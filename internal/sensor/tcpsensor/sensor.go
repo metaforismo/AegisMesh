@@ -33,9 +33,13 @@ type Sensor struct {
 
 	mu     sync.Mutex // guards ln: Start, Addr, and Close may run on any goroutine
 	ln     net.Listener
-	wg     sync.WaitGroup
+	wg     sync.WaitGroup // session handlers; Add only before acceptDone closes
 	runCtx context.Context
 	cancel context.CancelFunc
+
+	// acceptDone closes when the accept loop has exited; after that no new
+	// wg.Add can happen, so Close may safely Wait on sessions.
+	acceptDone chan struct{}
 
 	done chan error
 	once sync.Once
@@ -94,7 +98,9 @@ func (s *Sensor) Start(ctx context.Context, d sensor.Deps) error {
 	s.runCtx, s.cancel = context.WithCancel(context.WithoutCancel(ctx))
 
 	sem := make(chan struct{}, maxConcurrentSessionsPerSensor)
+	s.acceptDone = make(chan struct{})
 	go func() {
+		defer close(s.acceptDone)
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
@@ -299,6 +305,16 @@ func (s *Sensor) Close(ctx context.Context) error {
 		s.mu.Unlock()
 		if ln != nil {
 			err = ln.Close()
+		}
+		// Order matters: stop the accept loop before waiting on sessions so
+		// no wg.Add can race the Wait below.
+		if s.acceptDone != nil {
+			select {
+			case <-s.acceptDone:
+			case <-ctx.Done():
+				close(s.done)
+				return
+			}
 		}
 		waitDone := make(chan struct{})
 		go func() { s.wg.Wait(); close(waitDone) }()

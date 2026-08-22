@@ -30,7 +30,8 @@ func TestScrubCredentialPatterns(t *testing.T) {
 }
 
 func TestScrubPrivateKey(t *testing.T) {
-	in := "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\ndef\n-----END RSA PRIVATE KEY----- trailing"
+	// Synthetic fixture: not a real key, exercises the PEM rule.
+	in := "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\ndef\n-----END RSA PRIVATE KEY----- trailing" // secret-scan:allow
 	got := Scrub(in)
 	if strings.Contains(got, "MIIabc") {
 		t.Fatalf("private key body survived: %q", got)
