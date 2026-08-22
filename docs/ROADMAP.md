@@ -22,6 +22,21 @@ Nothing is checked on intent alone.
 - [x] Tests: unit, integration, golden/CLI snapshot, fuzz seeds, race; CI workflows pinned by commit SHA
 - [x] docs/verification.md + docs/HANDOFF.md
 
+## Batch 1.5 — Secure intelligence layer (in progress, branch `feat/secure-intelligence-mcp`)
+
+- [x] Deterministic prompt-injection / abuse rule engine (`internal/detect`: PI-001/PI-002, EXF-001,
+      ESC-001, OBS-001, RES-001; static evidence-safe reasons; fail-open by design)
+- [x] Provider credential references (`api_key_env` / `api_key_file`) with runtime resolution and
+      strict loader containment checks; `ollama` provider profile (loopback http allowed for it only)
+- [x] `init --profile local|ollama|remote` scaffolds
+- [x] Detection enforcement in the MCP sensor (severity→action: observe/tag/isolate/refuse) with
+      per-sensor throttling
+- [x] LLM fallback analysis path behind sensor opt-in (`fallback.enabled`), untrusted-output pipeline
+      (size caps, redaction-before-storage, structured findings)
+- [x] `doctor` provider readiness without secret disclosure; shared egress classifier with validate
+- [x] `validate --effective` resolved-policy preview (human + JSON); `inspect list --finding RULE_ID`
+- [x] Importer credential safety gate (refuse inline material, report references, non-zero exit on refusal)
+
 ## Batch 2 — Depth on the same spine (proposed next)
 
 1. R1: SSH deception sensor (crypto/ed25519 host key generation guidance, synthetic auth only) behind the

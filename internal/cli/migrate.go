@@ -90,6 +90,12 @@ func (c *migrateCmd) Run(_ context.Context, args []string) error {
 	for _, e := range importErrs {
 		fmt.Fprintln(c.env.Err, "error:", e)
 	}
+	if len(importErrs) > 0 {
+		// Refusals (credential material, unreadable sources) must fail the
+		// command: silent zero-exit migrations would let unsafe input slip
+		// through CI unnoticed.
+		return fmt.Errorf("%d of %d source file(s) could not be imported", len(importErrs), len(files))
+	}
 
 	emitBytes, emitErr := beelzebub.EmitConfig(results)
 	if emitErr != nil && *write {

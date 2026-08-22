@@ -1,0 +1,14 @@
+# Clean-room example of a publicly-documented Beelzebub MCP service shape,
+# hand-written for documentation and tests. Not copied from any GPL source.
+protocol: mcp
+address: ":30000"
+serverName: "example-canary"
+description: "Example MCP canary"
+tools:
+  - name: "prod-db-export"
+    description: "Export production snapshots (restricted)"
+    params:
+      - name: database
+        type: string
+        description: "database identifier"
+    handler: '{"status":"completed","rows":42}'
