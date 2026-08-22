@@ -87,21 +87,35 @@ const (
 	DefaultWebhookMaxRetries  = 3
 	MaxWebhookMaxRetries      = 8
 	MaxWebhookSecretFileBytes = 4096
+
+	// Correlation engine schema bounds. Numeric limits mirror
+	// internal/correlate.Options clamps; rule ids are validated against the
+	// correlate registry itself (single source of truth).
+	DefaultCorrelationWindowSecs   = 600 // 10m
+	MinCorrelationWindowSecs       = 60  // engine max window is 1h
+	MaxCorrelationWindowSecs       = 3600
+	DefaultCorrelationPerSrcEvents = 64
+	MinCorrelationPerSrcEvents     = 8
+	MaxCorrelationPerSrcEvents     = 512
+	DefaultCorrelationMaxSources   = 4096
+	MinCorrelationMaxSources       = 64
+	MaxCorrelationMaxSources       = 65536
 )
 
 // Config is the root configuration document.
 type Config struct {
-	APIVersion string     `yaml:"api_version" json:"api_version"`
-	Runtime    Runtime    `yaml:"runtime"     json:"runtime"`
-	Storage    Storage    `yaml:"storage"     json:"storage"`
-	Admin      Admin      `yaml:"admin"       json:"admin"`
-	Logging    Logging    `yaml:"logging"     json:"logging"`
-	Security   Security   `yaml:"security"    json:"security"`
-	LLM        LLM        `yaml:"llm"         json:"llm"`
-	Detection  Detection  `yaml:"detection,omitempty" json:"detection,omitempty"`
-	Extensions Extensions `yaml:"extensions,omitempty" json:"extensions,omitempty"`
-	Webhook    Webhook    `yaml:"webhook,omitempty"    json:"webhook,omitempty"`
-	Sensors    []Sensor   `yaml:"sensors"    json:"sensors"`
+	APIVersion  string      `yaml:"api_version" json:"api_version"`
+	Runtime     Runtime     `yaml:"runtime"     json:"runtime"`
+	Storage     Storage     `yaml:"storage"     json:"storage"`
+	Admin       Admin       `yaml:"admin"       json:"admin"`
+	Logging     Logging     `yaml:"logging"     json:"logging"`
+	Security    Security    `yaml:"security"    json:"security"`
+	LLM         LLM         `yaml:"llm"         json:"llm"`
+	Detection   Detection   `yaml:"detection,omitempty" json:"detection,omitempty"`
+	Extensions  Extensions  `yaml:"extensions,omitempty" json:"extensions,omitempty"`
+	Webhook     Webhook     `yaml:"webhook,omitempty"    json:"webhook,omitempty"`
+	Correlation Correlation `yaml:"correlation,omitempty" json:"correlation,omitempty"`
+	Sensors     []Sensor    `yaml:"sensors"    json:"sensors"`
 
 	// SourcePath records where this config was loaded from; never decoded from YAML.
 	SourcePath string `yaml:"-" json:"-"`
@@ -263,6 +277,26 @@ type Webhook struct {
 
 // IsEnabled reports whether the webhook sink is configured on.
 func (w Webhook) IsEnabled() bool { return w.Enabled != nil && *w.Enabled }
+
+// Correlation configures the bounded in-memory correlation engine that turns
+// per-source observation streams into signals (COR-001..COR-004). Zero values
+// mean defaults; bounds mirror internal/correlate.Options clamps. Signals are
+// observations for operators, never automated enforcement inputs.
+type Correlation struct {
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// DisabledRules lists rule ids (e.g. COR-004) to suppress; unknown ids
+	// are rejected at load time so typos never silently disable nothing.
+	DisabledRules []string `yaml:"disabled_rules,omitempty" json:"disabled_rules,omitempty"`
+	// WindowSeconds is the event-time lookback per source.
+	WindowSeconds int `yaml:"window_seconds,omitempty" json:"window_seconds,omitempty"`
+	// PerSourceEvents caps each source's ring buffer.
+	PerSourceEvents int `yaml:"per_source_events,omitempty" json:"per_source_events,omitempty"`
+	// MaxSources caps tracked sources (oldest-first eviction).
+	MaxSources int `yaml:"max_sources,omitempty" json:"max_sources,omitempty"`
+}
+
+// IsEnabled reports whether the correlation engine is configured on.
+func (c Correlation) IsEnabled() bool { return c.Enabled != nil && *c.Enabled }
 
 type Sensor struct {
 	ID     string `yaml:"id"     json:"id"`

@@ -159,6 +159,15 @@ func (c *Config) applyDefaults() {
 	if c.Webhook.MaxRetries == 0 {
 		c.Webhook.MaxRetries = DefaultWebhookMaxRetries
 	}
+	if c.Correlation.WindowSeconds == 0 {
+		c.Correlation.WindowSeconds = DefaultCorrelationWindowSecs
+	}
+	if c.Correlation.PerSourceEvents == 0 {
+		c.Correlation.PerSourceEvents = DefaultCorrelationPerSrcEvents
+	}
+	if c.Correlation.MaxSources == 0 {
+		c.Correlation.MaxSources = DefaultCorrelationMaxSources
+	}
 	if c.LLM.Provider == "" {
 		c.LLM.Provider = "local"
 	}

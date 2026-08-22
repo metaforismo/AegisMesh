@@ -214,6 +214,30 @@ Delivery semantics (wired in the runtime):
 `doctor` reports readiness statically; pass `--probe-webhook` to send one
 bounded signed test batch (explicit opt-in, never automatic).
 
+## Correlation engine (optional, off by default)
+
+```yaml
+correlation:
+  enabled: true
+  disabled_rules: ["COR-004"]   # rule ids; unknown ids are rejected at load
+  window_seconds: 600           # event-time lookback per source (60..3600)
+  per_source_events: 64         # ring cap per source (8..512)
+  max_sources: 4096             # tracked sources, oldest-first eviction (64..65536)
+```
+
+Turns per-source observation streams into signals — repeated injection
+(COR-001), protocol hopping (COR-002), tool probing (COR-003), sustained
+recon (COR-004). Semantics:
+
+- **Event-time deterministic**: same input sequence always yields the same
+  signals; late-but-in-window arrivals still count.
+- **One fire per window per source/rule**; re-arming needs fresh evidence
+  after the ring expires.
+- **Bounded memory**: rings and source count are capped; eviction forgets
+  cooldowns by design.
+- **Observations only**: signals are operator-facing findings. They are not
+  enforcement inputs and nothing acts on them automatically.
+
 ## Environment variable overrides
 
 Applied after file parsing, before validation:

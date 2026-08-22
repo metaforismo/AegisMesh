@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/metaforismo/aegismesh/internal/correlate"
 	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/egress"
 )
@@ -122,6 +123,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
 	if err := ValidateWebhook(&c.Webhook, c.Security.AllowPrivateLLMEgress); err != nil {
+		return fmt.Errorf("%w: %v", errConfig, err)
+	}
+	if err := ValidateCorrelation(&c.Correlation); err != nil {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
 	if c.Storage.MaxFileBytes < 4096 {
@@ -425,6 +429,30 @@ func ValidateExtensions(e Extensions) error {
 		if err != nil || len(key) != ed25519.PublicKeySize {
 			return fmt.Errorf("extensions.ed25519_pubkey_hex must be %d-byte hex ed25519 public key", ed25519.PublicKeySize)
 		}
+	}
+	return nil
+}
+
+// ValidateCorrelation enforces the correlation section's schema bounds and
+// checks disabled rule ids against the engine's registry. A disabled section
+// may still be validated so typos never hide behind enabled=false.
+func ValidateCorrelation(c *Correlation) error {
+	if len(c.DisabledRules) > 0 {
+		if err := correlate.ValidateRuleIDs(c.DisabledRules); err != nil {
+			return fmt.Errorf("correlation.disabled_rules: %v", err)
+		}
+	}
+	if c.WindowSeconds != 0 && (c.WindowSeconds < MinCorrelationWindowSecs || c.WindowSeconds > MaxCorrelationWindowSecs) {
+		return fmt.Errorf("correlation.window_seconds must be within %d..%d (0 = default %d)",
+			MinCorrelationWindowSecs, MaxCorrelationWindowSecs, DefaultCorrelationWindowSecs)
+	}
+	if c.PerSourceEvents != 0 && (c.PerSourceEvents < MinCorrelationPerSrcEvents || c.PerSourceEvents > MaxCorrelationPerSrcEvents) {
+		return fmt.Errorf("correlation.per_source_events must be within %d..%d (0 = default %d)",
+			MinCorrelationPerSrcEvents, MaxCorrelationPerSrcEvents, DefaultCorrelationPerSrcEvents)
+	}
+	if c.MaxSources != 0 && (c.MaxSources < MinCorrelationMaxSources || c.MaxSources > MaxCorrelationMaxSources) {
+		return fmt.Errorf("correlation.max_sources must be within %d..%d (0 = default %d)",
+			MinCorrelationMaxSources, MaxCorrelationMaxSources, DefaultCorrelationMaxSources)
 	}
 	return nil
 }
