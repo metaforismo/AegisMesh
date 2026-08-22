@@ -22,7 +22,7 @@ Nothing is checked on intent alone.
 - [x] Tests: unit, integration, golden/CLI snapshot, fuzz seeds, race; CI workflows pinned by commit SHA
 - [x] docs/verification.md + docs/HANDOFF.md
 
-## Batch 1.5 — Secure intelligence layer (in progress, branch `feat/secure-intelligence-mcp`)
+## Batch 1.5 — Secure intelligence layer (complete; merged through PR #12)
 
 - [x] Deterministic prompt-injection / abuse rule engine (`internal/detect`: PI-001/PI-002, EXF-001,
       ESC-001, OBS-001, RES-001; static evidence-safe reasons; fail-open by design)
@@ -41,8 +41,11 @@ Nothing is checked on intent alone.
 
 1. R1: SSH deception sensor (crypto/ed25519 host key generation guidance, synthetic auth only) behind the
    same Sensor interface.
-2. R2: Real remote provider adapter (OpenAI-compatible chat completions) with the untrusted-output pipeline,
-   egress allowlist config, and cost/latency caps — off by default.
+2. R2 (shipped): Real remote provider adapter — done. OpenAI-compatible chat completions via `openai` and
+   `ollama` adapters (`internal/llm.Remote`) behind strict config: fail-closed construction before any
+   listener binds, egress-classified dialing, loopback allowed only for `ollama`, response size + timeout
+   caps enforced, off by default (PR deliver/llm-remote-provider). Provider output still passes the
+   untrusted-output pipeline. Cost accounting beyond those size/timeout bounds stays future work.
 3. R3: SIEM-friendly export profiles (ECS-ish field mapping doc + `inspect export --profile ecs`).
 4. R4: Response recommendation engine v0: rules over events producing *dry-run* playbooks only.
 5. R5: Evidence at rest: optional age/x25519 encryption of JSONL segments.
