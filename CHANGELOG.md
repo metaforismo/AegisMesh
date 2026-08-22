@@ -6,6 +6,13 @@ changes bump MINOR).
 
 ## [Unreleased]
 
+### Added
+
+- Correlation signals (COR-001..COR-004) are now recorded as integrity-checked
+  `correlation_signal` evidence envelopes in the local JSONL store, visible
+  through the existing `inspect list/show/export`; signals remain observations
+  only.
+
 ### Fixed
 
 - MCP sensor returned an empty `{}` body (HTTP 200) for unparseable JSON-RPC

@@ -168,6 +168,10 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 			PerSourceEvents: cfg.Correlation.PerSourceEvents,
 			MaxSources:      cfg.Correlation.MaxSources,
 			DisabledRules:   cfg.Correlation.DisabledRules,
+		}, correlateDeps{
+			seq:      sys.seq,
+			instance: cfg.Runtime.InstanceName,
+			store:    store,
 		}, reg, log)
 	}
 

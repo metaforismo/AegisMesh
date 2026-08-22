@@ -20,8 +20,9 @@ const (
 	// SchemaV1 identifies the current envelope schema.
 	SchemaV1 = "aegismesh.event/v1"
 
-	ClassificationInteraction = "interaction"
-	ClassificationCanaryHit   = "canary_invocation"
+	ClassificationInteraction       = "interaction"
+	ClassificationCanaryHit         = "canary_invocation"
+	ClassificationCorrelationSignal = "correlation_signal"
 )
 
 var errEnvelope = errors.New("event envelope")
@@ -102,7 +103,7 @@ func (e *Envelope) Validate() error {
 		return fmt.Errorf("%w: incomplete sensor ref", errEnvelope)
 	}
 	switch e.Classification {
-	case ClassificationInteraction, ClassificationCanaryHit:
+	case ClassificationInteraction, ClassificationCanaryHit, ClassificationCorrelationSignal:
 	default:
 		return fmt.Errorf("%w: unknown classification %q", errEnvelope, e.Classification)
 	}
