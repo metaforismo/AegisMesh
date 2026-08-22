@@ -50,13 +50,37 @@ spec:
               mountPath: /workspace/data
             - name: tmp
               mountPath: /tmp
-        # No liveness/readiness probes in this core chart. The admin
-        # endpoints (/healthz, /readyz) are real and verified, but
-        # admin.listen is loopback-only by validated invariant
-        # (internal/config/validate.go), so kubelet probes - which dial the
-        # Pod IP - cannot reach them, and the distroless image ships no
-        # shell/wget for exec probes. Deferred to the probes PR rather than
-        # faking readiness semantics.
+          {{ if .Values.probes.enabled }}
+          # Exec probes run the binary itself (no shell, curl, or wget exist
+          # in the distroless image): the healthcheck subcommand (PR #37)
+          # loads this same strict mesh.yaml and GETs the fixed loopback
+          # admin path. Probes execute inside the container's own network
+          # namespace, so they add no Service/NetworkPolicy exposure.
+          livenessProbe:
+            exec:
+              command:
+                - /aegismesh
+                - healthcheck
+                - --config
+                - /etc/aegismesh/mesh.yaml
+                - --live
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            exec:
+              command:
+                - /aegismesh
+                - healthcheck
+                - --config
+                - /etc/aegismesh/mesh.yaml
+                - --ready
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{ end }}
       volumes:
         - name: config
           configMap:

@@ -57,6 +57,25 @@ type meshView struct {
 	} `yaml:"sensors"`
 }
 
+// probeTiming pins one kubelet exec probe's rendered scheduling knobs.
+type probeTiming struct {
+	initialDelaySeconds int
+	periodSeconds       int
+	timeoutSeconds      int
+	failureThreshold    int
+}
+
+var (
+	defaultLiveness  = probeTiming{initialDelaySeconds: 20, periodSeconds: 30, timeoutSeconds: 5, failureThreshold: 3}
+	defaultReadiness = probeTiming{initialDelaySeconds: 5, periodSeconds: 10, timeoutSeconds: 3, failureThreshold: 3}
+)
+
+// probePair carries the expected liveness/readiness timing for a scenario.
+type probePair struct {
+	live  probeTiming
+	ready probeTiming
+}
+
 type scenario struct {
 	name       string
 	valuesFile string
@@ -71,6 +90,9 @@ type scenario struct {
 	// serviceAccountName in both modes.
 	wantSAs   int
 	wantPodSA string
+	// wantProbes nil asserts NO liveness/readiness probe may render;
+	// otherwise both must render with exactly this timing.
+	wantProbes *probePair
 }
 
 func TestHelmChartContract(t *testing.T) {
@@ -118,8 +140,12 @@ pdb:
   enabled: true
   maxUnavailable: null
   minAvailable: 1
+probes:
+  liveness: {initialDelaySeconds: 30, periodSeconds: 45, timeoutSeconds: 7, failureThreshold: 6}
+  readiness: {initialDelaySeconds: 1, periodSeconds: 4, timeoutSeconds: 2, failureThreshold: 2}
 `,
 		"empty-sensors.yaml": "meshConfig:\n  sensors: []\n",
+		"probes-off.yaml":    "probes:\n  enabled: false\n",
 	}
 	for name, content := range files {
 		path := filepath.Join(scratch, name)
@@ -130,11 +156,18 @@ pdb:
 
 	scenarios := []scenario{
 		{name: "defaults", wantType: "ClusterIP", wantNetPol: true,
-			wantSAs: 1, wantPodSA: releaseName},
+			wantSAs: 1, wantPodSA: releaseName,
+			wantProbes: &probePair{live: defaultLiveness, ready: defaultReadiness}},
 		{name: "nodeport-exposure-policy-off", valuesFile: "nodeport.yaml", wantType: "NodePort",
-			wantSAs: 0, wantPodSA: "aegismesh-external-sa"},
+			wantSAs: 0, wantPodSA: "aegismesh-external-sa",
+			wantProbes: &probePair{live: defaultLiveness, ready: defaultReadiness}},
 		{name: "pinned-image-resources-pdb", valuesFile: "pinned.yaml", wantType: "ClusterIP", wantNetPol: true,
 			pdbKey: "minAvailable", pdbValue: 1,
+			wantSAs: 1, wantPodSA: releaseName,
+			wantProbes: &probePair{
+				live:  probeTiming{initialDelaySeconds: 30, periodSeconds: 45, timeoutSeconds: 7, failureThreshold: 6},
+				ready: probeTiming{initialDelaySeconds: 1, periodSeconds: 4, timeoutSeconds: 2, failureThreshold: 2}}},
+		{name: "probes-disabled-explicitly", valuesFile: "probes-off.yaml", wantType: "ClusterIP", wantNetPol: true,
 			wantSAs: 1, wantPodSA: releaseName},
 	}
 	for _, sc := range scenarios {
@@ -172,6 +205,13 @@ pdb:
 		{"empty external serviceaccount name", "/serviceAccount/name", []string{"serviceAccount.create=false"}, ""},
 		{"boolean pdb threshold", "/pdb/minAvailable", []string{"pdb.enabled=true", "pdb.minAvailable=true"}, ""},
 		{"malformed pdb percentage", "/pdb/maxUnavailable", []string{"pdb.maxUnavailable=%50"}, ""},
+		{"non-boolean probes enabled flag", "/probes/enabled", []string{"probes.enabled=maybe"}, ""},
+		{"zero liveness period", "/probes/liveness/periodSeconds", []string{"probes.liveness.periodSeconds=0"}, ""},
+		{"negative readiness timeout", "/probes/readiness/timeoutSeconds", []string{"probes.readiness.timeoutSeconds=-2"}, ""},
+		{"liveness timeout beyond CLI ceiling", "/probes/liveness/timeoutSeconds", []string{"probes.liveness.timeoutSeconds=11"}, ""},
+		{"non-integer readiness failure threshold", "/probes/readiness/failureThreshold", []string{"probes.readiness.failureThreshold=three"}, ""},
+		{"unknown probe command knob", "/probes/liveness", []string{"probes.liveness.command=sh"}, ""},
+		{"unknown probe endpoint knob", "/probes/readiness", []string{"probes.readiness.httpGetPath=/readyz"}, ""},
 	}
 	for _, tc := range negatives {
 		t.Run("rejects "+tc.name, func(t *testing.T) {
@@ -312,6 +352,84 @@ func checkContract(t *testing.T, rendered []byte, sc scenario) {
 		for _, r := range []string{"cpu", "memory"} {
 			if v, ok := section.vals[r]; !ok || v == nil {
 				t.Errorf("resource %s.%s missing or empty", section.name, r)
+			}
+		}
+	}
+
+	// Volume/mount contract: config stays read-only from the ConfigMap;
+	// data and tmp stay writable/memory-backed emptyDirs. Probes must not
+	// have disturbed any of it.
+	mountPaths := make([]string, 0, 3)
+	for _, m := range asList(t, c["volumeMounts"]) {
+		mm := asMap(t, m)
+		mountPaths = append(mountPaths, fmt.Sprint(mm["mountPath"]))
+		if mm["name"] == "config" && mm["readOnly"] != true {
+			t.Error("config mount must stay readOnly")
+		}
+	}
+	slices.Sort(mountPaths)
+	if !slices.Equal(mountPaths, []string{"/etc/aegismesh", "/tmp", "/workspace/data"}) {
+		t.Errorf("container volumeMounts = %v, want [/etc/aegismesh /tmp /workspace/data]", mountPaths)
+	}
+
+	// Probe contract: enabled renders both probes as exec handlers running
+	// exactly [/aegismesh healthcheck --config /etc/aegismesh/mesh.yaml
+	// --live|--ready] — no shell, curl, wget, HTTP/tcpSocket handler, or
+	// extra fields — with timing flowing from values verbatim. Disabled
+	// renders neither key.
+	if sc.wantProbes == nil {
+		for _, k := range []string{"livenessProbe", "readinessProbe"} {
+			if _, ok := c[k]; ok {
+				t.Errorf("%s must not render when probes.enabled=false", k)
+			}
+		}
+	} else {
+		wants := map[string]struct {
+			flag string
+			time probeTiming
+		}{
+			"livenessProbe":  {"--live", sc.wantProbes.live},
+			"readinessProbe": {"--ready", sc.wantProbes.ready},
+		}
+		for name, w := range wants {
+			p, ok := c[name].(map[string]any)
+			if !ok {
+				t.Fatalf("%s missing or not a mapping", name)
+			}
+			keys := slices.Sorted(maps.Keys(p))
+			if want := []string{"exec", "failureThreshold", "initialDelaySeconds", "periodSeconds", "timeoutSeconds"}; !slices.Equal(keys, want) {
+				t.Errorf("%s fields = %v, want exactly %v (successThreshold stays at the API default)", name, keys, want)
+			}
+			argv, ok := asMap(t, p["exec"])["command"].([]any)
+			if !ok {
+				t.Fatalf("%s must carry an exec command list", name)
+			}
+			wantArgv := []any{"/aegismesh", "healthcheck", "--config", "/etc/aegismesh/mesh.yaml", w.flag}
+			if !slices.Equal(argv, wantArgv) {
+				t.Errorf("%s argv = %v, want exactly %v", name, argv, wantArgv)
+			}
+			for _, a := range argv {
+				switch s := fmt.Sprint(a); s {
+				case "sh", "bash", "/bin/sh", "/bin/bash", "curl", "wget":
+					t.Errorf("%s must never shell out via %q", name, s)
+				}
+			}
+			rendered := map[string]any{
+				"initialDelaySeconds": p["initialDelaySeconds"],
+				"periodSeconds":       p["periodSeconds"],
+				"timeoutSeconds":      p["timeoutSeconds"],
+				"failureThreshold":    p["failureThreshold"],
+			}
+			expected := map[string]int{
+				"initialDelaySeconds": w.time.initialDelaySeconds,
+				"periodSeconds":       w.time.periodSeconds,
+				"timeoutSeconds":      w.time.timeoutSeconds,
+				"failureThreshold":    w.time.failureThreshold,
+			}
+			for field, wantV := range expected {
+				if v, ok := rendered[field].(int); !ok || v != wantV {
+					t.Errorf("%s.%s = %v, want %d", name, field, rendered[field], wantV)
+				}
 			}
 		}
 	}

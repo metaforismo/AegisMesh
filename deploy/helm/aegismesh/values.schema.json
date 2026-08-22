@@ -11,6 +11,7 @@
     "pdb",
     "serviceAccount",
     "terminationGracePeriodSeconds",
+    "probes",
     "podSecurityContext",
     "containerSecurityContext",
     "meshConfig"
@@ -156,6 +157,20 @@
       "minimum": 0,
       "description": "Time to flush evidence segments before SIGKILL; 0 means immediate termination."
     },
+    "probes": {
+      "type": "object",
+      "description": "Kubelet exec probes invoking the container binary itself (/aegismesh healthcheck --config /etc/aegismesh/mesh.yaml --live|--ready). The argv, config path, and probed endpoints are fixed by the template: no command, URL, host, path, header, or credential knobs exist by design. Probes dial the loopback admin listener inside the container's own network namespace and add no Service or NetworkPolicy exposure.",
+      "required": ["enabled", "liveness", "readiness"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "False renders a probe-less Pod exactly as this chart did before exec self-probes existed; default true."
+        },
+        "liveness": { "$ref": "#/definitions/probeTiming" },
+        "readiness": { "$ref": "#/definitions/probeTiming" }
+      }
+    },
     "podSecurityContext": {
       "type": "object",
       "required": ["runAsNonRoot", "runAsUser"],
@@ -265,6 +280,39 @@
     }
   },
   "definitions": {
+    "probeTiming": {
+      "type": "object",
+      "description": "Timing knobs for one exec probe; Kubernetes-valid conservative bounds. timeoutSeconds is capped at the healthcheck CLI's own 10s deadline ceiling (internal/cli/healthcheck.go), so a probe can never wait longer than the command itself tolerates.",
+      "required": [
+        "initialDelaySeconds",
+        "periodSeconds",
+        "timeoutSeconds",
+        "failureThreshold"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "initialDelaySeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "periodSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "failureThreshold": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      }
+    },
     "disruptionThreshold": {
       "description": "PDB threshold exactly as the Kubernetes API accepts it: a non-negative integer count or a percentage string like '25%'.",
       "oneOf": [
