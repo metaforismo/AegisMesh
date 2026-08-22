@@ -26,7 +26,7 @@ func (e *Engine) evaluate(trigger Event, st *sourceState) []Signal {
 	}
 	var out []Signal
 	for _, c := range cands { // fixed order => deterministic signal order
-		if !c.fire {
+		if !c.fire || e.disabled.disabled(c.id) {
 			continue
 		}
 		if lf, seen := st.fired[c.id]; seen && trigger.Time.Before(lf.Add(e.opts.Window)) {

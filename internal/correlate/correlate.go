@@ -106,6 +106,9 @@ type Options struct {
 	ToolProbeThreshold int
 	// ReconThreshold interactions fire COR-004 (default 6).
 	ReconThreshold int
+	// DisabledRules lists rule ids that must never fire. Config validation
+	// rejects unknown ids at the string level; the engine works on typed ids.
+	DisabledRules []RuleID
 	// Now is injectable for tests; nil means time.Now. Rule math itself is
 	// event-time based; Now stamps bookkeeping only.
 	Now func() time.Time
@@ -183,9 +186,10 @@ type sourceState struct {
 // Engine correlates events into signals under hard memory bounds. Evaluate
 // is safe for single-goroutine use; wrap externally if needed (runtime PR).
 type Engine struct {
-	opts    Options
-	sources map[string]*sourceState
-	arrival int64 // total ingested; drives deterministic FIFO eviction
+	opts     Options
+	disabled disableSet
+	sources  map[string]*sourceState
+	arrival  int64 // total ingested; drives deterministic FIFO eviction
 
 	evictedSources uint64
 	trimmedEvents  uint64
@@ -197,8 +201,9 @@ type Engine struct {
 func New(opts Options) *Engine {
 	opts.Normalize()
 	return &Engine{
-		opts:    opts,
-		sources: make(map[string]*sourceState),
+		opts:     opts,
+		disabled: buildDisableSet(opts.DisabledRules),
+		sources:  make(map[string]*sourceState),
 	}
 }
 
