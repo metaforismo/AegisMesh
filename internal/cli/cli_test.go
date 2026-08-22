@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,9 +19,14 @@ import (
 )
 
 // newTestApp mirrors cmd/aegismesh wiring but captures output in buffers.
-func newTestApp() (*App, *bytes.Buffer, *bytes.Buffer) {
+// An optional first argument injects the Env stdin stream for commands that
+// consume it; omitting it leaves Stdin nil exactly like a non-wired process.
+func newTestApp(stdin ...io.Reader) (*App, *bytes.Buffer, *bytes.Buffer) {
 	var out, errB bytes.Buffer
 	env := &Env{Out: &out, Err: &errB}
+	if len(stdin) > 0 {
+		env.Stdin = stdin[0]
+	}
 	app := NewApp("aegismesh", "local-first deception, detection, and evidence", &out, &errB)
 	must(app.Register(
 		NewInitCmd(env),
@@ -46,6 +52,13 @@ func must(err error) {
 func run(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	app, out, errB := newTestApp()
+	code := app.Run(context.Background(), args)
+	return code, out.String(), errB.String()
+}
+
+func runWithStdin(t *testing.T, stdin io.Reader, args ...string) (int, string, string) {
+	t.Helper()
+	app, out, errB := newTestApp(stdin)
 	code := app.Run(context.Background(), args)
 	return code, out.String(), errB.String()
 }

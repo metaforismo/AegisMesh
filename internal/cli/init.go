@@ -9,10 +9,13 @@ import (
 	"github.com/metaforismo/aegismesh/internal/config"
 )
 
-// Env carries injected IO for one CLI process.
+// Env carries injected IO for one CLI process. Stdin is optional: only
+// commands that read a stream consume it, and it is never accessed
+// process-globally inside those commands.
 type Env struct {
-	Out io.Writer
-	Err io.Writer
+	Out   io.Writer
+	Err   io.Writer
+	Stdin io.Reader
 }
 
 type initCmd struct {

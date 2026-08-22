@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	env := &cli.Env{Out: os.Stdout, Err: os.Stderr}
+	env := &cli.Env{Out: os.Stdout, Err: os.Stderr, Stdin: os.Stdin}
 	app := cli.NewApp("aegismesh", "local-first deception, detection, and evidence", env.Out, env.Err)
 	commands := []cli.Command{
 		cli.NewInitCmd(env),
