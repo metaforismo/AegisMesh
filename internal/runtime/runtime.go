@@ -51,6 +51,7 @@ type System struct {
 	sensors   []sensor.Sensor
 	extMgr    *extmanager.Manager
 	hook      *webhook.Sink
+	corr      *correlateAdapter
 	log       *slog.Logger
 	failed    atomic.Uint64
 	stopMaint chan struct{}
@@ -65,6 +66,7 @@ type evidenceSink struct {
 	primary event.Sink
 	mgr     *extmanager.Manager // may be nil
 	hook    *webhook.Sink       // may be nil
+	corr    *correlateAdapter   // may be nil
 }
 
 func (s evidenceSink) Append(ctx context.Context, e event.Envelope) error {
@@ -74,6 +76,9 @@ func (s evidenceSink) Append(ctx context.Context, e event.Envelope) error {
 	}
 	if s.hook != nil {
 		s.hook.Offer(e)
+	}
+	if s.corr != nil {
+		s.corr.observe(e)
 	}
 	return err
 }
@@ -157,9 +162,18 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		sys.hook = hook
 	}
 
+	if cfg.Correlation.IsEnabled() {
+		sys.corr = newCorrelateAdapter(correlateOptions{
+			WindowSeconds:   cfg.Correlation.WindowSeconds,
+			PerSourceEvents: cfg.Correlation.PerSourceEvents,
+			MaxSources:      cfg.Correlation.MaxSources,
+			DisabledRules:   cfg.Correlation.DisabledRules,
+		}, reg, log)
+	}
+
 	sink := event.Sink(store)
-	if sys.extMgr != nil || sys.hook != nil {
-		sink = evidenceSink{primary: store, mgr: sys.extMgr, hook: sys.hook}
+	if sys.extMgr != nil || sys.hook != nil || sys.corr != nil {
+		sink = evidenceSink{primary: store, mgr: sys.extMgr, hook: sys.hook, corr: sys.corr}
 	}
 	sys.bus = event.NewBus(busCapacity, sink, log)
 
