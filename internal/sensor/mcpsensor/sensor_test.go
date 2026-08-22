@@ -15,6 +15,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/observe"
+	"github.com/metaforismo/aegismesh/internal/policy"
 	"github.com/metaforismo/aegismesh/internal/sensor"
 )
 
@@ -79,7 +80,7 @@ func mcpCfg() config.Sensor {
 // startTestSensor binds on an ephemeral loopback port and returns its URL.
 func startTestSensor(t *testing.T, cfg config.Sensor) (*collectingSink, string) {
 	t.Helper()
-	s, err := New(cfg)
+	s, err := New(cfg, policy.NewEnforcer(config.Detection{}, observe.NewRegistry()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +316,7 @@ func TestMCPSensorOversizeMessageRejected(t *testing.T) {
 }
 
 func TestMCPSensorCloseShutsDownCleanly(t *testing.T) {
-	s, err := New(mcpCfg())
+	s, err := New(mcpCfg(), policy.NewEnforcer(config.Detection{}, observe.NewRegistry()))
 	if err != nil {
 		t.Fatal(err)
 	}

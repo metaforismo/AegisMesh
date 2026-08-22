@@ -158,6 +158,27 @@ type Detection struct {
 	// DisabledRules excludes rules by stable ID. Unknown IDs fail validation
 	// so typos cannot silently disable nothing.
 	DisabledRules []string `yaml:"disabled_rules,omitempty" json:"disabled_rules,omitempty"`
+
+	// Actions maps detection severity to the enforcement action applied when
+	// that severity fires (highest severity wins). Values:
+	// observe|tag|throttle|isolate|refuse.
+	Actions DetectionActions `yaml:"actions,omitempty" json:"actions,omitempty"`
+
+	// ThrottlePerMinute caps how many interactions per minute PER SENSOR may
+	// carry a detection signal (any finding) before further signaled ones get
+	// the throttle action until the minute window resets. Benign traffic does
+	// not count. Default 600; set 1..100000.
+	ThrottlePerMinute int `yaml:"throttle_per_minute,omitempty" json:"throttle_per_minute,omitempty"`
+}
+
+// DetectionActions maps severities to actions. Defaults (safe by design —
+// decoy availability first, escalation is an operator decision):
+// info=observe low=tag medium=isolate high=refuse.
+type DetectionActions struct {
+	Info   string `yaml:"info"   json:"info"`
+	Low    string `yaml:"low"    json:"low"`
+	Medium string `yaml:"medium" json:"medium"`
+	High   string `yaml:"high"   json:"high"`
 }
 
 func (d Detection) IsEnabled() bool { return d.Enabled == nil || *d.Enabled }

@@ -68,7 +68,7 @@ func newDeps(cfg config.Sensor, sink *collectingSink) (sensor.Deps, *event.Bus) 
 
 func startTestSensor(t *testing.T, cfg config.Sensor) (*collectingSink, string) {
 	t.Helper()
-	gate, err := policy.NewTCPGate(cfg)
+	gate, err := policy.NewTCPGate(cfg, policy.NewEnforcer(config.Detection{}, observe.NewRegistry()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +258,7 @@ func TestTCPSensorEmptyLinesAreIgnored(t *testing.T) {
 
 func TestTCPSensorCloseReleasesSessions(t *testing.T) {
 	cfg := tcpCfg()
-	gate, err := policy.NewTCPGate(cfg)
+	gate, err := policy.NewTCPGate(cfg, policy.NewEnforcer(config.Detection{}, observe.NewRegistry()))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -68,7 +68,7 @@ func quietLogger() *slog.Logger {
 // startTestSensor binds on an ephemeral loopback port and returns its base URL.
 func startTestSensor(t *testing.T, cfg config.Sensor) (*collectingSink, string) {
 	t.Helper()
-	gate, err := policy.NewHTTPGate(cfg, nil, llm.Local{})
+	gate, err := policy.NewHTTPGate(cfg, nil, llm.Local{}, policy.NewEnforcer(config.Detection{}, observe.NewRegistry()))
 	if err != nil {
 		t.Fatal(err)
 	}

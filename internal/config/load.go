@@ -153,6 +153,18 @@ func (c *Config) applyDefaults() {
 	if c.Detection.MaxInputBytes == 0 {
 		c.Detection.MaxInputBytes = DefaultDetectionMaxLen
 	}
+	if c.Detection.Actions.Info == "" {
+		c.Detection.Actions.Info = "observe"
+	}
+	if c.Detection.Actions.Low == "" {
+		c.Detection.Actions.Low = "tag"
+	}
+	if c.Detection.Actions.Medium == "" {
+		c.Detection.Actions.Medium = "isolate"
+	}
+	if c.Detection.Actions.High == "" {
+		c.Detection.Actions.High = "refuse"
+	}
 	for i := range c.Sensors {
 		s := &c.Sensors[i]
 		switch s.Kind {

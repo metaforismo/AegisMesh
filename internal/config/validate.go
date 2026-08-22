@@ -350,6 +350,9 @@ func validateLLM(l *LLM) error {
 	return nil
 }
 
+// ValidActions lists the enforcement actions a severity may map to.
+var ValidActions = []string{"observe", "tag", "throttle", "isolate", "refuse"}
+
 // ValidateDetection checks the detection section against the engine's rule
 // registry. It lives behind narrow functions so config never depends on
 // engine internals.
@@ -359,6 +362,21 @@ func ValidateDetection(d Detection) error {
 	}
 	if err := detect.ValidateRuleIDs(d.DisabledRules); err != nil {
 		return err
+	}
+	valid := map[string]bool{}
+	for _, a := range ValidActions {
+		valid[a] = true
+	}
+	for sev, act := range map[string]string{
+		"info": d.Actions.Info, "low": d.Actions.Low,
+		"medium": d.Actions.Medium, "high": d.Actions.High,
+	} {
+		if !valid[act] {
+			return fmt.Errorf("detection.actions.%s %q must be one of %s", sev, act, strings.Join(ValidActions, "|"))
+		}
+	}
+	if d.ThrottlePerMinute < 0 || d.ThrottlePerMinute > 100000 {
+		return fmt.Errorf("detection.throttle_per_minute must be within 0..100000 (0 = default)")
 	}
 	return nil
 }
