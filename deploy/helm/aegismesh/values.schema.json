@@ -8,6 +8,7 @@
     "replicas",
     "service",
     "networkPolicy",
+    "pdb",
     "terminationGracePeriodSeconds",
     "podSecurityContext",
     "containerSecurityContext",
@@ -78,6 +79,36 @@
           "description": "Default true: ingress is restricted to the decoy targetPorts declared under service.ports; egress is never constrained by this chart."
         }
       }
+    },
+    "pdb": {
+      "type": "object",
+      "description": "Optional policy/v1 PodDisruptionBudget. Default off: with replicas=1 and an emptyDir evidence store, an enforcing budget blocks all voluntary evictions (drains stall) without preserving availability or data. Enabling is a documented operator tradeoff, not a durability guarantee.",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minAvailable": { "$ref": "#/definitions/disruptionThreshold" },
+        "maxUnavailable": { "$ref": "#/definitions/disruptionThreshold" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "enabled": { "const": true } },
+            "required": ["enabled"]
+          },
+          "then": {
+            "oneOf": [
+              { "required": ["minAvailable"] },
+              { "required": ["maxUnavailable"] }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": ["minAvailable", "maxUnavailable"]
+          }
+        }
+      ]
     },
     "resources": {
       "type": "object",
@@ -202,6 +233,13 @@
     }
   },
   "definitions": {
+    "disruptionThreshold": {
+      "description": "PDB threshold exactly as the Kubernetes API accepts it: a non-negative integer count or a percentage string like '25%'.",
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "string", "pattern": "^[0-9]+%$" }
+      ]
+    },
     "quantityMap": {
       "type": "object",
       "additionalProperties": {
