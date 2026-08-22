@@ -16,6 +16,8 @@ fallback noted; **NOT RUN** = deliberately skipped, reason given.
 | Race detector | `go test -race ./...` | PASS (all 14 packages) |
 | Repeated race runs (sensor/runtime stability) | `go test -race -count=2 ./internal/sensor/... ./internal/runtime/` | PASS |
 | Ext host stability | `go test -race -count=3 ./internal/ext/` | PASS |
+| Correlation engine determinism/race | `go test -race ./internal/correlate/ && go test -count=5 ./internal/correlate/` | PASS |
+| Correlation CLI surface | `go test ./internal/cli/ -run 'TestDoctorCorrelation|TestValidateEffectiveIncludes'` | PASS |
 
 ## Fuzz smoke (bounded sessions on this machine)
 

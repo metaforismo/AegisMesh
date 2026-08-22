@@ -17,7 +17,9 @@ personas), empty `data/`. Refuses to overwrite without `--force`.
 
 Environment sanity checks: binary/version, config validity, data dir
 existence and writability, port availability, admin reachability when
-running, provider and webhook readiness without network contact.
+running, provider and webhook readiness without network contact,
+correlation configuration health (off by default; warns if
+`disabled_rules` is set while the engine stays disabled).
 Non-zero exit if any check fails. `--probe-provider` / `--probe-webhook`
 are explicit opt-ins that perform one bounded network probe each.
 
@@ -31,7 +33,8 @@ This is the same gate CI and `run` apply.
 
 With `--effective`, also preview the resolved policy — provider and egress
 classification (loopback/private/public/denied), detection rules with the
-severity-to-action mapping and bounds, and per-sensor capabilities including
+severity-to-action mapping and bounds, the correlation engine state with its
+resolved bounds, and per-sensor capabilities including
 the MCP decoy surface. Still side-effect free: nothing is started, contacted,
 or written.
 
