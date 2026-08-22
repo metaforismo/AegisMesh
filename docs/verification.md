@@ -45,6 +45,8 @@ CI runs all four targets at 15s each on every push.
 | Runtime wiring: observations delivered to a real observer subprocess; fail-closed on missing manifest / respond-only extension | `go test -race -count=1 -run 'TestSystemDelivers|TestBuildFailsClosedOnMissing|TestBuildFailsClosedOnRespond' ./internal/runtime/` | PASS |
 | Webhook config schema: egress-validated destinations, secret references, bounds, defaults | `go test -run 'TestWebhookSectionValidation|TestResolveWebhookSecret' ./internal/config/` | PASS |
 | Webhook delivery engine: signed batches, retry+jitter, redirect refusal, dial-time egress re-classification, bounded shutdown | `go test -race -count=3 ./internal/webhook/` | PASS |
+| Runtime fan-out: decoy → store AND signed webhook batch end-to-end; unresolvable secret fails startup | `go test -race -run 'TestSystemStreamsEvidenceToWebhook|TestBuildFailsClosedOnUnresolvableWebhookSecret' ./internal/runtime/` | PASS |
+| Webhook readiness in doctor/validate --effective (no contact) + opt-in signed probe | `go test -race -run 'TestValidateEffectiveShowsWebhook|TestDoctorWebhook|TestDoctorWarnsOnUnsigned' ./internal/cli/` | PASS |
 | inspect --finding filter (match, empty match, invalid rule id, verified JSON rows) | `go test -run TestInspectFindingFilter ./internal/cli/` | PASS |
 | Importer refuses inline credential material with non-zero exit; references reported, never carried or echoed | `go test -run 'TestMigrateRefuses|TestMigrateReports' ./internal/cli/` | PASS |
 | Example migration fixtures round-trip through the strict loader | `go test -run TestMigrateExampleFixturesRoundTrip ./internal/cli/` | PASS |

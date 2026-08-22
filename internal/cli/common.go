@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/url"
 	"strings"
 
 	"github.com/metaforismo/aegismesh/internal/config"
@@ -85,4 +86,34 @@ func slogLevel(l string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// classifyWebhookEndpoint returns the egress class label for the configured
+// webhook collector plus its parsed URL. Shared by doctor and validate.
+func classifyWebhookEndpoint(cfg *config.Config) (string, *url.URL, error) {
+	u, err := url.Parse(strings.TrimSpace(cfg.Webhook.URL))
+	if err != nil {
+		return "", nil, err
+	}
+	pol := egress.Policy{
+		AllowLoopback: cfg.Webhook.AllowLoopbackHTTP,
+		AllowPrivate:  cfg.Security.AllowPrivateLLMEgress,
+	}
+	vu, err := egress.ValidateURL(pol, cfg.Webhook.URL)
+	if err != nil {
+		return "DENIED by egress policy: " + err.Error(), u, err
+	}
+	host := vu.Hostname()
+	class := "public https endpoint"
+	if ip := net.ParseIP(host); ip != nil {
+		switch {
+		case ip.IsLoopback():
+			class = "loopback endpoint (dev mode)"
+		case ip.IsPrivate():
+			class = "private gateway (opt-in honored)"
+		}
+	} else if strings.EqualFold(host, "localhost") {
+		class = "loopback endpoint (dev mode)"
+	}
+	return class, vu, nil
 }

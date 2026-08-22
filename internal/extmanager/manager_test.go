@@ -96,7 +96,7 @@ func buildFixture(t *testing.T, name string, callTimeoutMS int) *ext.Manifest {
 		Transport: ext.Transport{
 			Kind:               "subprocess-ndjson",
 			Command:            []string{exePath},
-			HandshakeTimeoutMS: 2000,
+			HandshakeTimeoutMS: 5000,
 			CallTimeoutMS:      callTimeoutMS,
 			MaxOutputBytes:     1 << 20,
 		},

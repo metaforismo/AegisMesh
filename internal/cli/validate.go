@@ -96,6 +96,10 @@ func renderEffectiveHuman(w io.Writer, cfg *config.Config, rep effectiveReport) 
 	if base != "" {
 		fmt.Fprintf(w, "  endpoint: %s\n", base)
 	}
+	if rep.Webhook != nil {
+		fmt.Fprintf(w, "  webhook: %s (%s)%s\n", rep.Webhook.Host, rep.Webhook.Class,
+			map[bool]string{true: "", false: " — UNSIGNED"}[rep.Webhook.Signed])
+	}
 	d := rep.Detection
 	state := "disabled"
 	if d.Enabled {
@@ -138,7 +142,15 @@ type effectiveReport struct {
 	EgressClass string           `json:"egress_class"`
 	BaseURL     string           `json:"base_url,omitempty"`
 	Detection   detectionSummary `json:"detection"`
+	Webhook     *webhookSummary  `json:"webhook,omitempty"`
 	Sensors     []sensorSummary  `json:"sensors"`
+}
+
+type webhookSummary struct {
+	Enabled bool   `json:"enabled"`
+	Host    string `json:"host,omitempty"`
+	Signed  bool   `json:"signed"`
+	Class   string `json:"egress_class,omitempty"`
 }
 
 type detectionSummary struct {
@@ -184,6 +196,17 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 	}
 	if rep.Detection.ThrottlePerMinute == 0 {
 		rep.Detection.ThrottlePerMinute = 600 // documented default
+	}
+	if cfg.Webhook.IsEnabled() {
+		class, u, _ := classifyWebhookEndpoint(cfg)
+		rep.Webhook = &webhookSummary{
+			Enabled: true,
+			Signed:  cfg.Webhook.HMACSecretEnv != "" || cfg.Webhook.HMACSecretFile != "",
+			Class:   class,
+		}
+		if u != nil {
+			rep.Webhook.Host = u.Host
+		}
 	}
 	for i := range cfg.Sensors {
 		s := &cfg.Sensors[i]
