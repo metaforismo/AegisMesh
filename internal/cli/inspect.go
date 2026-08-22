@@ -26,14 +26,17 @@ func (c *inspectCmd) Usage() string { return "inspect <list|show|export> [flags]
 func (c *inspectCmd) Help() string {
 	return `Read and export recorded evidence.
 
-  inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--verify]
+  inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
   inspect show   --data-dir DIR --id EVENT_ID [--verify]
   inspect export --data-dir DIR --out FILE.ndjson [--verify]
 
 Events are observations of decoy interactions — they are not incidents and do
 not prove compromise. --verify recomputes each event's integrity hash while
 reading; failures are reported per line and counted. --finding filters to
-events where the named detection rule fired (e.g. --finding PI-001).`
+events where the named detection rule fired (e.g. --finding PI-001).
+--classification filters to exactly one evidence class (interaction,
+canary_invocation, correlation_signal); it applies before --limit, so
+--limit N caps matching rows.`
 }
 
 func (c *inspectCmd) Run(ctx context.Context, args []string) error {
@@ -70,8 +73,26 @@ func (c *inspectCmd) list(args []string) error {
 	sensorID := fs.String("sensor", "", "filter by sensor id")
 	kind := fs.String("kind", "", "filter by sensor kind (http|tcp|mcp)")
 	finding := fs.String("finding", "", "only events where this detection rule id fired (e.g. PI-001)")
+	var class classificationFlag
+	fs.Var(&class, "classification", "filter to one evidence class (interaction|canary_invocation|correlation_signal)")
 	verify := fs.Bool("verify", false, "recompute integrity hashes while reading")
-	fs.Parse(args) //nolint:errcheck // rendered below on error
+	if err := fs.Parse(args); err != nil {
+		return Usagef("%v", err)
+	}
+	if fs.NArg() > 0 {
+		return Usagef("unexpected argument %q (inspect list takes flags only)", fs.Arg(0))
+	}
+	classification := ""
+	if len(class.values) > 1 {
+		return Usagef("--classification given %d times; pass it at most once (want %s)",
+			len(class.values), strings.Join(eventClassifications, "|"))
+	}
+	if len(class.values) == 1 {
+		classification = class.values[0]
+		if !isValidClassification(classification) {
+			return Usagef("unknown classification %q (want %s)", classification, strings.Join(eventClassifications, "|"))
+		}
+	}
 	if *finding != "" {
 		if err := detect.ValidateRuleIDs([]string{*finding}); err != nil {
 			return Usagef("%v", err)
@@ -99,6 +120,9 @@ func (c *inspectCmd) list(args []string) error {
 			return nil
 		}
 		if *finding != "" && !observationHasFinding(e.Observation, *finding) {
+			return nil
+		}
+		if classification != "" && e.Classification != classification {
 			return nil
 		}
 		if len(rows) >= *limit {
@@ -268,6 +292,37 @@ var (
 	_ = context.Background
 	_ = os.Exit
 )
+
+// eventClassifications is derived from the owning constants in internal/event
+// so this filter cannot drift from the classifications envelopes validate.
+// Order here is the deterministic order used in every error message.
+var eventClassifications = []string{
+	event.ClassificationInteraction,
+	event.ClassificationCanaryHit,
+	event.ClassificationCorrelationSignal,
+}
+
+func isValidClassification(v string) bool {
+	for _, c := range eventClassifications {
+		if v == c {
+			return true
+		}
+	}
+	return false
+}
+
+// classificationFlag records every --classification occurrence so repeats fail
+// loudly instead of the last value silently winning.
+type classificationFlag struct{ values []string }
+
+func (f *classificationFlag) String() string {
+	if len(f.values) == 0 {
+		return ""
+	}
+	return f.values[len(f.values)-1]
+}
+
+func (f *classificationFlag) Set(v string) error { f.values = append(f.values, v); return nil }
 
 // observationHasFinding reports whether an observation payload carries a
 // detection finding with the given rule id. Unknown observation shapes simply

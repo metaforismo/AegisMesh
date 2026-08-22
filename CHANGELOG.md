@@ -8,6 +8,10 @@ changes bump MINOR).
 
 ### Added
 
+- `inspect list --classification VALUE` filters evidence to exactly one class
+  (`interaction`, `canary_invocation`, `correlation_signal`) using the owning
+  event constants, applied before `--limit`; unknown, repeated, or malformed
+  values fail as usage errors.
 - Correlation signals (COR-001..COR-004) are now recorded as integrity-checked
   `correlation_signal` evidence envelopes in the local JSONL store, visible
   through the existing `inspect list/show/export`; signals remain observations
