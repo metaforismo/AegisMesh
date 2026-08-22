@@ -1,0 +1,15 @@
+# Clean-room example of a publicly-documented Beelzebub HTTP service shape,
+# hand-written for documentation and tests. Not copied from any GPL source.
+protocol: http
+address: ":8081"
+description: "Example Linux server with weak admin panel"
+commands:
+  - regex: "^/admin/login$"
+    methods: ["GET"]
+    statusCode: 200
+    headers:
+      Content-Type: "text/html; charset=utf-8"
+    handler: "<html><body>Example admin login</body></html>"
+  - regex: "^/backup.tar.gz$"
+    statusCode: 200
+    handler: "not-a-real-archive"

@@ -78,6 +78,21 @@ Unsupported/reported:
 - Emitted configs contain **no** security section at all — the strict loader
   round-trip is part of the importer's test suite.
 
+## Credential safety gate
+
+Before any translation, every source document is scanned for
+credential-shaped keys (`api_key`, `secret`, `token`, `password`,
+`private_key`, ...):
+
+- **Inline material** (PEM blocks, long opaque blobs) refuses the whole
+  import with a non-zero exit. The error names the offending path (e.g.
+  `$.api_key`) but never the value.
+- **References** (file paths, obvious placeholders like `changeme`) are
+  reported as unsupported fields and carried over as nothing.
+
+AegisMesh configs are meant for version control; credentials belong in
+`llm.api_key_env` / `llm.api_key_file` references, resolved at runtime.
+
 ## Honest limitations
 
 - This is an auditable MVP, not full parity. Upstream features without a

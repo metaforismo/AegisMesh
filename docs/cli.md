@@ -63,7 +63,11 @@ against the registry before any file is read).
 Clean-room importer for Beelzebub YAML service documents (http/tcp/mcp;
 core files produce a report only; ssh/telnet are reported fully unsupported).
 Dry-run by default; `--write` emits `<stem>.aegismesh.yaml` per translatable
-file, refusing overwrites without `--force`. See docs/migration-beelzebub.md
+file, refusing overwrites without `--force`. Source documents containing
+credential material (API keys, tokens, PEM blocks) refuse the import with a
+non-zero exit; credential *references* (paths, placeholders) are reported as
+unsupported and never carried over. Values are never echoed. See
+docs/migration-beelzebub.md
 for exact field mappings.
 
 ## aegismesh ext
