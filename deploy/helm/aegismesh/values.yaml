@@ -41,6 +41,14 @@ service:
       targetPort: 6399
       protocol: TCP
 
+## Default-enabled ingress isolation (networking.k8s.io/v1): only the decoy
+## ports above accept traffic; everything else inbound to the Pod is dropped.
+## Egress stays open on purpose so local inference, remote LLM providers,
+## webhook delivery, and event sinks keep working unchanged. Set false to
+## restore flat networking; every relaxation widens attack surface.
+networkPolicy:
+  enabled: true
+
 ## Conservative placeholders; measured RSS guidance is still pending
 ## (docs/deploy/kubernetes.md, precondition 4). Adjust per deployment size.
 resources:

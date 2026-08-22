@@ -60,6 +60,7 @@ type scenario struct {
 	name       string
 	valuesFile string
 	wantType   string
+	wantNetPol bool
 }
 
 func TestHelmChartContract(t *testing.T) {
@@ -83,12 +84,16 @@ func TestHelmChartContract(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(scratch) })
 
 	files := map[string]string{
-		// Meaningful overrides: 1) wider exposure model; 2) immutable pin.
+		// Meaningful overrides: 1) wider exposure model with the ingress
+		// policy deliberately disabled (must render no NetworkPolicy);
+		// 2) immutable pin.
 		"nodeport.yaml": `service:
   type: NodePort
   ports:
     - {name: http, port: 8081, targetPort: 8081, protocol: TCP, nodePort: 30081}
     - {name: tcp, port: 6399, targetPort: 6399, protocol: TCP, nodePort: 30639}
+networkPolicy:
+  enabled: false
 `,
 		"pinned.yaml":        "image: {tag: \"1.2.3\", pullPolicy: Always}\nresources:\n  limits: {memory: 512Mi}\n",
 		"empty-sensors.yaml": "meshConfig:\n  sensors: []\n",
@@ -101,9 +106,9 @@ func TestHelmChartContract(t *testing.T) {
 	}
 
 	scenarios := []scenario{
-		{name: "defaults", wantType: "ClusterIP"},
-		{name: "nodeport-exposure", valuesFile: "nodeport.yaml", wantType: "NodePort"},
-		{name: "pinned-image-resources", valuesFile: "pinned.yaml", wantType: "ClusterIP"},
+		{name: "defaults", wantType: "ClusterIP", wantNetPol: true},
+		{name: "nodeport-exposure-policy-off", valuesFile: "nodeport.yaml", wantType: "NodePort"},
+		{name: "pinned-image-resources", valuesFile: "pinned.yaml", wantType: "ClusterIP", wantNetPol: true},
 	}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
@@ -135,6 +140,7 @@ func TestHelmChartContract(t *testing.T) {
 		{"wrong mesh api_version", "/meshConfig/api_version", []string{"meshConfig.api_version=aegismesh.io/v9"}, ""},
 		{"nonsensical memory quantity", "/resources/limits/memory", []string{"resources.limits.memory=banana"}, ""},
 		{"empty sensor set", "/meshConfig/sensors", nil, "empty-sensors.yaml"},
+		{"non-boolean network policy flag", "/networkPolicy/enabled", []string{"networkPolicy.enabled=maybe"}, ""},
 	}
 	for _, tc := range negatives {
 		t.Run("rejects "+tc.name, func(t *testing.T) {
@@ -262,9 +268,13 @@ func checkContract(t *testing.T, rendered []byte, sc scenario) {
 	if !maps.Equal(asMap(t, svcSpec["selector"]), sel) {
 		t.Error("service selector diverges from deployment matchLabels")
 	}
-	targets := make([]string, 0, len(asList(t, svcSpec["ports"])))
-	for _, p := range asList(t, svcSpec["ports"]) {
-		targets = append(targets, fmt.Sprint(asMap(t, p)["targetPort"]))
+	svcPorts := asList(t, svcSpec["ports"])
+	targets := make([]string, 0, len(svcPorts))
+	svcPairs := make([]string, 0, len(svcPorts))
+	for _, p := range svcPorts {
+		pm := asMap(t, p)
+		targets = append(targets, fmt.Sprint(pm["targetPort"]))
+		svcPairs = append(svcPairs, fmt.Sprint(pm["protocol"])+"/"+fmt.Sprint(pm["targetPort"]))
 	}
 	routable := []string{} // ports of non-loopback sensor listeners
 	for _, s := range mesh.Sensors {
@@ -284,6 +294,47 @@ func checkContract(t *testing.T, rendered []byte, sc scenario) {
 	}
 	if admin, _ := listenerPort(cmp.Or(mesh.Admin.Listen, adminListen)); slices.Contains(targets, admin) {
 		t.Errorf("admin listener :%s must never be routed through the Service", admin)
+	}
+
+	// Ingress isolation contract: the NetworkPolicy admits exactly the decoy
+	// protocol/targetPort pairs the Service exposes and never constrains
+	// egress (local inference, remote LLM providers, webhooks depend on it).
+	switch {
+	case sc.wantNetPol:
+		if counts["NetworkPolicy"] != 1 {
+			t.Fatalf("want exactly one NetworkPolicy in addition to core objects, got %d", counts["NetworkPolicy"])
+		}
+		npSpec := asMap(t, docsByKind["NetworkPolicy"]["spec"])
+		if !maps.Equal(asMap(t, asMap(t, npSpec["podSelector"])["matchLabels"]), sel) {
+			t.Error("networkpolicy podSelector diverges from deployment matchLabels")
+		}
+		ptypes, _ := npSpec["policyTypes"].([]any)
+		var types []string
+		for _, v := range ptypes {
+			types = append(types, fmt.Sprint(v))
+		}
+		if !slices.Equal(types, []string{"Ingress"}) {
+			t.Errorf("networkpolicy policyTypes = %v, want exactly [Ingress]", types)
+		}
+		if _, ok := npSpec["egress"]; ok {
+			t.Error("networkpolicy must not define egress rules")
+		}
+		var allowed []string
+		for _, rule := range asList(t, npSpec["ingress"]) {
+			for _, p := range asList(t, asMap(t, rule)["ports"]) {
+				pm := asMap(t, p)
+				allowed = append(allowed, fmt.Sprint(pm["protocol"])+"/"+fmt.Sprint(pm["port"]))
+			}
+		}
+		slices.Sort(allowed)
+		slices.Sort(svcPairs)
+		if !slices.Equal(allowed, svcPairs) {
+			t.Errorf("networkpolicy ingress %v != service protocol/targetPort set %v", allowed, svcPairs)
+		}
+	default:
+		if counts["NetworkPolicy"] != 0 {
+			t.Errorf("networkPolicy disabled must render no NetworkPolicy, got %d", counts["NetworkPolicy"])
+		}
 	}
 	if sc.name == "pinned-image-resources" {
 		if img := fmt.Sprint(c["image"]); !strings.HasSuffix(img, ":1.2.3") {

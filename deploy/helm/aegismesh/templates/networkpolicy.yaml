@@ -1,0 +1,28 @@
+{{- if .Values.networkPolicy.enabled }}
+# Default-enabled ingress isolation: the only traffic admitted into the Pod is
+# aimed at the decoy ports deliberately exposed via service.ports. The admin
+# listener (loopback-only by validated runtime invariant) needs no rule here
+# and must never appear. Egress is intentionally unconstrained so local
+# inference, remote LLM providers, webhooks, and event delivery keep working.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aegismesh.fullname" . }}
+  labels:
+    {{- include "aegismesh.labels" . | nindent 4 }}
+spec:
+  # Same immutable pod identity as Deployment selector and Service selector.
+  podSelector:
+    matchLabels:
+      {{- include "aegismesh.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Ports without `from`: these are deliberate decoy listeners; the Service
+    # remains the outer reachability boundary.
+    - ports:
+      {{- range .Values.service.ports }}
+        - protocol: {{ default "TCP" .protocol }}
+          port: {{ .targetPort }}
+      {{- end }}
+{{- end }}

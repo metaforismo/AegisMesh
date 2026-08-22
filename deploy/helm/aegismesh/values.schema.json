@@ -7,6 +7,7 @@
     "image",
     "replicas",
     "service",
+    "networkPolicy",
     "terminationGracePeriodSeconds",
     "podSecurityContext",
     "containerSecurityContext",
@@ -65,6 +66,16 @@
               "protocol": { "enum": ["TCP", "UDP", "SCTP"] }
             }
           }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Default true: ingress is restricted to the decoy targetPorts declared under service.ports; egress is never constrained by this chart."
         }
       }
     },
