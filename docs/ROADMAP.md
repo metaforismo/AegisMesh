@@ -47,6 +47,9 @@ Nothing is checked on intent alone.
 4. R4: Response recommendation engine v0: rules over events producing *dry-run* playbooks only.
 5. R5: Evidence at rest: optional age/x25519 encryption of JSONL segments.
 6. R6: Wire verified extensions into live policy resolution (behind explicit operator enablement).
+   - [x] Data-only observer path shipped: supervised delivery queue, drop/revocation metrics, bounded
+         shutdown, fail-closed manifest verification (`internal/extmanager`, PR feat/extension-observer-wiring).
+         Response-influencing wiring stays unimplemented by design (ADR-0006).
 7. R7: `aegismesh demo` self-contained scripted scenario command.
 8. R8: Optional per-sensor process isolation mode for fault containment.
 

@@ -149,6 +149,38 @@ Protocol surface: `initialize`, `notifications/initialized` (202),
 `interaction`; calling any tool (known or unknown) is a `canary_invocation`.
 Nothing is ever executed — results are canned text.
 
+## Extensions (observer, optional)
+
+Out-of-process observer extensions receive a bounded stream of observations
+(data-only; their replies are acks/errors and can never influence decoy
+behavior, evidence, or policy — ADR-0006).
+
+```yaml
+extensions:
+  enabled: true
+  manifests:                      # ext.aegismesh.io/v1alpha1 manifest files
+    - ./extensions/observer/manifest.json
+  queue_size: 256                 # per-extension delivery queue (16..4096); full = drop+count
+  shutdown_flush_seconds: 2       # bounded drain window at shutdown (1..10)
+  ed25519_pubkey_hex: ""          # optional: require signatures by this key
+```
+
+Semantics that matter:
+
+- **Verification is fail-closed.** Every manifest must pass digest (sha256,
+  mandatory) and — when `ed25519_pubkey_hex` is set — ed25519 signature checks
+  before startup; any failure refuses to start the system.
+- **Capability gate.** Only extensions declaring the `observe` permission are
+  wired today; anything else is refused with an explicit message.
+- **Delivery is best-effort by design.** Full queues drop (counter
+  `aegismesh_extension_dropped_total`), slow/crashing/erroring extensions are
+  revoked for the process lifetime (`aegismesh_extension_revoked_total`) — no
+  restart storms. Evidence storage is never affected.
+- **Lifecycle.** Extensions start after admin and before sensors; shutdown
+  drains up to `shutdown_flush_seconds`, then stops every host regardless.
+- Payloads are JSON: `{event_id, time, classification, sensor{...}, payload}`
+  where `payload` is the same redaction-safe observation stored in evidence.
+
 ## Environment variable overrides
 
 Applied after file parsing, before validation:

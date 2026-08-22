@@ -61,22 +61,51 @@ const (
 	// Detection evaluation bounds.
 	MaxDetectInputBytes    = 64 << 10 // engine never evaluates more than this per interaction
 	DefaultDetectionMaxLen = 8 << 10
+
+	// Extension supervisor bounds.
+	MaxExtensions             = 4
+	DefaultExtensionQueueSize = 256
+	MinExtensionQueueSize     = 16
+	MaxExtensionQueueSize     = 4096
+	DefaultExtensionFlushSecs = 2
+	MinExtensionFlushSecs     = 1
+	MaxExtensionFlushSecs     = 10
 )
 
 // Config is the root configuration document.
 type Config struct {
-	APIVersion string    `yaml:"api_version" json:"api_version"`
-	Runtime    Runtime   `yaml:"runtime"    json:"runtime"`
-	Storage    Storage   `yaml:"storage"    json:"storage"`
-	Admin      Admin     `yaml:"admin"      json:"admin"`
-	Logging    Logging   `yaml:"logging"    json:"logging"`
-	Security   Security  `yaml:"security"   json:"security"`
-	LLM        LLM       `yaml:"llm"        json:"llm"`
-	Detection  Detection `yaml:"detection,omitempty" json:"detection,omitempty"`
-	Sensors    []Sensor  `yaml:"sensors"    json:"sensors"`
+	APIVersion string     `yaml:"api_version" json:"api_version"`
+	Runtime    Runtime    `yaml:"runtime"     json:"runtime"`
+	Storage    Storage    `yaml:"storage"     json:"storage"`
+	Admin      Admin      `yaml:"admin"       json:"admin"`
+	Logging    Logging    `yaml:"logging"     json:"logging"`
+	Security   Security   `yaml:"security"    json:"security"`
+	LLM        LLM        `yaml:"llm"         json:"llm"`
+	Detection  Detection  `yaml:"detection,omitempty" json:"detection,omitempty"`
+	Extensions Extensions `yaml:"extensions,omitempty" json:"extensions,omitempty"`
+	Sensors    []Sensor   `yaml:"sensors"    json:"sensors"`
 
 	// SourcePath records where this config was loaded from; never decoded from YAML.
 	SourcePath string `yaml:"-" json:"-"`
+}
+
+// Extensions configures optional out-of-process observer extensions. They run
+// as digest-verified (optionally ed25519-signed) subprocesses and receive
+// observation envelopes data-only: their replies are acks/errors and can
+// never influence decoy behavior, evidence, or policy.
+type Extensions struct {
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// Manifests lists paths to extension manifest files (ext.aegismesh.io/v1alpha1).
+	Manifests []string `yaml:"manifests,omitempty" json:"manifests,omitempty"`
+	// QueueSize bounds the per-extension delivery queue. Full queues drop
+	// (counted), never block sensors.
+	QueueSize int `yaml:"queue_size,omitempty" json:"queue_size,omitempty"`
+	// ShutdownFlushSeconds bounds how long shutdown waits for queued
+	// observations to be delivered before extensions are stopped.
+	ShutdownFlushSeconds int `yaml:"shutdown_flush_seconds,omitempty" json:"shutdown_flush_seconds,omitempty"`
+	// Ed25519PubKeyHex optionally requires every manifest to carry a valid
+	// signature by this key. Empty means digest-only verification.
+	Ed25519PubKeyHex string `yaml:"ed25519_pubkey_hex,omitempty" json:"ed25519_pubkey_hex,omitempty"`
 }
 
 type Runtime struct {
@@ -182,6 +211,9 @@ type DetectionActions struct {
 }
 
 func (d Detection) IsEnabled() bool { return d.Enabled == nil || *d.Enabled }
+
+// IsEnabled reports whether observer extensions are configured on.
+func (e Extensions) IsEnabled() bool { return e.Enabled != nil && *e.Enabled }
 
 type Sensor struct {
 	ID     string `yaml:"id"     json:"id"`

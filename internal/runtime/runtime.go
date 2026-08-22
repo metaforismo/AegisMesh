@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/metaforismo/aegismesh/internal/admin"
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/ext"
+	"github.com/metaforismo/aegismesh/internal/extmanager"
 	"github.com/metaforismo/aegismesh/internal/llm"
 	"github.com/metaforismo/aegismesh/internal/observe"
 	"github.com/metaforismo/aegismesh/internal/policy"
@@ -43,10 +46,26 @@ type System struct {
 	seq       *event.Sequencer
 	adminSrv  *admin.Server
 	sensors   []sensor.Sensor
+	extMgr    *extmanager.Manager
 	log       *slog.Logger
 	failed    atomic.Uint64
 	stopMaint chan struct{}
 	maintOnce sync.Once
+}
+
+// observerSink keeps evidence authoritative while offering every envelope to
+// observer extensions best-effort: Deliver never blocks and its drops are
+// counted on extension metrics, so the store path cannot be slowed or failed
+// by an extension.
+type observerSink struct {
+	primary event.Sink
+	mgr     *extmanager.Manager
+}
+
+func (s observerSink) Append(ctx context.Context, e event.Envelope) error {
+	err := s.primary.Append(ctx, e)
+	s.mgr.Deliver(e)
+	return err
 }
 
 // Build validates and constructs everything. No listener is bound yet.
@@ -86,7 +105,23 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		log:       log,
 		stopMaint: make(chan struct{}),
 	}
-	sys.bus = event.NewBus(busCapacity, store, log)
+
+	if cfg.Extensions.IsEnabled() {
+		manifests, err := loadObserverManifests(cfg.Extensions)
+		if err != nil {
+			sys.closeAll()
+			return nil, fmt.Errorf("%w: %v", errRuntime, err)
+		}
+		sys.extMgr = extmanager.New(manifests, reg, log,
+			cfg.Extensions.QueueSize,
+			time.Duration(cfg.Extensions.ShutdownFlushSeconds)*time.Second)
+	}
+
+	sink := event.Sink(store)
+	if sys.extMgr != nil {
+		sink = observerSink{primary: store, mgr: sys.extMgr}
+	}
+	sys.bus = event.NewBus(busCapacity, sink, log)
 
 	for i := range cfg.Sensors {
 		s, err := buildSensor(&cfg.Sensors[i], cfg, prov, enf)
@@ -106,6 +141,37 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		sys.adminSrv = asrv
 	}
 	return sys, nil
+}
+
+// loadObserverManifests loads, verifies, and capability-checks every
+// configured extension manifest. Fail-closed: any problem refuses startup.
+func loadObserverManifests(c config.Extensions) ([]*ext.Manifest, error) {
+	seen := map[string]bool{}
+	manifests := make([]*ext.Manifest, 0, len(c.Manifests))
+	for _, path := range c.Manifests {
+		m, err := ext.LoadManifest(path)
+		if err != nil {
+			return nil, fmt.Errorf("extension manifest %s: %v", filepath.Base(path), err)
+		}
+		if seen[m.Name] {
+			return nil, fmt.Errorf("extension name %q declared twice (unique names are required for metrics and logs)", m.Name)
+		}
+		seen[m.Name] = true
+		wired := false
+		for _, p := range m.Permissions {
+			if p == "observe" {
+				wired = true
+			}
+		}
+		if !wired {
+			return nil, fmt.Errorf("extension %q must declare the observe permission; no other permission is wired into the runtime today", m.Name)
+		}
+		if _, err := ext.Verify(m, c.Ed25519PubKeyHex); err != nil {
+			return nil, fmt.Errorf("extension %q failed verification: %v", m.Name, err)
+		}
+		manifests = append(manifests, m)
+	}
+	return manifests, nil
 }
 
 // providerFor materializes the configured provider. Remote construction is
@@ -157,10 +223,22 @@ func buildSensor(c *config.Sensor, cfg *config.Config, prov llm.Provider, enf *p
 	}
 }
 
-// Start brings up admin + all sensors. Partial failures tear everything down.
+// Start brings up admin, observer extensions, and all sensors. Partial
+// failures tear everything down.
 func (s *System) Start(ctx context.Context) error {
 	if s.adminSrv != nil {
 		s.adminSrv.Start()
+	}
+	if s.extMgr != nil {
+		// Extensions start before sensors so early observations flow; a
+		// failed extension startup fails the whole start (fail-closed).
+		sctx, cancel := context.WithTimeout(ctx, startTimeout)
+		err := s.extMgr.Start(sctx)
+		cancel()
+		if err != nil {
+			s.Stop(context.Background())
+			return fmt.Errorf("%w: %v", errRuntime, err)
+		}
 	}
 	for _, sen := range s.sensors {
 		d := sensor.Deps{
@@ -254,6 +332,11 @@ func (s *System) closeAll() {
 	}
 	if s.bus != nil {
 		s.bus.Close()
+	}
+	if s.extMgr != nil {
+		// After bus drain (so queued events were offered) and before store
+		// close: bounded flush window, then hosts are stopped regardless.
+		s.extMgr.Stop()
 	}
 	if s.store != nil {
 		if err := s.store.Flush(); err != nil {

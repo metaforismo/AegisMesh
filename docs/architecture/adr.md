@@ -105,9 +105,12 @@ signature (verified when a public key is configured). Extensions run as separate
 newline-delimited JSON on stdin/stdout through an explicit operator-invoked host command: version-negotiated
 handshake, hard deadlines, stdout caps, revocation by kill. The runtime never spawns extensions implicitly.
 
-**Consequences.** No untrusted code in-process; integration into live sensor flows is explicitly NOT claimed
-in this batch (contract-tested host + reference extension only; runtime wiring is roadmap R6). WASM remains
-an option once a small, well-audited runtime dependency is justified.
+**Consequences.** No untrusted code in-process. The runtime wiring now exists for the **data-only observer
+path**: verified extensions declaring the `observe` permission receive bounded observation envelopes through a
+supervised delivery queue (drop accounting, terminal revocation on violation, bounded shutdown flush) — see
+`internal/extmanager`. Their replies are acks/errors and can never influence behavior, evidence, or policy.
+Response-influencing wiring (`respond`) remains explicitly NOT implemented; WASM remains an option once a
+small, well-audited runtime dependency is justified.
 
 ---
 
