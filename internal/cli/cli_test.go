@@ -28,6 +28,7 @@ func newTestApp() (*App, *bytes.Buffer, *bytes.Buffer) {
 		NewValidateCmd(env),
 		NewRunCmd(env),
 		NewInspectCmd(env),
+		NewRulesCmd(env),
 		NewMigrateCmd(env),
 		NewExtCmd(env),
 		NewVersionCmd(env),
