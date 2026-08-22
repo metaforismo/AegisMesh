@@ -384,3 +384,83 @@ sensors:
 		t.Fatalf("valid prompt rejected: %v", err)
 	}
 }
+
+func TestExtensionsSectionValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		snippet string
+		wantErr string // empty = must load
+	}{
+		{
+			name: "disabled empty section is fine",
+		},
+		{
+			name:    "enabled without manifests",
+			snippet: "extensions:\n  enabled: true\n",
+			wantErr: "at least one extensions.manifests entry",
+		},
+		{
+			name:    "too many manifests",
+			snippet: "extensions:\n  enabled: true\n  manifests: [a, b, c, d, e]\n",
+			wantErr: "at most 4 extensions",
+		},
+		{
+			name:    "duplicate manifest paths",
+			snippet: "extensions:\n  enabled: true\n  manifests: [same.json, same.json]\n",
+			wantErr: "duplicated",
+		},
+		{
+			name:    "queue size out of bounds",
+			snippet: "extensions:\n  enabled: true\n  manifests: [m.json]\n  queue_size: 3\n",
+			wantErr: "queue_size",
+		},
+		{
+			name:    "flush seconds out of bounds",
+			snippet: "extensions:\n  enabled: true\n  manifests: [m.json]\n  shutdown_flush_seconds: 60\n",
+			wantErr: "shutdown_flush_seconds",
+		},
+		{
+			name:    "malformed pubkey hex",
+			snippet: "extensions:\n  enabled: true\n  manifests: [m.json]\n  ed25519_pubkey_hex: zznothex\n",
+			wantErr: "ed25519_pubkey_hex",
+		},
+		{
+			name:    "wrong pubkey length",
+			snippet: "extensions:\n  enabled: true\n  manifests: [m.json]\n  ed25519_pubkey_hex: aabb\n",
+			wantErr: "ed25519_pubkey_hex",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := minimalValid
+			if tc.snippet != "" {
+				raw = strings.Replace(minimalValid, "sensors:", tc.snippet+"sensors:", 1)
+			}
+			c, err := Load(writeTemp(t, "mesh.yaml", raw))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected success, got: %v", err)
+				}
+				if c.Extensions.IsEnabled() {
+					t.Fatal("section absent must default to disabled")
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got: %v", tc.wantErr, err)
+			}
+		})
+	}
+
+	// Valid section loads with defaults applied.
+	ok := writeTemp(t, "mesh.yaml", strings.Replace(minimalValid, "sensors:",
+		"extensions:\n  enabled: true\n  manifests: [observer.json]\nsensors:", 1))
+	c, err := Load(ok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Extensions.IsEnabled() || c.Extensions.QueueSize != DefaultExtensionQueueSize ||
+		c.Extensions.ShutdownFlushSeconds != DefaultExtensionFlushSecs {
+		t.Fatalf("defaults wrong: %+v", c.Extensions)
+	}
+}

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -113,6 +115,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
 	if err := ValidateDetection(c.Detection); err != nil {
+		return fmt.Errorf("%w: %v", errConfig, err)
+	}
+	if err := ValidateExtensions(c.Extensions); err != nil {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
 	if c.Storage.MaxFileBytes < 4096 {
@@ -377,6 +382,45 @@ func ValidateDetection(d Detection) error {
 	}
 	if d.ThrottlePerMinute < 0 || d.ThrottlePerMinute > 100000 {
 		return fmt.Errorf("detection.throttle_per_minute must be within 0..100000 (0 = default)")
+	}
+	return nil
+}
+
+// ValidateExtensions enforces the observer-extension bounds. Manifest file
+// existence and verification happen at Build time (fail-closed), not here.
+func ValidateExtensions(e Extensions) error {
+	if !e.IsEnabled() {
+		return nil // disabled sections may hold nothing at all
+	}
+	if len(e.Manifests) == 0 {
+		return fmt.Errorf("extensions.enabled=true requires at least one extensions.manifests entry")
+	}
+	if len(e.Manifests) > MaxExtensions {
+		return fmt.Errorf("at most %d extensions are supported, got %d", MaxExtensions, len(e.Manifests))
+	}
+	seen := map[string]bool{}
+	for _, m := range e.Manifests {
+		if strings.TrimSpace(m) == "" {
+			return fmt.Errorf("extensions.manifests entries must be non-empty")
+		}
+		if seen[m] {
+			return fmt.Errorf("extensions.manifests entry %q is duplicated", m)
+		}
+		seen[m] = true
+	}
+	if e.QueueSize != 0 && (e.QueueSize < MinExtensionQueueSize || e.QueueSize > MaxExtensionQueueSize) {
+		return fmt.Errorf("extensions.queue_size must be within %d..%d (0 = default %d)",
+			MinExtensionQueueSize, MaxExtensionQueueSize, DefaultExtensionQueueSize)
+	}
+	if e.ShutdownFlushSeconds != 0 && (e.ShutdownFlushSeconds < MinExtensionFlushSecs || e.ShutdownFlushSeconds > MaxExtensionFlushSecs) {
+		return fmt.Errorf("extensions.shutdown_flush_seconds must be within %d..%d (0 = default %d)",
+			MinExtensionFlushSecs, MaxExtensionFlushSecs, DefaultExtensionFlushSecs)
+	}
+	if e.Ed25519PubKeyHex != "" {
+		key, err := hex.DecodeString(e.Ed25519PubKeyHex)
+		if err != nil || len(key) != ed25519.PublicKeySize {
+			return fmt.Errorf("extensions.ed25519_pubkey_hex must be %d-byte hex ed25519 public key", ed25519.PublicKeySize)
+		}
 	}
 	return nil
 }

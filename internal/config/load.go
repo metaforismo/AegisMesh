@@ -138,6 +138,12 @@ func (c *Config) applyDefaults() {
 	if c.Logging.Format == "" {
 		c.Logging.Format = "json"
 	}
+	if c.Extensions.QueueSize == 0 {
+		c.Extensions.QueueSize = DefaultExtensionQueueSize
+	}
+	if c.Extensions.ShutdownFlushSeconds == 0 {
+		c.Extensions.ShutdownFlushSeconds = DefaultExtensionFlushSecs
+	}
 	if c.LLM.Provider == "" {
 		c.LLM.Provider = "local"
 	}

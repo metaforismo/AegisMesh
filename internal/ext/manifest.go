@@ -37,10 +37,16 @@ var (
 	errManifest = errors.New("ext manifest")
 )
 
-// Permissions allowed in v1alpha1. Extensions can only ever produce response
-// text; anything more requires a new schema version and ADR.
+// Permissions allowed in v1alpha1:
+//   - respond: extension may contribute response text (not wired into the
+//     runtime yet; reserved by the schema)
+//   - observe: extension receives observation envelopes (data-only; its
+//     replies carry acks/errors and can never influence behavior)
+//
+// Anything more requires a new schema version and ADR.
 var allowedPermissions = map[string]bool{
 	"respond": true,
+	"observe": true,
 }
 
 type Manifest struct {
@@ -95,7 +101,7 @@ func (m *Manifest) Validate() error {
 	}
 	for _, p := range m.Permissions {
 		if !allowedPermissions[p] {
-			return fmt.Errorf("%w: permission %q not recognized (allowed: respond)", errManifest, p)
+			return fmt.Errorf("%w: permission %q not recognized (allowed: observe|respond)", errManifest, p)
 		}
 	}
 	t := &m.Transport
