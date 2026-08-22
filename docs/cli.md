@@ -61,6 +61,16 @@ skipped, counted, and reported — never silently dropped. `--finding PI-001`
 filters to events where a named detection rule fired (rule ids are validated
 against the registry before any file is read).
 
+## aegismesh rules
+
+    rules list [--family detection|correlation]
+
+List every rule the binaries can emit — detection findings and correlation
+signals — from one catalog derived from the owning engine registries.
+Deterministic order; `--json` emits `{"rules":[...]}` with stable keys
+(signals carry no severity). Read-only: nothing is loaded, contacted, or
+evaluated.
+
 ## aegismesh migrate
 
     migrate beelzebub FILE... [--out DIR] [--write] [--force]
