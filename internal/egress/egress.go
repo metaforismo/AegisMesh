@@ -47,9 +47,16 @@ import (
 // Policy states which destination classes this process may contact.
 type Policy struct {
 	// AllowLoopback permits loopback destinations (127.0.0.0/8, ::1, the
-	// name "localhost") over cleartext http — the local Ollama case. It NEVER
-	// relaxes the permanent denials below.
+	// name "localhost") over cleartext http — the local Ollama case.
+	// Link-local/cloud metadata stays denied even with this set.
 	AllowLoopback bool
+
+	// AllowPrivate permits RFC1918 and IPv6 ULA destinations — the corporate
+	// LLM-gateway-on-an-internal-address case. It is an explicit operator
+	// decision because it lets captured attacker traffic flow toward
+	// internal networks. Link-local/cloud metadata remains denied even with
+	// both flags set: no legitimate model provider lives there.
+	AllowPrivate bool
 }
 
 var errDenied = fmt.Errorf("egress: destination denied by policy")
@@ -76,9 +83,19 @@ func deny(class DenyClass, detail string) error {
 // IsDenied reports whether err came from this package's policy checks.
 func IsDenied(err error) bool { return err != nil && strings.Contains(err.Error(), errDenied.Error()) }
 
+// metadataIPs are cloud instance metadata endpoints. They sit in ranges that
+// other flags may otherwise permit (link-local for IPv4, ULA for AWS's IPv6
+// endpoint), so they are pinned here and denied unconditionally: no
+// legitimate model provider lives at these addresses, while every VM-borne
+// credential does.
+var metadataIPs = map[string]bool{
+	"169.254.169.254": true,
+	"fd00:ec2::254":   true,
+}
+
 // Classify maps one IP to a denial class, or "" when permitted by p.
-// Loopback is only denied when the policy does not opt in; every other class
-// listed here is denied unconditionally — including under loopback opt-in.
+// Metadata endpoints, link-local, unspecified, and multicast destinations are
+// denied unconditionally; loopback and private ranges require their opt-ins.
 func Classify(ip net.IP, p Policy) DenyClass {
 	// Canonicalize IPv4-mapped IPv6 (::ffff:a.b.c.d) to plain v4 so mapped
 	// forms cannot masquerade as unlisted global addresses. Genuine v6
@@ -86,18 +103,23 @@ func Classify(ip net.IP, p Policy) DenyClass {
 	if t4 := ip.To4(); t4 != nil {
 		ip = t4
 	}
-	switch {
-	case ip.IsUnspecified(): // 0.0.0.0 / ::
+	if ip.IsUnspecified() { // 0.0.0.0 / ::
 		return DenyUnspecified
+	}
+	if metadataIPs[ip.String()] {
+		return DenyLinkLocal
+	}
+	switch {
 	case ip.IsLoopback():
 		if !p.AllowLoopback {
 			return DenyLoopback
 		}
 	case ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast():
-		// 169.254.0.0/16 covers the cloud metadata service; fe80::/10 likewise.
 		return DenyLinkLocal
-	case ip.IsPrivate(): // RFC1918 + ULA fc00::/7 (incl. fd00:ec2::254)
-		return DenyPrivate
+	case ip.IsPrivate(): // RFC1918 + remaining ULA space
+		if !p.AllowPrivate {
+			return DenyPrivate
+		}
 	case ip.IsMulticast():
 		return DenyMulticast
 	}

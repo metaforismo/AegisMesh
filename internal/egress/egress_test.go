@@ -29,7 +29,7 @@ func TestValidateURLTable(t *testing.T) {
 		{"rfc1918 10/8", "https://10.0.0.5/v1", true, string(DenyPrivate), DenyPrivate},
 		{"rfc1918 172.16/12", "https://172.16.31.5/v1", true, string(DenyPrivate), DenyPrivate},
 		{"rfc1918 192.168/16", "https://192.168.1.10/v1", true, string(DenyPrivate), DenyPrivate},
-		{"ula ec2 metadata", "http://[fd00:ec2::254]/v1", true, string(DenyPrivate), DenyPrivate},
+		{"ula ec2 metadata", "http://[fd00:ec2::254]/v1", true, string(DenyLinkLocal), DenyLinkLocal},
 		{"unspecified v4", "http://0.0.0.0/v1", true, string(DenyUnspecified), DenyUnspecified},
 		{"public https ok", "https://api.example.com/v1", false, "", ""},
 		{"public ip https ok", "https://203.0.113.7/v1", false, "", ""},
@@ -164,5 +164,33 @@ func TestErrorsAreTypedSentinels(t *testing.T) {
 	_, err := ValidateURL(Policy{}, "ftp://x")
 	if !errors.Is(err, errDenied) {
 		t.Fatalf("errors.Is(errDenied) failed for %v", err)
+	}
+}
+
+func TestMetadataDeniedEvenWithAllOptIns(t *testing.T) {
+	p := Policy{AllowLoopback: true, AllowPrivate: true}
+	for _, ip := range []string{"169.254.169.254", "fd00:ec2::254", "::ffff:169.254.169.254"} {
+		if got := Classify(net.ParseIP(ip), p); got != DenyLinkLocal {
+			t.Fatalf("metadata %s classified %q with all opt-ins on", ip, got)
+		}
+	}
+	_, err := ValidateURL(p, "http://169.254.169.254/latest/meta-data/iam/")
+	if err == nil || !strings.Contains(err.Error(), string(DenyLinkLocal)) {
+		t.Fatalf("metadata URL accepted under full opt-in: %v", err)
+	}
+}
+
+func TestPrivateAllowedUnderExplicitOptIn(t *testing.T) {
+	p := Policy{AllowPrivate: true}
+	if got := Classify(net.ParseIP("10.1.2.3"), p); got != "" {
+		t.Fatalf("RFC1918 still denied under opt-in: %q", got)
+	}
+	u, err := ValidateURL(Policy{AllowLoopback: true, AllowPrivate: true}, "https://172.16.31.5/v1")
+	if err != nil || u == nil {
+		t.Fatalf("internal gateway https rejected despite opt-in: %v", err)
+	}
+	// cleartext to private ranges stays denied — opt-in is not a blanket pass.
+	if _, err := ValidateURL(Policy{AllowLoopback: true, AllowPrivate: true}, "http://192.168.1.10/v1"); err == nil {
+		t.Fatal("cleartext private destination must stay denied")
 	}
 }
