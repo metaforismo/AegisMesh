@@ -49,6 +49,22 @@ service:
 networkPolicy:
   enabled: true
 
+## Voluntary-disruption budget (policy/v1 PodDisruptionBudget). Default OFF
+## deliberately: the supported shape is replicas=1 on an ephemeral emptyDir
+## (see `replicas` above), where any enforcing budget blocks every voluntary
+## eviction — routine node drains stall until it is removed — while the data
+## it would "protect" is lost on ANY restart anyway. Enable only if you
+## accept that tradeoff; with minAvailable/maxUnavailable semantics this is
+## a disruption gate, not a durability or availability guarantee.
+pdb:
+  enabled: false
+  # Exactly one threshold, integer or Kubernetes percentage string.
+  # maxUnavailable: 0 means "no voluntary capacity loss" and stays honest at
+  # any replica count. To switch to minAvailable, unset this key first
+  # (`--set pdb.maxUnavailable=null` or `maxUnavailable: null`) or the
+  # exact-one validation rejects the release.
+  maxUnavailable: 0
+
 ## Conservative placeholders; measured RSS guidance is still pending
 ## (docs/deploy/kubernetes.md, precondition 4). Adjust per deployment size.
 resources:

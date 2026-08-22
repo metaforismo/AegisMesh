@@ -61,6 +61,10 @@ type scenario struct {
 	valuesFile string
 	wantType   string
 	wantNetPol bool
+	// Empty pdbKey asserts no PodDisruptionBudget renders; otherwise it
+	// names the single threshold expected together with its value.
+	pdbKey   string
+	pdbValue any
 }
 
 func TestHelmChartContract(t *testing.T) {
@@ -86,7 +90,8 @@ func TestHelmChartContract(t *testing.T) {
 	files := map[string]string{
 		// Meaningful overrides: 1) wider exposure model with the ingress
 		// policy deliberately disabled (must render no NetworkPolicy);
-		// 2) immutable pin.
+		// 2) immutable pin, resource bounds, and an explicit PDB opt-in
+		// exercising the non-default threshold (minAvailable).
 		"nodeport.yaml": `service:
   type: NodePort
   ports:
@@ -95,7 +100,14 @@ func TestHelmChartContract(t *testing.T) {
 networkPolicy:
   enabled: false
 `,
-		"pinned.yaml":        "image: {tag: \"1.2.3\", pullPolicy: Always}\nresources:\n  limits: {memory: 512Mi}\n",
+		"pinned.yaml": `image: {tag: "1.2.3", pullPolicy: Always}
+resources:
+  limits: {memory: 512Mi}
+pdb:
+  enabled: true
+  maxUnavailable: null
+  minAvailable: 1
+`,
 		"empty-sensors.yaml": "meshConfig:\n  sensors: []\n",
 	}
 	for name, content := range files {
@@ -108,7 +120,8 @@ networkPolicy:
 	scenarios := []scenario{
 		{name: "defaults", wantType: "ClusterIP", wantNetPol: true},
 		{name: "nodeport-exposure-policy-off", valuesFile: "nodeport.yaml", wantType: "NodePort"},
-		{name: "pinned-image-resources", valuesFile: "pinned.yaml", wantType: "ClusterIP", wantNetPol: true},
+		{name: "pinned-image-resources-pdb", valuesFile: "pinned.yaml", wantType: "ClusterIP", wantNetPol: true,
+			pdbKey: "minAvailable", pdbValue: 1},
 	}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
@@ -141,6 +154,8 @@ networkPolicy:
 		{"nonsensical memory quantity", "/resources/limits/memory", []string{"resources.limits.memory=banana"}, ""},
 		{"empty sensor set", "/meshConfig/sensors", nil, "empty-sensors.yaml"},
 		{"non-boolean network policy flag", "/networkPolicy/enabled", []string{"networkPolicy.enabled=maybe"}, ""},
+		{"boolean pdb threshold", "/pdb/minAvailable", []string{"pdb.enabled=true", "pdb.minAvailable=true"}, ""},
+		{"malformed pdb percentage", "/pdb/maxUnavailable", []string{"pdb.maxUnavailable=%50"}, ""},
 	}
 	for _, tc := range negatives {
 		t.Run("rejects "+tc.name, func(t *testing.T) {
@@ -159,6 +174,31 @@ networkPolicy:
 				t.Fatalf("failure was not a values.schema.json rejection: %.400s", stderr)
 			case !strings.Contains(stderr, "at '"+tc.wantPath):
 				t.Fatalf("rejection did not name expected path %s: %.400s", tc.wantPath, stderr)
+			}
+		})
+	}
+
+	// Ambiguous pdb thresholds must fail the render whether caught by the
+	// schema layer or by the template guard: no invalid budget may ship.
+	pdbNegatives := []struct {
+		name string
+		set  []string
+	}{
+		{"both pdb thresholds set", []string{"pdb.enabled=true", "pdb.minAvailable=1", "pdb.maxUnavailable=0"}},
+		{"no pdb threshold set", []string{"pdb.enabled=true", "pdb.maxUnavailable=null"}},
+	}
+	for _, tc := range pdbNegatives {
+		t.Run("rejects "+tc.name, func(t *testing.T) {
+			var args []string
+			for _, s := range tc.set {
+				args = append(args, "--set", s)
+			}
+			_, stderr, err := helmTemplate(t, helm, scratch, args)
+			if err == nil {
+				t.Fatal("helm rendered an ambiguous pdb configuration; expected rejection")
+			}
+			if !strings.Contains(stderr, "exactly one") && !strings.Contains(stderr, "/pdb") {
+				t.Fatalf("failure lacks the exact-one reason or schema path /pdb: %.400s", stderr)
 			}
 		})
 	}
@@ -336,7 +376,39 @@ func checkContract(t *testing.T, rendered []byte, sc scenario) {
 			t.Errorf("networkPolicy disabled must render no NetworkPolicy, got %d", counts["NetworkPolicy"])
 		}
 	}
-	if sc.name == "pinned-image-resources" {
+
+	// Voluntary-disruption contract: the PDB is absent by default (with one
+	// replica on an ephemeral evidence store it could only stall drains),
+	// and when opted into it must be a single policy/v1 object bound to the
+	// Deployment selector declaring exactly the configured threshold.
+	switch {
+	case sc.pdbKey != "":
+		if counts["PodDisruptionBudget"] != 1 {
+			t.Fatalf("want exactly one PodDisruptionBudget in addition to core objects, got %d", counts["PodDisruptionBudget"])
+		}
+		pdbDoc := docsByKind["PodDisruptionBudget"]
+		if v := fmt.Sprint(pdbDoc["apiVersion"]); v != "policy/v1" {
+			t.Errorf("poddisruptionbudget apiVersion = %q, want policy/v1", v)
+		}
+		pdbSpec := asMap(t, pdbDoc["spec"])
+		if !maps.Equal(asMap(t, asMap(t, pdbSpec["selector"])["matchLabels"]), sel) {
+			t.Error("poddisruptionbudget selector diverges from deployment matchLabels")
+		}
+		thrown := map[string]any{}
+		for _, k := range []string{"minAvailable", "maxUnavailable"} {
+			if v, ok := pdbSpec[k]; ok && v != nil {
+				thrown[k] = v
+			}
+		}
+		if len(thrown) != 1 || thrown[sc.pdbKey] == nil || fmt.Sprint(thrown[sc.pdbKey]) != fmt.Sprint(sc.pdbValue) {
+			t.Errorf("poddisruptionbudget thresholds %v, want exactly %s=%v", thrown, sc.pdbKey, sc.pdbValue)
+		}
+	default:
+		if counts["PodDisruptionBudget"] != 0 {
+			t.Errorf("pdb disabled must render no PodDisruptionBudget, got %d", counts["PodDisruptionBudget"])
+		}
+	}
+	if sc.name == "pinned-image-resources-pdb" {
 		if img := fmt.Sprint(c["image"]); !strings.HasSuffix(img, ":1.2.3") {
 			t.Errorf("image override ignored: %q does not end in :1.2.3", img)
 		}

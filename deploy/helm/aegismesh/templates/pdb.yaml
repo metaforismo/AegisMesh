@@ -1,0 +1,36 @@
+{{/*
+PodDisruptionBudget — strictly opt-in (values.pdb.enabled).
+
+Honest semantics for this chart's evidence-based defaults: the supported
+shape is a single replica with an ephemeral emptyDir evidence store
+(docs/deploy/kubernetes.md), so an enforcing budget cannot preserve either
+availability or data; it only blocks voluntary evictions. Enabled is a
+deliberate operator decision to trade drainability for disruption control.
+
+Exactly one of pdb.minAvailable / pdb.maxUnavailable must be set when
+enabled; fail here rather than emit an invalid PDB.
+*/}}
+{{- if .Values.pdb.enabled -}}
+{{- $minSet := kindIs "invalid" .Values.pdb.minAvailable | not -}}
+{{- $maxSet := kindIs "invalid" .Values.pdb.maxUnavailable | not -}}
+{{- if and $minSet $maxSet -}}
+{{- fail "pdb.enabled accepts exactly one of pdb.minAvailable or pdb.maxUnavailable; both are set" -}}
+{{- else if not (or $minSet $maxSet) -}}
+{{- fail "pdb.enabled requires exactly one of pdb.minAvailable or pdb.maxUnavailable; none is set" -}}
+{{- end -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aegismesh.fullname" . }}
+  labels:
+    {{- include "aegismesh.labels" . | nindent 4 }}
+spec:
+  {{- if $minSet }}
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ .Values.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "aegismesh.selectorLabels" . | nindent 6 }}
+{{- end }}
