@@ -14,6 +14,7 @@ func main() {
 	commands := []cli.Command{
 		cli.NewInitCmd(env),
 		cli.NewDoctorCmd(env),
+		cli.NewHealthcheckCmd(env),
 		cli.NewValidateCmd(env),
 		cli.NewRunCmd(env),
 		cli.NewInspectCmd(env),
