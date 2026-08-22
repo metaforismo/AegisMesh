@@ -112,6 +112,15 @@ func renderEffectiveHuman(w io.Writer, cfg *config.Config, rep effectiveReport) 
 	fmt.Fprintf(w, "    actions: info=%s low=%s medium=%s high=%s\n",
 		d.Actions["info"], d.Actions["low"], d.Actions["medium"], d.Actions["high"])
 	fmt.Fprintf(w, "    bounds: max_input=%dB throttle=%d/min\n", d.MaxInputBytes, d.ThrottlePerMinute)
+	if c := rep.Correlation; c.Enabled {
+		fmt.Fprintf(w, "  correlation: enabled — window=%ds per_source_events=%d max_sources=%d\n",
+			c.WindowSeconds, c.PerSourceEvents, c.MaxSources)
+		if len(c.DisabledRules) > 0 {
+			fmt.Fprintf(w, "    disabled: %s\n", strings.Join(c.DisabledRules, ", "))
+		}
+	} else {
+		fmt.Fprintf(w, "  correlation: off (default)\n")
+	}
 	for _, s := range rep.Sensors {
 		caps := []string{}
 		if s.HTTPRules > 0 {
@@ -143,7 +152,17 @@ type effectiveReport struct {
 	BaseURL     string           `json:"base_url,omitempty"`
 	Detection   detectionSummary `json:"detection"`
 	Webhook     *webhookSummary  `json:"webhook,omitempty"`
+	Correlation correlationSum   `json:"correlation"`
 	Sensors     []sensorSummary  `json:"sensors"`
+}
+
+// correlationSum mirrors the resolved correlation section for operators.
+type correlationSum struct {
+	Enabled         bool     `json:"enabled"`
+	WindowSeconds   int      `json:"window_seconds,omitempty"`
+	PerSourceEvents int      `json:"per_source_events,omitempty"`
+	MaxSources      int      `json:"max_sources,omitempty"`
+	DisabledRules   []string `json:"disabled_rules,omitempty"`
 }
 
 type webhookSummary struct {
@@ -207,6 +226,13 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 		if u != nil {
 			rep.Webhook.Host = u.Host
 		}
+	}
+	rep.Correlation = correlationSum{
+		Enabled:         cfg.Correlation.IsEnabled(),
+		WindowSeconds:   cfg.Correlation.WindowSeconds,
+		PerSourceEvents: cfg.Correlation.PerSourceEvents,
+		MaxSources:      cfg.Correlation.MaxSources,
+		DisabledRules:   cfg.Correlation.DisabledRules,
 	}
 	for i := range cfg.Sensors {
 		s := &cfg.Sensors[i]

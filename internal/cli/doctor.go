@@ -146,7 +146,31 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 		}
 	}
 
+	// Correlation readiness: static only. Signals are observations; doctor
+	// reports configuration health, never signal state.
+	switch {
+	case cfg.Correlation.IsEnabled():
+		add("ok", "correlation",
+			fmt.Sprintf("enabled: window=%ds per_source_events=%d max_sources=%d disabled_rules=%s",
+				cfg.Correlation.WindowSeconds, cfg.Correlation.PerSourceEvents,
+				cfg.Correlation.MaxSources, ruleList(cfg.Correlation.DisabledRules)),
+			"signals appear as logs and aegismesh_correlate_signals_total{rule}")
+	case len(cfg.Correlation.DisabledRules) > 0:
+		add("warn", "correlation",
+			"disabled_rules set but correlation.enabled is false — the list has no effect",
+			"enable correlation or remove the section")
+	default:
+		add("info", "correlation", "off (default)", "enable with correlation.enabled=true")
+	}
+
 	return c.render(rep)
+}
+
+func ruleList(ids []string) string {
+	if len(ids) == 0 {
+		return "none"
+	}
+	return strings.Join(ids, ",")
 }
 
 // providerStaticReadiness classifies the configured endpoint against the
@@ -234,7 +258,7 @@ func (c *doctorCmd) render(rep doctorReport) error {
 	if c.g.jsonOut {
 		return writeJSON(c.env.Out, rep)
 	}
-	statusIcon := map[string]string{"ok": "[ ok ]", "warn": "[warn]", "fail": "[FAIL]"}
+	statusIcon := map[string]string{"ok": "[ ok ]", "warn": "[warn]", "fail": "[FAIL]", "info": "[info]"}
 	fmt.Fprintf(c.env.Out, "aegismesh doctor — %s\n", rep.ConfigPath)
 	for _, ch := range rep.Checks {
 		line := fmt.Sprintf("%s %-14s %s", statusIcon[ch.Status], ch.Name, ch.Detail)
