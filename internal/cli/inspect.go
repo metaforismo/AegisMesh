@@ -2,12 +2,14 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/storage"
 )
@@ -24,13 +26,14 @@ func (c *inspectCmd) Usage() string { return "inspect <list|show|export> [flags]
 func (c *inspectCmd) Help() string {
 	return `Read and export recorded evidence.
 
-  inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--verify]
+  inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--verify]
   inspect show   --data-dir DIR --id EVENT_ID [--verify]
   inspect export --data-dir DIR --out FILE.ndjson [--verify]
 
 Events are observations of decoy interactions — they are not incidents and do
 not prove compromise. --verify recomputes each event's integrity hash while
-reading; failures are reported per line and counted.`
+reading; failures are reported per line and counted. --finding filters to
+events where the named detection rule fired (e.g. --finding PI-001).`
 }
 
 func (c *inspectCmd) Run(ctx context.Context, args []string) error {
@@ -66,8 +69,14 @@ func (c *inspectCmd) list(args []string) error {
 	limit := fs.Int("limit", 20, "max events to print")
 	sensorID := fs.String("sensor", "", "filter by sensor id")
 	kind := fs.String("kind", "", "filter by sensor kind (http|tcp|mcp)")
+	finding := fs.String("finding", "", "only events where this detection rule id fired (e.g. PI-001)")
 	verify := fs.Bool("verify", false, "recompute integrity hashes while reading")
 	fs.Parse(args) //nolint:errcheck // rendered below on error
+	if *finding != "" {
+		if err := detect.ValidateRuleIDs([]string{*finding}); err != nil {
+			return Usagef("%v", err)
+		}
+	}
 	r, err := storage.NewReader(*dataDir)
 	if err != nil {
 		return err
@@ -87,6 +96,9 @@ func (c *inspectCmd) list(args []string) error {
 			return nil
 		}
 		if *kind != "" && e.Sensor.Kind != *kind {
+			return nil
+		}
+		if *finding != "" && !observationHasFinding(e.Observation, *finding) {
 			return nil
 		}
 		if len(rows) >= *limit {
@@ -256,3 +268,25 @@ var (
 	_ = context.Background
 	_ = os.Exit
 )
+
+// observationHasFinding reports whether an observation payload carries a
+// detection finding with the given rule id. Unknown observation shapes simply
+// do not match — evidence from older versions stays readable.
+func observationHasFinding(obs json.RawMessage, ruleID string) bool {
+	var probe struct {
+		Detection *struct {
+			Findings []struct {
+				RuleID string `json:"rule_id"`
+			} `json:"findings"`
+		} `json:"detection"`
+	}
+	if json.Unmarshal(obs, &probe) != nil || probe.Detection == nil {
+		return false
+	}
+	for _, f := range probe.Detection.Findings {
+		if f.RuleID == ruleID {
+			return true
+		}
+	}
+	return false
+}

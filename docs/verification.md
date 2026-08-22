@@ -35,6 +35,9 @@ CI runs all four targets at 15s each on every push.
 | Demo walkthrough (HTTP+TCP+MCP decoys, metrics, SIGTERM shutdown, verified evidence) | `./scripts/demo.sh` | PASS — 3 events recorded, `INTEGRITY true`, counters incremented before shutdown |
 | Dry-run binding proof | `go run ./cmd/aegismesh run --config examples/demo/mesh.yaml --dry-run` | PASS — 3 sensors bound and stopped cleanly |
 | Strict validation of demo config | `go run ./cmd/aegismesh validate --config examples/demo/mesh.yaml` | PASS |
+| Effective-policy preview (validate --effective, human + pure-JSON) | `go test -run 'TestValidateEffective' ./internal/cli/` | PASS |
+| inspect --finding filter (match, empty match, invalid rule id, verified JSON rows) | `go test -run TestInspectFindingFilter ./internal/cli/` | PASS |
+| inspect --finding filter (match, empty match, invalid rule id, verified JSON rows) | `go test -run TestInspectFindingFilter ./internal/cli/` | PASS |
 | Importer output passes strict loader (in-test round trip) | `go test -run TestEmitConfigRoundTripsThroughStrictLoader ./internal/migrate/beelzebub/` | PASS |
 | Extension contract incl. real subprocess handshake/call/revocation | `go test -race ./internal/ext/` | PASS |
 | License policy scan | `./scripts/license-check.sh` | PASS (2 modules within policy) |
