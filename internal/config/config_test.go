@@ -238,3 +238,149 @@ func TestScaffoldRefusesOverwrite(t *testing.T) {
 		t.Fatalf("generated demo config must validate: %v", err)
 	}
 }
+
+func TestLLMProviderFieldsValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		llmYAML string
+		wantErr string
+	}{
+		{"ollama defaults base_url", "llm:\n  provider: ollama\n  model: llama3\nsensors:", ""},
+		{"openai needs model", "llm:\n  provider: openai\n  base_url: https://api.example.com/v1\nsensors:", "llm.model"},
+		{"openai needs base_url", "llm:\n  provider: openai\n  model: gpt\nsensors:", "llm.base_url"},
+		{"unknown provider", "llm:\n  provider: claude\nsensors:", "local|ollama|openai"},
+		{"api_key_env name shape", "llm:\n  provider: openai\n  base_url: https://x/v1\n  model: m\n  api_key_env: \"9bad\"\nsensors:", "environment variable NAME"},
+		{"both secret refs", "llm:\n  provider: openai\n  base_url: https://x/v1\n  model: m\n  api_key_env: K1\n  api_key_file: key.txt\nsensors:", "not both"},
+		{"timeout cap", "llm:\n  timeout_seconds: 9999\nsensors:", "timeout_seconds"},
+		{"response cap", "llm:\n  max_response_bytes: 99999999999\nsensors:", "max_response_bytes"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := strings.Replace(minimalValid, "sensors:", tc.llmYAML, 1)
+			p := writeTemp(t, "mesh.yaml", doc)
+			c, err := Load(p)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Load: %v", err)
+				}
+				if c.LLM.Provider == "ollama" && c.LLM.BaseURL != DefaultOllamaBaseURL {
+					t.Fatalf("ollama default base_url = %q", c.LLM.BaseURL)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("err = %v, want containing %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestResolveAPIKeyPrecedenceAndRefs(t *testing.T) {
+	doc := strings.Replace(minimalValid, "sensors:",
+		"llm:\n  provider: openai\n  base_url: https://x/v1\n  model: m\n  api_key_file: key.txt\nsensors:", 1)
+	p := writeTemp(t, "mesh.yaml", doc)
+	keyFile := filepath.Join(filepath.Dir(p), "key.txt")
+	if err := os.WriteFile(keyFile, []byte("  file-secret-123 \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := c.ResolveAPIKey()
+	if err != nil || got != "file-secret-123" {
+		t.Fatalf("file ref resolve = %q, %v", got, err)
+	}
+
+	// env var named by api_key_env beats nothing else configured; empty var fails loudly.
+	c2, _ := Load(writeTemp(t, "mesh2.yaml", strings.Replace(minimalValid, "sensors:",
+		"llm:\n  provider: openai\n  base_url: https://x/v1\n  model: m\n  api_key_env: AEGIS_TEST_KEY\nsensors:", 1)))
+	if _, err := c2.ResolveAPIKey(); err == nil || !strings.Contains(err.Error(), "empty or unset") {
+		t.Fatalf("unset env ref = %v", err)
+	}
+	t.Setenv("AEGIS_TEST_KEY", "env-secret")
+	if got, err := c2.ResolveAPIKey(); err != nil || got != "env-secret" {
+		t.Fatalf("env ref = %q, %v", got, err)
+	}
+
+	// legacy direct override wins over the reference.
+	c2.LLM.APIKey = "legacy-wins"
+	if got, _ := c2.ResolveAPIKey(); got != "legacy-wins" {
+		t.Fatalf("legacy override lost: %q", got)
+	}
+
+	// traversal outside the config directory is refused at load time.
+	c3err := writeTemp(t, "mesh3.yaml", strings.Replace(minimalValid, "sensors:",
+		"llm:\n  api_key_file: ../../etc/passwd\nsensors:", 1))
+	if _, err := Load(c3err); err == nil || !strings.Contains(err.Error(), "outside") {
+		t.Fatalf("traversal ref = %v", err)
+	}
+}
+
+func TestDetectionSectionValidation(t *testing.T) {
+	bad := writeTemp(t, "mesh.yaml", strings.Replace(minimalValid, "sensors:",
+		"detection:\n  disabled_rules: [\"NOPE-1\"]\nsensors:", 1))
+	if _, err := Load(bad); err == nil || !strings.Contains(err.Error(), "NOPE-1") {
+		t.Fatalf("unknown disabled rule must fail with id in message: %v", err)
+	}
+	cap := writeTemp(t, "mesh.yaml", strings.Replace(minimalValid, "sensors:",
+		"detection:\n  max_input_bytes: 100000000\nsensors:", 1))
+	if _, err := Load(cap); err == nil || !strings.Contains(err.Error(), "max_input_bytes") {
+		t.Fatalf("oversized max_input_bytes must fail: %v", err)
+	}
+	ok := writeTemp(t, "mesh.yaml", strings.Replace(minimalValid, "sensors:",
+		"detection:\n  enabled: false\n  disabled_rules: [\"OBS-001\"]\nsensors:", 1))
+	c, err := Load(ok)
+	if err != nil {
+		t.Fatalf("valid detection section rejected: %v", err)
+	}
+	if c.Detection.IsEnabled() {
+		t.Fatal("enabled: false must be honored")
+	}
+	if !c.Detection.IsEnabled() && c.Detection.MaxInputBytes != DefaultDetectionMaxLen {
+		t.Fatalf("default max_input_bytes = %d", c.Detection.MaxInputBytes)
+	}
+}
+
+func TestMCPResourcesAndPromptsValidation(t *testing.T) {
+	base := `
+api_version: aegismesh.io/v1alpha1
+sensors:
+  - id: mcp-one
+    kind: mcp
+    listen: "127.0.0.1:8099"
+    tools:
+      - name: canary
+        description: d
+        result_json: '{"ok":true}'
+`
+	goodRes := base + "    resources:\n      - uri: decoy://db/users\n        name: users\n        text: hello\n"
+	c, err := Load(writeTemp(t, "mesh.yaml", goodRes))
+	if err != nil {
+		t.Fatalf("valid resource rejected: %v", err)
+	}
+	if len(c.Sensors[0].Resources) != 1 || c.Sensors[0].Resources[0].URI != "decoy://db/users" {
+		t.Fatalf("resource not loaded: %+v", c.Sensors[0].Resources)
+	}
+	cases := map[string]string{
+		"bad uri":         base + "    resources:\n      - uri: \"no scheme\"\n        name: n\n        text: t\n",
+		"dup uri":         base + "    resources:\n      - uri: decoy://a\n        name: n1\n        text: t\n      - uri: decoy://a\n        name: n2\n        text: t\n",
+		"missing text":    base + "    resources:\n      - uri: decoy://a\n        name: n\n",
+		"prompt no msg":   base + "    prompts:\n      - name: p1\n",
+		"dup prompt":      base + "    prompts:\n      - name: p1\n        messages: [\"hi\"]\n      - name: p1\n        messages: [\"ho\"]\n",
+		"bad arg name":    base + "    prompts:\n      - name: p1\n        arguments: [{name: \"-bad\"}]\n        messages: [\"hi\"]\n",
+		"too many msgs":   base + "    prompts:\n      - name: p1\n        messages: [\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\",\"9\"]\n",
+		"kind field leak": base + "    banner: nope\n",
+	}
+	for name, doc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Load(writeTemp(t, "mesh.yaml", doc)); err == nil {
+				t.Fatalf("%s: expected rejection", name)
+			}
+		})
+	}
+	validPrompt := base + "    prompts:\n      - name: triage\n        description: synthetic intake script\n        arguments: [{name: host, required: true}]\n        messages: [\"Triaging {host} now.\"]\n"
+	if _, err := Load(writeTemp(t, "mesh.yaml", validPrompt)); err != nil {
+		t.Fatalf("valid prompt rejected: %v", err)
+	}
+}
