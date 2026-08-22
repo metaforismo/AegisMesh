@@ -113,3 +113,100 @@ func TestRulesListCompletionRegistration(t *testing.T) {
 		t.Fatal("zsh completion missing rules command")
 	}
 }
+
+func TestRulesExplainKnownDetectionHuman(t *testing.T) {
+	code, out, errOut := run(t, "rules", "explain", "PI-001")
+	if code != 0 {
+		t.Fatalf("%s", errOut)
+	}
+	for _, want := range []string{
+		"ID:        PI-001",
+		"FAMILY:    detection",
+		"CLASS:     finding",
+		"SEVERITY:  high",
+		"SUMMARY:   instruction-override phrasing",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestRulesExplainSignalShowsDashAndJSONOmitsSeverity(t *testing.T) {
+	code, out, _ := run(t, "rules", "explain", "COR-002")
+	if code != 0 {
+		t.Fatal(out)
+	}
+	if !strings.Contains(out, "SEVERITY:  -") || !strings.Contains(out, "CLASS:     signal") {
+		t.Fatalf("signal rendering wrong:\n%s", out)
+	}
+	code, out, _ = run(t, "rules", "explain", "COR-002", "--json")
+	if code != 0 {
+		t.Fatal(out)
+	}
+	var e rulecatalog.Entry
+	if err := json.Unmarshal([]byte(out), &e); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out)
+	}
+	want, ok := rulecatalog.Lookup("COR-002")
+	if !ok || e != want {
+		t.Fatalf("json entry drifted: %+v vs %+v", e, want)
+	}
+	raw, _ := json.Marshal(e)
+	if strings.Contains(string(raw), "severity") {
+		t.Fatalf("signal entry leaked empty severity key: %s", raw)
+	}
+}
+
+func TestRulesExplainUnknownIDSuggestions(t *testing.T) {
+	cases := []struct {
+		name string
+		id   string
+		want string
+	}{
+		{"case-only miss suggests exact id", "pi-001", "; did you mean PI-001?"},
+		{"unambiguous prefix suggests", "EXF-", "; did you mean EXF-001?"},
+		{"ambiguous prefix lists all, no guess", "PI-", "known rules with this prefix: PI-001, PI-002"},
+		{"no match at all lists catalog", "ZZZ-999", "known rules: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, _, errOut := run(t, "rules", "explain", tc.id)
+			if code == 0 {
+				t.Fatalf("%q must not resolve", tc.id)
+			}
+			if !strings.Contains(errOut, tc.want) {
+				t.Fatalf("missing %q in error:\n%s", tc.want, errOut)
+			}
+		})
+	}
+	// The ambiguous case must NOT contain a single-guess phrasing.
+	_, _, errOut := run(t, "rules", "explain", "PI-")
+	if strings.Contains(errOut, "did you mean") {
+		t.Fatalf("ambiguous prefix must never produce a single suggestion:\n%s", errOut)
+	}
+}
+
+func TestRulesExplainArgErrors(t *testing.T) {
+	cases := [][]string{
+		{"rules", "explain"},
+		{"rules", "explain", "PI-001", "COR-001"},
+		{"rules", "explain", ""},
+	}
+	for _, args := range cases {
+		if code, _, errOut := run(t, args...); code == 0 || errOut == "" {
+			t.Fatalf("%v must fail with an error", args)
+		}
+	}
+}
+
+func TestRulesExplainJSONFlagOrderBothWays(t *testing.T) {
+	a1, o1, _ := run(t, "rules", "explain", "COR-001", "--json")
+	a2, o2, _ := run(t, "rules", "explain", "--json", "COR-001")
+	if a1 != 0 || a2 != 0 || o1 != o2 {
+		t.Fatalf("flag order must not matter:\n%s\n---\n%s", o1, o2)
+	}
+	if _, _, errOut := run(t, "rules", "explain", "--fam", "X"); errOut == "" {
+		t.Fatal("unknown flags must fail precisely")
+	}
+}
