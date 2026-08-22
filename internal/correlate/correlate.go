@@ -175,8 +175,9 @@ func (o *Options) Validate() error {
 
 // sourceState is the bounded per-source ring plus cooldown bookkeeping.
 type sourceState struct {
-	events    []Event // arrival order; trimmed to PerSourceEvents and window
-	firstSeen int64   // monotonic arrival counter for deterministic eviction
+	events    []Event              // arrival order; trimmed to PerSourceEvents and window
+	firstSeen int64                // monotonic arrival counter for deterministic eviction
+	fired     map[RuleID]time.Time // last fire time per rule (cooldown = window)
 }
 
 // Engine correlates events into signals under hard memory bounds. Evaluate
@@ -189,6 +190,7 @@ type Engine struct {
 	evictedSources uint64
 	trimmedEvents  uint64
 	prunedEvents   uint64
+	firedSignals   uint64
 }
 
 // New constructs an engine. Options are copied after normalization.
@@ -207,6 +209,7 @@ type Stats struct {
 	TrimmedEvents  uint64 // dropped by per-source cap
 	PrunedEvents   uint64 // dropped by window expiry
 	IngestedTotal  uint64
+	FiredSignals   uint64
 }
 
 // Stats reports current accounting without mutating anything.
@@ -217,6 +220,7 @@ func (e *Engine) Stats() Stats {
 		TrimmedEvents:  e.trimmedEvents,
 		PrunedEvents:   e.prunedEvents,
 		IngestedTotal:  uint64(e.arrival),
+		FiredSignals:   e.firedSignals,
 	}
 }
 
@@ -228,7 +232,7 @@ func (e *Engine) Ingest(ev Event) []Signal {
 	key := ev.SourceKey
 	st := e.sources[key]
 	if st == nil {
-		st = &sourceState{firstSeen: e.arrival}
+		st = &sourceState{firstSeen: e.arrival, fired: make(map[RuleID]time.Time)}
 		e.sources[key] = st
 		if len(e.sources) > e.opts.MaxSources {
 			e.evictOldest()
@@ -240,7 +244,7 @@ func (e *Engine) Ingest(ev Event) []Signal {
 		st.events = st.events[1:]
 		e.trimmedEvents++
 	}
-	return nil // rule evaluation lands in the rules slice
+	return e.evaluate(ev, st)
 }
 
 // prune drops events older than the window relative to the incoming event's
