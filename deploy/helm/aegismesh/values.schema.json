@@ -1,0 +1,207 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "aegismesh chart values",
+  "description": "Machine-enforced contract for deploy/helm/aegismesh values.yaml: types, required structure, enums, numeric bounds, and the security invariants of this chart. meshConfig is validated by the runtime at startup (schema aegismesh.io/v1alpha1), so only its top-level shape is constrained here and unknown application fields stay allowed.",
+  "type": "object",
+  "required": [
+    "image",
+    "replicas",
+    "service",
+    "terminationGracePeriodSeconds",
+    "podSecurityContext",
+    "containerSecurityContext",
+    "meshConfig"
+  ],
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "image": {
+      "type": "object",
+      "required": ["repository"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "tag": {
+          "type": "string",
+          "description": "Empty falls back to .Chart.AppVersion (see templates/_helpers.tpl)."
+        },
+        "pullPolicy": {
+          "description": "Empty lets _helpers.tpl pick IfNotPresent (Always when tag=latest).",
+          "enum": ["", "Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "replicas": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Evidence segments are append-only local files on an emptyDir; scale out only after a shared-storage design exists."
+    },
+    "service": {
+      "type": "object",
+      "required": ["type", "ports"],
+      "properties": {
+        "type": {
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"]
+        },
+        "ports": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "port", "targetPort"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Kubernetes port name (IANA_SVC_NAME).",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                "maxLength": 15
+              },
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+              "targetPort": {
+                "oneOf": [
+                  { "type": "integer", "minimum": 1, "maximum": 65535 },
+                  { "type": "string", "pattern": "^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$", "maxLength": 15 }
+                ]
+              },
+              "protocol": { "enum": ["TCP", "UDP", "SCTP"] }
+            }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "description": "Kubernetes quantities; unquoted YAML numbers are accepted exactly as the API server accepts them.",
+      "propertyNames": { "enum": ["requests", "limits", "claims"] },
+      "properties": {
+        "requests": { "$ref": "#/definitions/quantityMap" },
+        "limits": { "$ref": "#/definitions/quantityMap" }
+      }
+    },
+    "terminationGracePeriodSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Time to flush evidence segments before SIGKILL; 0 means immediate termination."
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "required": ["runAsNonRoot", "runAsUser"],
+      "properties": {
+        "runAsNonRoot": {
+          "const": true,
+          "description": "Invariant: the image is built for uid 10001; root is never acceptable."
+        },
+        "runAsUser": { "type": "integer", "minimum": 1, "maximum": 65534 },
+        "runAsGroup": { "type": "integer", "minimum": 1, "maximum": 65534 },
+        "fsGroup": { "type": "integer", "minimum": 1, "maximum": 65534 },
+        "fsGroupChangePolicy": { "enum": ["Always", "OnRootMismatch"] },
+        "seccompProfile": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "description": "Unconfined is deliberately not a valid option.",
+              "enum": ["RuntimeDefault", "Localhost"]
+            }
+          }
+        }
+      }
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "required": ["allowPrivilegeEscalation", "readOnlyRootFilesystem", "capabilities"],
+      "properties": {
+        "allowPrivilegeEscalation": { "const": false },
+        "readOnlyRootFilesystem": {
+          "const": true,
+          "description": "Writes go to the mounted emptyDirs (/workspace/data, /tmp) only."
+        },
+        "capabilities": {
+          "type": "object",
+          "required": ["drop"],
+          "properties": {
+            "drop": {
+              "type": "array",
+              "items": { "type": "string" },
+              "contains": { "const": "ALL" }
+            },
+            "add": {
+              "type": "array",
+              "maxItems": 0,
+              "description": "Re-adding capabilities would negate drop: ALL."
+            }
+          }
+        }
+      }
+    },
+    "meshConfig": {
+      "type": "object",
+      "description": "Rendered verbatim into the mesh.yaml ConfigMap and strict-decoded by the runtime. Only the top-level shape is mirrored here; deeper validation belongs to internal/config so this schema cannot drift into a second config implementation.",
+      "required": ["api_version", "sensors"],
+      "additionalProperties": true,
+      "properties": {
+        "api_version": {
+          "const": "aegismesh.io/v1alpha1"
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "instance_name": { "type": "string" },
+            "data_dir": { "type": "string" }
+          }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "allow_public_bind": {
+              "type": "boolean",
+              "description": "Required true by this chart's reference decoys (they bind inside the Pod network namespace); flips to false yield a crash-looping release caught at runtime."
+            }
+          }
+        },
+        "admin": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "listen": {
+              "type": "string",
+              "description": "Health/metrics listener; internal/config enforces loopback binding."
+            }
+          }
+        },
+        "sensors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "kind", "listen"],
+            "additionalProperties": true,
+            "properties": {
+              "id": { "type": "string" },
+              "kind": {
+                "description": "Sensor kinds accepted by the runtime (internal/config validate.go).",
+                "enum": ["http", "tcp", "mcp"]
+              },
+              "listen": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "quantityMap": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?(n|u|m|k|K|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?$"
+          },
+          { "type": "number", "minimum": 0 }
+        ]
+      }
+    }
+  }
+}
