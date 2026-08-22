@@ -76,6 +76,8 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		return nil, fmt.Errorf("%w: %v", errRuntime, err)
 	}
 
+	enf := policy.NewEnforcer(cfg.Detection, reg)
+
 	sys := &System{
 		cfg:       cfg,
 		store:     store,
@@ -87,7 +89,7 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 	sys.bus = event.NewBus(busCapacity, store, log)
 
 	for i := range cfg.Sensors {
-		s, err := buildSensor(&cfg.Sensors[i], cfg, prov)
+		s, err := buildSensor(&cfg.Sensors[i], cfg, prov, enf)
 		if err != nil {
 			sys.closeAll()
 			return nil, fmt.Errorf("%w: sensor %q: %v", errRuntime, cfg.Sensors[i].ID, err)
@@ -134,22 +136,22 @@ func providerFor(c config.Config) (llm.Provider, error) {
 	}
 }
 
-func buildSensor(c *config.Sensor, cfg *config.Config, prov llm.Provider) (sensor.Sensor, error) {
+func buildSensor(c *config.Sensor, cfg *config.Config, prov llm.Provider, enf *policy.Enforcer) (sensor.Sensor, error) {
 	switch c.Kind {
 	case config.SensorKindHTTP:
-		gate, err := policy.NewHTTPGate(*c, cfg.ResolveBodyFile, prov)
+		gate, err := policy.NewHTTPGate(*c, cfg.ResolveBodyFile, prov, enf)
 		if err != nil {
 			return nil, err
 		}
 		return httpsensor.New(*c, gate)
 	case config.SensorKindTCP:
-		gate, err := policy.NewTCPGate(*c)
+		gate, err := policy.NewTCPGate(*c, enf)
 		if err != nil {
 			return nil, err
 		}
 		return tcpsensor.New(*c, gate)
 	case config.SensorKindMCP:
-		return mcpsensor.New(*c)
+		return mcpsensor.New(*c, enf)
 	default:
 		return nil, fmt.Errorf("unknown kind %q", c.Kind)
 	}

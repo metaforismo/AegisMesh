@@ -2,13 +2,17 @@ package policy
 
 import (
 	"context"
-
 	"strings"
 	"testing"
 
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/llm"
+	"github.com/metaforismo/aegismesh/internal/observe"
 )
+
+func testEnforcer() *Enforcer {
+	return NewEnforcer(config.Detection{}, observe.NewRegistry())
+}
 
 func httpSensorCfg(rules ...config.HTTPRule) config.Sensor {
 	return config.Sensor{
@@ -22,7 +26,7 @@ func TestHTTPGateRulePrecedence(t *testing.T) {
 	g, err := NewHTTPGate(httpSensorCfg(
 		config.HTTPRule{Name: "admin", PathRegex: "^/admin.*", Methods: []string{"GET"}, Status: 200, Body: "admin-ok"},
 		config.HTTPRule{Name: "catchall", PathRegex: "^/.*$", Status: 404, Body: "nope"},
-	), nil, nil)
+	), nil, nil, testEnforcer())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +42,7 @@ func TestHTTPGateRulePrecedence(t *testing.T) {
 func TestHTTPGateMethodMismatch405(t *testing.T) {
 	g, _ := NewHTTPGate(httpSensorCfg(
 		config.HTTPRule{Name: "post-only", PathRegex: "^/login$", Methods: []string{"POST"}, Status: 200, Body: "x"},
-	), nil, nil)
+	), nil, nil, testEnforcer())
 	d, err := g.Resolve(context.Background(), "DELETE", "/login", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +55,7 @@ func TestHTTPGateMethodMismatch405(t *testing.T) {
 func TestHTTPGateFallbackOnUnmatchedPath(t *testing.T) {
 	cfg := httpSensorCfg(config.HTTPRule{Name: "root", PathRegex: "^/$", Status: 200, Body: "/"})
 	cfg.Fallback = &config.LLMFallback{Enabled: true, SystemPrompt: "be boring", MaxReplyChars: 512}
-	g, err := NewHTTPGate(cfg, nil, llm.Local{})
+	g, err := NewHTTPGate(cfg, nil, llm.Local{}, testEnforcer())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +83,7 @@ func (hostileProvider) Complete(_ context.Context, _ llm.Request) (llm.Response,
 func TestFallbackOutputIsScrubbed(t *testing.T) {
 	cfg := httpSensorCfg(config.HTTPRule{Name: "root", PathRegex: "^/$", Status: 200})
 	cfg.Fallback = &config.LLMFallback{Enabled: true, SystemPrompt: "p", MaxReplyChars: 4096}
-	g, _ := NewHTTPGate(cfg, nil, hostileProvider{})
+	g, _ := NewHTTPGate(cfg, nil, hostileProvider{}, testEnforcer())
 	d, _ := g.Resolve(context.Background(), "GET", "/anything", nil)
 	body := string(d.Body)
 	if strings.Contains(body, "supersecret9") || strings.Contains(body, "abcdef123456") {
@@ -95,7 +99,7 @@ func TestTCPGateMatchingAndSuffix(t *testing.T) {
 			{Name: "other", LineRegex: "^.*$", Response: "-ERR"},
 		},
 	}
-	g, err := NewTCPGate(s)
+	g, err := NewTCPGate(s, testEnforcer())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,13 +114,13 @@ func TestTCPGateMatchingAndSuffix(t *testing.T) {
 
 func TestGatesRejectBadRegex(t *testing.T) {
 	bad := config.HTTPRule{Name: "b", PathRegex: "([unclosed", Status: 200}
-	if _, err := NewHTTPGate(httpSensorCfg(bad), nil, nil); err == nil {
+	if _, err := NewHTTPGate(httpSensorCfg(bad), nil, nil, testEnforcer()); err == nil {
 		t.Fatal("bad path regex must fail at gate construction")
 	}
 	if _, err := NewTCPGate(config.Sensor{
 		ID: "t", Kind: "tcp",
 		TCPResponseRule: []config.TCPRule{{LineRegex: "*", Response: "x"}},
-	}); err == nil {
+	}, testEnforcer()); err == nil {
 		t.Fatal("bad line regex must fail at gate construction")
 	}
 }

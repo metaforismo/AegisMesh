@@ -25,8 +25,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/observe"
+	"github.com/metaforismo/aegismesh/internal/policy"
 	"github.com/metaforismo/aegismesh/internal/redact"
 	"github.com/metaforismo/aegismesh/internal/sensor"
 )
@@ -51,6 +53,8 @@ const (
 	codeInvalidRequest = -32600
 	codeMethodNotFound = -32601
 	codeInvalidParams  = -32602
+	// codeServerRefused sits in the JSON-RPC server-error range (-32000..-32099).
+	codeServerRefused = -32000
 )
 
 type rpcResponse struct {
@@ -69,6 +73,7 @@ type toolInfo struct {
 type Sensor struct {
 	id  string
 	cfg config.Sensor
+	enf *policy.Enforcer
 	srv *http.Server
 
 	mu sync.Mutex // guards ln: Start, Addr, and Close may run on any goroutine
@@ -79,14 +84,17 @@ type Sensor struct {
 	log  *slog.Logger
 }
 
-func New(c config.Sensor) (*Sensor, error) {
+func New(c config.Sensor, enf *policy.Enforcer) (*Sensor, error) {
 	if c.ID == "" {
 		return nil, fmt.Errorf("mcpsensor: empty id")
+	}
+	if enf == nil {
+		return nil, fmt.Errorf("mcpsensor %s: nil enforcer", c.ID)
 	}
 	if len(c.Tools) == 0 {
 		return nil, fmt.Errorf("mcpsensor %s: no canary tools configured", c.ID)
 	}
-	return &Sensor{id: c.ID, cfg: c, done: make(chan error, 1)}, nil
+	return &Sensor{id: c.ID, cfg: c, enf: enf, done: make(chan error, 1)}, nil
 }
 
 func (s *Sensor) ID() string   { return s.id }
@@ -127,6 +135,7 @@ func (s *Sensor) Start(ctx context.Context, d sensor.Deps) error {
 	h := &handler{
 		ref:      event.SensorRef{ID: s.cfg.ID, Kind: s.Kind(), Listen: s.cfg.Listen},
 		cfg:      &s.cfg,
+		enf:      s.enf,
 		bus:      d.Bus,
 		seq:      d.Seq,
 		instance: d.Instance,
@@ -183,6 +192,7 @@ func (s *Sensor) Close(ctx context.Context) error {
 type handler struct {
 	ref      event.SensorRef
 	cfg      *config.Sensor
+	enf      *policy.Enforcer
 	bus      *event.Bus
 	seq      *event.Sequencer
 	instance string
@@ -211,9 +221,22 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Detection runs before any method dispatch. Input is the bounded raw
+	// message text; findings shape both the response (refuse) and evidence.
+	det := h.enf.Evaluate(h.ref.ID, detect.Input{
+		Text:       policy.BoundedDetectInput(req.Method+" "+string(req.Params), h.enf.EngineMaxInput()),
+		TotalBytes: len(req.Method) + len(req.Params),
+	})
+	if det.Action == policy.ActionRefuse {
+		h.emitWithClass(req.Method, event.ClassificationInteraction, &det)
+		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID},
+			&rpcError{Code: codeServerRefused, Message: "request refused"})
+		return
+	}
+
 	switch req.Method {
 	case "initialize":
-		h.emit("initialize")
+		h.emitWithClass("initialize", event.ClassificationInteraction, &det)
 		result, _ := json.Marshal(map[string]any{
 			"protocolVersion": "2025-06-18",
 			"capabilities":    map[string]any{"tools": map[string]any{}},
@@ -231,7 +254,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 
 	case "ping":
-		h.emit("ping")
+		h.emitWithClass("ping", event.ClassificationInteraction, &det)
 		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{}`)}, nil)
 
 	case "tools/list":
@@ -245,7 +268,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			tools = append(tools, tinfo)
 		}
 		result, _ := json.Marshal(map[string]any{"tools": tools})
-		h.emit("tools/list")
+		h.emitWithClass("tools/list", event.ClassificationInteraction, &det)
 		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result}, nil)
 
 	case "tools/call":
@@ -259,7 +282,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		tool, ok := h.toolByName(p.Name)
 		if !ok {
-			h.emitCall(p.Name, p.Arguments, "unknown-tool", true, sensor.PeerHost(r.RemoteAddr))
+			h.emitCall(p.Name, p.Arguments, "unknown-tool", true, &det, sensor.PeerHost(r.RemoteAddr))
 			writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID},
 				&rpcError{Code: codeInvalidParams, Message: "unknown tool"})
 			return
@@ -268,7 +291,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// highest-signal observation this sensor produces, then answer with the
 		// configured canned synthetic result. Nothing here is ever executed.
 		h.events.Inc()
-		h.emitCall(tool.Name, p.Arguments, tool.Name, false, sensor.PeerHost(r.RemoteAddr))
+		h.emitCall(tool.Name, p.Arguments, tool.Name, false, &det, sensor.PeerHost(r.RemoteAddr))
 		writeRPC(w, &rpcResponse{
 			JSONRPC: "2.0",
 			ID:      req.ID,
@@ -276,7 +299,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}, nil)
 
 	default:
-		h.emit(req.Method)
+		h.emitWithClass(req.Method, event.ClassificationInteraction, &det)
 		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID},
 			&rpcError{Code: codeMethodNotFound, Message: "method not found"})
 	}
@@ -314,12 +337,8 @@ func writeRPC(w http.ResponseWriter, resp *rpcResponse, rpcErr *rpcError) {
 
 // emit records an MCP-level observation. Only tools/call is a canary hit;
 // listing or initializing against the endpoint is a plain interaction.
-func (h *handler) emit(method string) {
-	h.emitWithClass(method, event.ClassificationInteraction)
-}
-
-func (h *handler) emitWithClass(method string, class string) {
-	obs := observation{Method: method}
+func (h *handler) emitWithClass(method string, class string, det *policy.Decision) {
+	obs := observation{Method: method, Detection: newDetectionInfo(det)}
 	raw, err := json.Marshal(obs)
 	if err != nil {
 		return
@@ -331,7 +350,7 @@ func (h *handler) emitWithClass(method string, class string) {
 	h.bus.Submit(env)
 }
 
-func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rejected bool, remoteHost string) {
+func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rejected bool, det *policy.Decision, remoteHost string) {
 	argsPreview, truncated := "", false
 	argLen := 0
 	if len(args) > 0 {
@@ -352,6 +371,7 @@ func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rej
 			RuleID:   ruleID,
 			Rejected: rejected,
 		},
+		Detection: newDetectionInfo(det),
 	}
 	raw, err := json.Marshal(obs)
 	if err != nil {
@@ -370,14 +390,29 @@ func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rej
 }
 
 type observation struct {
-	Method        string       `json:"method"`
-	ToolName      string       `json:"tool_name,omitempty"`
-	ArgsLength    int          `json:"args_length,omitempty"`
-	ArgsTruncated bool         `json:"args_truncated,omitempty"`
-	ArgsPreview   string       `json:"args_preview,omitempty"`
-	ArgsSHA256    string       `json:"args_sha256,omitempty"`
-	RemoteHost    string       `json:"remote_host,omitempty"`
-	Response      responseInfo `json:"response"`
+	Method        string         `json:"method"`
+	ToolName      string         `json:"tool_name,omitempty"`
+	ArgsLength    int            `json:"args_length,omitempty"`
+	ArgsTruncated bool           `json:"args_truncated,omitempty"`
+	ArgsPreview   string         `json:"args_preview,omitempty"`
+	ArgsSHA256    string         `json:"args_sha256,omitempty"`
+	RemoteHost    string         `json:"remote_host,omitempty"`
+	Response      responseInfo   `json:"response"`
+	Detection     *detectionInfo `json:"detection,omitempty"`
+}
+
+// detectionInfo carries the enforcement verdict into evidence. Findings are
+// static rule-authored text — safe to store verbatim.
+type detectionInfo struct {
+	Action   string           `json:"action"`
+	Findings []detect.Finding `json:"findings,omitempty"`
+}
+
+func newDetectionInfo(det *policy.Decision) *detectionInfo {
+	if det == nil {
+		return nil
+	}
+	return &detectionInfo{Action: string(det.Action), Findings: det.Findings}
 }
 
 type responseInfo struct {

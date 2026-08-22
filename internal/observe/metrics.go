@@ -23,11 +23,20 @@ type Gauge interface {
 	Add(delta float64)
 }
 
+// LabeledCounter partitions one metric by a single label whose values come
+// exclusively from operator/config enums (rule IDs, severities, action names)
+// — never from network or file input. Cardinality is capped at construction:
+// unknown labels route to a dedicated "_overflow" series instead of growing.
+type LabeledCounter interface {
+	Inc(label string)
+}
+
 // Meter is the seam sensors depend on. A no-op implementation keeps sensor
 // code testable without a registry.
 type Meter interface {
 	Counter(name, help string) Counter
 	Gauge(name, help string) Gauge
+	CounterVec(name, help string, maxSeries int) LabeledCounter
 	WritePrometheus() string
 }
 
@@ -37,6 +46,7 @@ type Registry struct {
 	mu       sync.Mutex
 	counters map[string]*counter
 	gauges   map[string]*gauge
+	vecs     map[string]*counterVec
 	metas    map[string]string // name -> help
 }
 
@@ -44,6 +54,7 @@ func NewRegistry() *Registry {
 	return &Registry{
 		counters: map[string]*counter{},
 		gauges:   map[string]*gauge{},
+		vecs:     map[string]*counterVec{},
 		metas:    map[string]string{},
 	}
 }
@@ -114,8 +125,87 @@ func (r *Registry) Gauge(name, help string) Gauge {
 	return r.gauges[name]
 }
 
+const (
+	maxSeriesHardCap = 64
+	overflowLabel    = "_overflow"
+)
+
+// CounterVec creates a bounded-cardinality labeled counter. maxSeries is
+// clamped to 1..maxSeriesHardCap; the "_overflow" series always exists and
+// absorbs unknown or over-cap labels, so a caller bug (or anything worse)
+// can grow this metric by at most maxSeries+1 time series.
+func (r *Registry) CounterVec(name, help string, maxSeries int) LabeledCounter {
+	if !validMetricName(name) {
+		return nopLabeled{}
+	}
+	if maxSeries < 1 {
+		maxSeries = 8
+	}
+	if maxSeries > maxSeriesHardCap {
+		maxSeries = maxSeriesHardCap
+	}
+	v := &counterVec{reg: r, name: name, cap: maxSeries, series: map[string]*counter{}}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.vecs[name] = v
+	if help != "" {
+		r.metas[name] = sanitizeHelp(help)
+	}
+	return v
+}
+
+type counterVec struct {
+	reg    *Registry
+	name   string
+	cap    int
+	mu     sync.Mutex // guards series creation; counters themselves are atomic
+	series map[string]*counter
+}
+
+func validLabel(s string) bool {
+	if len(s) == 0 || len(s) > 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '-', c == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func (v *counterVec) Inc(label string) {
+	if !validLabel(label) || label == overflowLabel {
+		label = overflowLabel
+	}
+	v.mu.Lock()
+	c, ok := v.series[label]
+	if !ok && len(v.series) < v.cap {
+		c = &counter{}
+		v.series[label] = c
+	}
+	v.mu.Unlock()
+	if c == nil { // over cardinality cap: aggregate, never grow
+		c = v.overflow()
+	}
+	c.Inc()
+}
+
+func (v *counterVec) overflow() *counter {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.series[overflowLabel] == nil {
+		v.series[overflowLabel] = &counter{}
+	}
+	return v.series[overflowLabel]
+}
+
 // WritePrometheus renders the registry in Prometheus text format (v0.0.4).
-// Counters sort before gauges; names sort alphabetically within their type.
+// Counters sort before gauges; labeled counters render as
+// name{label="value"} series sorted by label.
 func (r *Registry) WritePrometheus() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -144,7 +234,34 @@ func (r *Registry) WritePrometheus() string {
 		writeType("gauge", n, "")
 		sb.WriteString(fmt.Sprintf("%s %s\n", n, formatFloat(math.Float64frombits(r.gauges[n].v.Load()))))
 	}
+	vnames := make([]string, 0, len(r.vecs))
+	for n := range r.vecs {
+		vnames = append(vnames, n)
+	}
+	sort.Strings(vnames)
+	for _, n := range vnames {
+		v := r.vecs[n]
+		writeType("counter", n, "")
+		v.mu.Lock()
+		labels := make([]string, 0, len(v.series))
+		for l := range v.series {
+			labels = append(labels, l)
+		}
+		sort.Strings(labels)
+		for _, l := range labels {
+			sb.WriteString(fmt.Sprintf("%s{label=\"%s\"} %s\n", n, escapeLabelValue(l),
+				formatFloat(math.Float64frombits(v.series[l].v.Load()))))
+		}
+		v.mu.Unlock()
+	}
 	return sb.String()
+}
+
+func escapeLabelValue(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	return s
 }
 
 func sanitizeHelp(h string) string {
@@ -167,3 +284,7 @@ type nopGauge struct{}
 
 func (nopGauge) Set(float64) {}
 func (nopGauge) Add(float64) {}
+
+type nopLabeled struct{}
+
+func (nopLabeled) Inc(string) {}
