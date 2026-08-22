@@ -70,6 +70,23 @@ const (
 	DefaultExtensionFlushSecs = 2
 	MinExtensionFlushSecs     = 1
 	MaxExtensionFlushSecs     = 10
+
+	// Webhook sink bounds.
+	DefaultWebhookQueueSize   = 512
+	MinWebhookQueueSize       = 16
+	MaxWebhookQueueSize       = 8192
+	DefaultWebhookBatchSize   = 32
+	MinWebhookBatchSize       = 1
+	MaxWebhookBatchSize       = 256
+	DefaultWebhookFlushSecs   = 5
+	MinWebhookFlushSecs       = 1
+	MaxWebhookFlushSecs       = 60
+	DefaultWebhookTimeoutSecs = 10
+	MinWebhookTimeoutSecs     = 1
+	MaxWebhookTimeoutSecs     = 60
+	DefaultWebhookMaxRetries  = 3
+	MaxWebhookMaxRetries      = 8
+	MaxWebhookSecretFileBytes = 4096
 )
 
 // Config is the root configuration document.
@@ -83,6 +100,7 @@ type Config struct {
 	LLM        LLM        `yaml:"llm"         json:"llm"`
 	Detection  Detection  `yaml:"detection,omitempty" json:"detection,omitempty"`
 	Extensions Extensions `yaml:"extensions,omitempty" json:"extensions,omitempty"`
+	Webhook    Webhook    `yaml:"webhook,omitempty"    json:"webhook,omitempty"`
 	Sensors    []Sensor   `yaml:"sensors"    json:"sensors"`
 
 	// SourcePath records where this config was loaded from; never decoded from YAML.
@@ -214,6 +232,37 @@ func (d Detection) IsEnabled() bool { return d.Enabled == nil || *d.Enabled }
 
 // IsEnabled reports whether observer extensions are configured on.
 func (e Extensions) IsEnabled() bool { return e.Enabled != nil && *e.Enabled }
+
+// Webhook configures an optional outbound evidence stream. The evidence
+// store remains authoritative; the webhook is a best-effort, bounded,
+// HMAC-signed delivery to an SSRF-validated destination (see internal/egress).
+type Webhook struct {
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// URL is the collector endpoint. Validated against the egress policy at
+	// load time: https beyond loopback, cloud metadata permanently denied,
+	// private ranges only via security.allow_private_llm_egress.
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// HMAC secret via reference (env var NAME or config-relative file path),
+	// never an inline value. Exactly one may be set.
+	HMACSecretEnv  string `yaml:"hmac_secret_env,omitempty" json:"hmac_secret_env,omitempty"`
+	HMACSecretFile string `yaml:"hmac_secret_file,omitempty" json:"hmac_secret_file,omitempty"`
+	// QueueSize bounds pending events; full queue drops (counted).
+	QueueSize int `yaml:"queue_size,omitempty" json:"queue_size,omitempty"`
+	// BatchSize bounds events per POST body.
+	BatchSize int `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
+	// FlushIntervalSeconds sends partial batches after this idle period.
+	FlushIntervalSeconds int `yaml:"flush_interval_seconds,omitempty" json:"flush_interval_seconds,omitempty"`
+	// TimeoutSeconds bounds each HTTP attempt.
+	TimeoutSeconds int `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
+	// MaxRetries caps retry attempts per batch (exponential backoff + jitter).
+	MaxRetries int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	// AllowLoopbackHTTP opts into cleartext http for loopback collectors
+	// (local development only). Metadata stays denied regardless.
+	AllowLoopbackHTTP bool `yaml:"allow_loopback_http,omitempty" json:"allow_loopback_http,omitempty"`
+}
+
+// IsEnabled reports whether the webhook sink is configured on.
+func (w Webhook) IsEnabled() bool { return w.Enabled != nil && *w.Enabled }
 
 type Sensor struct {
 	ID     string `yaml:"id"     json:"id"`

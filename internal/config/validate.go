@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/metaforismo/aegismesh/internal/detect"
+	"github.com/metaforismo/aegismesh/internal/egress"
 )
 
 var (
@@ -118,6 +119,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
 	if err := ValidateExtensions(c.Extensions); err != nil {
+		return fmt.Errorf("%w: %v", errConfig, err)
+	}
+	if err := ValidateWebhook(&c.Webhook, c.Security.AllowPrivateLLMEgress); err != nil {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
 	if c.Storage.MaxFileBytes < 4096 {
@@ -421,6 +425,59 @@ func ValidateExtensions(e Extensions) error {
 		if err != nil || len(key) != ed25519.PublicKeySize {
 			return fmt.Errorf("extensions.ed25519_pubkey_hex must be %d-byte hex ed25519 public key", ed25519.PublicKeySize)
 		}
+	}
+	return nil
+}
+
+// ValidateWebhook enforces the webhook sink's schema bounds and validates the
+// destination against the SSRF-safe egress policy at load time (fail-closed).
+// allowPrivateEgress is the operator opt-in for private-range collectors.
+func ValidateWebhook(w *Webhook, allowPrivateEgress bool) error {
+	if !w.IsEnabled() {
+		// Disabled sections may hold nothing, but a URL alone (without
+		// enabled) is still validated when present so typos never hide.
+		if w.URL != "" {
+			if _, err := egress.ValidateURL(egress.Policy{AllowLoopback: w.AllowLoopbackHTTP, AllowPrivate: allowPrivateEgress}, w.URL); err != nil {
+				return fmt.Errorf("webhook.url: %v", err)
+			}
+		}
+		return nil
+	}
+	if strings.TrimSpace(w.URL) == "" {
+		return fmt.Errorf("webhook.enabled=true requires webhook.url")
+	}
+	if _, err := egress.ValidateURL(egress.Policy{AllowLoopback: w.AllowLoopbackHTTP, AllowPrivate: allowPrivateEgress}, w.URL); err != nil {
+		return fmt.Errorf("webhook.url: %v", err)
+	}
+	if w.HMACSecretEnv != "" && !envNameRe.MatchString(w.HMACSecretEnv) {
+		return fmt.Errorf("webhook.hmac_secret_env %q must be an environment variable NAME (A-Z, digits, underscore)", w.HMACSecretEnv)
+	}
+	if w.HMACSecretEnv != "" && w.HMACSecretFile != "" {
+		return fmt.Errorf("set either webhook.hmac_secret_env or webhook.hmac_secret_file, not both")
+	}
+	if w.HMACSecretFile != "" {
+		if err := safeRelative(w.HMACSecretFile); err != nil {
+			return fmt.Errorf("webhook.hmac_secret_file: %v", err)
+		}
+	}
+	if w.QueueSize < MinWebhookQueueSize || w.QueueSize > MaxWebhookQueueSize {
+		return fmt.Errorf("webhook.queue_size must be within %d..%d (0 = default %d)",
+			MinWebhookQueueSize, MaxWebhookQueueSize, DefaultWebhookQueueSize)
+	}
+	if w.BatchSize < MinWebhookBatchSize || w.BatchSize > MaxWebhookBatchSize {
+		return fmt.Errorf("webhook.batch_size must be within %d..%d (0 = default %d)",
+			MinWebhookBatchSize, MaxWebhookBatchSize, DefaultWebhookBatchSize)
+	}
+	if w.FlushIntervalSeconds < MinWebhookFlushSecs || w.FlushIntervalSeconds > MaxWebhookFlushSecs {
+		return fmt.Errorf("webhook.flush_interval_seconds must be within %d..%d (0 = default %d)",
+			MinWebhookFlushSecs, MaxWebhookFlushSecs, DefaultWebhookFlushSecs)
+	}
+	if w.TimeoutSeconds < MinWebhookTimeoutSecs || w.TimeoutSeconds > MaxWebhookTimeoutSecs {
+		return fmt.Errorf("webhook.timeout_seconds must be within %d..%d (0 = default %d)",
+			MinWebhookTimeoutSecs, MaxWebhookTimeoutSecs, DefaultWebhookTimeoutSecs)
+	}
+	if w.MaxRetries < 0 || w.MaxRetries > MaxWebhookMaxRetries {
+		return fmt.Errorf("webhook.max_retries must be within 0..%d (0 = default %d)", MaxWebhookMaxRetries, DefaultWebhookMaxRetries)
 	}
 	return nil
 }

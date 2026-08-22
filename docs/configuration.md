@@ -181,6 +181,27 @@ Semantics that matter:
 - Payloads are JSON: `{event_id, time, classification, sensor{...}, payload}`
   where `payload` is the same redaction-safe observation stored in evidence.
 
+## Webhook evidence stream (optional, off by default)
+
+```yaml
+webhook:
+  enabled: true
+  url: "https://collector.example.com/v1/events"
+  hmac_secret_env: WEBHOOK_HMAC      # NAME of env var — or hmac_secret_file, never the value itself
+  queue_size: 512                    # pending events (16..8192); full queue drops (counted)
+  batch_size: 32                     # events per POST (1..256)
+  flush_interval_seconds: 5          # partial-batch send after idle (1..60)
+  timeout_seconds: 10                # per-attempt HTTP timeout (1..60)
+  max_retries: 3                     # attempts per batch, exponential backoff + jitter (0..8)
+  allow_loopback_http: false         # dev-only cleartext to loopback collectors
+```
+
+Destination policy (validated at load, fail-closed): https required beyond
+loopback; cloud metadata permanently denied; private-range collectors need
+`security.allow_private_llm_egress: true` (the current opt-in covers LLM and
+webhook egress alike). The evidence store stays authoritative — the webhook
+is a best-effort stream and every drop is counted.
+
 ## Environment variable overrides
 
 Applied after file parsing, before validation:

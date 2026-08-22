@@ -144,6 +144,21 @@ func (c *Config) applyDefaults() {
 	if c.Extensions.ShutdownFlushSeconds == 0 {
 		c.Extensions.ShutdownFlushSeconds = DefaultExtensionFlushSecs
 	}
+	if c.Webhook.QueueSize == 0 {
+		c.Webhook.QueueSize = DefaultWebhookQueueSize
+	}
+	if c.Webhook.BatchSize == 0 {
+		c.Webhook.BatchSize = DefaultWebhookBatchSize
+	}
+	if c.Webhook.FlushIntervalSeconds == 0 {
+		c.Webhook.FlushIntervalSeconds = DefaultWebhookFlushSecs
+	}
+	if c.Webhook.TimeoutSeconds == 0 {
+		c.Webhook.TimeoutSeconds = DefaultWebhookTimeoutSecs
+	}
+	if c.Webhook.MaxRetries == 0 {
+		c.Webhook.MaxRetries = DefaultWebhookMaxRetries
+	}
 	if c.LLM.Provider == "" {
 		c.LLM.Provider = "local"
 	}
@@ -298,4 +313,51 @@ func (c *Config) ResolveAPIKey() (string, error) {
 		return v, nil
 	}
 	return "", nil
+}
+
+// ResolveWebhookSecret materializes the HMAC signing key from the configured
+// reference: env var NAME takes precedence over config-relative file path.
+// The value never appears in errors.
+func (c *Config) ResolveWebhookSecret() (string, error) {
+	if name := strings.TrimSpace(c.Webhook.HMACSecretEnv); name != "" {
+		v := os.Getenv(name)
+		if strings.TrimSpace(v) == "" {
+			return "", fmt.Errorf("%w: webhook.hmac_secret_env %q is set but the variable is empty or unset", errConfig, name)
+		}
+		return strings.TrimSpace(v), nil
+	}
+	if rel := strings.TrimSpace(c.Webhook.HMACSecretFile); rel != "" {
+		base := filepath.Dir(absClean(c.SourcePath))
+		full := filepath.Join(base, filepath.Clean(rel))
+		absBase, err := filepath.Abs(base)
+		if err != nil {
+			return "", err
+		}
+		absFull, err := filepath.Abs(full)
+		if err != nil {
+			return "", err
+		}
+		if absFull != absBase && !strings.HasPrefix(absFull, absBase+string(filepath.Separator)) {
+			return "", fmt.Errorf("%w: webhook.hmac_secret_file %q resolves outside the config directory", errConfig, rel)
+		}
+		f, err := os.Open(absFull) //nolint:gosec // containment verified above
+		if err != nil {
+			return "", fmt.Errorf("%w: webhook.hmac_secret_file: %v", errConfig, err)
+		}
+		defer f.Close()
+		buf := make([]byte, MaxWebhookSecretFileBytes+1)
+		n, rerr := io.ReadFull(f, buf)
+		if rerr != nil && rerr != io.ErrUnexpectedEOF {
+			return "", fmt.Errorf("%w: webhook.hmac_secret_file: %v", errConfig, rerr)
+		}
+		if n > MaxWebhookSecretFileBytes {
+			return "", fmt.Errorf("%w: webhook.hmac_secret_file exceeds %d bytes", errConfig, MaxWebhookSecretFileBytes)
+		}
+		v := strings.TrimSpace(string(buf[:n]))
+		if v == "" {
+			return "", fmt.Errorf("%w: webhook.hmac_secret_file is empty", errConfig)
+		}
+		return v, nil
+	}
+	return "", nil // unsigned delivery is allowed but reported by doctor
 }
