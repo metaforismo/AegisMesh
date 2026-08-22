@@ -15,7 +15,9 @@ policy_doc="docs/license-policy.md"
 command -v go >/dev/null 2>&1 || { echo "license-check: go not installed" >&2; exit 2; }
 
 echo "license-check: policy = $policy_doc"
-go mod download
+# "all" matters: without it, test-only dependencies of dependencies
+# (e.g. gopkg.in/check.v1) are not fetched and the scan false-positives.
+go mod download all
 
 status=0
 count=0
