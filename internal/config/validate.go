@@ -26,7 +26,7 @@ var (
 	allowedByKind = map[string]map[string]bool{
 		SensorKindHTTP: {"persona": true, "rules": true, "fallback": true, "max_body_bytes": true},
 		SensorKindTCP:  {"banner": true, "session": true, "tcp_rules": true},
-		SensorKindMCP:  {"path": true, "server_name": true, "server_version": true, "instructions": true, "tools": true,
+		SensorKindMCP: {"path": true, "server_name": true, "server_version": true, "instructions": true, "tools": true,
 			"resources": true, "prompts": true},
 	}
 )

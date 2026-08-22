@@ -50,13 +50,13 @@ const (
 	defaultMaxEventBytes   = 256 << 10
 
 	// Provider transport defaults and hard caps.
-	DefaultLLMTimeoutSeconds  = 20
-	MaxLLMTimeoutSeconds      = 120
-	DefaultLLMResponseBytes   = 1 << 20
-	MaxLLMResponseBytes       = 8 << 20
-	DefaultAPIKeyFileBytes    = 4 << 10
-	MaxAPIKeyFileBytes        = 64 << 10
-	DefaultOllamaBaseURL      = "http://127.0.0.1:11434/v1"
+	DefaultLLMTimeoutSeconds = 20
+	MaxLLMTimeoutSeconds     = 120
+	DefaultLLMResponseBytes  = 1 << 20
+	MaxLLMResponseBytes      = 8 << 20
+	DefaultAPIKeyFileBytes   = 4 << 10
+	MaxAPIKeyFileBytes       = 64 << 10
+	DefaultOllamaBaseURL     = "http://127.0.0.1:11434/v1"
 
 	// Detection evaluation bounds.
 	MaxDetectInputBytes    = 64 << 10 // engine never evaluates more than this per interaction
@@ -65,15 +65,15 @@ const (
 
 // Config is the root configuration document.
 type Config struct {
-	APIVersion string   `yaml:"api_version" json:"api_version"`
-	Runtime    Runtime  `yaml:"runtime"    json:"runtime"`
-	Storage    Storage  `yaml:"storage"    json:"storage"`
-	Admin      Admin    `yaml:"admin"      json:"admin"`
-	Logging    Logging  `yaml:"logging"    json:"logging"`
-	Security   Security `yaml:"security"   json:"security"`
-	LLM        LLM      `yaml:"llm"        json:"llm"`
+	APIVersion string    `yaml:"api_version" json:"api_version"`
+	Runtime    Runtime   `yaml:"runtime"    json:"runtime"`
+	Storage    Storage   `yaml:"storage"    json:"storage"`
+	Admin      Admin     `yaml:"admin"      json:"admin"`
+	Logging    Logging   `yaml:"logging"    json:"logging"`
+	Security   Security  `yaml:"security"   json:"security"`
+	LLM        LLM       `yaml:"llm"        json:"llm"`
 	Detection  Detection `yaml:"detection,omitempty" json:"detection,omitempty"`
-	Sensors    []Sensor `yaml:"sensors"    json:"sensors"`
+	Sensors    []Sensor  `yaml:"sensors"    json:"sensors"`
 
 	// SourcePath records where this config was loaded from; never decoded from YAML.
 	SourcePath string `yaml:"-" json:"-"`
@@ -135,8 +135,8 @@ type LLM struct {
 	APIKeyFile string `yaml:"api_key_file,omitempty" json:"api_key_file,omitempty"`
 
 	// Transport bounds. TimeoutSeconds covers one Complete call end to end.
-	TimeoutSeconds    int   `yaml:"timeout_seconds,omitempty"     json:"timeout_seconds,omitempty"`
-	MaxResponseBytes  int64 `yaml:"max_response_bytes,omitempty"  json:"max_response_bytes,omitempty"`
+	TimeoutSeconds   int   `yaml:"timeout_seconds,omitempty"     json:"timeout_seconds,omitempty"`
+	MaxResponseBytes int64 `yaml:"max_response_bytes,omitempty"  json:"max_response_bytes,omitempty"`
 }
 
 // Detection configures the prompt-injection / abuse detection engine applied
@@ -231,21 +231,21 @@ const (
 // is config-provided and synthetic; the URI scheme is decorative (e.g.
 // decoy://...) and never dereferenced by the runtime.
 type MCPResource struct {
-	URI        string `yaml:"uri"         json:"uri"`
-	Name       string `yaml:"name"        json:"name"`
+	URI         string `yaml:"uri"         json:"uri"`
+	Name        string `yaml:"name"        json:"name"`
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	MIMEType   string `yaml:"mime_type,omitempty"   json:"mime_type,omitempty"`
-	Text       string `yaml:"text"        json:"text"`
+	MIMEType    string `yaml:"mime_type,omitempty"   json:"mime_type,omitempty"`
+	Text        string `yaml:"text"        json:"text"`
 }
 
 // MCPPrompt is a decoy prompt template returned by prompts/get. Arguments are
 // declared but always substituted verbatim into canned text — no evaluation,
 // no templating language, nothing attacker-supplied is interpreted.
 type MCPPrompt struct {
-	Name        string           `yaml:"name"          json:"name"`
-	Description string           `yaml:"description,omitempty" json:"description,omitempty"`
-	Arguments   []MCPPromptArg   `yaml:"arguments,omitempty" json:"arguments,omitempty"`
-	Messages    []string         `yaml:"messages"      json:"messages"`
+	Name        string         `yaml:"name"          json:"name"`
+	Description string         `yaml:"description,omitempty" json:"description,omitempty"`
+	Arguments   []MCPPromptArg `yaml:"arguments,omitempty" json:"arguments,omitempty"`
+	Messages    []string       `yaml:"messages"      json:"messages"`
 }
 
 type MCPPromptArg struct {
