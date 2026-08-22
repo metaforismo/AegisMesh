@@ -64,12 +64,27 @@ against the registry before any file is read).
 ## aegismesh rules
 
     rules list [--family detection|correlation]
+    rules explain RULE_ID
 
-List every rule the binaries can emit — detection findings and correlation
-signals — from one catalog derived from the owning engine registries.
-Deterministic order; `--json` emits `{"rules":[...]}` with stable keys
-(signals carry no severity). Read-only: nothing is loaded, contacted, or
-evaluated.
+List and explain every rule the binaries can emit — detection findings and
+correlation signals — from one catalog derived from the owning engine
+registries. Deterministic order; `--json` emits stable keys (signals carry
+no severity). Read-only: nothing is loaded, contacted, or evaluated.
+
+`rules list` prints an `ID FAMILY CLASS SEV SUMMARY` table; `--family`
+filters with exact validation.
+
+`rules explain PI-001` prints `ID`, `FAMILY`, `CLASS`, `SEVERITY` (`-` for
+signals), and `SUMMARY`. With `--json` it emits the catalog entry object
+with the severity key omitted for signals. `--json` is accepted before or
+after the rule id: both `rules explain COR-001 --json` and
+`rules explain --json COR-001` are identical.
+
+Unknown ids fail with deterministic, fuzz-free suggestions: a case-only
+mismatch suggests the exact id (`pi-001` → "did you mean PI-001?"), an
+unambiguous prefix suggests its single match (`EXF-` → EXF-001), an
+ambiguous prefix lists all candidates without guessing (`PI-` →
+"PI-001, PI-002"), and anything else lists the full catalog.
 
 ## aegismesh migrate
 
