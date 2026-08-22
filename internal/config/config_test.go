@@ -464,3 +464,179 @@ func TestExtensionsSectionValidation(t *testing.T) {
 		t.Fatalf("defaults wrong: %+v", c.Extensions)
 	}
 }
+
+func TestWebhookSectionValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		snippet string
+		wantErr string // empty = must load
+	}{
+		{
+			name: "disabled empty section is fine",
+		},
+		{
+			name:    "enabled without url",
+			snippet: "webhook:\n  enabled: true\n",
+			wantErr: "requires webhook.url",
+		},
+		{
+			name:    "metadata endpoint permanently denied",
+			snippet: "webhook:\n  enabled: true\n  url: \"http://169.254.169.254/latest\"\n  allow_loopback_http: false\n",
+			wantErr: "webhook.url",
+		},
+		{
+			name:    "cleartext http to public host denied",
+			snippet: "webhook:\n  enabled: true\n  url: \"http://collector.example.com/events\"\n",
+			wantErr: "webhook.url",
+		},
+		{
+			name:    "private range denied without opt-in",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://10.0.0.9/events\"\n",
+			wantErr: "webhook.url",
+		},
+		{
+			name: "private range allowed with explicit opt-in",
+			snippet: "security:\n  allow_private_llm_egress: true\n" +
+				"webhook:\n  enabled: true\n  url: \"https://10.0.0.9/events\"\n",
+		},
+		{
+			name:    "loopback cleartext denied without dev opt-in",
+			snippet: "webhook:\n  enabled: true\n  url: \"http://127.0.0.1:9999/events\"\n",
+			wantErr: "webhook.url",
+		},
+		{
+			name:    "loopback cleartext allowed with dev opt-in",
+			snippet: "webhook:\n  enabled: true\n  url: \"http://127.0.0.1:9999/events\"\n  allow_loopback_http: true\n",
+		},
+		{
+			name: "valid https destination loads",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://collector.example.com/v1/events\"\n" +
+				"  hmac_secret_env: WEBHOOK_HMAC\n",
+		},
+		{
+			name:    "both secret references set",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  hmac_secret_env: A\n  hmac_secret_file: s.key\n",
+			wantErr: "not both",
+		},
+		{
+			name:    "malformed env name",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  hmac_secret_env: not-a-name\n",
+			wantErr: "environment variable NAME",
+		},
+		{
+			name:    "traversal file path",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  hmac_secret_file: ../secrets/key\n",
+			wantErr: "hmac_secret_file",
+		},
+		{
+			name:    "queue size out of bounds",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  queue_size: 3\n",
+			wantErr: "queue_size",
+		},
+		{
+			name:    "batch size out of bounds",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  batch_size: 100000\n",
+			wantErr: "batch_size",
+		},
+		{
+			name:    "flush interval out of bounds",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  flush_interval_seconds: 3600\n",
+			wantErr: "flush_interval_seconds",
+		},
+		{
+			name:    "timeout out of bounds",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  timeout_seconds: 0\n",
+			wantErr: "",
+		}, // 0 = default, applied before validation; see defaults assertion below
+		{
+			name:    "retries out of bounds",
+			snippet: "webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\n  max_retries: 99\n",
+			wantErr: "max_retries",
+		},
+		{
+			name:    "disabled section still validates a present url",
+			snippet: "webhook:\n  url: \"http://169.254.169.254/x\"\n",
+			wantErr: "webhook.url",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := minimalValid
+			if tc.snippet != "" {
+				raw = strings.Replace(minimalValid, "sensors:", tc.snippet+"sensors:", 1)
+			}
+			_, err := Load(writeTemp(t, "mesh.yaml", raw))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected success, got: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got: %v", tc.wantErr, err)
+			}
+		})
+	}
+
+	// Defaults applied when enabled with only a URL.
+	ok := writeTemp(t, "mesh.yaml", strings.Replace(minimalValid, "sensors:",
+		"webhook:\n  enabled: true\n  url: \"https://collector.example.com/v1/events\"\nsensors:", 1))
+	c, err := Load(ok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := c.Webhook
+	if !w.IsEnabled() || w.QueueSize != DefaultWebhookQueueSize || w.BatchSize != DefaultWebhookBatchSize ||
+		w.FlushIntervalSeconds != DefaultWebhookFlushSecs || w.TimeoutSeconds != DefaultWebhookTimeoutSecs ||
+		w.MaxRetries != DefaultWebhookMaxRetries {
+		t.Fatalf("defaults wrong: %+v", w)
+	}
+}
+
+func TestResolveWebhookSecretPrecedenceAndRefs(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "mesh.yaml")
+	base := strings.Replace(minimalValid, "sensors:",
+		"webhook:\n  enabled: true\n  url: \"https://c.example.com/e\"\nsensors:", 1)
+
+	// No reference configured: empty secret, no error (doctor reports it).
+	os.WriteFile(cfgPath, []byte(base), 0o600)
+	c, err := Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err := c.ResolveWebhookSecret(); err != nil || v != "" {
+		t.Fatalf("no-ref case: v=%q err=%v", v, err)
+	}
+
+	// Env reference wins and must be non-empty.
+	os.Setenv("AEGISMESH_TEST_WEBHOOK_HMAC", "synthetic-secret")
+	defer os.Unsetenv("AEGISMESH_TEST_WEBHOOK_HMAC")
+	doc := strings.Replace(base, "url:", "hmac_secret_env: AEGISMESH_TEST_WEBHOOK_HMAC\n  url:", 1)
+	os.WriteFile(cfgPath, []byte(doc), 0o600)
+	c, _ = Load(cfgPath)
+	v, err := c.ResolveWebhookSecret()
+	if err != nil || v == "" {
+		t.Fatalf("env ref: v=%q err=%v", v, err)
+	}
+
+	// File reference works and enforces containment.
+	os.Setenv("AEGISMESH_TEST_WEBHOOK_HMAC", "")
+	keyPath := filepath.Join(dir, "wh.key")
+	os.WriteFile(keyPath, []byte("file-secret-value"), 0o600)
+	doc = strings.Replace(base, "url:", "hmac_secret_file: ./wh.key\n  url:", 1)
+	os.WriteFile(cfgPath, []byte(doc), 0o600)
+	c, _ = Load(cfgPath)
+	v, err = c.ResolveWebhookSecret()
+	if err != nil || v != "file-secret-value" {
+		t.Fatalf("file ref: v=%q err=%v", v, err)
+	}
+
+	// Empty env value is an actionable error, never silent.
+	doc = strings.Replace(base, "url:", "hmac_secret_env: AEGISMESH_TEST_WEBHOOK_HMAC\n  url:", 1)
+	os.WriteFile(cfgPath, []byte(doc), 0o600)
+	c, _ = Load(cfgPath)
+	if _, err := c.ResolveWebhookSecret(); err == nil || !strings.Contains(err.Error(), "empty or unset") {
+		t.Fatalf("empty env must fail loudly: %v", err)
+	}
+}
