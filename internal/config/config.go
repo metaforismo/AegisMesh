@@ -107,11 +107,16 @@ type Logging struct {
 	Format string `yaml:"format" json:"format"`
 }
 
-// Security carries the two explicit opt-ins that relax safe defaults. Both
-// default to false; both must be set deliberately by an operator.
+// Security carries the explicit opt-ins that relax safe defaults. All default
+// to false; each must be set deliberately by an operator.
 type Security struct {
 	AllowPublicBind      bool `yaml:"allow_public_bind"       json:"allow_public_bind"`
 	AllowPrivilegedPorts bool `yaml:"allow_privileged_ports"  json:"allow_privileged_ports"`
+
+	// AllowPrivateLLMEgress permits LLM provider endpoints on RFC1918/ULA
+	// addresses (corporate gateways). Cloud-metadata and link-local targets
+	// remain denied unconditionally regardless of this flag.
+	AllowPrivateLLMEgress bool `yaml:"allow_private_llm_egress,omitempty" json:"allow_private_llm_egress,omitempty"`
 }
 
 // LLM selects the response provider backend.

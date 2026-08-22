@@ -70,7 +70,7 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		return nil, fmt.Errorf("%w: %v", errRuntime, err)
 	}
 
-	prov, err := providerFor(cfg.LLM)
+	prov, err := providerFor(*cfg)
 	if err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("%w: %v", errRuntime, err)
@@ -106,16 +106,31 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 	return sys, nil
 }
 
-func providerFor(lc config.LLM) (llm.Provider, error) {
+// providerFor materializes the configured provider. Remote construction is
+// fail-closed: egress policy validation, model presence, and credential
+// resolution all happen here, before any listener binds.
+func providerFor(c config.Config) (llm.Provider, error) {
+	lc := c.LLM
 	switch lc.Provider {
 	case "", "local":
 		return llm.Local{}, nil
-	default:
-		// Remote adapters land with roadmap R2; fail closed meanwhile.
-		if lc.APIKey == "" {
-			return nil, llm.ErrNoAPIKey
+	case "ollama", "openai":
+		key, err := c.ResolveAPIKey()
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", errRuntime, err)
 		}
-		return nil, fmt.Errorf("provider %q is not implemented in this release; use llm.provider=local", lc.Provider)
+		return llm.NewRemote(llm.RemoteConfig{
+			Name:             lc.Provider,
+			BaseURL:          lc.BaseURL,
+			Model:            lc.Model,
+			APIKey:           key,
+			AllowLoopback:    lc.Provider == "ollama",
+			AllowPrivate:     c.Security.AllowPrivateLLMEgress,
+			Timeout:          time.Duration(lc.TimeoutSeconds) * time.Second,
+			MaxResponseBytes: lc.MaxResponseBytes,
+		})
+	default:
+		return nil, fmt.Errorf("provider %q is not supported; use local|ollama|openai", lc.Provider)
 	}
 }
 
