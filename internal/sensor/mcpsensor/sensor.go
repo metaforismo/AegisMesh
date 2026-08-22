@@ -9,6 +9,7 @@
 package mcpsensor
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -19,7 +20,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
 
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -68,6 +71,32 @@ type toolInfo struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
+}
+
+type resourceInfo struct {
+	URI         string `json:"uri"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MIMEType    string `json:"mimeType,omitempty"`
+}
+
+type promptInfo struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Arguments   []promptArgInfo `json:"arguments,omitempty"`
+}
+
+type promptArgInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+}
+
+func orString(v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	return v
 }
 
 type Sensor struct {
@@ -131,6 +160,12 @@ func (s *Sensor) Start(ctx context.Context, d sensor.Deps) error {
 	lists := d.Meter.Counter(
 		"aegismesh_sensor_mcp_tools_listed_total",
 		"tools/list requests answered")
+	reads := d.Meter.Counter(
+		"aegismesh_sensor_mcp_resources_read_total",
+		"resources/read requests answered")
+	prompts := d.Meter.Counter(
+		"aegismesh_sensor_mcp_prompts_fetched_total",
+		"prompts/get requests answered")
 
 	h := &handler{
 		ref:      event.SensorRef{ID: s.cfg.ID, Kind: s.Kind(), Listen: s.cfg.Listen},
@@ -142,6 +177,8 @@ func (s *Sensor) Start(ctx context.Context, d sensor.Deps) error {
 		log:      d.Log,
 		events:   eventsTotal,
 		lists:    lists,
+		reads:    reads,
+		prompts:  prompts,
 	}
 	mux := http.NewServeMux()
 	path := s.cfg.MCPPath
@@ -199,14 +236,30 @@ type handler struct {
 	log      *slog.Logger
 	events   observe.Counter
 	lists    observe.Counter
+	reads    observe.Counter
+	prompts  observe.Counter
 }
 
 const maxMessageBytes = 256 << 10
+
+// methodRe constrains JSON-RPC method names to the shapes this protocol uses:
+// ASCII tokens with slash-separated segments (e.g. "tools/call",
+// "notifications/initialized"). Anything outside the shape fails envelope
+// validation (-32600) rather than method-not-found, because it is not a
+// plausible MCP method at all.
+var methodRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9/_-]{0,63}$`)
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// Media-type gate: a present Content-Type must be application/json.
+	// Absent is tolerated for minimal clients; anything else declared is a
+	// hard 415 before we spend bytes reading the body.
+	if ct := strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]); ct != "" && ct != "application/json" {
+		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxMessageBytes))
@@ -215,9 +268,31 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Batches: JSON arrays are valid JSON-RPC but deliberately unsupported by
+	// this decoy. Reject as a single error object per the spec's allowance,
+	// never by processing batch contents.
+	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
+		writeRPC(w, nil, &rpcError{Code: codeInvalidRequest, Message: "batch requests are not supported"})
+		return
+	}
+
 	var req rpcRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeRPC(w, nil, &rpcError{Code: codeParseError, Message: "parse error"})
+		return
+	}
+	// Envelope strictness: version pinned, method shaped, id typed.
+	if req.JSONRPC != "2.0" {
+		writeRPC(w, nil, &rpcError{Code: codeInvalidRequest, Message: `jsonrpc must be exactly "2.0"`})
+		return
+	}
+	if !methodRe.MatchString(req.Method) {
+		writeRPC(w, nil, &rpcError{Code: codeInvalidRequest, Message: "malformed method"})
+		return
+	}
+	isNotification := len(req.ID) == 0
+	if !isNotification && !validRequestID(req.ID) {
+		writeRPC(w, nil, &rpcError{Code: codeInvalidRequest, Message: "id must be a string or integer"})
 		return
 	}
 
@@ -227,8 +302,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Text:       policy.BoundedDetectInput(req.Method+" "+string(req.Params), h.enf.EngineMaxInput()),
 		TotalBytes: len(req.Method) + len(req.Params),
 	})
+	w.Header().Set("X-AegisMesh-Action", string(det.Action))
+
 	if det.Action == policy.ActionRefuse {
 		h.emitWithClass(req.Method, event.ClassificationInteraction, &det)
+		if isNotification {
+			// Notifications never get a response body, even on refusal.
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID},
 			&rpcError{Code: codeServerRefused, Message: "request refused"})
 		return
@@ -237,9 +319,16 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch req.Method {
 	case "initialize":
 		h.emitWithClass("initialize", event.ClassificationInteraction, &det)
+		caps := map[string]any{"tools": map[string]any{}}
+		if len(h.cfg.Resources) > 0 {
+			caps["resources"] = map[string]any{}
+		}
+		if len(h.cfg.Prompts) > 0 {
+			caps["prompts"] = map[string]any{}
+		}
 		result, _ := json.Marshal(map[string]any{
 			"protocolVersion": "2025-06-18",
-			"capabilities":    map[string]any{"tools": map[string]any{}},
+			"capabilities":    caps,
 			"serverInfo": map[string]string{
 				"name":    h.cfg.ServerName,
 				"version": h.cfg.ServerVer,
@@ -247,11 +336,6 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"instructions": truncateStr(h.cfg.Instructions, 1024),
 		})
 		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result}, nil)
-
-	case "notifications/initialized":
-		// JSON-RPC notification: no id, no response body. The streamable
-		// transport allows 202 Accepted with an empty body.
-		w.WriteHeader(http.StatusAccepted)
 
 	case "ping":
 		h.emitWithClass("ping", event.ClassificationInteraction, &det)
@@ -298,11 +382,160 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Result:  json.RawMessage(tool.ResultJSON),
 		}, nil)
 
+	case "resources/list":
+		items := make([]resourceInfo, 0, len(h.cfg.Resources))
+		for _, res := range h.cfg.Resources {
+			items = append(items, resourceInfo{
+				URI: res.URI, Name: res.Name,
+				Description: truncateStr(res.Description, 2048), MIMEType: res.MIMEType,
+			})
+		}
+		result, _ := json.Marshal(map[string]any{"resources": items})
+		h.emitWithClass("resources/list", event.ClassificationInteraction, &det)
+		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result}, nil)
+
+	case "resources/read":
+		var p struct {
+			URI string `json:"uri"`
+		}
+		if len(req.Params) == 0 || json.Unmarshal(req.Params, &p) != nil || p.URI == "" {
+			writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID},
+				&rpcError{Code: codeInvalidParams, Message: "uri required"})
+			return
+		}
+		res, ok := h.resourceByURI(p.URI)
+		h.reads.Inc()
+		if !ok {
+			h.emitWithClass("resources/read", event.ClassificationInteraction, &det)
+			writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID},
+				&rpcError{Code: codeInvalidParams, Message: "unknown resource"})
+			return
+		}
+		content, _ := json.Marshal(map[string]any{
+			"contents": []map[string]any{{
+				"uri":      res.URI,
+				"mimeType": orString(res.MIMEType, "text/plain"),
+				"text":     res.Text,
+			}},
+		})
+		h.emitWithClass("resources/read", event.ClassificationInteraction, &det)
+		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: content}, nil)
+
+	case "prompts/list":
+		items := make([]promptInfo, 0, len(h.cfg.Prompts))
+		for _, pr := range h.cfg.Prompts {
+			args := make([]promptArgInfo, 0, len(pr.Arguments))
+			for _, a := range pr.Arguments {
+				args = append(args, promptArgInfo{Name: a.Name, Description: a.Description, Required: a.Required})
+			}
+			items = append(items, promptInfo{Name: pr.Name, Description: pr.Description, Arguments: args})
+		}
+		result, _ := json.Marshal(map[string]any{"prompts": items})
+		h.emitWithClass("prompts/list", event.ClassificationInteraction, &det)
+		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result}, nil)
+
+	case "prompts/get":
+		out, rpcErr := h.renderPrompt(req.Params)
+		h.prompts.Inc()
+		h.emitWithClass("prompts/get", event.ClassificationInteraction, &det)
+		if rpcErr != nil {
+			writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID}, rpcErr)
+			return
+		}
+		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: out}, nil)
+
 	default:
+		if isNotification {
+			// Unknown notifications are accepted silently per JSON-RPC 2.0;
+			// the streamable transport answers 202 with no body.
+			h.emitWithClass(req.Method, event.ClassificationInteraction, &det)
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 		h.emitWithClass(req.Method, event.ClassificationInteraction, &det)
 		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID},
 			&rpcError{Code: codeMethodNotFound, Message: "method not found"})
 	}
+}
+
+// validRequestID accepts only string and integer ids per JSON-RPC 2.0; the
+// fractional/null/bool/object/array forms are envelope errors here.
+func validRequestID(raw json.RawMessage) bool {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil {
+		return false
+	}
+	switch t := v.(type) {
+	case string:
+		return true
+	case json.Number:
+		_, err := t.Int64()
+		return err == nil
+	default:
+		return false
+	}
+}
+
+func (h *handler) resourceByURI(uri string) (config.MCPResource, bool) {
+	for _, r := range h.cfg.Resources {
+		if r.URI == uri {
+			return r, true
+		}
+	}
+	return config.MCPResource{}, false
+}
+
+// renderPrompt substitutes {argument_name} occurrences verbatim — there is no
+// templating language, no evaluation, and the substituted text is bounded so a
+// flood of argument values cannot balloon the response.
+func (h *handler) renderPrompt(params json.RawMessage) (json.RawMessage, *rpcError) {
+	var p struct {
+		Name      string            `json:"name"`
+		Arguments map[string]string `json:"arguments,omitempty"`
+	}
+	if len(params) == 0 || json.Unmarshal(params, &p) != nil {
+		return nil, &rpcError{Code: codeInvalidParams, Message: "invalid params"}
+	}
+	var found *config.MCPPrompt
+	for i := range h.cfg.Prompts {
+		if h.cfg.Prompts[i].Name == p.Name {
+			found = &h.cfg.Prompts[i]
+			break
+		}
+	}
+	if found == nil {
+		return nil, &rpcError{Code: codeInvalidParams, Message: "unknown prompt"}
+	}
+	msgs := make([]map[string]any, 0, len(found.Messages))
+	total := 0
+	for _, m := range found.Messages {
+		text := m
+		for _, a := range found.Arguments {
+			val, provided := p.Arguments[a.Name]
+			if a.Required && !provided {
+				return nil, &rpcError{Code: codeInvalidParams, Message: "missing required argument " + a.Name}
+			}
+			if provided {
+				text = strings.ReplaceAll(text, "{"+a.Name+"}", val)
+			}
+		}
+		if total+len(text) > config.MaxMCPResultBytes {
+			break
+		}
+		text = truncateStr(text, config.MaxMCPResultBytes-total)
+		total += len(text)
+		msgs = append(msgs, map[string]any{
+			"role":    "user",
+			"content": map[string]any{"type": "text", "text": text},
+		})
+	}
+	out, err := json.Marshal(map[string]any{"messages": msgs})
+	if err != nil {
+		return nil, &rpcError{Code: codeInvalidParams, Message: "render failed"}
+	}
+	return out, nil
 }
 
 type callParams struct {

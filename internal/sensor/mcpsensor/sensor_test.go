@@ -276,7 +276,7 @@ func TestMCPSensorProtocolErrors(t *testing.T) {
 	}
 
 	// Unknown method → -32601.
-	_, out = postRPC(t, url, rpcReq(3, "resources/list", nil))
+	_, out = postRPC(t, url, rpcReq(3, "widgets/list", nil))
 	errObj, _ = out["error"].(map[string]any)
 	if errObj == nil || errObj["code"].(float64) != codeMethodNotFound {
 		t.Fatalf("method-not-found error missing: %+v", out)
