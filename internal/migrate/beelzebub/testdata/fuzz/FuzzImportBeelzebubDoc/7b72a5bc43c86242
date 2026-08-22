@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("protocol: http\naddress: 0A\ncommands:\n- regex: 0A")

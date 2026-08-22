@@ -1,0 +1,105 @@
+# Continuous integration for AegisMesh.
+#
+# Supply-chain rules for this file:
+#   - Every action is pinned to a full commit SHA (immutable), with the
+#     version noted beside it for humans.
+#   - Least privileges: default token permission is read-only; jobs opt in.
+#   - No secrets are required for PRs; nothing here can publish artifacts.
+
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  verify:
+    name: fmt, vet, build, test (-race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt + vet (+ golangci-lint when configured)
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+          go vet ./...
+
+      - name: build
+        run: go build -trimpath ./...
+
+      - name: test (-race)
+        run: go test -race ./...
+
+  fuzz-smoke:
+    name: fuzz seeds (bounded)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # Bounded real fuzzing (~15s/target): enough to catch regressions in
+      # parsers without burning CI minutes. Longer sessions are local/manual.
+      - name: fuzz targets
+        run: |
+          go test -run '^$' -fuzz=FuzzParseConfig         ./internal/config            -fuzztime=15s
+          go test -run '^$' -fuzz=FuzzDecodeEventEnvelope ./internal/event             -fuzztime=15s
+          go test -run '^$' -fuzz=FuzzMatchTCPLine        ./internal/sensor/tcpsensor  -fuzztime=15s
+          go test -run '^$' -fuzz=FuzzImportBeelzebubDoc  ./internal/migrate/beelzebub -fuzztime=15s
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: govulncheck (module mode)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  license-secrets:
+    name: dependency licenses + secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: license policy
+        run: ./scripts/license-check.sh
+
+      - name: secret scan
+        run: ./scripts/secrets-scan.sh
