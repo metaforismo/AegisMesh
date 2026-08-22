@@ -42,7 +42,6 @@ CI runs all four targets at 15s each on every push.
 | Example migration fixtures round-trip through the strict loader | `go test -run TestMigrateExampleFixturesRoundTrip ./internal/cli/` | PASS |
 | Race detector on touched packages | `go test -race -count=1 ./internal/cli/ ./internal/migrate/beelzebub/` | PASS |
 | inspect --finding filter (match, empty match, invalid rule id, verified JSON rows) | `go test -run TestInspectFindingFilter ./internal/cli/` | PASS |
-| init provider profiles load through strict loader; doctor credential-reference states | `go test -run 'TestInitProfiles|TestInitRejectsUnknownProfile|TestDoctorRemoteProfileKeyFileStates' ./internal/cli/` | PASS |
 | Importer refuses inline credential material with non-zero exit; references reported, never carried or echoed | `go test -run 'TestMigrateRefuses|TestMigrateReports' ./internal/cli/` | PASS |
 | Example migration fixtures round-trip through the strict loader | `go test -run TestMigrateExampleFixturesRoundTrip ./internal/cli/` | PASS |
 | Importer output passes strict loader (in-test round trip) | `go test -run TestEmitConfigRoundTripsThroughStrictLoader ./internal/migrate/beelzebub/` | PASS |
