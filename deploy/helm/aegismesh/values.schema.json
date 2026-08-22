@@ -9,6 +9,7 @@
     "service",
     "networkPolicy",
     "pdb",
+    "serviceAccount",
     "terminationGracePeriodSeconds",
     "podSecurityContext",
     "containerSecurityContext",
@@ -106,6 +107,37 @@
         {
           "not": {
             "required": ["minAvailable", "maxUnavailable"]
+          }
+        }
+      ]
+    },
+    "serviceAccount": {
+      "type": "object",
+      "description": "Per-release identity. The chart never creates Role, ClusterRole, RoleBinding, or ClusterRoleBinding objects: AegisMesh does not call the Kubernetes API, and token automount stays disabled on both the account and the Pod.",
+      "required": ["create", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "description": "True renders one dedicated ServiceAccount named after the release fullname; false requires an operator-managed account via name."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 63,
+          "description": "External ServiceAccount name; must be non-empty when create=false, ignored otherwise."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "create": { "const": false } },
+            "required": ["create"]
+          },
+          "then": {
+            "required": ["name"],
+            "properties": {
+              "name": { "minLength": 1, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" }
+            }
           }
         }
       ]

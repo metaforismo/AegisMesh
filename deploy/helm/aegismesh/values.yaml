@@ -65,6 +65,17 @@ pdb:
   # exact-one validation rejects the release.
   maxUnavailable: 0
 
+## Per-release identity (templates/serviceaccount.yaml), created by default
+## and least-privileged by construction: this chart creates NO Role,
+## ClusterRole, RoleBinding, or ClusterRoleBinding because AegisMesh never
+## calls the Kubernetes API, and token automount is disabled so the account
+## can never carry a projected API token. Set create=false to reference an
+## account you provision yourself; name must then be non-empty.
+serviceAccount:
+  create: true
+  # Used only when create=false (external account in the target namespace).
+  name: ""
+
 ## Conservative placeholders; measured RSS guidance is still pending
 ## (docs/deploy/kubernetes.md, precondition 4). Adjust per deployment size.
 resources:

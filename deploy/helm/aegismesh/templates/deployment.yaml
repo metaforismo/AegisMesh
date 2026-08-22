@@ -20,6 +20,11 @@ spec:
       # Nothing in the runtime talks to the Kubernetes API; never project a
       # token into the Pod by default.
       automountServiceAccountToken: false
+      {{- $saName := include "aegismesh.fullname" . -}}
+      {{- if not .Values.serviceAccount.create -}}
+      {{- $saName = required "serviceAccount.create=false requires an explicit non-empty serviceAccount.name naming an account you manage in this namespace" .Values.serviceAccount.name -}}
+      {{- end }}
+      serviceAccountName: {{ $saName }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}

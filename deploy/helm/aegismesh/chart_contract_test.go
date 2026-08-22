@@ -2,7 +2,8 @@
 //
 // Shells out to `helm template` (offline, no cluster) and verifies the chart
 // keeps rendering what this repository promises: exactly one
-// ConfigMap/Deployment/Service, decoy-only exposure, hardened pod/container
+// ConfigMap/Deployment/Service, a dedicated token-free ServiceAccount (or a
+// named external one), decoy-only exposure, hardened pod/container
 // contexts, resource bounds, and a checksum annotation bound to the rendered
 // mesh.yaml. A smoke check, not a second Kubernetes validator; deep config
 // checking stays in internal/config.
@@ -65,6 +66,11 @@ type scenario struct {
 	// names the single threshold expected together with its value.
 	pdbKey   string
 	pdbValue any
+	// wantSAs is the exact rendered ServiceAccount count (0 selects the
+	// external-account mode); wantPodSA is the required Deployment
+	// serviceAccountName in both modes.
+	wantSAs   int
+	wantPodSA string
 }
 
 func TestHelmChartContract(t *testing.T) {
@@ -89,9 +95,11 @@ func TestHelmChartContract(t *testing.T) {
 
 	files := map[string]string{
 		// Meaningful overrides: 1) wider exposure model with the ingress
-		// policy deliberately disabled (must render no NetworkPolicy);
-		// 2) immutable pin, resource bounds, and an explicit PDB opt-in
-		// exercising the non-default threshold (minAvailable).
+		// policy deliberately disabled (must render no NetworkPolicy) and
+		// the external-account mode selected via a fixed pre-provisioned
+		// ServiceAccount name; 2) immutable pin, resource bounds, and an
+		// explicit PDB opt-in exercising the non-default threshold
+		// (minAvailable).
 		"nodeport.yaml": `service:
   type: NodePort
   ports:
@@ -99,6 +107,9 @@ func TestHelmChartContract(t *testing.T) {
     - {name: tcp, port: 6399, targetPort: 6399, protocol: TCP, nodePort: 30639}
 networkPolicy:
   enabled: false
+serviceAccount:
+  create: false
+  name: aegismesh-external-sa
 `,
 		"pinned.yaml": `image: {tag: "1.2.3", pullPolicy: Always}
 resources:
@@ -118,10 +129,13 @@ pdb:
 	}
 
 	scenarios := []scenario{
-		{name: "defaults", wantType: "ClusterIP", wantNetPol: true},
-		{name: "nodeport-exposure-policy-off", valuesFile: "nodeport.yaml", wantType: "NodePort"},
+		{name: "defaults", wantType: "ClusterIP", wantNetPol: true,
+			wantSAs: 1, wantPodSA: releaseName},
+		{name: "nodeport-exposure-policy-off", valuesFile: "nodeport.yaml", wantType: "NodePort",
+			wantSAs: 0, wantPodSA: "aegismesh-external-sa"},
 		{name: "pinned-image-resources-pdb", valuesFile: "pinned.yaml", wantType: "ClusterIP", wantNetPol: true,
-			pdbKey: "minAvailable", pdbValue: 1},
+			pdbKey: "minAvailable", pdbValue: 1,
+			wantSAs: 1, wantPodSA: releaseName},
 	}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
@@ -154,6 +168,8 @@ pdb:
 		{"nonsensical memory quantity", "/resources/limits/memory", []string{"resources.limits.memory=banana"}, ""},
 		{"empty sensor set", "/meshConfig/sensors", nil, "empty-sensors.yaml"},
 		{"non-boolean network policy flag", "/networkPolicy/enabled", []string{"networkPolicy.enabled=maybe"}, ""},
+		{"non-boolean serviceaccount create flag", "/serviceAccount/create", []string{"serviceAccount.create=maybe"}, ""},
+		{"empty external serviceaccount name", "/serviceAccount/name", []string{"serviceAccount.create=false"}, ""},
 		{"boolean pdb threshold", "/pdb/minAvailable", []string{"pdb.enabled=true", "pdb.minAvailable=true"}, ""},
 		{"malformed pdb percentage", "/pdb/maxUnavailable", []string{"pdb.maxUnavailable=%50"}, ""},
 	}
@@ -407,6 +423,26 @@ func checkContract(t *testing.T, rendered []byte, sc scenario) {
 		if counts["PodDisruptionBudget"] != 0 {
 			t.Errorf("pdb disabled must render no PodDisruptionBudget, got %d", counts["PodDisruptionBudget"])
 		}
+	}
+	// Identity contract: default and pinned scenarios render exactly one
+	// dedicated ServiceAccount (explicitly token-free; the chart creates no
+	// RBAC objects of any kind), the external mode renders none, and the Pod
+	// always references a named account explicitly on top of its own
+	// automountServiceAccountToken=false.
+	if counts["ServiceAccount"] != sc.wantSAs {
+		t.Errorf("want %d ServiceAccount, got %d", sc.wantSAs, counts["ServiceAccount"])
+	}
+	if sc.wantSAs > 0 {
+		saDoc := docsByKind["ServiceAccount"]
+		if got := fmt.Sprint(asMap(t, saDoc["metadata"])["name"]); got != sc.wantPodSA {
+			t.Errorf("serviceaccount name = %q, want %q", got, sc.wantPodSA)
+		}
+		if am, ok := saDoc["automountServiceAccountToken"].(bool); !ok || am {
+			t.Error("serviceaccount automountServiceAccountToken must be explicitly false")
+		}
+	}
+	if got := fmt.Sprint(podSpec["serviceAccountName"]); got != sc.wantPodSA {
+		t.Errorf("deployment serviceAccountName = %q, want %q", got, sc.wantPodSA)
 	}
 	if sc.name == "pinned-image-resources-pdb" {
 		if img := fmt.Sprint(c["image"]); !strings.HasSuffix(img, ":1.2.3") {
