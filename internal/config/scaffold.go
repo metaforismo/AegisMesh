@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	_ "embed"
 	"fmt"
 	"os"
@@ -10,10 +11,37 @@ import (
 //go:embed assets/demo.yaml
 var demoConfig []byte
 
-// Scaffold writes a demo configuration plus a short README into dir. It
-// refuses to overwrite existing files unless force is true. The generated
-// config contains only synthetic data and safe loopback defaults.
+// Profile selects the provider wiring a scaffolded workspace starts with.
+type Profile string
+
+const (
+	// ProfileLocal is the deterministic offline default: no egress, no key.
+	ProfileLocal Profile = "local"
+	// ProfileOllama points the fallback at a local Ollama daemon via its
+	// OpenAI-compatible endpoint (loopback http permitted for this profile).
+	ProfileOllama Profile = "ollama"
+	// ProfileRemote targets a generic OpenAI-compatible endpoint; credentials
+	// are referenced by environment variable name, never embedded.
+	ProfileRemote Profile = "remote"
+)
+
+// ValidProfiles lists accepted init --profile values.
+func ValidProfiles() []string { return []string{"local", "ollama", "remote"} }
+
+// Scaffold writes the default (local) demo configuration plus README.
 func Scaffold(dir string, force bool) ([]string, error) {
+	return ScaffoldProfile(dir, ProfileLocal, force)
+}
+
+// ScaffoldProfile writes a demo configuration wired for the requested
+// provider profile plus a short README into dir. It refuses to overwrite
+// existing files unless force is true. Generated configs never contain
+// credential values — only references (env var names or relative file paths).
+func ScaffoldProfile(dir string, profile Profile, force bool) ([]string, error) {
+	body, err := profileConfig(profile)
+	if err != nil {
+		return nil, err
+	}
 	cfgPath := filepath.Join(dir, "mesh.yaml")
 	readmePath := filepath.Join(dir, "README.md")
 
@@ -25,13 +53,69 @@ func Scaffold(dir string, force bool) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create directory %s: %v", dir, err)
 	}
-	if err := os.WriteFile(cfgPath, demoConfig, 0o644); err != nil { //nolint:gosec // world-readable config is intentional
+	if err := os.WriteFile(cfgPath, body, 0o644); err != nil { //nolint:gosec // world-readable config is intentional and contains no secrets
 		return nil, fmt.Errorf("write %s: %v", cfgPath, err)
 	}
 	if err := os.WriteFile(readmePath, []byte(scaffoldReadme), 0o644); err != nil {
 		return nil, fmt.Errorf("write %s: %v", readmePath, err)
 	}
 	return []string{cfgPath, readmePath}, nil
+}
+
+// profileConfig renders the demo template with the llm block swapped per
+// profile. The template is ours; the split point is stable and asserted by
+// tests that load every variant through the strict loader.
+func profileConfig(p Profile) ([]byte, error) {
+	marker := "\nllm:\n"
+	idx := bytes.Index(demoConfig, []byte(marker))
+	end := bytes.Index(demoConfig, []byte("\nsensors:"))
+	if idx < 0 || end < 0 || idx > end {
+		return nil, fmt.Errorf("internal: demo template llm block not found")
+	}
+	head := demoConfig[:idx]
+	tail := demoConfig[end:] // starts at the blank line before sensors
+
+	var block string
+	switch p {
+	case ProfileLocal:
+		block = `
+llm:
+  provider: local                  # deterministic offline provider; no API key needed
+  # provider: openai               # opt-in remote adapter (untrusted output pipeline applies)
+  # base_url: https://api.example.com/v1
+  # model: gpt-4o-mini
+  # api key comes from AEGISMESH_LLM_API_KEY, never from files
+`
+	case ProfileOllama:
+		block = `
+# Local Ollama profile. AegisMesh talks to Ollama's OpenAI-compatible
+# endpoint; loopback cleartext http is allowed ONLY for provider=ollama.
+llm:
+  provider: ollama
+  # base_url: http://127.0.0.1:11434/v1   # default when omitted
+  model: llama3                            # any model your instance has pulled
+`
+	case ProfileRemote:
+		block = `
+# Remote OpenAI-compatible provider. Egress policy enforced by AegisMesh:
+#   - https required beyond loopback (loopback cleartext only via ollama)
+#   - private-range gateways need security.allow_private_llm_egress: true
+#   - cloud metadata / link-local destinations are always denied
+#   - redirects are never followed; response bodies are size-capped
+llm:
+  provider: openai
+  base_url: https://api.openai.com/v1
+  model: gpt-4o-mini
+  api_key_env: OPENAI_API_KEY      # NAME of the env var holding the key — never the key itself
+  # api_key_file: ./secrets/llm.key       # alternative reference, relative to this file
+  timeout_seconds: 20
+  max_response_bytes: 1048576
+`
+	default:
+		return nil, fmt.Errorf("unknown profile %q (valid: local|ollama|remote)", string(p))
+	}
+	out := append(append([]byte{}, head...), []byte(block)...)
+	return append(out, tail...), nil
 }
 
 const scaffoldReadme = `# AegisMesh local workspace
