@@ -80,7 +80,7 @@ answers. Use it before any production-ish deployment.
 
 ## aegismesh inspect
 
-    inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--verify]
+    inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
     inspect show   --data-dir DIR --id EVENT_ID [--verify]
     inspect export --data-dir DIR --out FILE.ndjson [--verify]
 
@@ -88,7 +88,14 @@ Read-only access to evidence. `show` accepts ID prefixes (shortest unambiguous
 match). `--verify` recomputes each event's integrity hash; corrupt lines are
 skipped, counted, and reported — never silently dropped. `--finding PI-001`
 filters to events where a named detection rule fired (rule ids are validated
-against the registry before any file is read).
+against the registry before any file is read). `--classification CLASS` keeps
+only one evidence class (`interaction`, `canary_invocation`, or
+`correlation_signal`) — a strict enum match validated against the same
+constants the event schema accepts, with no globs, lists, or negation. The
+filter applies before `--limit`, so N caps matching rows:
+
+    inspect list --data-dir DIR --classification correlation_signal
+    inspect list --data-dir DIR --classification canary_invocation --limit 5
 
 ## aegismesh rules
 
