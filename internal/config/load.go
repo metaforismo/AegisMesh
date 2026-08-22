@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -140,6 +141,18 @@ func (c *Config) applyDefaults() {
 	if c.LLM.Provider == "" {
 		c.LLM.Provider = "local"
 	}
+	if c.LLM.Provider == "ollama" && strings.TrimSpace(c.LLM.BaseURL) == "" {
+		c.LLM.BaseURL = DefaultOllamaBaseURL
+	}
+	if c.LLM.TimeoutSeconds == 0 {
+		c.LLM.TimeoutSeconds = DefaultLLMTimeoutSeconds
+	}
+	if c.LLM.MaxResponseBytes == 0 {
+		c.LLM.MaxResponseBytes = DefaultLLMResponseBytes
+	}
+	if c.Detection.MaxInputBytes == 0 {
+		c.Detection.MaxInputBytes = DefaultDetectionMaxLen
+	}
 	for i := range c.Sensors {
 		s := &c.Sensors[i]
 		switch s.Kind {
@@ -213,4 +226,58 @@ func (c *Config) applyEnvOverrides() error {
 		return err
 	}
 	return nil
+}
+
+// ResolveAPIKey materializes the configured credential reference at runtime.
+//
+// Precedence: a secret already set via the AEGISMESH_LLM_API_KEY environment
+// override wins; otherwise APIKeyEnv names an environment variable; otherwise
+// APIKeyFile is read relative to the config directory. The file is size-capped
+// and its contents are trimmed of surrounding whitespace only. The returned
+// value must never be logged or serialized by callers.
+func (c *Config) ResolveAPIKey() (string, error) {
+	if c.LLM.APIKey != "" {
+		return c.LLM.APIKey, nil
+	}
+	if name := strings.TrimSpace(c.LLM.APIKeyEnv); name != "" {
+		v := os.Getenv(name)
+		if strings.TrimSpace(v) == "" {
+			return "", fmt.Errorf("%w: llm.api_key_env %q is set but the variable is empty or unset", errConfig, name)
+		}
+		return strings.TrimSpace(v), nil
+	}
+	if rel := strings.TrimSpace(c.LLM.APIKeyFile); rel != "" {
+		base := filepath.Dir(absClean(c.SourcePath))
+		full := filepath.Join(base, filepath.Clean(rel))
+		absBase, err := filepath.Abs(base)
+		if err != nil {
+			return "", err
+		}
+		absFull, err := filepath.Abs(full)
+		if err != nil {
+			return "", err
+		}
+		if absFull != absBase && !strings.HasPrefix(absFull, absBase+string(filepath.Separator)) {
+			return "", fmt.Errorf("%w: llm.api_key_file %q resolves outside the config directory", errConfig, rel)
+		}
+		f, err := os.Open(absFull) //nolint:gosec // containment verified above
+		if err != nil {
+			return "", fmt.Errorf("%w: llm.api_key_file: %v", errConfig, err)
+		}
+		defer f.Close()
+		buf := make([]byte, MaxAPIKeyFileBytes+1)
+		n, err := io.ReadFull(f, buf)
+		if err != nil && err != io.ErrUnexpectedEOF {
+			return "", fmt.Errorf("%w: llm.api_key_file: %v", errConfig, err)
+		}
+		if n > MaxAPIKeyFileBytes {
+			return "", fmt.Errorf("%w: llm.api_key_file exceeds %d bytes", errConfig, MaxAPIKeyFileBytes)
+		}
+		v := strings.TrimSpace(string(buf[:n]))
+		if v == "" {
+			return "", fmt.Errorf("%w: llm.api_key_file %q is empty", errConfig, rel)
+		}
+		return v, nil
+	}
+	return "", nil
 }

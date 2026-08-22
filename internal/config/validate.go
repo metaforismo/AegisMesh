@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/metaforismo/aegismesh/internal/detect"
 )
 
 var (
@@ -17,12 +19,15 @@ var (
 	toolNameRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9:_.-]{0,127}$`)
 	headerKeyRe = regexp.MustCompile(`^[A-Za-z0-9!#$%&'*+\-.^_` + "`" + `|~]{1,128}$`)
 	methodRe    = regexp.MustCompile(`^[A-Z]{1,16}$`)
+	envNameRe   = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
+	uriRe       = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^\s]{1,512}$`)
 
 	allowedCommon = map[string]bool{"id": true, "kind": true, "listen": true}
 	allowedByKind = map[string]map[string]bool{
 		SensorKindHTTP: {"persona": true, "rules": true, "fallback": true, "max_body_bytes": true},
 		SensorKindTCP:  {"banner": true, "session": true, "tcp_rules": true},
-		SensorKindMCP:  {"path": true, "server_name": true, "server_version": true, "instructions": true, "tools": true},
+		SensorKindMCP: {"path": true, "server_name": true, "server_version": true, "instructions": true, "tools": true,
+			"resources": true, "prompts": true},
 	}
 )
 
@@ -95,12 +100,20 @@ func (c *Config) Validate() error {
 	}
 	switch c.LLM.Provider {
 	case "", "local":
+	case "ollama":
+		// base_url defaults to the standard local endpoint in applyDefaults.
 	case "openai":
 		if strings.TrimSpace(c.LLM.BaseURL) == "" {
 			return fmt.Errorf("%w: llm.base_url is required when llm.provider=openai", errConfig)
 		}
 	default:
-		return fmt.Errorf("%w: llm.provider %q must be local|openai", errConfig, c.LLM.Provider)
+		return fmt.Errorf("%w: llm.provider %q must be local|ollama|openai", errConfig, c.LLM.Provider)
+	}
+	if err := validateLLM(&c.LLM); err != nil {
+		return fmt.Errorf("%w: %v", errConfig, err)
+	}
+	if err := ValidateDetection(c.Detection); err != nil {
+		return fmt.Errorf("%w: %v", errConfig, err)
 	}
 	if c.Storage.MaxFileBytes < 4096 {
 		return fmt.Errorf("%w: storage.max_file_bytes must be >= 4096", errConfig)
@@ -302,6 +315,54 @@ func validateTCPSensor(s *Sensor) error {
 	return nil
 }
 
+// validateLLM enforces the secret-reference and transport-bound rules.
+// Secrets are never present in the file itself; only references are.
+func validateLLM(l *LLM) error {
+	if l.APIKeyEnv != "" && !envNameRe.MatchString(l.APIKeyEnv) {
+		return fmt.Errorf("llm.api_key_env %q must be an environment variable NAME (A-Z, digits, underscore)", l.APIKeyEnv)
+	}
+	if l.APIKeyEnv != "" && l.APIKeyFile != "" {
+		return fmt.Errorf("set either llm.api_key_env or llm.api_key_file, not both")
+	}
+	if l.APIKeyFile != "" {
+		if err := safeRelative(l.APIKeyFile); err != nil {
+			return fmt.Errorf("llm.api_key_file: %v", err)
+		}
+	}
+	switch l.Provider {
+	case "ollama", "openai":
+		if strings.TrimSpace(l.Model) == "" {
+			return fmt.Errorf("llm.model is required when llm.provider=%s", l.Provider)
+		}
+		if len(l.Model) > 128 {
+			return fmt.Errorf("llm.model exceeds 128 bytes")
+		}
+		if strings.TrimSpace(l.BaseURL) == "" {
+			return fmt.Errorf("llm.base_url is required when llm.provider=%s", l.Provider)
+		}
+	}
+	if l.TimeoutSeconds < 0 || l.TimeoutSeconds > MaxLLMTimeoutSeconds {
+		return fmt.Errorf("llm.timeout_seconds must be within 0..%d (0 = default %ds)", MaxLLMTimeoutSeconds, DefaultLLMTimeoutSeconds)
+	}
+	if l.MaxResponseBytes < 0 || l.MaxResponseBytes > MaxLLMResponseBytes {
+		return fmt.Errorf("llm.max_response_bytes must be within 0..%d (0 = default %d)", MaxLLMResponseBytes, DefaultLLMResponseBytes)
+	}
+	return nil
+}
+
+// ValidateDetection checks the detection section against the engine's rule
+// registry. It lives behind narrow functions so config never depends on
+// engine internals.
+func ValidateDetection(d Detection) error {
+	if d.MaxInputBytes < 0 || d.MaxInputBytes > MaxDetectInputBytes {
+		return fmt.Errorf("detection.max_input_bytes must be within 0..%d (0 = default %d)", MaxDetectInputBytes, DefaultDetectionMaxLen)
+	}
+	if err := detect.ValidateRuleIDs(d.DisabledRules); err != nil {
+		return err
+	}
+	return nil
+}
+
 func validateMCPSensor(s *Sensor) error {
 	if !strings.HasPrefix(s.MCPPath, "/") || strings.ContainsAny(s.MCPPath, "?#") {
 		return fmt.Errorf("path %q must start with '/' and contain no query or fragment", s.MCPPath)
@@ -313,6 +374,18 @@ func validateMCPSensor(s *Sensor) error {
 		return fmt.Errorf("at least one canary tool is required (an MCP endpoint without tools serves no deception purpose)")
 	} else if n > MaxMCPTools {
 		return fmt.Errorf("%d tools exceed cap of %d", n, MaxMCPTools)
+	}
+	if len(s.Resources) > MaxMCPResources {
+		return fmt.Errorf("%d resources exceed cap of %d", len(s.Resources), MaxMCPResources)
+	}
+	if err := validateMCPResources(s.Resources); err != nil {
+		return err
+	}
+	if len(s.Prompts) > MaxMCPPrompts {
+		return fmt.Errorf("%d prompts exceed cap of %d", len(s.Prompts), MaxMCPPrompts)
+	}
+	if err := validateMCPPrompts(s.Prompts); err != nil {
+		return err
 	}
 	names := map[string]bool{}
 	for i := range s.Tools {
@@ -424,6 +497,94 @@ func (c *Config) ResolveBodyFile(rel string) ([]byte, error) {
 		return nil, fmt.Errorf("body_file %q is %d bytes; cap is %d", rel, len(b), MaxHTTPBodyBytes)
 	}
 	return b, nil
+}
+
+// validateMCPResources checks decoy resource definitions. URIs are decorative
+// labels returned verbatim to clients; they are never dereferenced, but they
+// must still be well-formed so agent clients do not choke on garbage.
+func validateMCPResources(resources []MCPResource) error {
+	seen := map[string]bool{}
+	for i := range resources {
+		r := &resources[i]
+		where := fmt.Sprintf("resources[%d]", i)
+		if !uriRe.MatchString(r.URI) || len(r.URI) > 512 {
+			return fmt.Errorf("%s.uri %q is not a valid absolute URI", where, r.URI)
+		}
+		if seen[r.URI] {
+			return fmt.Errorf("%s.uri %q duplicates an earlier resource URI", where, r.URI)
+		}
+		seen[r.URI] = true
+		if len(r.Name) == 0 || len(r.Name) > 256 {
+			return fmt.Errorf("%s.name must be 1..256 bytes", where)
+		}
+		if len(r.Description) > 2048 {
+			return fmt.Errorf("%s.description exceeds 2048 bytes", where)
+		}
+		if r.MIMEType != "" && (len(r.MIMEType) > 128 || strings.ContainsAny(r.MIMEType, " ;,\r\n")) {
+			return fmt.Errorf("%s.mime_type %q is not a bare media type", where, r.MIMEType)
+		}
+		if len(r.Text) == 0 || len(r.Text) > MaxMCPResultBytes {
+			return fmt.Errorf("%s.text must be 1..%d bytes", where, MaxMCPResultBytes)
+		}
+	}
+	return nil
+}
+
+// validateMCPPrompts checks decoy prompt templates. Messages are canned text;
+// argument names are substituted verbatim at read time with no templating
+// language beyond exact-name replacement.
+func validateMCPPrompts(prompts []MCPPrompt) error {
+	seen := map[string]bool{}
+	for i := range prompts {
+		p := &prompts[i]
+		where := fmt.Sprintf("prompts[%d]", i)
+		if !toolNameRe.MatchString(p.Name) {
+			return fmt.Errorf("%s.name %q is not a valid MCP prompt name", where, p.Name)
+		}
+		if seen[p.Name] {
+			return fmt.Errorf("%s.name %q duplicates an earlier prompt name", where, p.Name)
+		}
+		seen[p.Name] = true
+		if len(p.Description) > 2048 {
+			return fmt.Errorf("%s.description exceeds 2048 bytes", where)
+		}
+		if len(p.Arguments) > 16 {
+			return fmt.Errorf("%s.arguments exceed cap of 16", where)
+		}
+		argNames := map[string]bool{}
+		total := 0
+		for j := range p.Messages {
+			m := p.Messages[j]
+			total += len(m)
+			if len(m) == 0 {
+				return fmt.Errorf("%s.messages[%d] is empty", where, j)
+			}
+			if len(m) > MaxMCPResultBytes {
+				return fmt.Errorf("%s.messages[%d] exceeds %d bytes", where, j, MaxMCPResultBytes)
+			}
+		}
+		if total > MaxMCPResultBytes {
+			return fmt.Errorf("%s.messages total %d bytes exceeds %d", where, total, MaxMCPResultBytes)
+		}
+		if n := len(p.Messages); n == 0 || n > 8 {
+			return fmt.Errorf("%s.messages must contain 1..8 entries, has %d", where, n)
+		}
+		for j := range p.Arguments {
+			a := &p.Arguments[j]
+			aw := fmt.Sprintf("%s.arguments[%d]", where, j)
+			if !toolNameRe.MatchString(a.Name) {
+				return fmt.Errorf("%s.name %q is not a valid argument name", aw, a.Name)
+			}
+			if argNames[a.Name] {
+				return fmt.Errorf("%s.name duplicates an earlier argument", aw)
+			}
+			argNames[a.Name] = true
+			if len(a.Description) > 512 {
+				return fmt.Errorf("%s.description exceeds 512 bytes", aw)
+			}
+		}
+	}
+	return nil
 }
 
 func isObject(v any) bool {

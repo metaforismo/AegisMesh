@@ -14,6 +14,8 @@ import (
 
 const (
 	// APIVersionV1Alpha1 is the only supported configuration schema version.
+	// Additive optional fields may extend this version when they carry safe
+	// defaults and leave existing semantics untouched (ADR-0003, ADR-0009).
 	APIVersionV1Alpha1 = "aegismesh.io/v1alpha1"
 
 	SensorKindHTTP = "http"
@@ -46,18 +48,32 @@ const (
 	defaultMaxAgeDays      = 30
 	defaultMaxFileBytes    = 16 << 20
 	defaultMaxEventBytes   = 256 << 10
+
+	// Provider transport defaults and hard caps.
+	DefaultLLMTimeoutSeconds = 20
+	MaxLLMTimeoutSeconds     = 120
+	DefaultLLMResponseBytes  = 1 << 20
+	MaxLLMResponseBytes      = 8 << 20
+	DefaultAPIKeyFileBytes   = 4 << 10
+	MaxAPIKeyFileBytes       = 64 << 10
+	DefaultOllamaBaseURL     = "http://127.0.0.1:11434/v1"
+
+	// Detection evaluation bounds.
+	MaxDetectInputBytes    = 64 << 10 // engine never evaluates more than this per interaction
+	DefaultDetectionMaxLen = 8 << 10
 )
 
 // Config is the root configuration document.
 type Config struct {
-	APIVersion string   `yaml:"api_version" json:"api_version"`
-	Runtime    Runtime  `yaml:"runtime"    json:"runtime"`
-	Storage    Storage  `yaml:"storage"    json:"storage"`
-	Admin      Admin    `yaml:"admin"      json:"admin"`
-	Logging    Logging  `yaml:"logging"    json:"logging"`
-	Security   Security `yaml:"security"   json:"security"`
-	LLM        LLM      `yaml:"llm"        json:"llm"`
-	Sensors    []Sensor `yaml:"sensors"    json:"sensors"`
+	APIVersion string    `yaml:"api_version" json:"api_version"`
+	Runtime    Runtime   `yaml:"runtime"    json:"runtime"`
+	Storage    Storage   `yaml:"storage"    json:"storage"`
+	Admin      Admin     `yaml:"admin"      json:"admin"`
+	Logging    Logging   `yaml:"logging"    json:"logging"`
+	Security   Security  `yaml:"security"   json:"security"`
+	LLM        LLM       `yaml:"llm"        json:"llm"`
+	Detection  Detection `yaml:"detection,omitempty" json:"detection,omitempty"`
+	Sensors    []Sensor  `yaml:"sensors"    json:"sensors"`
 
 	// SourcePath records where this config was loaded from; never decoded from YAML.
 	SourcePath string `yaml:"-" json:"-"`
@@ -98,15 +114,48 @@ type Security struct {
 	AllowPrivilegedPorts bool `yaml:"allow_privileged_ports"  json:"allow_privileged_ports"`
 }
 
-// LLM selects the response provider backend. APIKey is populated from the
-// AEGISMESH_LLM_API_KEY environment variable only — it is never read from or
-// written to config files, and it is excluded from JSON serialization.
+// LLM selects the response provider backend.
+//
+// Secrets never live in the config file. API credentials are referenced
+// indirectly: api_key_env names an environment variable, api_key_file names a
+// file relative to the config directory. The resolved secret is held only in
+// memory, is excluded from JSON serialization, and is never logged. The
+// legacy AEGISMESH_LLM_API_KEY environment override still works and takes
+// precedence over both references (documented precedence: env > file > none).
 type LLM struct {
-	Provider string `yaml:"provider"             json:"provider"` // "" | local | openai
+	// Provider selects the backend: "" | "local" | "ollama" | "openai".
+	// "openai" means any OpenAI-compatible chat-completions endpoint; Ollama
+	// exposes one at http://127.0.0.1:11434/v1.
+	Provider string `yaml:"provider"             json:"provider"`
 	BaseURL  string `yaml:"base_url,omitempty"   json:"base_url,omitempty"`
 	Model    string `yaml:"model,omitempty"      json:"model,omitempty"`
-	APIKey   string `yaml:"-"                    json:"-"`
+
+	APIKey     string `yaml:"-"                     json:"-"`
+	APIKeyEnv  string `yaml:"api_key_env,omitempty"  json:"api_key_env,omitempty"`
+	APIKeyFile string `yaml:"api_key_file,omitempty" json:"api_key_file,omitempty"`
+
+	// Transport bounds. TimeoutSeconds covers one Complete call end to end.
+	TimeoutSeconds   int   `yaml:"timeout_seconds,omitempty"     json:"timeout_seconds,omitempty"`
+	MaxResponseBytes int64 `yaml:"max_response_bytes,omitempty"  json:"max_response_bytes,omitempty"`
 }
+
+// Detection configures the prompt-injection / abuse detection engine applied
+// to inbound interactions before evidence emission.
+type Detection struct {
+	// Enabled defaults to true; set false explicitly to run pure decoys with
+	// no analysis. Actions then degrade to observe for every interaction.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled"`
+
+	// MaxInputBytes bounds how much of any single interaction the engine will
+	// evaluate; content beyond this is counted as RES-001 excessive input.
+	MaxInputBytes int `yaml:"max_input_bytes,omitempty" json:"max_input_bytes,omitempty"`
+
+	// DisabledRules excludes rules by stable ID. Unknown IDs fail validation
+	// so typos cannot silently disable nothing.
+	DisabledRules []string `yaml:"disabled_rules,omitempty" json:"disabled_rules,omitempty"`
+}
+
+func (d Detection) IsEnabled() bool { return d.Enabled == nil || *d.Enabled }
 
 type Sensor struct {
 	ID     string `yaml:"id"     json:"id"`
@@ -125,11 +174,13 @@ type Sensor struct {
 	TCPResponseRule []TCPRule   `yaml:"tcp_rules,omitempty"        json:"tcp_rules,omitempty"`
 
 	// MCP fields.
-	MCPPath      string    `yaml:"path,omitempty"            json:"path,omitempty"`
-	ServerName   string    `yaml:"server_name,omitempty"     json:"server_name,omitempty"`
-	ServerVer    string    `yaml:"server_version,omitempty"  json:"server_version,omitempty"`
-	Instructions string    `yaml:"instructions,omitempty"    json:"instructions,omitempty"`
-	Tools        []MCPTool `yaml:"tools,omitempty"           json:"tools,omitempty"`
+	MCPPath      string        `yaml:"path,omitempty"            json:"path,omitempty"`
+	ServerName   string        `yaml:"server_name,omitempty"     json:"server_name,omitempty"`
+	ServerVer    string        `yaml:"server_version,omitempty"  json:"server_version,omitempty"`
+	Instructions string        `yaml:"instructions,omitempty"    json:"instructions,omitempty"`
+	Tools        []MCPTool     `yaml:"tools,omitempty"           json:"tools,omitempty"`
+	Resources    []MCPResource `yaml:"resources,omitempty"       json:"resources,omitempty"`
+	Prompts      []MCPPrompt   `yaml:"prompts,omitempty"         json:"prompts,omitempty"`
 }
 
 type HTTPPersona struct {
@@ -169,6 +220,38 @@ type MCPTool struct {
 	Description string   `yaml:"description"            json:"description"`
 	InputSchema FlexJSON `yaml:"input_schema,omitempty" json:"input_schema,omitempty"`
 	ResultJSON  string   `yaml:"result_json"            json:"result_json"`
+}
+
+const (
+	MaxMCPResources = 32
+	MaxMCPPrompts   = 32
+)
+
+// MCPResource is a decoy static resource exposed via resources/read. Content
+// is config-provided and synthetic; the URI scheme is decorative (e.g.
+// decoy://...) and never dereferenced by the runtime.
+type MCPResource struct {
+	URI         string `yaml:"uri"         json:"uri"`
+	Name        string `yaml:"name"        json:"name"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	MIMEType    string `yaml:"mime_type,omitempty"   json:"mime_type,omitempty"`
+	Text        string `yaml:"text"        json:"text"`
+}
+
+// MCPPrompt is a decoy prompt template returned by prompts/get. Arguments are
+// declared but always substituted verbatim into canned text — no evaluation,
+// no templating language, nothing attacker-supplied is interpreted.
+type MCPPrompt struct {
+	Name        string         `yaml:"name"          json:"name"`
+	Description string         `yaml:"description,omitempty" json:"description,omitempty"`
+	Arguments   []MCPPromptArg `yaml:"arguments,omitempty" json:"arguments,omitempty"`
+	Messages    []string       `yaml:"messages"      json:"messages"`
+}
+
+type MCPPromptArg struct {
+	Name        string `yaml:"name"                  json:"name"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Required    bool   `yaml:"required,omitempty"    json:"required,omitempty"`
 }
 
 // FlexJSON accepts JSON either inline (as a quoted JSON string) or as a native
