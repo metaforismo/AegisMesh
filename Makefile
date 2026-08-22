@@ -28,6 +28,11 @@ lint: ## gofmt check + go vet (+ golangci-lint when available)
 	go vet ./...
 	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run || echo "golangci-lint not installed; skipped (vet+fmt ran)"
 
+.PHONY: helm-contract
+helm-contract: ## verify Helm chart contract (guarded test; needs local helm v4)
+	@command -v helm >/dev/null 2>&1 || { echo "helm-contract: BLOCKED - helm binary not found in PATH"; exit 1; }
+	AEGISMESH_HELM_CONTRACT_TEST=1 go test ./deploy/helm/aegismesh -count=1 -v
+
 .PHONY: fuzz-seed
 fuzz-seed: ## run fuzz targets over seed corpora only (fast, deterministic)
 	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=15s
