@@ -99,6 +99,19 @@ func NewEnforcer(det config.Detection, m observe.Meter) *Enforcer {
 		for sev := range actions {
 			actions[sev] = ActionObserve
 		}
+	} else {
+		// Normalize anything unvalidated to observe: programmatic configs
+		// that skipped the loader, or future enum drift, must fail toward
+		// the safest behavior, never toward a garbage action string.
+		valid := map[string]bool{}
+		for _, a := range config.ValidActions {
+			valid[a] = true
+		}
+		for sev, act := range actions {
+			if !valid[string(act)] {
+				actions[sev] = ActionObserve
+			}
+		}
 	}
 	limit := det.ThrottlePerMinute
 	if limit <= 0 {
