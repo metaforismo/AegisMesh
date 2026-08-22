@@ -2,8 +2,9 @@
 
 This chart packages the AegisMesh runtime as one non-root Pod: ConfigMap
 (`mesh.yaml`), Deployment, Service exposing decoy ports only, default-on
-ingress-isolating NetworkPolicy, opt-in PDB, dedicated token-free
-ServiceAccount. Values are machine-checked by `values.schema.json`; the rendered
+exec liveness/readiness probes, default-on ingress-isolating NetworkPolicy,
+opt-in PDB, dedicated token-free ServiceAccount. Values are machine-checked
+by `values.schema.json`; the rendered
 config is strict-decoded at startup (`aegismesh.io/v1alpha1`) — typos fail the
 rollout, not production.
 
@@ -142,6 +143,56 @@ set the schema rejects the release (`'oneOf' failed, subschemas 0, 1 matched`):
 ```
 
 Read it as a disruption gate, never as availability or durability.
+
+## Probes: default-on exec self-checks, no shell involved
+
+Default-on (`probes.enabled=true`): the kubelet runs the image's own binary
+as both probes, because the distroless image has no shell, curl, or wget to
+exec instead. The argv is fixed by the template and pinned byte-for-byte by
+the CI contract test (`make helm-contract`) — there are no command, URL,
+host, path, header, or credential knobs:
+
+```console
+/aegismesh healthcheck --config /etc/aegismesh/mesh.yaml --live    # livenessProbe
+/aegismesh healthcheck --config /etc/aegismesh/mesh.yaml --ready   # readinessProbe
+```
+
+The CLI loads the same strict `mesh.yaml` the runtime uses, dials only the
+validated loopback admin listener (`127.0.0.1:9110` by default), GETs one
+fixed path, requires HTTP 200, and reports by exit code. Redirects are
+refused and proxy environment variables ignored; response bodies are
+bounded and discarded, never echoed.
+
+Only timing is tunable (`probes.liveness.*` / `probes.readiness.*`; the
+schema caps `timeoutSeconds` at 10s — the CLI's own ceiling). Rendered
+defaults, VERIFIED LOCALLY via `helm template`:
+
+| Probe     | initialDelaySeconds | periodSeconds | timeoutSeconds | failureThreshold |
+|-----------|---------------------|---------------|----------------|------------------|
+| liveness  | 20                  | 30            | 5              | 3                |
+| readiness | 5                   | 10            | 3              | 3                |
+
+These are chart inputs, not measured effects. Inferred from the knob
+arithmetic alone (initialDelay + failureThreshold × period), sustained
+liveness failure could restart the container no sooner than roughly two
+minutes in, and sustained readiness failure could drop the Pod from
+Service endpoints after roughly half a minute — a paper bound, nothing
+observed here. `successThreshold` stays at the Kubernetes default of 1.
+
+To disable both: `--set probes.enabled=false` renders a probe-less Pod
+exactly as this chart did before exec self-probes existed; no kubelet
+health verdict is configured for it.
+
+Why this adds no network exposure: kubelet exec probes execute **inside the
+container's own network namespace**, so the probe process's `127.0.0.1` is
+the Pod's loopback — the same interface the admin listener already binds.
+No Service port, no NetworkPolicy ingress rule, no sidecar is introduced;
+the NetworkPolicy section above remains complete as written.
+
+NOT RUN IN CLUSTER: kubelet-driven probe scheduling, readiness-based
+endpoint removal, restart-on-liveness-failure, and the real durations
+behind the arithmetic above have never been observed by this repository;
+verify them on your cluster before relying on any threshold.
 
 ## Configuration overrides, migration input, and secrets
 

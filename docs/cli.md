@@ -23,6 +23,35 @@ correlation configuration health (off by default; warns if
 Non-zero exit if any check fails. `--probe-provider` / `--probe-webhook`
 are explicit opt-ins that perform one bounded network probe each.
 
+## aegismesh healthcheck
+
+    healthcheck --config FILE (--live | --ready) [--timeout DURATION]
+
+One self-probe for shell-less environments (distroless containers,
+Kubernetes exec probes): loads `FILE` strictly, derives the validated
+loopback admin listener from it, and issues exactly one HTTP GET —
+`/healthz` with `--live`, `/readyz` with `--ready`; exactly one mode is
+required. Sensors never start and storage is never created. No `--json`:
+the contract is the exit code.
+
+- `--timeout` defaults to `2s`; anything outside `(0s, 10s]` is a usage error.
+- Exit codes follow the CLI convention: `0` healthy; `1` unhealthy,
+  unreachable, or invalid config (which category goes to stderr);
+  `2` usage error.
+- Success prints one stable line and nothing else:
+
+      $ aegismesh healthcheck --config mesh.yaml --live
+      healthcheck ok mode=live path=/healthz target=127.0.0.1:9110
+
+- Failures print a category (`timeout after …`, `connect failed`,
+  `unhealthy: HTTP <code>`, `config invalid`) — never a response body.
+
+The dial target comes from the config's admin listener and is re-checked to
+be loopback before use; arbitrary hosts, paths, headers, credentials,
+redirects, and proxy environment variables are impossible by construction.
+The Helm chart's default-on exec probes invoke exactly this command — see
+deploy/helm/aegismesh/README.md.
+
 ## aegismesh validate
 
     validate --config FILE [--effective] [--json]

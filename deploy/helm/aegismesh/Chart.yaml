@@ -3,8 +3,9 @@ name: aegismesh
 description: >
   Core Helm chart packaging the AegisMesh deception, detection, and evidence
   runtime as a single non-root container. Ships the minimum objects needed to
-  run one Pod: ConfigMap (mesh.yaml), Deployment, Service. Probes, ingress,
-  persistence, and monitoring land in follow-up charts/PRs by design.
+  run one Pod: ConfigMap (mesh.yaml), Deployment, Service, plus default-on
+  exec liveness/readiness probes running the image's own healthcheck CLI.
+  Ingress, persistence, and monitoring land in follow-up charts/PRs by design.
 type: application
 version: 0.1.0
 appVersion: "v0.1.0"
