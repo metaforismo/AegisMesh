@@ -1,0 +1,18 @@
+{
+  "api_version": "ext.aegismesh.io/v1alpha1",
+  "name": "echo-responder",
+  "version": "0.1.0",
+  "description": "Reference extension: returns a canned synthetic response.",
+  "permissions": ["respond"],
+  "transport": {
+    "kind": "subprocess-ndjson",
+    "command": ["./echo-responder"],
+    "handshake_timeout_ms": 2000,
+    "call_timeout_ms": 3000,
+    "max_output_bytes": 65536
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "value": "REPLACE_WITH_SHA256_OF_BINARY"
+  }
+}

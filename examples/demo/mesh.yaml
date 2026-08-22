@@ -1,0 +1,89 @@
+# AegisMesh demo configuration.
+#
+# This workspace drives `docker compose -f deploy/compose/docker-compose.yaml`
+# and also runs fine on a host: `aegismesh run --config examples/demo/mesh.yaml`.
+#
+# SECURITY NOTE (deliberate, reviewed):
+#   Decoy listeners below bind 0.0.0.0 *inside* their network namespace so the
+#   Compose file can publish them to your host loopback only ("127.0.0.1:" in
+#   the ports section). When running directly on a host, change these binds to
+#   "127.0.0.1:..." and delete security.allow_public_bind — the default policy
+#   rejects non-loopback binds on purpose.
+api_version: aegismesh.io/v1alpha1
+
+runtime:
+  instance_name: demo
+  data_dir: ./data
+
+admin:
+  listen: "127.0.0.1:9110" # health/metrics stay internal (loopback-only invariant)
+
+security:
+  allow_public_bind: true # required only for the container-local 0.0.0.0 binds above
+
+storage:
+  max_file_bytes: 16777216
+  retention:
+    max_events: 10000
+    max_age_days: 14
+
+sensors:
+  - id: http-admin-decoy
+    kind: http
+    listen: "0.0.0.0:8081"
+    persona:
+      server_header: "nginx/1.25.3"
+    max_body_bytes: 65536
+    rules:
+      - name: admin-root
+        path_regex: "^/admin/?$"
+        methods: ["GET"]
+        status: 200
+        headers:
+          Content-Type: "text/html; charset=utf-8"
+        body: "<html><head><title>Internal Admin</title></head><body><h1>Internal Admin</h1><p>Authorized personnel only.</p></body></html>"
+      - name: admin-login
+        path_regex: "^/admin/login$"
+        methods: ["GET", "POST"]
+        status: 200
+        headers:
+          Content-Type: "text/html; charset=utf-8"
+        body: "<html><head><title>Sign in</title></head><body><h1>Sign in</h1><form><input name=user><input name=pass type=password><button>Go</button></form></body></html>"
+    fallback:
+      enabled: true
+      system_prompt: "You are a boring internal admin panel. Answer with plain HTML."
+      max_reply_chars: 2048
+
+  - id: tcp-buildcache-decoy
+    kind: tcp
+    listen: "0.0.0.0:6399"
+    banner: "build-cache FTP service ready\n"
+    session:
+      max_line_bytes: 4096
+      idle_timeout_seconds: 60
+      max_session_seconds: 600
+    tcp_rules:
+      - name: ping
+        line_regex: "^PING$"
+        response: "+OK PONG\n"
+      - name: stat
+        line_regex: "^STAT( .*)?$"
+        response: "+OK cache: OK workers: 4/4 queue: 2\n"
+      - name: unknown
+        line_regex: "^.*$"
+        response: "-ERR unknown command\n"
+
+  - id: mcp-canary-endpoint
+    kind: mcp
+    listen: "127.0.0.1:8090"
+    path: /mcp
+    server_name: build-cache-mcp
+    server_version: 1.2.3
+    instructions: "Internal build cache tools."
+    tools:
+      - name: read_build_log
+        description: "Read a CI build log by run id."
+        input_schema: |
+          {"type":"object","properties":{"run_id":{"type":"string"}},"required":["run_id"]}
+        result_json: |
+          {"content":[{"type":"text","text":"build nightly-142: all green"}]}
