@@ -196,11 +196,23 @@ webhook:
   allow_loopback_http: false         # dev-only cleartext to loopback collectors
 ```
 
-Destination policy (validated at load, fail-closed): https required beyond
-loopback; cloud metadata permanently denied; private-range collectors need
-`security.allow_private_llm_egress: true` (the current opt-in covers LLM and
-webhook egress alike). The evidence store stays authoritative — the webhook
-is a best-effort stream and every drop is counted.
+Delivery semantics (wired in the runtime):
+
+- **Fail-closed startup**: an unresolvable HMAC reference refuses to start;
+  with no reference at all the sink delivers unsigned batches (doctor warns).
+- **Best-effort by design**: the evidence store stays authoritative. Batches
+  are POSTed as `{"events":[...]}` with `X-AegisMesh-Signature: sha256=<hmac>`,
+  a timestamp, and a batch id; per-event ids inside the body give collectors
+  idempotency.
+- **DNS-rebinding safe**: every connection target IP is re-checked against
+  the egress policy at dial time; redirects are never followed; environment
+  proxies are ignored.
+- **Bounded**: queue drops (`aegismesh_webhook_dropped_queue_full_total`),
+  retry exhaustion, and shutdown abandonment are all counted — silent loss is
+  impossible by construction.
+
+`doctor` reports readiness statically; pass `--probe-webhook` to send one
+bounded signed test batch (explicit opt-in, never automatic).
 
 ## Environment variable overrides
 

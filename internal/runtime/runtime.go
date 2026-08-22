@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,6 +27,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/sensor/mcpsensor"
 	"github.com/metaforismo/aegismesh/internal/sensor/tcpsensor"
 	"github.com/metaforismo/aegismesh/internal/storage"
+	"github.com/metaforismo/aegismesh/internal/webhook"
 )
 
 const (
@@ -47,24 +50,31 @@ type System struct {
 	adminSrv  *admin.Server
 	sensors   []sensor.Sensor
 	extMgr    *extmanager.Manager
+	hook      *webhook.Sink
 	log       *slog.Logger
 	failed    atomic.Uint64
 	stopMaint chan struct{}
 	maintOnce sync.Once
 }
 
-// observerSink keeps evidence authoritative while offering every envelope to
-// observer extensions best-effort: Deliver never blocks and its drops are
-// counted on extension metrics, so the store path cannot be slowed or failed
-// by an extension.
-type observerSink struct {
+// evidenceSink keeps evidence authoritative while offering every envelope to
+// optional best-effort consumers (observer extensions, webhook stream). Both
+// offers never block and their drops are counted on their own metrics, so the
+// store path can neither be slowed nor failed by them.
+type evidenceSink struct {
 	primary event.Sink
-	mgr     *extmanager.Manager
+	mgr     *extmanager.Manager // may be nil
+	hook    *webhook.Sink       // may be nil
 }
 
-func (s observerSink) Append(ctx context.Context, e event.Envelope) error {
+func (s evidenceSink) Append(ctx context.Context, e event.Envelope) error {
 	err := s.primary.Append(ctx, e)
-	s.mgr.Deliver(e)
+	if s.mgr != nil {
+		s.mgr.Deliver(e)
+	}
+	if s.hook != nil {
+		s.hook.Offer(e)
+	}
 	return err
 }
 
@@ -117,9 +127,39 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 			time.Duration(cfg.Extensions.ShutdownFlushSeconds)*time.Second)
 	}
 
+	if cfg.Webhook.IsEnabled() {
+		secret, err := cfg.ResolveWebhookSecret()
+		if err != nil {
+			sys.closeAll()
+			return nil, fmt.Errorf("%w: %v", errRuntime, err)
+		}
+		u, err := url.Parse(strings.TrimSpace(cfg.Webhook.URL))
+		if err != nil {
+			sys.closeAll()
+			return nil, fmt.Errorf("%w: webhook.url: %v", errRuntime, err)
+		}
+		hook, err := webhook.New(webhook.Config{
+			Endpoint:          u,
+			AllowLoopbackHTTP: cfg.Webhook.AllowLoopbackHTTP,
+			AllowPrivate:      cfg.Security.AllowPrivateLLMEgress,
+			Secret:            []byte(secret),
+			QueueSize:         cfg.Webhook.QueueSize,
+			BatchSize:         cfg.Webhook.BatchSize,
+			FlushInterval:     time.Duration(cfg.Webhook.FlushIntervalSeconds) * time.Second,
+			Timeout:           time.Duration(cfg.Webhook.TimeoutSeconds) * time.Second,
+			MaxRetries:        cfg.Webhook.MaxRetries,
+			ShutdownFlush:     3 * time.Second,
+		}, reg, log)
+		if err != nil {
+			sys.closeAll()
+			return nil, fmt.Errorf("%w: %v", errRuntime, err)
+		}
+		sys.hook = hook
+	}
+
 	sink := event.Sink(store)
-	if sys.extMgr != nil {
-		sink = observerSink{primary: store, mgr: sys.extMgr}
+	if sys.extMgr != nil || sys.hook != nil {
+		sink = evidenceSink{primary: store, mgr: sys.extMgr, hook: sys.hook}
 	}
 	sys.bus = event.NewBus(busCapacity, sink, log)
 
@@ -337,6 +377,11 @@ func (s *System) closeAll() {
 		// After bus drain (so queued events were offered) and before store
 		// close: bounded flush window, then hosts are stopped regardless.
 		s.extMgr.Stop()
+	}
+	if s.hook != nil {
+		// Same position in the ordering: drain-then-abandon is the webhook
+		// sink's own bounded policy.
+		s.hook.Close()
 	}
 	if s.store != nil {
 		if err := s.store.Flush(); err != nil {

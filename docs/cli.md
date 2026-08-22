@@ -17,7 +17,9 @@ personas), empty `data/`. Refuses to overwrite without `--force`.
 
 Environment sanity checks: binary/version, config validity, data dir
 existence and writability, port availability, admin reachability when
-running. Non-zero exit if any check fails.
+running, provider and webhook readiness without network contact.
+Non-zero exit if any check fails. `--probe-provider` / `--probe-webhook`
+are explicit opt-ins that perform one bounded network probe each.
 
 ## aegismesh validate
 

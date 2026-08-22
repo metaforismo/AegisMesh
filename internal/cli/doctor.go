@@ -1,11 +1,16 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,6 +63,7 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 	addGlobalFlags(fs, &c.g)
 	cfgPath := fs.String("config", "mesh.yaml", "path to mesh.yaml")
 	probe := fs.Bool("probe-provider", false, "opt-in: contact the configured provider endpoint with one bounded GET /models")
+	probeWebhook := fs.Bool("probe-webhook", false, "opt-in: send one bounded signed test batch to the webhook collector")
 	if err := fs.Parse(args); err != nil {
 		return Usagef("%v", err)
 	}
@@ -127,6 +133,17 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 		}
 	default:
 		add("fail", "llm", fmt.Sprintf("provider %q unsupported", cfg.LLM.Provider), "use local|ollama|openai")
+	}
+
+	// Webhook readiness: static classification only, unless the operator
+	// explicitly passes --probe-webhook.
+	if cfg.Webhook.IsEnabled() {
+		st, detail, hint := webhookReadiness(cfg)
+		add(st, "webhook", detail, hint)
+		if *probeWebhook {
+			st, detail, hint = runWebhookProbe(ctx, cfg)
+			add(st, "webhook-probe", detail, hint)
+		}
 	}
 
 	return c.render(rep)
@@ -241,4 +258,82 @@ func countFailures(rep doctorReport) int {
 		}
 	}
 	return n
+}
+
+// webhookReadiness classifies the configured collector and reports secret
+// state WITHOUT contacting it. Values are never echoed.
+func webhookReadiness(cfg *config.Config) (string, string, string) {
+	class, _, verr := classifyWebhookEndpoint(cfg)
+	if verr != nil {
+		return "fail", "webhook destination rejected by egress policy: " + verr.Error(),
+			"fix webhook.url; see docs/configuration.md"
+	}
+	switch {
+	case cfg.Webhook.HMACSecretEnv != "":
+		state := "UNSET"
+		if v := os.Getenv(cfg.Webhook.HMACSecretEnv); strings.TrimSpace(v) != "" {
+			state = "set"
+		}
+		return "ok", fmt.Sprintf("webhook %s; hmac_secret_env %s is %s", class, cfg.Webhook.HMACSecretEnv, state), ""
+	case cfg.Webhook.HMACSecretFile != "":
+		base := filepath.Dir(cfg.SourcePath)
+		full := filepath.Join(base, filepath.Clean(cfg.Webhook.HMACSecretFile))
+		if _, err := os.Stat(full); err != nil {
+			return "warn", fmt.Sprintf("webhook %s; hmac_secret_file %q not readable: %v", class, cfg.Webhook.HMACSecretFile, err),
+				"create the key file or switch to hmac_secret_env"
+		}
+		return "ok", fmt.Sprintf("webhook %s; hmac_secret_file %q readable", class, cfg.Webhook.HMACSecretFile), ""
+	default:
+		return "warn", fmt.Sprintf("webhook %s delivers UNSIGNED batches (no HMAC reference configured)", class),
+			"configure hmac_secret_env or hmac_secret_file so the collector can authenticate events"
+	}
+}
+
+// runWebhookProbe sends exactly one bounded, signed empty batch to prove
+// reachability. Opt-in via --probe-webhook only; never logs bodies or keys.
+func runWebhookProbe(ctx context.Context, cfg *config.Config) (string, string, string) {
+	u, err := url.Parse(strings.TrimSpace(cfg.Webhook.URL))
+	if err != nil {
+		return "fail", fmt.Sprintf("webhook probe skipped: %v", err), ""
+	}
+	secret, serr := cfg.ResolveWebhookSecret()
+	if serr != nil {
+		return "warn", fmt.Sprintf("webhook probe ran unsigned (secret unavailable: use --json for fields; check hmac reference)"), "fix the hmac reference"
+	}
+	body := []byte(`{"events":[]}`)
+	req, rerr := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+	if rerr != nil {
+		return "fail", fmt.Sprintf("webhook probe build failed: %v", rerr), ""
+	}
+	req.Header.Set("Content-Type", "application/json")
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	req.Header.Set("X-AegisMesh-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	client := &http.Client{
+		Timeout:       time.Duration(min2(cfg.Webhook.TimeoutSeconds, 5)) * time.Second,
+		CheckRedirect: egress.RefuseAllRedirects,
+		Transport:     &http.Transport{Proxy: nil},
+	}
+	resp, perr := client.Do(req)
+	if perr != nil {
+		return "warn", fmt.Sprintf("collector unreachable: %v", redactURL(u)), "check network path; delivery retries handle transient faults"
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return "ok", fmt.Sprintf("probe accepted with status %d", resp.StatusCode), ""
+	}
+	return "warn", fmt.Sprintf("probe answered status %d", resp.StatusCode), "verify collector authentication and route"
+}
+
+func min2(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// redactURL keeps scheme+host for diagnostics, drops any path detail.
+func redactURL(u *url.URL) string {
+	return u.Scheme + "://" + u.Host + "/[redacted]"
 }
