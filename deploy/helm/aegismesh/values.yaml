@@ -1,0 +1,147 @@
+# Default values for the aegismesh core chart.
+#
+# Every default is derived from repository evidence:
+#   - deploy/Dockerfile            (image layout, uid/gid 10001, /workspace)
+#   - deploy/compose/docker-compose.yaml and examples/demo/mesh.yaml
+#                                  (reference sensor set, exposure model)
+#   - docs/deploy/kubernetes.md    (intended in-cluster shape)
+#
+# Nothing here carries credentials. Secrets (LLM API keys, webhook HMAC)
+# are referenced by the app config itself via api_key_env/api_key_file and
+# are deliberately out of scope for this core chart.
+
+## Image conventions: no official OCI image is published yet — the release
+## pipeline currently ships binaries + SBOM only (.github/workflows/release.yml).
+## Build one with `docker build -f deploy/Dockerfile .` and push it to your own
+## registry, or override both fields to point at an existing mirror.
+image:
+  repository: ghcr.io/metaforismo/aegismesh
+  # Defaults to .Chart.AppVersion when empty. Avoid mutable tags: prefer a
+  # release tag, or pin by digest (@sha256:...) per docs/deploy/kubernetes.md.
+  tag: ""
+  pullPolicy: ""
+
+## Must stay 1 for now: evidence segments are append-only local files with
+## "no shared-multi-writer storage" (docs/deploy/kubernetes.md). Multi-replica
+## needs shared/PVC storage design first.
+replicas: 1
+
+service:
+  type: ClusterIP
+  # Deliberate exposure of decoy listeners ONLY. The admin listener
+  # (127.0.0.1:9110 by invariant) and any loopback-bound sensor are never
+  # routable from outside the Pod and must not be listed here.
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+    - name: tcp
+      port: 6399
+      targetPort: 6399
+      protocol: TCP
+
+## Conservative placeholders; measured RSS guidance is still pending
+## (docs/deploy/kubernetes.md, precondition 4). Adjust per deployment size.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "1"
+    memory: 256Mi
+
+terminationGracePeriodSeconds: 30
+
+## Secure defaults mirroring deploy/Dockerfile + docs/deploy/kubernetes.md.
+## Override only with a documented reason; every relaxation widens attack surface.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+## Application configuration rendered verbatim into the mesh.yaml ConfigMap.
+## The runtime strict-decodes this document (schema aegismesh.io/v1alpha1);
+## unknown keys fail startup, so typos surface immediately on rollout.
+##
+## Deliberately minimal: unset sections use the runtime's built-in safe
+## defaults (admin 127.0.0.1:9110, logging info/json, retention caps — see
+## internal/config/load.go applyDefaults).
+##
+## NOTE on data_dir: relative data_dir resolves against the config file's
+## directory (/etc/aegismesh), which is mounted read-only — so an absolute
+## path into the writable emptyDir is required.
+##
+## allow_public_bind=true is required because the reference decoys below bind
+## 0.0.0.0 inside their network namespace; binds stay namespace-local and
+## reach the cluster only through the Service above (the same
+## deliberate-exposure model as deploy/compose/docker-compose.yaml).
+meshConfig:
+  api_version: aegismesh.io/v1alpha1
+
+  runtime:
+    instance_name: helm-core
+    data_dir: /workspace/data
+
+  security:
+    allow_public_bind: true
+
+  sensors:
+    # Verbatim from examples/demo/mesh.yaml minus the loopback-only MCP
+    # canary (127.0.0.1:8090), which no Service can route to. Re-add it (or
+    # replace sensors wholesale) via values override if wanted.
+    - id: http-admin-decoy
+      kind: http
+      listen: "0.0.0.0:8081"
+      persona:
+        server_header: "nginx/1.25.3"
+      max_body_bytes: 65536
+      rules:
+        - name: admin-root
+          path_regex: "^/admin/?$"
+          methods: ["GET"]
+          status: 200
+          headers:
+            Content-Type: "text/html; charset=utf-8"
+          body: "<html><head><title>Internal Admin</title></head><body><h1>Internal Admin</h1><p>Authorized personnel only.</p></body></html>"
+        - name: admin-login
+          path_regex: "^/admin/login$"
+          methods: ["GET", "POST"]
+          status: 200
+          headers:
+            Content-Type: "text/html; charset=utf-8"
+          body: "<html><head><title>Sign in</title></head><body><h1>Sign in</title><form><input name=user><input name=pass type=password><button>Go</button></form></body></html>"
+      fallback:
+        enabled: true
+        system_prompt: "You are a boring internal admin panel. Answer with plain HTML."
+        max_reply_chars: 2048
+
+    - id: tcp-buildcache-decoy
+      kind: tcp
+      listen: "0.0.0.0:6399"
+      banner: "build-cache FTP service ready\n"
+      session:
+        max_line_bytes: 4096
+        idle_timeout_seconds: 60
+        max_session_seconds: 600
+      tcp_rules:
+        - name: ping
+          line_regex: "^PING$"
+          response: "+OK PONG\n"
+        - name: stat
+          line_regex: "^STAT( .*)?$"
+          response: "+OK cache: OK workers: 4/4 queue: 2\n"
+        - name: unknown
+          line_regex: "^.*$"
+          response: "-ERR unknown command\n"
