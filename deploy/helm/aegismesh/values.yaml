@@ -88,6 +88,35 @@ resources:
 
 terminationGracePeriodSeconds: 30
 
+## Kubelet exec probes (enabled by default) invoking the image's own binary:
+## /aegismesh healthcheck --config /etc/aegismesh/mesh.yaml --live|--ready.
+## The command argv is fixed by the template and not configurable; the CLI
+## itself (internal/cli/healthcheck.go, PR #37) loads the strict config,
+## dials only its validated loopback admin listener, and refuses redirects
+## and proxy env. Probes run inside the container's network namespace, so
+## they create no new Service or NetworkPolicy exposure.
+##
+## Only timing is tunable. Liveness and readiness are timed separately on
+## purpose: readiness failures just pull the Pod from Service endpoints
+## (cheap, so fast polling), liveness failures restart it (expensive, so
+## deliberately slower thresholds). successThreshold is left at the API
+## default of 1 and timeoutSeconds is capped at 10s — the healthcheck CLI
+## refuses longer deadlines anyway.
+probes:
+  enabled: true
+  liveness:
+    # Restart no sooner than ~110s of continuous failure.
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    # Out of Service endpoints after ~30s of continuous failure.
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
 ## Secure defaults mirroring deploy/Dockerfile + docs/deploy/kubernetes.md.
 ## Override only with a documented reason; every relaxation widens attack surface.
 podSecurityContext:
