@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,10 +53,73 @@ func ImportFile(sourceName string, raw []byte) (*Result, error) {
 	if len(doc) == 0 {
 		return &Result{Source: filepath.Base(sourceName), Detected: "unknown"}, nil
 	}
-	if _, ok := doc["core"]; ok {
-		return importCore(filepath.Base(sourceName), doc), nil
+	base := filepath.Base(sourceName)
+	// Safety gate before any translation: credential material in a source
+	// document must never survive into an emitted AegisMesh config (which is
+	// meant for VCS). Inline material refuses the import loudly; references
+	// are reported as unsupported and never carried over. Values are never
+	// echoed either way.
+	credNotes, err := scanCredentialMaterial("$", doc)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", errImport, base, err)
 	}
-	return importService(filepath.Base(sourceName), doc)
+	var r *Result
+	if _, ok := doc["core"]; ok {
+		r = importCore(base, doc)
+	} else {
+		r, err = importService(base, doc)
+		if err != nil {
+			return nil, err
+		}
+	}
+	r.Unsupported = append(r.Unsupported, credNotes...)
+	return r, nil
+}
+
+// credentialKeyRe matches key names that conventionally hold secrets across
+// the documented Beelzebub configuration shapes and generic YAML practice.
+var credentialKeyRe = regexp.MustCompile(`(?i)(api[_-]?key|secret|password|passwd|token|access[_-]?key|private[_-]?key|bearer)`)
+
+// placeholderRe marks values that are obviously not real credentials
+// (documentation examples, templating stubs).
+var placeholderRe = regexp.MustCompile(`(?i)(example|changeme|placeholder|xxxxx|<|\$\{|insert |your[_-]?)`)
+
+// scanCredentialMaterial walks top-level blocks and one nested level. A
+// credential-shaped KEY with a non-empty string value yields:
+//   - a hard refusal (error) when the value looks like inline secret MATERIAL
+//     (PEM header or a long blob without path separators) — the import stops;
+//   - an unsupported-field note when it looks like a reference (file path,
+//     placeholder) — nothing is carried over, the outcome is reported.
+//
+// Values never appear in any output.
+func scanCredentialMaterial(path string, doc map[string]any) ([]FieldNote, error) {
+	var notes []FieldNote
+	for _, k := range keys(doc) {
+		where := path + "." + k
+		switch tv := doc[k].(type) {
+		case string:
+			trimmed := strings.TrimSpace(tv)
+			if trimmed == "" || !credentialKeyRe.MatchString(k) || placeholderRe.MatchString(tv) {
+				continue
+			}
+			inlineMaterial := strings.Contains(tv, "PRIVATE KEY-----") ||
+				(len(trimmed) > 64 && !strings.ContainsAny(trimmed, "/\\."))
+			if inlineMaterial {
+				return nil, fmt.Errorf("refusing to import: credential material detected at %s — redact the source file first (values are never echoed)", where)
+			}
+			notes = append(notes, FieldNote{
+				Path:   where,
+				Reason: "credential reference detected; AegisMesh never carries credentials over — configure providers via api_key_env/api_key_file instead",
+			})
+		case map[string]any:
+			sub, err := scanCredentialMaterial(where, tv)
+			if err != nil {
+				return nil, err
+			}
+			notes = append(notes, sub...)
+		}
+	}
+	return notes, nil
 }
 
 func importCore(name string, doc map[string]any) *Result {

@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"strings"
 
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/egress"
 )
 
 // Global flag state shared by most commands.
@@ -40,6 +43,35 @@ func newFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // errors are rendered by Run() with usage context
 	return fs
+}
+
+// classifyProviderEndpoint returns the egress class label for the configured
+// LLM endpoint plus its normalized base URL. Shared by doctor and validate so
+// both commands describe the same policy with the same words.
+func classifyProviderEndpoint(cfg *config.Config) (class, baseURL string) {
+	if cfg.LLM.Provider == "" || cfg.LLM.Provider == "local" {
+		return "none (local deterministic provider)", ""
+	}
+	pol := egress.Policy{
+		AllowLoopback: cfg.LLM.Provider == "ollama",
+		AllowPrivate:  cfg.Security.AllowPrivateLLMEgress,
+	}
+	u, err := egress.ValidateURL(pol, cfg.LLM.BaseURL)
+	if err != nil {
+		return "DENIED by egress policy: " + err.Error(), cfg.LLM.BaseURL
+	}
+	host := u.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		switch {
+		case ip.IsLoopback():
+			return "loopback endpoint", u.String()
+		case ip.IsPrivate():
+			return "private gateway (opt-in honored)", u.String()
+		}
+	} else if strings.EqualFold(host, "localhost") {
+		return "loopback endpoint", u.String()
+	}
+	return "public https endpoint", u.String()
 }
 
 func slogLevel(l string) slog.Level {

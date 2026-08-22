@@ -35,6 +35,12 @@ CI runs all four targets at 15s each on every push.
 | Demo walkthrough (HTTP+TCP+MCP decoys, metrics, SIGTERM shutdown, verified evidence) | `./scripts/demo.sh` | PASS — 3 events recorded, `INTEGRITY true`, counters incremented before shutdown |
 | Dry-run binding proof | `go run ./cmd/aegismesh run --config examples/demo/mesh.yaml --dry-run` | PASS — 3 sensors bound and stopped cleanly |
 | Strict validation of demo config | `go run ./cmd/aegismesh validate --config examples/demo/mesh.yaml` | PASS |
+| Effective-policy preview across all init profiles (local/ollama/remote) incl. JSON mode | `go test -run 'TestInitProfiles|TestValidateEffective' ./internal/cli/` | PASS |
+| Doctor credential-reference states (env unset, key file missing/readable; values never printed) | `go test -run TestDoctorRemoteProfileKeyFileStates ./internal/cli/` | PASS |
+| inspect --finding filter (match, empty match, invalid rule id, verified JSON rows) | `go test -run TestInspectFindingFilter ./internal/cli/` | PASS |
+| Importer refuses inline credential material with non-zero exit; references reported, never carried or echoed | `go test -run 'TestMigrateRefuses|TestMigrateReports' ./internal/cli/` | PASS |
+| Example migration fixtures round-trip through the strict loader | `go test -run TestMigrateExampleFixturesRoundTrip ./internal/cli/` | PASS |
+| Race detector on touched packages | `go test -race -count=1 ./internal/cli/ ./internal/migrate/beelzebub/` | PASS |
 | Importer output passes strict loader (in-test round trip) | `go test -run TestEmitConfigRoundTripsThroughStrictLoader ./internal/migrate/beelzebub/` | PASS |
 | Extension contract incl. real subprocess handshake/call/revocation | `go test -race ./internal/ext/` | PASS |
 | License policy scan | `./scripts/license-check.sh` | PASS (2 modules within policy) |
