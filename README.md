@@ -88,7 +88,7 @@ Read [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md). Highlights:
 cmd/aegismesh                   entrypoint
 internal/*                      sensors, runtime, storage, cli, extensions, migration
 docs/                           brief, threat model, ADRs, roadmap, verification
-deploy/                         Dockerfile, compose demo
+deploy/                         Dockerfile, compose demo, Helm chart
 examples/demo/                  demo config + scripted walkthrough
 scripts/                        build/demo/scans helpers
 ```
@@ -103,7 +103,8 @@ scripts/                        build/demo/scans helpers
 | [docs/migration-beelzebub.md](docs/migration-beelzebub.md) | importer field mappings, exact supported/approximated/unsupported |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | symptom → cause → fix |
 | [docs/FAQ.md](docs/FAQ.md) | positioning, evidence, provider questions |
-| [docs/deploy/kubernetes.md](docs/deploy/kubernetes.md) | K8s direction (not yet supported — honestly labeled) |
+| [deploy/helm/aegismesh/README.md](deploy/helm/aegismesh/README.md) | Helm chart operator runbook — current Kubernetes packaging path |
+| [docs/deploy/kubernetes.md](docs/deploy/kubernetes.md) | Kubernetes verified-vs-untested boundary map and support preconditions |
 
 ## Contributing & governance
 
