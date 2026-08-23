@@ -25,7 +25,8 @@ native envelope. Exact current commands and evidence live in
   read-boundary projection and nests the complete native envelope.
 - Verified export stages output and changes the destination only after all
   records pass structural and integrity checks. It refuses direct, symbolic and
-  hard-linked paths to source evidence segments.
+  hard-linked paths to source evidence segments, and any segment read failure
+  aborts the export without changing the destination.
 - Port `0` means an OS-assigned ephemeral port. Admin remains loopback-only.
 - Extensions inherit only `AEGISMESH_EXTENSION=1` and use the manifest
   directory as their working directory.

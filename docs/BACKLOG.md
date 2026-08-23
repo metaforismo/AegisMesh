@@ -56,6 +56,21 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Verify:** `rg -n 'recommend|nothing leaves|remote adapters absent|not wired' README.md docs`;
   compare claims with `internal/runtime` and `internal/llm`; `make lint test`.
 
+### P0-4 — propagate evidence segment read failures — PASS
+
+- **Evidence:** `storage.readLines` returned an empty slice on open errors and
+  discarded scanner errors. A red CLI regression exported zero events with exit
+  0 after replacing a segment with an unreadable directory target.
+- **Affected:** `internal/storage`, `internal/cli`, verification and handoff docs.
+- **Security/egress:** local evidence correctness only; prevents incomplete
+  evidence from being represented as a successful verified export. No egress.
+- **Dependencies:** none.
+- **Acceptance:** segment metadata, open and scan failures propagate; verified
+  export remains fail closed and leaves an existing target unchanged.
+- **Verify:** `go test ./internal/storage ./internal/cli -run
+  'TestInspectExportFailsClosedOnSegmentReadError|TestInspectExportVerifyFailsClosedWithoutTouchingOutput'
+  -count=1`; `make lint test`.
+
 ## P1 — Batch 2 and important architecture gaps
 
 ### P1-1 — ECS-compatible evidence export — PASS

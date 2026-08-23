@@ -166,7 +166,7 @@ func (s *Store) Segments() ([]Segment, error) {
 		}
 		info, err := e.Info()
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("%w: inspect segment %s: %v", errStore, e.Name(), err)
 		}
 		out = append(out, Segment{
 			Name:      e.Name(),
@@ -279,10 +279,10 @@ func CountSegment(path string) (int, error) {
 	return n, sc.Err()
 }
 
-func readLines(path string) []string {
+func readLines(path string) ([]string, error) {
 	f, err := os.Open(path) //nolint:gosec // see above
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
 	}
 	defer f.Close()
 	var out []string
@@ -291,7 +291,10 @@ func readLines(path string) []string {
 	for sc.Scan() {
 		out = append(out, sc.Text())
 	}
-	return out
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
+	}
+	return out, nil
 }
 
 // Reader iterates envelopes across all segments in a directory without
@@ -322,7 +325,7 @@ func (r *Reader) segments() ([]Segment, error) {
 		}
 		info, err := e.Info()
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("%w: inspect segment %s: %v", errStore, e.Name(), err)
 		}
 		out = append(out, Segment{
 			Name:      e.Name(),
@@ -370,7 +373,10 @@ func (r *Reader) ForEach(fn func(event.Envelope) error, onCorrupt func(line stri
 		return err
 	}
 	for _, sg := range segs {
-		lines := readLines(sg.Path)
+		lines, err := readLines(sg.Path)
+		if err != nil {
+			return err
+		}
 		for _, ln := range lines {
 			if strings.TrimSpace(ln) == "" {
 				continue
