@@ -16,7 +16,9 @@ recommendations remain roadmap work; the shipped runtime never acts on real asse
 
 Early foundation release (v0.1.0): a complete, tested vertical slice — three sensors, CLI, evidence store,
 admin endpoints, extension contract — not yet a full platform. See [docs/ROADMAP.md](docs/ROADMAP.md).
-Everything below is verified by the commands shown; see [docs/verification.md](docs/verification.md).
+The finite v0.2 PR train and stop condition are in
+[docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md). Everything below is verified by
+the commands shown; see [docs/verification.md](docs/verification.md).
 
 ## Five-minute demo
 
@@ -100,6 +102,7 @@ scripts/                        build/demo/scans helpers
 | [docs/configuration.md](docs/configuration.md) | full config reference (schema, precedence, env overrides) |
 | [docs/cli.md](docs/cli.md) | every command and flag |
 | [docs/ecs-export.md](docs/ecs-export.md) | stable ECS-compatible evidence mapping and limits |
+| [docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md) | finite v0.2 PR train, acceptance gates and completion predicate |
 | [docs/canary-model.md](docs/canary-model.md) | MCP canary/operator model |
 | [docs/migration-beelzebub.md](docs/migration-beelzebub.md) | importer field mappings, exact supported/approximated/unsupported |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | symptom → cause → fix |
