@@ -20,8 +20,11 @@ docs/canary-model.md.
 
 **Where does evidence go, and who reads it?**
 JSONL segments under `runtime.data_dir` on the machine running AegisMesh.
-Nothing leaves the machine. `inspect list/show/export` read it locally;
-export produces plain NDJSON you own.
+`inspect list/show/export` read it locally; export produces native or
+ECS-compatible NDJSON you own. Nothing leaves by default. An explicitly enabled
+webhook sends bounded evidence batches to its fixed operator-configured endpoint,
+and an explicitly selected remote provider sends bounded prompt context to its
+fixed API endpoint.
 
 **Is evidence tamper-proof?**
 Tamper-*evident*: each event carries a SHA-256 over its payload, verified at
@@ -29,8 +32,9 @@ read/export time. There is no chain-of-custody anchor yet (roadmap); treat
 integrity failures as compromise of the host, not just the file.
 
 **Does it send my data to an LLM API?**
-Not in this release. Only the deterministic offline provider exists; remote
-adapters fail closed until roadmap R2 lands.
+Not by default. The deterministic offline provider is the default. Opt-in
+`ollama` and OpenAI-compatible adapters are shipped with fixed destinations,
+dial-time egress checks, credential references, cancellation, and response caps.
 
 **Why strict config parsing?**
 A decoy platform's worst failure mode is silently doing something other than
@@ -43,7 +47,7 @@ translates documented Beelzebub YAML shapes with exact per-field reporting.
 Differences are tabulated in docs/research/competitive-landscape.md.
 
 **Is this production-ready?**
-It is a tested vertical slice (v0.1.0): real listeners, evidence pipeline,
-CLI, extension contract — plus honest limits (no TLS termination on decoys,
-local provider only, Compose-only container support). Read docs/ROADMAP.md
-before deploying anywhere you care about.
+No production-readiness claim is made. It is a tested early vertical slice with
+real listeners and evidence paths, plus honest limits: no TLS termination on
+decoys, no at-rest encryption, no SSH sensor, no autonomous response, and no
+verified real-cluster Kubernetes support. Read docs/ROADMAP.md first.

@@ -43,8 +43,8 @@ type Response struct {
 // calls, retries, queueing. Implementations that perform no blocking work
 // (e.g. Local, a pure function) must NOT consult ctx and must not fail merely
 // because it is already cancelled; callers get an answer whenever one can be
-// produced for free. Remote adapters (roadmap R2) MUST honor cancellation and
-// deadlines, returning ctx.Err() when interrupted.
+// produced for free. Remote adapters honor cancellation and deadlines,
+// returning ctx.Err() when interrupted.
 type Provider interface {
 	Name() string
 	Complete(ctx context.Context, req Request) (Response, error)
@@ -107,7 +107,6 @@ func (Local) Complete(_ context.Context, req Request) (Response, error) {
 	}, nil
 }
 
-// ErrNoAPIKey guards the remote adapter path until R2 lands; constructing a
-// remote provider without credentials fails closed here rather than silently
-// falling back to local behavior.
+// ErrNoAPIKey keeps credentialed remote construction fail closed rather than
+// silently falling back to local behavior.
 var ErrNoAPIKey = fmt.Errorf("llm: remote provider requested but AEGISMESH_LLM_API_KEY is not set")

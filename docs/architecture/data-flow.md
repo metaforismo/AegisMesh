@@ -19,6 +19,7 @@ internal/llm           Provider interface; deterministic local provider + remote
 internal/egress        destination classifier shared by validate, LLM providers, and the webhook sink
 internal/event         versioned envelope, redaction, integrity hashing, bounded bus
 internal/storage       JSONL append-only store, rotation, retention, export
+internal/ecsexport     deterministic ECS-compatible read-boundary projection
 internal/correlate     bounded multi-event correlation engine (COR-001..COR-004 signals)
 internal/webhook       signed best-effort evidence stream to an operator-configured collector
 internal/extmanager    supervised data-only observer extensions (`observe` permission only)
@@ -47,7 +48,7 @@ flowchart LR
     C --> J[Event construction:\nredact payloads,\nhash, sequence, timestamp]
     E --> K[Response to attacker]
     I --> K
-    J --> L[Bounded event bus\ncapacity 4096, drop-oldest policy]
+    J --> L[Bounded event bus\ncapacity 4096, reject new event when full]
     L --> S{Composite sink}
     S -->|"authoritative raw evidence written first"| M[(JSONL evidence store\nrotation + retention)]
     S -.->|"optional offers, never blocking,\ndrops counted per consumer"| W[Webhook sink\nHMAC-signed batches]
@@ -58,6 +59,7 @@ flowchart LR
     N[/observe.Meter counters\nincremented throughout/] -.-> Q[Admin listener\n127.0.0.1 healthz readyz metrics]
     O[Operator] --> P[aegismesh inspect / export / rules]
     M --> P
+    P -->|optional --profile ecs; native envelope preserved| ECS[ECS-compatible NDJSON\nlocal output only]
     O --> Q
 ```
 
@@ -159,3 +161,6 @@ processes supervised by `internal/extmanager`.
    replies, or outputs can never slow an evidence write, alter a decoy response, or mutate configuration.
    Fired signals reach only the store today; delivering signals to webhook/extensions is deferred and
    unimplemented.
+8. Producer offers hold a shared lifecycle lock from the closed-state check through the non-blocking send;
+   shutdown closes each queue only under the exclusive lock and waits after releasing it. Global runtime
+   shutdown is guarded by `sync.Once`.

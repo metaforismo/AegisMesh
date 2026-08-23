@@ -5,15 +5,42 @@ arm64, Go 1.25.5) or to CI. Vocabulary: **PASS** = ran, exit 0; **FAIL** =
 ran, non-zero (fixed or documented); **BLOCKED** = tool/environment missing,
 fallback noted; **NOT RUN** = deliberately skipped, reason given.
 
-## Full-suite evidence (final state of this batch)
+## 2026-08-23 — Batch 2 R3 and shutdown correctness
+
+| check | command | result |
+|---|---|---|
+| Repository baseline | `git status --short --branch`; `git rev-parse HEAD`; `git remote -v` | PASS — clean `master`, HEAD `cf8bdee19625e78ee82e399f9531331e78173b94`, origin points to `metaforismo/AegisMesh` before the isolated worktree was created |
+| Baseline suite | `make lint test` | PASS — `go vet` and `go test -race ./...`; `golangci-lint` unavailable, documented fallback used |
+| ECS mapping and strict CLI matrix | `go test ./internal/ecsexport ./internal/cli -run 'TestMarshal\|TestInspectExport\|TestInspectShowRejects' -count=1` | PASS |
+| Export failure regressions before fix | `go test ./internal/cli -run 'TestInspectExportRejectsUnexpectedArgumentsWithoutTouchingOutput\|TestInspectExportVerifyFailsClosedWithoutTouchingOutput' -count=1` | FAIL — reproduced positional-argument target replacement and verified-export success despite tampering; fixed in this batch |
+| Bus regression before fix | `go test ./internal/event -run TestBusSubmitAfterCloseReturnsFalse -count=1` | FAIL — reproduced `panic: send on closed channel`; fixed in this batch |
+| Concurrent lifecycle stress | `go test -race ./internal/event ./internal/webhook ./internal/extmanager -run 'TestBusSubmitAfterCloseReturnsFalse\|TestBusConcurrentSubmitAndClose\|TestOfferConcurrentWithClose\|TestDeliverConcurrentWithStop' -count=10`; extension test repeated separately with `-count=3` | PASS |
+| Global shutdown idempotence | `go test -race ./internal/runtime -run TestSystemStopConcurrentIsIdempotent -count=10` | PASS |
+| Runtime extension readiness after full-suite timeout diagnosis | `go test -race ./internal/runtime -run 'TestSystemDeliversObservationsToExtension\|TestSystemStopConcurrentIsIdempotent' -count=3` | PASS — readiness wait now matches the 15-second production startup deadline plus test margin |
+| Final formatting, vet, build and all package races | `make lint test` | PASS — 29 packages enumerated by `go list ./...`; scoped loopback permission was required for integration listeners |
+| Parser fuzz seeds | `make fuzz-seed` | PASS — config, event, TCP-line and Beelzebub-import fuzz targets, 15 seconds each |
+| Helm packaging contract | `make helm-contract` | PASS — positive and adversarial chart cases |
+| Dependency license policy | `./scripts/license-check.sh` | PASS — 2 modules within policy; this batch added no dependency |
+| Secret tripwire | `./scripts/secrets-scan.sh` | PASS |
+| Patch hygiene | `git diff --check` | PASS |
+
+Current evidence boundaries:
+
+- **BLOCKED — Exa connector tools are not exposed to this task.** Native web research used official sources instead.
+- **BLOCKED:** `gh pr list` and `gh issue list` could not connect to `api.github.com`, including a scoped network retry. Authentication status was available, but public PR/issue state remains unverified.
+- **BLOCKED:** the first full-suite attempt could not bind loopback listeners inside the sandbox. The identical scoped retry ran; one runtime readiness test then exposed a real load-sensitive timeout, which was fixed and followed by a green final suite.
+- **BLOCKED:** local `golangci-lint`, `govulncheck`, CycloneDX tooling and cosign are unavailable. No result was inferred for those tools.
+- **NOT RUN:** release publication/signing, real-cluster deployment, repository-setting changes, new egress and correlation-signal fan-out were outside this batch's authority.
+
+## Prior captured full-suite evidence (through `cf8bdee`)
 
 | check | command | result |
 |---|---|---|
 | Formatting | `gofmt -l .` | PASS (empty output) |
 | Vet | `go vet ./...` | PASS |
 | Build | `go build ./...` | PASS |
-| Unit + integration | `go test ./...` | PASS (14 packages) |
-| Race detector | `go test -race ./...` | PASS (all 14 packages) |
+| Unit + integration | `go test ./...` | PASS (historical snapshot) |
+| Race detector | `go test -race ./...` | PASS (historical snapshot) |
 | Repeated race runs (sensor/runtime stability) | `go test -race -count=2 ./internal/sensor/... ./internal/runtime/` | PASS |
 | Ext host stability | `go test -race -count=3 ./internal/ext/` | PASS |
 | Correlation engine determinism/race | `go test -race ./internal/correlate/ && go test -count=5 ./internal/correlate/` | PASS |
@@ -84,6 +111,15 @@ resulted (root causes fixed, not assertions bent):
    channel.
 8. Port `0` rejected by validation although ephemeral binds are legitimate;
    documented and allowed.
+9. Verified export truncated or replaced its target before validation and
+   returned success after skipping tampered events. Export now stages locally,
+   refuses partial verified output and atomically replaces the target only on success.
+10. Event, webhook and extension producers could race channel closure. Lifecycle
+    locks now cover the closed-state check through each non-blocking send; runtime
+    shutdown is whole-sequence idempotent.
+11. The extension integration readiness wait was shorter than the production
+    startup deadline and failed under full race-suite load. The test now derives
+    its bound from `startTimeout` and the focused repeated run is green.
 
 ## BLOCKED / NOT RUN (honest limits)
 
@@ -93,5 +129,5 @@ resulted (root causes fixed, not assertions bent):
 | govulncheck local run | BLOCKED (not installed). CI runs it on every push. |
 | SBOM generation local run | BLOCKED (syft/cyclonedx-gomod not installed); `scripts/sbom.sh` exits 2 with setup instructions rather than fabricating one. CI generates per-release SBOMs. |
 | cosign keyless signing | NOT RUN (roadmap; attestations provide tamper-evidence meanwhile). Documented in docs/RELEASE.md. |
-| Kubernetes manifests | NOT RUN by design — docs/deploy/kubernetes.md is a labeled direction document. |
+| Real-cluster Kubernetes smoke | NOT RUN; the Helm chart contract is PASS, but no cluster-support claim is made. |
 | Docker image build/push | NOT RUN locally this batch (Docker available but image publishing belongs to CI/tag flow); compose file mirrors the tested demo config. |
