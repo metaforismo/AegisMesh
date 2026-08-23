@@ -26,12 +26,14 @@ and crypto digests/signatures are implemented on the standard library deliberate
 
 ## SBOM and provenance strategy
 
-- SBOM: generated per release from the resolved module graph (`scripts/sbom.sh`, CycloneDX-style module
-  inventory; SPDX output planned when a maintained tool is adopted). Attached to GitHub Releases.
-- Provenance: release binaries built by CI with `-buildvcs=true -trimpath`; GitHub artifact attestations
-  provide SLSA-style provenance once releases are automated on public CI. Checksums signed via the release
-  workflow's OIDc-backed attestations; until key ceremony completes, checksums.txt is published unsigned
-  with the workflow run linked — stated plainly rather than implying more than exists.
+- SBOM: the tag-triggered release workflow emits CycloneDX JSON for every binary with
+  `anchore/sbom-action`. `scripts/sbom.sh` is a local helper that exits BLOCKED
+  unless Syft or cyclonedx-gomod is already installed; it never fabricates output.
+- Provenance: tag-triggered release binaries receive GitHub build-provenance
+  attestations. This is evidence about the named binary subjects, not a blanket
+  SLSA level claim for the repository or its dependencies.
+- Signing: `SHA256SUMS.txt` and binaries are not cosign-signed. Checksums and
+  GitHub attestations are distinct controls and are described separately.
 
 ## Attribution process
 

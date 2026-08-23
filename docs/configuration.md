@@ -56,16 +56,22 @@ for parallel test runs; still subject to host-loopback rules.
 
 | field | default | notes |
 |---|---|---|
-| `provider` | `local` | only `local` is implemented; anything else fails closed (`ErrNoAPIKey` without key) |
-| `base_url` | — | remote adapter endpoint; unused until roadmap R2 |
-| `model` | — | remote model name; unused until R2 |
+| `provider` | `local` | `local`, `ollama`, or `openai`; remote providers are opt-in and constructed fail closed |
+| `base_url` | — | fixed OpenAI-compatible endpoint; loopback cleartext is allowed only for `ollama` |
+| `model` | — | required remote model name |
+| `api_key_env` | — | environment-variable name holding the credential |
+| `api_key_file` | — | contained regular file path relative to the config directory |
+| `timeout_seconds` | `20` | end-to-end remote call timeout; maximum 120 |
+| `max_response_bytes` | `1048576` | remote response body cap; maximum 4 MiB |
 
-The API key is read only from the environment variable
-`AEGISMESH_LLM_API_KEY`; there is deliberately no config-file field for it.
+Credentials are referenced, never stored inline. `AEGISMESH_LLM_API_KEY`
+remains the highest-precedence compatibility override; otherwise the runtime
+resolves `api_key_env` or `api_key_file` before any listener binds. Ollama may
+omit a key. OpenAI-compatible remote construction fails closed without one.
 
 Provider contract (internal/llm): the context governs blocking work only.
 The local provider is a pure function and never fails because a context is
-cancelled; remote adapters must honor cancellation.
+cancelled; remote adapters honor cancellation and the configured size/time bounds.
 
 ## Sensors
 

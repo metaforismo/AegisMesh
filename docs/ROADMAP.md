@@ -19,6 +19,7 @@ Nothing is checked on intent alone.
 - [x] Extension manifest schema + digest/signature verifier + out-of-process reference host + contract tests
 - [x] Clean-room `migrate beelzebub` importer (dry-run default, compatibility report, source preserved)
 - [x] Dockerfile (non-root), docker-compose demo, reviewable install script
+- [x] Helm chart packaging with schema and contract tests; real-cluster support remains unverified
 - [x] Tests: unit, integration, golden/CLI snapshot, fuzz seeds, race; CI workflows pinned by commit SHA
 - [x] docs/verification.md + docs/HANDOFF.md
 
@@ -46,7 +47,9 @@ Nothing is checked on intent alone.
    listener binds, egress-classified dialing, loopback allowed only for `ollama`, response size + timeout
    caps enforced, off by default (PR deliver/llm-remote-provider). Provider output still passes the
    untrusted-output pipeline. Cost accounting beyond those size/timeout bounds stays future work.
-3. R3: SIEM-friendly export profiles (ECS-ish field mapping doc + `inspect export --profile ecs`).
+3. R3 (shipped): ECS-compatible local evidence projection via `inspect export --profile ecs`, with a
+   stable mapping, complete native-envelope preservation, deterministic golden tests, strict CLI validation,
+   and fail-closed verified export. No connector or automatic upload is implied.
 4. R4: Response recommendation engine v0: rules over events producing *dry-run* playbooks only.
 5. R5: Evidence at rest: optional age/x25519 encryption of JSONL segments.
 6. R6: Wire verified extensions into live policy resolution (behind explicit operator enablement).
@@ -62,7 +65,8 @@ Nothing is checked on intent alone.
 - Continuous adversarial simulation harness that probes your own decoys in CI.
 - Threat intelligence pipeline: clustering of captured interactions into TTP summaries (local models first).
 - Web console (read-only by default) once the API surface stabilizes.
-- Kubernetes: Helm chart only after single-node story is hardened; no production-readiness claims before then.
+- Kubernetes operation: the Helm chart is packaging, not real-cluster support. Add image, persistence,
+  upgrade/rollback and cluster failure-path evidence before any production-readiness claim.
 
 ## Explicit non-goals reminder
 

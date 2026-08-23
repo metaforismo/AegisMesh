@@ -31,7 +31,6 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/egress"
@@ -82,7 +81,8 @@ type Sink struct {
 	doneSignal chan struct{}
 	closeOnce  sync.Once
 	doneOne    sync.Once
-	closed     atomic.Bool
+	lifecycle  sync.RWMutex
+	closed     bool
 	wg         sync.WaitGroup
 }
 
@@ -190,7 +190,9 @@ func (s *Sink) buildClient(pol egress.Policy) *http.Client {
 // Offer enqueues one envelope without blocking. It returns false when the
 // queue was full (counted) or the sink is closing.
 func (s *Sink) Offer(e event.Envelope) bool {
-	if s.closed.Load() {
+	s.lifecycle.RLock()
+	defer s.lifecycle.RUnlock()
+	if s.closed {
 		return false
 	}
 	select {
@@ -207,8 +209,10 @@ func (s *Sink) Offer(e event.Envelope) bool {
 // Idempotent and bounded.
 func (s *Sink) Close() {
 	s.closeOnce.Do(func() {
-		s.closed.Store(true)
+		s.lifecycle.Lock()
+		s.closed = true
 		close(s.ch)
+		s.lifecycle.Unlock()
 	})
 	select {
 	case <-s.exited:
@@ -333,7 +337,7 @@ func (s *Sink) deliver(batch []event.Envelope) {
 			time.Sleep(fullJitter(backoffBase << uint(min(attempt-1, 3))))
 		}
 	}
-	shuttingDown := s.ctx.Err() != nil || s.closed.Load()
+	shuttingDown := s.ctx.Err() != nil || s.isClosed()
 	for range batch {
 		if shuttingDown {
 			s.c.droppedShutdown.Inc()
@@ -344,6 +348,12 @@ func (s *Sink) deliver(batch []event.Envelope) {
 	s.c.failedBatches.Inc()
 	// Errors carry statuses and transport reasons only — never body or key material.
 	s.log.Warn("webhook batch failed", "reason", fmt.Sprint(lastErr), "events", len(batch))
+}
+
+func (s *Sink) isClosed() bool {
+	s.lifecycle.RLock()
+	defer s.lifecycle.RUnlock()
+	return s.closed
 }
 
 func (s *Sink) post(body []byte) (int, error) {

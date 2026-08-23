@@ -51,7 +51,7 @@ type Manager struct {
 	manifests []*ext.Manifest
 	m         metrics
 
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	entries []*entry
 	started bool
 	stopped bool
@@ -156,14 +156,12 @@ func (m *Manager) dispatch(e *entry) {
 // Deliver offers one envelope to every healthy extension without blocking.
 // Full queues drop (counted); sensors and the evidence bus are never slowed.
 func (m *Manager) Deliver(e event.Envelope) {
-	m.mu.Lock()
-	stopped := m.stopped
-	entries := append([]*entry(nil), m.entries...)
-	m.mu.Unlock()
-	if stopped {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.stopped {
 		return
 	}
-	for _, en := range entries {
+	for _, en := range m.entries {
 		if en.host == nil { // not started (Start failed mid-way)
 			continue
 		}

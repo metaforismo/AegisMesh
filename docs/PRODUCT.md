@@ -5,8 +5,8 @@ Version: 0.1.0 (first batch). Status: active.
 ## One-liner
 
 AegisMesh is a fully open-source, local-first, secure-by-default agentic deception, detection, and
-response platform: you deploy believable decoys, it records every interaction as bounded, redacted,
-integrity-checked evidence, and it recommends — never autonomously performs — containment actions.
+evidence platform: you deploy believable decoys and it records every interaction as bounded, redacted,
+integrity-checked evidence. It does not autonomously act on real assets; dry-run recommendations are proposed work.
 
 ## Problem
 
@@ -36,8 +36,8 @@ marketing that conflates "someone touched a decoy" with "you are breached".
 ## Non-goals (for the whole project, not just this batch)
 
 - **Not an IDS/IPS replacement.** Deception detects what touches decoys; it does not inspect production traffic.
-- **No autonomous enforcement against real assets.** Response begins as recommendation/dry-run; any external
-  action requires explicit operator approval per-action, with audit trail.
+- **No autonomous enforcement against real assets.** Any future response begins as a recommendation/dry-run;
+  external action requires explicit operator approval per action, with an audit trail.
 - **No offensive capability.** No exploitation, credential theft, persistence, botnet behavior, phishing
   delivery, or malware execution — ever, in any tier.
 - **Not a sandbox/detonation platform** for running attacker binaries (roadmap consideration only as an
@@ -47,7 +47,7 @@ marketing that conflates "someone touched a decoy" with "you are breached".
 
 ## What "agentic deception" means here
 
-Three sensor families, of which two ship in this first batch:
+Three product families, with both current sensor families shipped:
 
 1. **Infrastructure decoys** (HTTP, TCP now; SSH/Telnet/DB personas roadmap): fake services that record
    probes and credential guessing attempts against synthetic credentials only.
@@ -61,7 +61,7 @@ Three sensor families, of which two ship in this first batch:
 
 | Dimension | AegisMesh position |
 |---|---|
-| Licensing | Apache-2.0 end to end; zero GPL dependencies; SBOM + license policy enforced in CI |
+| Licensing | Apache-2.0 end to end; zero GPL dependencies; license policy in CI and CycloneDX SBOMs on release tags |
 | Offline | Deterministic local provider + static policies = fully functional without network egress |
 | Supply chain | Single third-party Go dependency at launch (YAML parser); extensions out-of-process behind manifests |
 | Safe defaults | Loopback bind + unprivileged ports validated by `doctor`; strict config schema; dry-run modes |
@@ -70,10 +70,11 @@ Three sensor families, of which two ship in this first batch:
 
 ## First-batch MVP scope (honest boundary)
 
-Ships: CLI (`init`, `doctor`, `validate`, `run`, `inspect`, `migrate beelzebub`, `version`, `completion`),
-HTTP/TCP/MCP sensors, static policies + deterministic local LLM provider, JSONL evidence store with
-retention/redaction, loopback admin endpoints (health/readiness/metrics), extension manifest+verifier+reference
-host, Docker/compose demo, CI, docs.
+Ships: CLI (`init`, `doctor`, `validate`, `run`, `inspect`, `rules`, `migrate beelzebub`, `ext`, `healthcheck`,
+`version`, `completion`), HTTP/TCP/MCP sensors, static policies, deterministic local and opt-in remote
+providers, JSONL evidence with correlation signals and ECS-compatible local export, loopback admin endpoints,
+data-only observer extensions, opt-in webhook delivery, Docker/Compose, Helm packaging, CI and docs.
 
-Does not ship yet (see ROADMAP): SSH/Telnet sensors, real LLM providers beyond the adapter seam, OTLP
-exporter, SIEM connectors, response playbook engine, distributed deployment, web console.
+Does not ship yet (see ROADMAP): SSH/Telnet sensors, OTLP or automatic SIEM connectors, response
+recommendation/playbook engine, evidence-at-rest encryption, distributed deployment, web console, or
+verified real-cluster Kubernetes support.

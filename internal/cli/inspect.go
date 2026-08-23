@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/metaforismo/aegismesh/internal/detect"
+	"github.com/metaforismo/aegismesh/internal/ecsexport"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/storage"
 )
@@ -28,7 +30,7 @@ func (c *inspectCmd) Help() string {
 
   inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
   inspect show   --data-dir DIR --id EVENT_ID [--verify]
-  inspect export --data-dir DIR --out FILE.ndjson [--verify]
+  inspect export --data-dir DIR --out FILE.ndjson [--profile ecs] [--verify]
 
 Events are observations of decoy interactions — they are not incidents and do
 not prove compromise. --verify recomputes each event's integrity hash while
@@ -36,7 +38,9 @@ reading; failures are reported per line and counted. --finding filters to
 events where the named detection rule fired (e.g. --finding PI-001).
 --classification filters to exactly one evidence class (interaction,
 canary_invocation, correlation_signal); it applies before --limit, so
---limit N caps matching rows.`
+--limit N caps matching rows. Export keeps the native envelope by default;
+--profile ecs emits the documented ECS-compatible mapping while preserving
+the complete native envelope under the aegismesh field.`
 }
 
 func (c *inspectCmd) Run(ctx context.Context, args []string) error {
@@ -73,7 +77,7 @@ func (c *inspectCmd) list(args []string) error {
 	sensorID := fs.String("sensor", "", "filter by sensor id")
 	kind := fs.String("kind", "", "filter by sensor kind (http|tcp|mcp)")
 	finding := fs.String("finding", "", "only events where this detection rule id fired (e.g. PI-001)")
-	var class classificationFlag
+	var class singleValueFlag
 	fs.Var(&class, "classification", "filter to one evidence class (interaction|canary_invocation|correlation_signal)")
 	verify := fs.Bool("verify", false, "recompute integrity hashes while reading")
 	if err := fs.Parse(args); err != nil {
@@ -179,7 +183,12 @@ func (c *inspectCmd) show(args []string) error {
 	dataDir := fs.String("data-dir", "./data", "evidence directory")
 	id := fs.String("id", "", "event id to display")
 	verify := fs.Bool("verify", true, "verify this event's integrity hash")
-	fs.Parse(args) //nolint:errcheck // see list()
+	if err := fs.Parse(args); err != nil {
+		return Usagef("%v", err)
+	}
+	if fs.NArg() > 0 {
+		return Usagef("unexpected argument %q (inspect show takes flags only)", fs.Arg(0))
+	}
 	if strings.TrimSpace(*id) == "" {
 		return Usagef("--id is required")
 	}
@@ -227,49 +236,109 @@ func (c *inspectCmd) export(args []string) error {
 	addGlobalFlags(fs, &c.g)
 	dataDir := fs.String("data-dir", "./data", "evidence directory")
 	outPath := fs.String("out", "", "output NDJSON file ('-' for stdout)")
+	var profile singleValueFlag
+	fs.Var(&profile, "profile", "export mapping profile (ecs)")
 	verify := fs.Bool("verify", true, "refuse to export events failing integrity checks")
-	fs.Parse(args) //nolint:errcheck // see list()
-	if *outPath == "" {
+	if err := fs.Parse(args); err != nil {
+		return Usagef("%v", err)
+	}
+	if fs.NArg() > 0 {
+		return Usagef("unexpected argument %q (inspect export takes flags only)", fs.Arg(0))
+	}
+	if strings.TrimSpace(*outPath) == "" {
 		return Usagef("--out FILE.ndjson is required (or '-' for stdout)")
+	}
+	if len(profile.values) > 1 {
+		return Usagef("--profile given %d times; pass it at most once (want ecs)", len(profile.values))
+	}
+	profileName := ""
+	if len(profile.values) == 1 {
+		profileName = profile.values[0]
+		if profileName != "ecs" {
+			return Usagef("unknown export profile %q (want ecs)", profileName)
+		}
 	}
 	r, err := storage.NewReader(*dataDir)
 	if err != nil {
 		return err
 	}
-	var w io.Writer = os.Stdout
 	if *outPath != "-" {
-		f, ferr := os.Create(*outPath)
-		if ferr != nil {
-			return fmt.Errorf("create %s: %v", *outPath, ferr)
+		isSegment, serr := r.IsSegmentPath(*outPath)
+		if serr != nil {
+			return serr
 		}
-		defer f.Close()
-		w = f
+		if isSegment {
+			return Usagef("--out must not resolve to an evidence segment in --data-dir")
+		}
 	}
+	tempDir := os.TempDir()
+	if *outPath != "-" {
+		tempDir = filepath.Dir(*outPath)
+	}
+	staged, err := os.CreateTemp(tempDir, ".aegismesh-export-*")
+	if err != nil {
+		return fmt.Errorf("stage export: %v", err)
+	}
+	stagedPath := staged.Name()
+	defer os.Remove(stagedPath)
+	defer staged.Close()
+
 	count, bad := 0, 0
 	err = r.ForEach(func(e event.Envelope) error {
+		if verr := e.Validate(); verr != nil {
+			bad++
+			return nil
+		}
 		if *verify {
 			if verr := e.VerifyIntegrity(); verr != nil {
 				bad++
-				fmt.Fprintf(c.env.Err, "skipping tampered/invalid event %s: %v\n", e.ID, verr)
+				fmt.Fprintf(c.env.Err, "skipping tampered/invalid event %s: %v\n", short(e.ID), verr)
 				return nil
 			}
 		}
-		count++
-		line, merr := marshalLine(e)
+		var line []byte
+		var merr error
+		if profileName == "ecs" {
+			line, merr = ecsexport.Marshal(e)
+		} else {
+			line, merr = marshalLine(e)
+		}
 		if merr != nil {
 			bad++
 			return nil
 		}
-		if _, werr := w.Write(append(line, '\n')); werr != nil {
+		if _, werr := staged.Write(append(line, '\n')); werr != nil {
 			return werr
 		}
+		count++
 		return nil
-	}, nil)
+	}, func(_ string, _ error) { bad++ })
 	if err != nil {
 		return err
 	}
+	if *verify && bad > 0 {
+		return fmt.Errorf("integrity verification failed for %d event(s); output was not changed", bad)
+	}
 	if bad > 0 {
 		fmt.Fprintf(c.env.Err, "warning: %d event(s) skipped during export\n", bad)
+	}
+	if err := staged.Sync(); err != nil {
+		return fmt.Errorf("sync staged export: %v", err)
+	}
+	if *outPath == "-" {
+		if _, err := staged.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("rewind staged export: %v", err)
+		}
+		if _, err := io.Copy(c.env.Out, staged); err != nil {
+			return fmt.Errorf("write export to stdout: %v", err)
+		}
+	} else {
+		if err := staged.Close(); err != nil {
+			return fmt.Errorf("close staged export: %v", err)
+		}
+		if err := os.Rename(stagedPath, *outPath); err != nil {
+			return fmt.Errorf("replace %s: %v", *outPath, err)
+		}
 	}
 	if c.g.jsonOut || *outPath != "-" {
 		fmt.Fprintf(c.env.Err, "exported %d event(s)\n", count)
@@ -311,18 +380,16 @@ func isValidClassification(v string) bool {
 	return false
 }
 
-// classificationFlag records every --classification occurrence so repeats fail
-// loudly instead of the last value silently winning.
-type classificationFlag struct{ values []string }
+type singleValueFlag struct{ values []string }
 
-func (f *classificationFlag) String() string {
+func (f *singleValueFlag) String() string {
 	if len(f.values) == 0 {
 		return ""
 	}
 	return f.values[len(f.values)-1]
 }
 
-func (f *classificationFlag) Set(v string) error { f.values = append(f.values, v); return nil }
+func (f *singleValueFlag) Set(v string) error { f.values = append(f.values, v); return nil }
 
 // observationHasFinding reports whether an observation payload carries a
 // detection finding with the given rule id. Unknown observation shapes simply

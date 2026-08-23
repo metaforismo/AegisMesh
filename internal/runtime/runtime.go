@@ -56,6 +56,7 @@ type System struct {
 	failed    atomic.Uint64
 	stopMaint chan struct{}
 	maintOnce sync.Once
+	stopOnce  sync.Once
 }
 
 // evidenceSink keeps evidence authoritative while offering every envelope to
@@ -365,8 +366,8 @@ func (s *System) maintenanceLoop() {
 }
 
 // Stop shuts down gracefully: stop intake, drain sensors, flush store.
-func (s *System) Stop(ctx context.Context) {
-	s.closeAll()
+func (s *System) Stop(_ context.Context) {
+	s.stopOnce.Do(s.closeAll)
 }
 
 func (s *System) closeAll() {

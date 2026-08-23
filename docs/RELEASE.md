@@ -43,7 +43,7 @@ feasible.
 | Builds | `CGO_ENABLED=0 -trimpath -ldflags "-s -w"`; version stamped from tag | done |
 | Checksums | SHA256SUMS.txt over binaries + SBOMs | done |
 | SBOM | anchore/sbom-action, CycloneDX JSON per artifact | done (CI) |
-| Provenance | actions/attest-build-provenance (SLSA) | done (CI); verify with `gh attestation verify` |
+| Provenance | actions/attest-build-provenance for binary subjects | done on release tags; no repository-wide SLSA level claim |
 | Binary signing | keyless cosign signing is **planned**; attestations currently provide tamper-evidence | roadmap — do not claim signed releases yet |
 | Actions pinned by SHA | enforced in both workflows | done |
 
@@ -57,6 +57,6 @@ feasible.
 golangci-lint, govulncheck, syft/sbom-tool, trivy, and cosign were **not
 installed** in the original development environment; local runs recorded
 BLOCKED entries in docs/verification.md with fallbacks (gofmt+vet, scripted
-license/secret scans). CI runs govulncheck and SBOM generation on every
-push/tag, so evidence accumulates there rather than being fabricated
-locally.
+license/secret scans). CI runs govulncheck on pushes and pull requests; SBOM
+generation belongs to the tag-triggered release workflow. Evidence is recorded
+at the boundary where the command actually ran rather than inferred locally.

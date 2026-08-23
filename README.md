@@ -5,8 +5,8 @@ human and agentic attackers.**
 
 AegisMesh deploys believable decoy services — HTTP endpoints, TCP services, and MCP canary tools that no
 honest agent should ever call — and records every interaction as bounded, redacted, integrity-checked
-evidence on your own machine. It runs offline. It never executes attacker input. Response automation starts
-as dry-run recommendations that require explicit operator approval.
+evidence on your own machine. It runs offline by default and never executes attacker input. Response
+recommendations remain roadmap work; the shipped runtime never acts on real assets.
 
 > AegisMesh is an independent implementation in the deception-technology problem space. It contains no code
 > or text from other honeypot projects. Inspiration and differences are documented in
@@ -65,11 +65,11 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 | Area | What ships |
 |---|---|
 | Sensors | `http`, `tcp`, `mcp` (JSON-RPC 2.0 over streamable HTTP POST) |
-| Responses | Static config rules + deterministic local LLM provider (offline by default); provider output treated as untrusted data |
-| Evidence | Versioned envelope (`aegismesh.event/v1`) with SHA-256 payload integrity, per-process sequence numbers, redaction record; JSONL store with rotation + retention |
+| Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
+| Evidence | Versioned native envelope, integrity checks, rotation/retention, plus opt-in local ECS-compatible export that preserves the native envelope |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
 | Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no exec anywhere |
-| Extensions | Out-of-process host behind digest-verified manifests (`ext.aegismesh.io/v1alpha1`) — contract-tested, not yet wired into live policy |
+| Extensions | Digest-verified out-of-process observer extensions receive bounded data-only events; they cannot influence policy or responses |
 | Migration | Clean-room `aegismesh migrate beelzebub` importer: dry-run default, never touches sources, exact unsupported-field report |
 
 ## Security posture
@@ -99,6 +99,7 @@ scripts/                        build/demo/scans helpers
 |---|---|
 | [docs/configuration.md](docs/configuration.md) | full config reference (schema, precedence, env overrides) |
 | [docs/cli.md](docs/cli.md) | every command and flag |
+| [docs/ecs-export.md](docs/ecs-export.md) | stable ECS-compatible evidence mapping and limits |
 | [docs/canary-model.md](docs/canary-model.md) | MCP canary/operator model |
 | [docs/migration-beelzebub.md](docs/migration-beelzebub.md) | importer field mappings, exact supported/approximated/unsupported |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | symptom → cause → fix |

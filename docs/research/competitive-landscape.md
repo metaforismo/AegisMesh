@@ -1,16 +1,14 @@
 # Competitive landscape research
 
-Status: initial research note for the first batch. All vendor claims are recorded as claims, not facts.
-Access dates: 2026-08-22 unless noted. Links checked at authoring time.
+Status: refreshed against official repositories on 2026-08-23. Upstream
+descriptions remain upstream claims unless this repository independently tested them.
 
 ## 1. Beelzebub (primary reference)
 
 Sources inspected:
 
-- Repository README: <https://github.com/beelzebub-labs/beelzebub> (accessed 2026-08-22)
-- Marketing site copy (local capture of beelzebub.ai homepage): `~/.codex/attachments/d621576f-b8ce-4ef3-a672-adc657bf59a4/pasted-text.txt`
-- Help Net Security coverage: <https://www.helpnetsecurity.com/2025/02/10/beelzebub-open-source-honeypot-framework/>
-- United Ventures investment note: <https://unitedventures.com/2026/07/27/why-we-backed-beelzebub/>
+- Repository README and license: <https://github.com/beelzebub-labs/beelzebub>
+- Official documentation: <https://docs.beelzebub.ai/>
 
 ### 1.1 Verified open-source capabilities (from the public repo)
 
@@ -24,21 +22,15 @@ Sources inspected:
 | Plugins compiled into the same process (`init()` registration; `plugin install` fetches from GitHub and rebuilds) | Plugin System section |
 | Prometheus metrics on `:2112/metrics`; RabbitMQ event streaming to SIEM | Observability section |
 | CLI: `run`, `validate`, `plugin`, `version` | CLI Reference |
-| Deployment: Docker, Helm chart, graceful shutdown, per-service memory limit flag | Quick Start / production-ready claims |
+| Deployment: Docker, Helm chart, graceful shutdown, per-service memory limit flag | Quick Start; the README's production-ready wording is an upstream claim, not our verification |
 
-### 1.2 Commercial platform claims — recorded as CLAIMS requiring evidence
+### 1.2 Claim boundary
 
-From the marketing site copy and investor note. None verified by us:
-
-- "Zero False Positives. Every Alert Is a Real Threat." — a strong universal claim; in our experience any
-  detection surface has false-positive modes (misconfigured decoys reachable by benign scanners, uptime
-  probes, vulnerability scanners on shared networks). We do not repeat this claim about AegisMesh.
-- "Cut MTTR from hours to seconds", "reduce SOC operational costs by up to 60%" — unverified percentages;
-  no methodology published in the sources we inspected.
-- Compliance alignment (NIS2, DORA, EU AI Act, SOC 2) with "undeniable audit trails" — compliance is an
-  organizational process; software can produce evidence but cannot make an org compliant.
-- "Instant threat containment", autonomous isolation — automated enforcement against real assets is a
-  high-blast-radius action; AegisMesh deliberately starts in recommendation/dry-run mode instead.
+The upstream README describes the project as production-ready and uses strong
+intelligence/detection language. AegisMesh does not import those claims as
+facts. A decoy interaction can also be operator testing, benign scanning or
+misconfiguration. AegisMesh records observations, makes no production-readiness
+claim, and has no autonomous enforcement or shipped recommendation engine.
 
 ### 1.3 Design observations relevant to AegisMesh
 
@@ -59,12 +51,15 @@ From the marketing site copy and investor note. None verified by us:
 
 ## 2. Adjacent OSS projects consulted conceptually (not copied)
 
-- **OpenCanary / Thinkst Canary** — low-interaction honeypots with high-fidelity alerts; validates that
-  simple, credible decoys with quiet-by-default alerting are operationally valuable. Not a code reference.
-- **T-Pot / honeypot aggregators** — demonstrate both the value and the operational weight of running many
-  honeypot images; motivates our single-binary, single-config golden path.
-- **OWASP Honeypot project** — modular Python honeypots; independent confirmation that YAML-defined decoys
-  lower the barrier for small teams.
+- **Cowrie** — <https://github.com/cowrie/cowrie> documents SSH/Telnet
+  high-interaction features including a fake filesystem and command capture.
+  AegisMesh deliberately does not emulate or execute a host shell.
+- **OpenCanary** — <https://github.com/thinkst/opencanary> documents a
+  lightweight multi-protocol network honeypot and optional Linux portscan response.
+- **T-Pot** — <https://github.com/telekom-security/tpotce> documents a
+  multi-container honeypot platform with substantially different operational weight.
+- **Galah** — <https://github.com/0x4D31/galah> documents LLM-generated HTTP
+  deception and explicitly notes provider cost/fingerprintability concerns.
 - No source code, tests, config samples, docs wording, or internal architecture was copied from any of
   these projects. AegisMesh is an independent implementation (clean-room).
 
@@ -96,7 +91,7 @@ resolved fact.
    deadline- and output-limited, revocable. No plugin compilation into the core binary.
 5. Honest evidence language: events are observations; classification and incident status require operator
    verification. The event envelope encodes this distinction.
-6. Explainable CLI with dry-run everywhere, actionable errors, JSON output for automation, and a
+6. Explainable CLI with dry-run on mutating/startup-sensitive paths, actionable errors, JSON output, and a
    five-minute empty-directory-to-running-demo golden path.
 7. Migration over lock-in: `aegismesh migrate beelzebub` imports documented public YAML shapes clean-room,
    dry-run first, never touching source files, reporting unsupported fields exactly.

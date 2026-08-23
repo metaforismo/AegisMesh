@@ -144,3 +144,35 @@ interface is the seam where a real client library can land without touching sens
 
 **Conclusions.** Honest scoping: we claim "Prometheus-text-compatible metrics endpoint", not "full OTel
 SDK". Swapping in client_golang later is localized to `internal/admin`.
+
+---
+
+## ADR-0009: ECS-compatible projection at the read boundary
+
+Date: 2026-08-23
+
+**Context.** Operators need SIEM-friendly evidence without changing the native
+store or adding an outbound connector. Observation payloads differ by sensor and
+are not a versioned cross-package mapping contract.
+
+**Usage.** The existing native command remains unchanged. Operators opt into the
+projection with `inspect export --profile ecs`; every projected row still
+contains the complete native envelope.
+
+**Decision.** `internal/ecsexport.Marshal` is one pure, I/O-free mapping boundary.
+It validates the native envelope, maps only stable envelope-level facts, targets
+a documented ECS version, and owns deterministic serialization. The CLI owns
+streaming, staging and destination replacement. The native storage schema and
+live runtime are untouched.
+
+Two shapes were considered. A mapper inside `internal/event` would couple the
+native evidence model to a downstream vendor schema. A generic exporter registry
+inside `internal/cli` would expose a shallow abstraction for one real profile.
+The dedicated package hides mapping/version policy behind one function and can
+be removed or replaced without changing event or storage ownership.
+
+**Consequences.** The first mapping is intentionally conservative and does not
+interpret sensor-private observation JSON. We accept fewer normalized fields in
+exchange for a stable contract and honest semantics. This adds no external
+egress; a future connector or automatic upload is a separate architecture and
+approval decision.

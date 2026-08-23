@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -133,6 +134,43 @@ func waitFor(t *testing.T, d time.Duration, cond func() bool, what string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for %s", what)
+}
+
+func TestOfferConcurrentWithClose(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	exited := make(chan struct{})
+	close(exited)
+	meter := newRecMeter()
+	s := &Sink{
+		cfg:        Config{ShutdownFlush: time.Second},
+		ctx:        ctx,
+		cancel:     cancel,
+		ch:         make(chan event.Envelope, 1024),
+		exited:     exited,
+		doneSignal: make(chan struct{}),
+		c: counters{
+			droppedQueueFull: recCounter{meter, "queue_full"},
+		},
+	}
+
+	start := make(chan struct{})
+	var producers sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		producers.Add(1)
+		go func() {
+			defer producers.Done()
+			<-start
+			for j := 0; j < 200; j++ {
+				s.Offer(testEnvelope(j))
+			}
+		}()
+	}
+	close(start)
+	s.Close()
+	producers.Wait()
+	if s.Offer(testEnvelope(999)) {
+		t.Fatal("Offer after Close = true, want false")
+	}
 }
 
 // collectEventsServer verifies signature headers and records accepted bodies.

@@ -87,7 +87,7 @@ func TestSystemDeliversObservationsToExtension(t *testing.T) {
 	// Extensions start before sensors, so admin health precedes decoy
 	// readiness by design; poll for the listener rather than assume.
 	var url string
-	waitForCondition(t, 10*time.Second, func() bool {
+	waitForCondition(t, startTimeout+2*time.Second, func() bool {
 		for _, sen := range sys.sensors {
 			if sen.ID() != "http-decoy" {
 				continue
@@ -259,7 +259,7 @@ sensors:
 	waitHealthy(t, addr)
 
 	var url string
-	waitForCondition(t, 10*time.Second, func() bool {
+	waitForCondition(t, startTimeout+2*time.Second, func() bool {
 		for _, sen := range sys.sensors {
 			if sen.ID() != "http-decoy" {
 				continue
