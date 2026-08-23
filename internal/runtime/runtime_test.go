@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -73,6 +74,29 @@ sensors:
 		t.Fatal(err)
 	}
 	return cfg
+}
+
+func TestSystemStopConcurrentIsIdempotent(t *testing.T) {
+	cfg := testConfig(t)
+	disabled := false
+	cfg.Admin.Enabled = &disabled
+	sys, err := Build(cfg, quietLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	var callers sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		callers.Add(1)
+		go func() {
+			defer callers.Done()
+			<-start
+			sys.Stop(context.Background())
+		}()
+	}
+	close(start)
+	callers.Wait()
 }
 
 func TestSystemEndToEndLifecycle(t *testing.T) {

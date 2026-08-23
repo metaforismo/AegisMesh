@@ -233,6 +233,32 @@ func TestBackpressureDropsWithoutBlocking(t *testing.T) {
 	}, "drop+deliver accounting to equal 300")
 }
 
+func TestDeliverConcurrentWithStop(t *testing.T) {
+	mgr := New([]*ext.Manifest{buildFixture(t, "acker", 2000)}, newFakeMeter(), nil, 8, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := mgr.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	var producers sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		producers.Add(1)
+		go func() {
+			defer producers.Done()
+			<-start
+			for j := 0; j < 200; j++ {
+				mgr.Deliver(testEnvelope(j))
+			}
+		}()
+	}
+	close(start)
+	mgr.Stop()
+	producers.Wait()
+	mgr.Deliver(testEnvelope(999))
+}
+
 func TestStartFailureTearsDownAndStopIsIdempotent(t *testing.T) {
 	fm := newFakeMeter()
 	good := buildFixture(t, "acker", 2000)

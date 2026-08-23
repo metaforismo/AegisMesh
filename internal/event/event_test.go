@@ -119,6 +119,38 @@ func TestBusBoundedAndDropCounted(t *testing.T) {
 	}
 }
 
+func TestBusSubmitAfterCloseReturnsFalse(t *testing.T) {
+	bus := NewBus(1, &recordingSink{}, slog.New(slog.NewTextHandler(&testWriter{}, nil)))
+	bus.Close()
+
+	if bus.Submit(testEnvelope(t, &Sequencer{})) {
+		t.Fatal("Submit after Close = true, want false")
+	}
+}
+
+func TestBusConcurrentSubmitAndClose(t *testing.T) {
+	bus := NewBus(8, &recordingSink{}, slog.New(slog.NewTextHandler(&testWriter{}, nil)))
+	start := make(chan struct{})
+	var producers sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		producers.Add(1)
+		go func() {
+			defer producers.Done()
+			<-start
+			for j := 0; j < 200; j++ {
+				bus.Submit(Envelope{})
+			}
+		}()
+	}
+	close(start)
+	bus.Close()
+	producers.Wait()
+}
+
+type recordingSink struct{}
+
+func (*recordingSink) Append(context.Context, Envelope) error { return nil }
+
 type testWriter struct{}
 
 func (*testWriter) Write(p []byte) (int, error) { return len(p), nil }
