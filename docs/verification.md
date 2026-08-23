@@ -25,6 +25,18 @@ fallback noted; **NOT RUN** = deliberately skipped, reason given.
 | Secret tripwire | `./scripts/secrets-scan.sh` | PASS |
 | Patch hygiene | `git diff --check` | PASS |
 
+## 2026-08-24 — evidence reader fail-closed hotfix
+
+| check | command | result |
+|---|---|---|
+| Red segment-read regression | `go test ./internal/cli -run TestInspectExportFailsClosedOnSegmentReadError -count=1` | FAIL before fix — export returned 0 and reported `exported 0 event(s)` after a segment read failure |
+| Focused reader/export regression | `go test ./internal/storage ./internal/cli -run 'TestInspectExportFailsClosedOnSegmentReadError\|TestInspectExportVerifyFailsClosedWithoutTouchingOutput' -count=1` | PASS |
+| Focused reader/export race repeat | `go test -race ./internal/storage ./internal/cli -run 'TestInspectExportFailsClosedOnSegmentReadError\|TestInspectExportVerifyFailsClosedWithoutTouchingOutput' -count=5` | PASS |
+| First full-suite attempt | `make lint test` | FAIL — two extension-host tests hit their handshake timeout under load; the changed storage/CLI packages passed |
+| Extension timeout diagnosis | `go test -race ./internal/ext -run 'TestHostHandshakeFailures\|TestHostCallDeadlineRevokesProcess' -count=3 -v` | PASS — all six test cases passed three consecutive runs |
+| Final formatting, vet and full race suite | `make lint test` | PASS — unchanged retry; `golangci-lint` unavailable, documented `go vet` fallback used |
+| License, secret and patch hygiene | `./scripts/license-check.sh`; `./scripts/secrets-scan.sh`; `git diff --check` | PASS — no dependency change |
+
 Current evidence boundaries:
 
 - **BLOCKED — Exa connector tools are not exposed to this task.** Native web research used official sources instead.

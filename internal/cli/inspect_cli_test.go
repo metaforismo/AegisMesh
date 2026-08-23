@@ -152,6 +152,41 @@ func TestInspectExportRejectsEvidenceSegmentDestination(t *testing.T) {
 	}
 }
 
+func TestInspectExportFailsClosedOnSegmentReadError(t *testing.T) {
+	dir, _ := seedEvidence(t)
+	segments, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil || len(segments) != 1 {
+		t.Fatalf("segments = %v, err = %v", segments, err)
+	}
+	if err := os.Remove(segments[0]); err != nil {
+		t.Fatal(err)
+	}
+	unreadable := filepath.Join(t.TempDir(), "directory-not-jsonl")
+	if err := os.Mkdir(unreadable, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(unreadable, segments[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	outPath := filepath.Join(t.TempDir(), "export.ndjson")
+	const sentinel = "existing export\n"
+	if err := os.WriteFile(outPath, []byte(sentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", outPath, "--verify")
+	if code != 1 || !strings.Contains(stderr, "read segment") {
+		t.Fatalf("exit = %d, want 1 with segment read error; stderr=%q", code, stderr)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != sentinel {
+		t.Fatalf("segment read failure changed output: %q", got)
+	}
+}
+
 func TestInspectExportNativeProfileOmittedIsByteCompatible(t *testing.T) {
 	dir, env := seedEvidence(t)
 	code, out, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", "-", "--verify")
