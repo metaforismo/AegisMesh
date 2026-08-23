@@ -82,7 +82,7 @@ answers. Use it before any production-ish deployment.
 
     inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
     inspect show   --data-dir DIR --id EVENT_ID [--verify]
-    inspect export --data-dir DIR --out FILE.ndjson [--verify]
+    inspect export --data-dir DIR --out FILE.ndjson [--profile ecs] [--verify]
 
 Read-only access to evidence. `show` accepts ID prefixes (shortest unambiguous
 match). `--verify` recomputes each event's integrity hash; corrupt lines are
@@ -96,6 +96,20 @@ filter applies before `--limit`, so N caps matching rows:
 
     inspect list --data-dir DIR --classification correlation_signal
     inspect list --data-dir DIR --classification canary_invocation --limit 5
+
+`inspect export` emits the native `aegismesh.event/v1` envelope when
+`--profile` is omitted. `--profile ecs` emits one ECS-compatible JSON document
+per line and nests the complete native envelope under `aegismesh.envelope`; see
+[ecs-export.md](ecs-export.md) for the stable mapping and its limits. The profile
+is a strict enum: empty, whitespace, padded, repeated, comma-separated, unknown,
+and positional forms are usage errors.
+
+Verified export is fail closed. It stages the complete output and replaces the
+destination only after every event and line passes validation and integrity
+checks. An existing output file is unchanged on malformed input, corrupt
+evidence, or a failed integrity check. `--verify=false` is an explicit recovery
+mode: invalid records are reported and skipped, so its output is not suitable as
+a verified evidence set.
 
 ## aegismesh rules
 

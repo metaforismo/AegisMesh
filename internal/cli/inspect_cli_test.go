@@ -13,6 +13,157 @@ import (
 	"github.com/metaforismo/aegismesh/internal/storage"
 )
 
+func TestInspectExportRejectsUnexpectedArgumentsWithoutTouchingOutput(t *testing.T) {
+	dir, _ := seedEvidence(t)
+	outPath := filepath.Join(t.TempDir(), "export.ndjson")
+	const sentinel = "existing export\n"
+	if err := os.WriteFile(outPath, []byte(sentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, _, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", outPath, "unexpected")
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2; stderr=%q", code, stderr)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != sentinel {
+		t.Fatalf("invalid invocation changed output: %q", got)
+	}
+}
+
+func TestInspectExportVerifyFailsClosedWithoutTouchingOutput(t *testing.T) {
+	dir, _ := seedEvidence(t)
+	segments, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil || len(segments) != 1 {
+		t.Fatalf("segments = %v, err = %v", segments, err)
+	}
+	raw, err := os.ReadFile(segments[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := strings.Replace(string(raw), "/admin/login", "/admin/panel", 1)
+	if tampered == string(raw) {
+		t.Fatal("test fixture did not contain observation to tamper")
+	}
+	if err := os.WriteFile(segments[0], []byte(tampered), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	outPath := filepath.Join(t.TempDir(), "export.ndjson")
+	const sentinel = "existing export\n"
+	if err := os.WriteFile(outPath, []byte(sentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", outPath, "--verify")
+	if code != 1 || !strings.Contains(stderr, "integrity") {
+		t.Fatalf("exit = %d, want 1 with integrity error; stderr=%q", code, stderr)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != sentinel {
+		t.Fatalf("failed verified export changed output: %q", got)
+	}
+}
+
+func TestInspectExportNativeProfileOmittedIsByteCompatible(t *testing.T) {
+	dir, env := seedEvidence(t)
+	code, out, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", "-", "--verify")
+	if code != 0 {
+		t.Fatalf("exit = %d; stderr=%q", code, stderr)
+	}
+	want, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != string(want)+"\n" {
+		t.Fatalf("native export changed\n got: %s\nwant: %s", out, want)
+	}
+}
+
+func TestInspectExportECSProfile(t *testing.T) {
+	dir, env := seedEvidence(t)
+	code, out, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", "-", "--profile", "ecs", "--verify", "--json")
+	if code != 0 {
+		t.Fatalf("exit = %d; stderr=%q", code, stderr)
+	}
+	var got struct {
+		ECS struct {
+			Version string `json:"version"`
+		} `json:"ecs"`
+		Event struct {
+			Action string `json:"action"`
+			ID     string `json:"id"`
+		} `json:"event"`
+		Native struct {
+			MappingVersion string         `json:"mapping_version"`
+			Envelope       event.Envelope `json:"envelope"`
+		} `json:"aegismesh"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("not JSON: %v (%q)", err, out)
+	}
+	if got.ECS.Version != "9.4.0" || got.Event.Action != env.Classification || got.Event.ID != env.ID {
+		t.Fatalf("unexpected mapping: %+v", got)
+	}
+	if got.Native.MappingVersion != "aegismesh.ecs/v1" || got.Native.Envelope.ID != env.ID {
+		t.Fatalf("native envelope not preserved: %+v", got.Native)
+	}
+}
+
+func TestInspectExportProfileUsageErrorsDoNotTouchOutput(t *testing.T) {
+	dir, _ := seedEvidence(t)
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"explicit empty", []string{"--profile="}},
+		{"separate empty", []string{"--profile", ""}},
+		{"whitespace", []string{"--profile", "   "}},
+		{"padded", []string{"--profile", " ecs "}},
+		{"repeated", []string{"--profile", "ecs", "--profile", "ecs"}},
+		{"repeated different", []string{"--profile", "ecs", "--profile", "native"}},
+		{"comma separated", []string{"--profile", "ecs,native"}},
+		{"unknown", []string{"--profile", "native"}},
+		{"missing value", []string{"--profile"}},
+		{"unexpected limit", []string{"--limit", "1"}},
+		{"unexpected positional", []string{"extra"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			outPath := filepath.Join(t.TempDir(), "export.ndjson")
+			const sentinel = "existing export\n"
+			if err := os.WriteFile(outPath, []byte(sentinel), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			args := append([]string{"inspect", "export", "--data-dir", dir, "--out", outPath}, tc.args...)
+			code, _, stderr := run(t, args...)
+			if code != 2 {
+				t.Fatalf("exit = %d, want 2; stderr=%q", code, stderr)
+			}
+			got, err := os.ReadFile(outPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != sentinel {
+				t.Fatalf("invalid invocation changed output: %q", got)
+			}
+		})
+	}
+}
+
+func TestInspectShowRejectsUnexpectedArguments(t *testing.T) {
+	dir, env := seedEvidence(t)
+	code, _, stderr := run(t, "inspect", "show", "--data-dir", dir, "--id", env.ID, "unexpected")
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2; stderr=%q", code, stderr)
+	}
+}
+
 // appendClassified stores one envelope of the given classification and fails
 // the test on any storage error.
 func appendClassified(t *testing.T, st *storage.Store, seq *event.Sequencer, class, sensorID, kind, obs string) event.Envelope {
