@@ -262,6 +262,15 @@ func (c *inspectCmd) export(args []string) error {
 	if err != nil {
 		return err
 	}
+	if *outPath != "-" {
+		isSegment, serr := r.IsSegmentPath(*outPath)
+		if serr != nil {
+			return serr
+		}
+		if isSegment {
+			return Usagef("--out must not resolve to an evidence segment in --data-dir")
+		}
+	}
 	tempDir := os.TempDir()
 	if *outPath != "-" {
 		tempDir = filepath.Dir(*outPath)
@@ -276,10 +285,14 @@ func (c *inspectCmd) export(args []string) error {
 
 	count, bad := 0, 0
 	err = r.ForEach(func(e event.Envelope) error {
+		if verr := e.Validate(); verr != nil {
+			bad++
+			return nil
+		}
 		if *verify {
 			if verr := e.VerifyIntegrity(); verr != nil {
 				bad++
-				fmt.Fprintf(c.env.Err, "skipping tampered/invalid event %s: %v\n", e.ID, verr)
+				fmt.Fprintf(c.env.Err, "skipping tampered/invalid event %s: %v\n", short(e.ID), verr)
 				return nil
 			}
 		}

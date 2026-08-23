@@ -52,6 +52,8 @@ domain contract is explicit.
   or integrity mismatch fails the whole export without replacing the target.
 - `--verify=false` skips invalid records with a warning. This is a recovery aid,
   not verified evidence.
+- Export refuses a destination that resolves to a source evidence segment,
+  including through a symlink or hard link.
 - The profile writes NDJSON only; it does not configure Elasticsearch, transmit
   events, create indices, or promise dashboard compatibility.
 

@@ -70,6 +70,88 @@ func TestInspectExportVerifyFailsClosedWithoutTouchingOutput(t *testing.T) {
 	}
 }
 
+func TestInspectExportRejectsStructurallyInvalidNativeEnvelope(t *testing.T) {
+	dir, _ := seedEvidence(t)
+	segments, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil || len(segments) != 1 {
+		t.Fatalf("segments = %v, err = %v", segments, err)
+	}
+	raw, err := os.ReadFile(segments[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env event.Envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatal(err)
+	}
+	env.Schema = "aegismesh.event/future"
+	raw, err = json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(segments[0], append(raw, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	outPath := filepath.Join(t.TempDir(), "export.ndjson")
+	const sentinel = "existing export\n"
+	if err := os.WriteFile(outPath, []byte(sentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", outPath, "--verify")
+	if code != 1 || !strings.Contains(stderr, "verification failed") {
+		t.Fatalf("exit = %d, want 1 with verification error; stderr=%q", code, stderr)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != sentinel {
+		t.Fatalf("structurally invalid export changed output: %q", got)
+	}
+}
+
+func TestInspectExportRejectsEvidenceSegmentDestination(t *testing.T) {
+	dir, _ := seedEvidence(t)
+	segments, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil || len(segments) != 1 {
+		t.Fatalf("segments = %v, err = %v", segments, err)
+	}
+	want, err := os.ReadFile(segments[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	linksDir := t.TempDir()
+	symlink := filepath.Join(linksDir, "segment-symlink.jsonl")
+	if err := os.Symlink(segments[0], symlink); err != nil {
+		t.Fatal(err)
+	}
+	hardlink := filepath.Join(linksDir, "segment-hardlink.jsonl")
+	if err := os.Link(segments[0], hardlink); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{{"direct", segments[0]}, {"symlink", symlink}, {"hardlink", hardlink}} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, _, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", tc.path, "--profile", "ecs")
+			if code != 2 || !strings.Contains(stderr, "evidence segment") {
+				t.Fatalf("exit = %d, want 2 with evidence-segment error; stderr=%q", code, stderr)
+			}
+			got, err := os.ReadFile(segments[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != string(want) {
+				t.Fatal("export modified its source evidence segment")
+			}
+		})
+	}
+}
+
 func TestInspectExportNativeProfileOmittedIsByteCompatible(t *testing.T) {
 	dir, env := seedEvidence(t)
 	code, out, stderr := run(t, "inspect", "export", "--data-dir", dir, "--out", "-", "--verify")

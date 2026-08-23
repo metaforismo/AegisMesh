@@ -19,7 +19,8 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Dependencies:** none.
 - **Acceptance:** invalid syntax and failed verification return non-zero without
   changing an existing target; stdout receives bytes only after validation;
-  native successful output stays byte-for-byte compatible.
+  native successful output stays byte-for-byte compatible; an export target
+  cannot resolve to a source segment through a direct path, symlink or hard link.
 - **Verify:** `go test ./internal/cli -run 'TestInspectExport|TestInspectShowRejects' -count=1`;
   `go test -race ./internal/cli ./internal/storage`; `make lint test`.
 

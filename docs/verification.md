@@ -12,6 +12,7 @@ fallback noted; **NOT RUN** = deliberately skipped, reason given.
 | Repository baseline | `git status --short --branch`; `git rev-parse HEAD`; `git remote -v` | PASS — clean `master`, HEAD `cf8bdee19625e78ee82e399f9531331e78173b94`, origin points to `metaforismo/AegisMesh` before the isolated worktree was created |
 | Baseline suite | `make lint test` | PASS — `go vet` and `go test -race ./...`; `golangci-lint` unavailable, documented fallback used |
 | ECS mapping and strict CLI matrix | `go test ./internal/ecsexport ./internal/cli -run 'TestMarshal\|TestInspectExport\|TestInspectShowRejects' -count=1` | PASS |
+| Final export security review | `go test ./internal/storage ./internal/cli -run 'TestInspectExportRejectsStructurallyInvalidNativeEnvelope\|TestInspectExportRejectsEvidenceSegmentDestination\|TestInspectExportNativeProfileOmittedIsByteCompatible' -count=1` | PASS — native schema validation plus direct/symlink/hardlink source-segment rejection |
 | Export failure regressions before fix | `go test ./internal/cli -run 'TestInspectExportRejectsUnexpectedArgumentsWithoutTouchingOutput\|TestInspectExportVerifyFailsClosedWithoutTouchingOutput' -count=1` | FAIL — reproduced positional-argument target replacement and verified-export success despite tampering; fixed in this batch |
 | Bus regression before fix | `go test ./internal/event -run TestBusSubmitAfterCloseReturnsFalse -count=1` | FAIL — reproduced `panic: send on closed channel`; fixed in this batch |
 | Concurrent lifecycle stress | `go test -race ./internal/event ./internal/webhook ./internal/extmanager -run 'TestBusSubmitAfterCloseReturnsFalse\|TestBusConcurrentSubmitAndClose\|TestOfferConcurrentWithClose\|TestDeliverConcurrentWithStop' -count=10`; extension test repeated separately with `-count=3` | PASS |
@@ -120,6 +121,9 @@ resulted (root causes fixed, not assertions bent):
 11. The extension integration readiness wait was shorter than the production
     startup deadline and failed under full race-suite load. The test now derives
     its bound from `startTimeout` and the focused repeated run is green.
+12. Native export trusted a matching payload hash without structural validation,
+    and `--out` could resolve to an authoritative source segment. All profiles now
+    validate envelopes, and segment identity checks cover direct, symbolic and hard links.
 
 ## BLOCKED / NOT RUN (honest limits)
 

@@ -335,6 +335,32 @@ func (r *Reader) segments() ([]Segment, error) {
 	return out, nil
 }
 
+// IsSegmentPath reports whether path currently resolves to an evidence segment
+// owned by this reader. It follows symlinks and detects hard links.
+func (r *Reader) IsSegmentPath(path string) (bool, error) {
+	target, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("%w: inspect export target: %v", errStore, err)
+	}
+	segs, err := r.segments()
+	if err != nil {
+		return false, err
+	}
+	for _, seg := range segs {
+		info, statErr := os.Stat(seg.Path)
+		if statErr != nil {
+			return false, fmt.Errorf("%w: inspect segment %s: %v", errStore, seg.Name, statErr)
+		}
+		if os.SameFile(target, info) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // ForEach calls fn for every valid envelope in order. Corrupt lines are
 // reported via onCorrupt and skipped — evidence readers must not crash on a
 // partially written line (e.g., after power loss).

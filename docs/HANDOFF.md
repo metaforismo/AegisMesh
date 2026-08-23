@@ -24,7 +24,8 @@ native envelope. Exact current commands and evidence live in
 - Native evidence remains the source contract. ECS-compatible export is a
   read-boundary projection and nests the complete native envelope.
 - Verified export stages output and changes the destination only after all
-  records pass structural and integrity checks.
+  records pass structural and integrity checks. It refuses direct, symbolic and
+  hard-linked paths to source evidence segments.
 - Port `0` means an OS-assigned ephemeral port. Admin remains loopback-only.
 - Extensions inherit only `AEGISMESH_EXTENSION=1` and use the manifest
   directory as their working directory.

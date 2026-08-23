@@ -109,7 +109,8 @@ destination only after every event and line passes validation and integrity
 checks. An existing output file is unchanged on malformed input, corrupt
 evidence, or a failed integrity check. `--verify=false` is an explicit recovery
 mode: invalid records are reported and skipped, so its output is not suitable as
-a verified evidence set.
+a verified evidence set. The destination may not resolve to a source evidence
+segment, including through a symlink or hard link.
 
 ## aegismesh rules
 
