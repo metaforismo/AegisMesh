@@ -104,43 +104,50 @@ func TestDisabledByDefaultAndConfigGate(t *testing.T) {
 }
 
 func TestSignalFiresAcrossKindsThroughAdapter(t *testing.T) {
-	reg := observe.NewRegistry()
-	logs := newCaptureLogger()
-	sink := &recordSink{}
-	a := newCorrelateAdapter(correlateOptions{
-		WindowSeconds:   600,
-		PerSourceEvents: 64,
-		MaxSources:      1024,
-	}, testDeps(sink), reg, logs.logger)
+	for _, kinds := range [][]string{
+		{"http", "tcp", "mcp"},
+		{"http", "tcp", "ssh"},
+	} {
+		t.Run(strings.Join(kinds, "-"), func(t *testing.T) {
+			reg := observe.NewRegistry()
+			logs := newCaptureLogger()
+			sink := &recordSink{}
+			a := newCorrelateAdapter(correlateOptions{
+				WindowSeconds:   600,
+				PerSourceEvents: 64,
+				MaxSources:      1024,
+			}, testDeps(sink), reg, logs.logger)
 
-	peer := "203.0.113.9"
-	for i, kind := range []string{"http", "tcp", "mcp"} {
-		id := "ev-" + string(rune('a'+i))
-		a.observe(testEnvelope(t, id, kind+"-one", kind, "interaction",
-			map[string]any{"remote_host": peer}))
-	}
-	found := false
-	for _, line := range logs.lines {
-		if strings.Contains(line, `"rule_id":"COR-002"`) || strings.Contains(line, "COR-002") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("protocol hopping signal not logged: %v", logs.lines)
-	}
-	if a.Stats().FiredSignals != 1 {
-		t.Fatalf("engine accounting mismatch: %+v", a.Stats())
-	}
-	stored := sink.collected()
-	if len(stored) != 1 {
-		t.Fatalf("fired signal must be persisted exactly once, got %d", len(stored))
-	}
-	var obs correlationObservation
-	if err := json.Unmarshal(stored[0].Observation, &obs); err != nil {
-		t.Fatalf("stored observation unmarshal: %v", err)
-	}
-	if stored[0].Classification != event.ClassificationCorrelationSignal || obs.RuleID != string(correlate.RuleProtocolHopping) {
-		t.Fatalf("wrong persisted signal: class=%q obs=%+v", stored[0].Classification, obs)
+			peer := "203.0.113.9"
+			for i, kind := range kinds {
+				id := "ev-" + string(rune('a'+i))
+				a.observe(testEnvelope(t, id, kind+"-one", kind, "interaction",
+					map[string]any{"remote_host": peer}))
+			}
+			found := false
+			for _, line := range logs.lines {
+				if strings.Contains(line, `"rule_id":"COR-002"`) || strings.Contains(line, "COR-002") {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("protocol hopping signal not logged: %v", logs.lines)
+			}
+			if a.Stats().FiredSignals != 1 {
+				t.Fatalf("engine accounting mismatch: %+v", a.Stats())
+			}
+			stored := sink.collected()
+			if len(stored) != 1 {
+				t.Fatalf("fired signal must be persisted exactly once, got %d", len(stored))
+			}
+			var obs correlationObservation
+			if err := json.Unmarshal(stored[0].Observation, &obs); err != nil {
+				t.Fatalf("stored observation unmarshal: %v", err)
+			}
+			if stored[0].Classification != event.ClassificationCorrelationSignal || obs.RuleID != string(correlate.RuleProtocolHopping) {
+				t.Fatalf("wrong persisted signal: class=%q obs=%+v", stored[0].Classification, obs)
+			}
+		})
 	}
 }
 

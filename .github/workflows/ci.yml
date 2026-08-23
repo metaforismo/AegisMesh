@@ -58,14 +58,15 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # Bounded real fuzzing (~15s/target): enough to catch regressions in
-      # parsers without burning CI minutes. Longer sessions are local/manual.
+      # Bounded real fuzzing (~15s/target). Post-discovery minimization is off
+      # because its independent 60s default would violate this smoke bound.
       - name: fuzz targets
         run: |
-          go test -run '^$' -fuzz=FuzzParseConfig         ./internal/config            -fuzztime=15s
-          go test -run '^$' -fuzz=FuzzDecodeEventEnvelope ./internal/event             -fuzztime=15s
-          go test -run '^$' -fuzz=FuzzMatchTCPLine        ./internal/sensor/tcpsensor  -fuzztime=15s
-          go test -run '^$' -fuzz=FuzzImportBeelzebubDoc  ./internal/migrate/beelzebub -fuzztime=15s
+          go test -run '^$' -fuzz=FuzzParseConfig         ./internal/config            -fuzztime=15s -fuzzminimizetime=0
+          go test -run '^$' -fuzz=FuzzDecodeEventEnvelope ./internal/event             -fuzztime=15s -fuzzminimizetime=0
+          go test -run '^$' -fuzz=FuzzMatchTCPLine        ./internal/sensor/tcpsensor  -fuzztime=15s -fuzzminimizetime=0
+          go test -run '^$' -fuzz=FuzzSSHMetadataHelpers  ./internal/sensor/sshsensor  -fuzztime=15s -fuzzminimizetime=0
+          go test -run '^$' -fuzz=FuzzImportBeelzebubDoc  ./internal/migrate/beelzebub -fuzztime=15s -fuzzminimizetime=0
 
   helm-contract:
     name: helm chart contract
@@ -102,7 +103,7 @@ jobs:
 
       - name: govulncheck (module mode)
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           govulncheck ./...
 
   license-secrets:

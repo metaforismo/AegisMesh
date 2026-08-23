@@ -8,6 +8,11 @@ changes bump MINOR).
 
 ### Added
 
+- Authentication-only SSH deception sensor with synthetic password/public-key
+  authentication, per-instance in-memory Ed25519 host keys, bounded
+  sessions/inputs/concurrency, redacted evidence, and unconditional rejection
+  of channels and global requests. Conservative Beelzebub SSH migration and
+  ECS-compatible protocol mapping are included.
 - `inspect list --classification VALUE` filters evidence to exactly one class
   (`interaction`, `canary_invocation`, `correlation_signal`) using the owning
   event constants, applied before `--limit`; unknown, repeated, or malformed
@@ -33,7 +38,9 @@ changes bump MINOR).
 - `migrate beelzebub` ignored its flags entirely (`--write`, `--out`,
   `--force` never parsed); interleaved flag/positional parsing implemented.
 - Data race between sensor `Addr()`/`Close()` across goroutines; listener
-  access is now synchronized in all three sensors.
+  access is now synchronized in all sensors.
+- `/readyz` no longer reports ready before sensor startup completes; runtime
+  status now counts listeners only after each successful start.
 - Runtime maintenance goroutine leaked after shutdown; it now terminates via
   a closed channel.
 - Duplicate sensor ids from same-named import sources collided at emit time;
@@ -41,6 +48,9 @@ changes bump MINOR).
 
 ### Changed
 
+- The minimum Go version is 1.25.14 so reachable standard-library SSH/ASN.1
+  vulnerabilities fixed in 1.25.13 cannot be reintroduced and the latest Go
+  1.25 network-library maintenance fix is included.
 - Configuration now accepts port `0` ("OS assigns an ephemeral port");
   privileged-port policy applies only to ports 1..1023. Documented in
   docs/configuration.md.

@@ -32,6 +32,7 @@ var (
 		SensorKindTCP:  {"banner": true, "session": true, "tcp_rules": true},
 		SensorKindMCP: {"path": true, "server_name": true, "server_version": true, "instructions": true, "tools": true,
 			"resources": true, "prompts": true},
+		SensorKindSSH: {"ssh": true},
 	}
 )
 
@@ -66,9 +67,9 @@ func (c *Config) Validate() error {
 		seen[s.ID] = true
 
 		switch s.Kind {
-		case SensorKindHTTP, SensorKindTCP, SensorKindMCP:
+		case SensorKindHTTP, SensorKindTCP, SensorKindMCP, SensorKindSSH:
 		default:
-			return fmt.Errorf("%w: sensors[%d].kind %q must be one of http|tcp|mcp", errConfig, i, s.Kind)
+			return fmt.Errorf("%w: sensors[%d].kind %q must be one of http|tcp|mcp|ssh", errConfig, i, s.Kind)
 		}
 		if err := c.validateListen(fmt.Sprintf("sensors[%d]", i), s.Listen, s.Kind); err != nil {
 			return err
@@ -85,6 +86,10 @@ func (c *Config) Validate() error {
 		case SensorKindMCP:
 			if err := validateMCPSensor(s); err != nil {
 				return fmt.Errorf("%w: mcp sensor %q: %v", errConfig, s.ID, err)
+			}
+		case SensorKindSSH:
+			if err := validateSSHSensor(s); err != nil {
+				return fmt.Errorf("%w: ssh sensor %q: %v", errConfig, s.ID, err)
 			}
 		}
 	}
@@ -324,6 +329,43 @@ func validateTCPSensor(s *Sensor) error {
 		if len(r.Response) > MaxTCPResponseBytes {
 			return fmt.Errorf("%s.response exceeds %d bytes", where, MaxTCPResponseBytes)
 		}
+	}
+	return nil
+}
+
+func validateSSHSensor(s *Sensor) error {
+	if s.SSH == nil {
+		return fmt.Errorf("ssh configuration is required")
+	}
+	c := s.SSH
+	if c.ServerVersion == "" {
+		return fmt.Errorf("ssh.server_version is required")
+	}
+	if len(c.ServerVersion) > MaxSSHServerVersionBytes {
+		return fmt.Errorf("ssh.server_version exceeds %d bytes", MaxSSHServerVersionBytes)
+	}
+	if strings.ContainsAny(c.ServerVersion, "\x00\r\n") {
+		return fmt.Errorf("ssh.server_version must not contain NUL, CR, or LF")
+	}
+	if !strings.HasPrefix(c.ServerVersion, "SSH-2.0-") {
+		return fmt.Errorf("ssh.server_version must begin with SSH-2.0-")
+	}
+	for i := 0; i < len(c.ServerVersion); i++ {
+		if c.ServerVersion[i] < 0x20 || c.ServerVersion[i] > 0x7e {
+			return fmt.Errorf("ssh.server_version must contain printable ASCII only (byte %d is invalid)", i)
+		}
+	}
+	if len(c.ServerVersion) == len("SSH-2.0-") {
+		return fmt.Errorf("ssh.server_version must include a software version after SSH-2.0-")
+	}
+	if c.HandshakeTimeoutSeconds <= 0 || c.HandshakeTimeoutSeconds > MaxSSHHandshakeTimeoutSeconds {
+		return fmt.Errorf("ssh.handshake_timeout_seconds must be within 1..%d", MaxSSHHandshakeTimeoutSeconds)
+	}
+	if c.MaxSessionSeconds <= 0 || c.MaxSessionSeconds > MaxSSHSessionSeconds {
+		return fmt.Errorf("ssh.max_session_seconds must be within 1..%d", MaxSSHSessionSeconds)
+	}
+	if c.MaxAuthAttempts <= 0 || c.MaxAuthAttempts > MaxSSHAuthAttempts {
+		return fmt.Errorf("ssh.max_auth_attempts must be within 1..%d", MaxSSHAuthAttempts)
 	}
 	return nil
 }
@@ -594,6 +636,9 @@ func CheckKindFields(raw []byte, ext string) error {
 		allowed := allowedByKind[kind]
 		if allowed == nil {
 			continue // kind validity handled by Validate
+		}
+		if value, ok := m["ssh"]; kind == SensorKindSSH && ok && value == nil {
+			return fmt.Errorf("%w: sensors[%d].ssh must be a mapping, not null", errConfig, i)
 		}
 		keys := make([]string, 0, len(m))
 		for k := range m {

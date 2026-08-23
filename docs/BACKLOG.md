@@ -89,20 +89,43 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   `go test -race ./internal/ecsexport ./internal/cli ./internal/event ./internal/storage`;
   `make lint test`.
 
-### P1-2 — SSH deception sensor — TODO
+### P1-2 — SSH deception sensor — PASS
 
-- **Evidence:** config and runtime accept only `http`, `tcp`, and `mcp`; there is
-  no `internal/sensor/sshsensor`. Migration reports SSH fully unsupported.
+- **Evidence:** the baseline accepted only `http`, `tcp`, and `mcp`. The shipped
+  `internal/sensor/sshsensor` performs real SSH handshakes with synthetic
+  password/public-key authentication, emits bounded redacted observations, and
+  rejects every channel and global request. Migration maps only kind, derived
+  id, and safe listen address; unsupported behavior is reported, never copied.
 - **Affected:** config schema/validation/scaffold, runtime sensor construction,
-  new sensor package, migration, docs and deployment examples.
-- **Security/egress:** inbound listener only. Synthetic authentication must never
-  validate/reuse real credentials or expose shell, PTY, host filesystem, or exec.
-- **Dependencies:** choose and license-review a maintained SSH implementation;
-  finish P0-2 lifecycle hardening first.
-- **Acceptance:** Ed25519 host-key lifecycle guidance, loopback/unprivileged
-  defaults, connection/deadline/input caps, redaction, and real loopback tests.
-- **Verify:** focused unit/integration/race/fuzz tests for `sshsensor` and config;
+  new `internal/sensor/sshsensor` package, migration, docs and deployment
+  examples, plus the resolved dependency graph.
+- **Security/egress:** inbound listener only. Password and public-key
+  authentication is synthetic; usernames and credential contents are omitted,
+  not hashed. No shell, PTY, subsystem, SFTP, forwarding, filesystem,
+  command-execution, or outbound-target path may exist. Loopback and
+  unprivileged defaults remain the safe baseline.
+- **Dependencies:** `golang.org/x/crypto/ssh` `v0.55.0` is pinned and
+  BSD-3-Clause; the seven-module resolved graph passed the repository license
+  gate and `go mod verify`. Go 1.25.14 is the minimum current 1.25 patch; the
+  preceding 1.25.13 patch removed reachable standard-library vulnerabilities
+  through the SSH stack. P0-2 lifecycle hardening is PASS. No new egress was
+  added.
+- **Acceptance:** Ed25519 host key generated and held in memory per sensor instance
+  with no configured key path; strict bounded config for server version,
+  handshake/session deadlines, and authentication attempts; fixed caps for
+  concurrent connections and protocol metadata; synthetic auth only; all
+  channels/global requests rejected; redaction and omission assertions; real
+  loopback integration, restart/shutdown, adversarial input, and race tests.
+  Startup/shutdown races and timeout paths preserve terminal lifecycle
+  semantics, including when `Close` wins a concurrent bind.
+- **Verify:** focused unit/integration tests for `internal/sensor/sshsensor`,
+  config and runtime; real loopback client/server tests; `go test -race` on
+  affected packages; `go mod verify`; `go list -m -json all`;
   `./scripts/license-check.sh`; `./scripts/secrets-scan.sh`; `make lint test`.
+- **Status:** **PASS** — focused real-loopback tests, adversarial auth/config
+  tests, affected-package race tests, SSH fuzz smoke, pinned vulnerability
+  scan, dependency/license checks, full suite, Helm contract, and documentation
+  truth-sync passed in the current environment; see `docs/verification.md`.
 
 ### P1-3 — dry-run recommendation engine — TODO
 
@@ -159,7 +182,7 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   port. No external egress.
 - **Dependencies:** a safe way to expose OS-assigned listener addresses without
   widening the public `sensor.Sensor` interface speculatively.
-- **Acceptance:** meaningful HTTP/TCP/MCP-to-evidence flow, deterministic summary,
+- **Acceptance:** meaningful HTTP/TCP/MCP/SSH-to-evidence flow, deterministic summary,
   bounded readiness, cleanup on failure/signal, repeatable parallel runs.
 - **Verify:** focused CLI tests; repeated real loopback integration; `make lint test`.
 
@@ -181,9 +204,10 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 
 ### P2-2 — supply-chain hardening — TODO
 
-- **Evidence:** actions are immutable-SHA pinned and workflow permissions are
-  scoped, but CI installs `govulncheck@latest`, local SBOM guidance uses
-  `cyclonedx-gomod@latest`, and cosign signing is not implemented.
+- **Evidence:** actions are immutable-SHA pinned, workflow permissions are
+  scoped, and the SSH prerequisite pins `govulncheck@v1.7.0`. The container
+  builder still uses a mutable tag, local SBOM guidance uses
+  `cyclonedx-gomod@latest`, and provenance/signing are not implemented.
 - **Affected:** CI/release workflows, scripts, release/license docs.
 - **Security/egress:** build-time downloads only. Do not add signing credentials,
   publish artifacts, or change repository settings without action-time approval.
@@ -251,11 +275,12 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 
 ## Current evidence boundaries
 
-- **BLOCKED:** Exa connector tools are not exposed to this task; native web
-  research was used.
-- **BLOCKED:** GitHub PR/issue API calls could not connect, including a scoped
-  escalated retry. Local authentication status alone does not prove public state.
-- **BLOCKED:** the current sandbox cannot bind the demo loopback listeners; package
-  integration tests that create real loopback listeners pass under `make lint test`.
+- **PASS:** Exa search/fetch connector tools were exposed and used for
+  multi-pass primary-source research; official repositories, RFCs, Go release
+  notes, and package documentation were checked.
+- **PASS:** loopback integration and race tests ran with scoped host access; no
+  pass is inferred from the restricted sandbox's bind policy.
+- **PASS:** scoped GitHub API access verified authentication, open pull requests
+  and open issues before the SSH PR was created.
 - **NOT RUN:** release publication, signing, repository-setting changes, new
   external egress and real-cluster deployment were outside this block's authority.

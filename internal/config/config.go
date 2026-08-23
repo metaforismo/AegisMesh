@@ -6,6 +6,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -21,6 +22,7 @@ const (
 	SensorKindHTTP = "http"
 	SensorKindTCP  = "tcp"
 	SensorKindMCP  = "mcp"
+	SensorKindSSH  = "ssh"
 )
 
 // Hard caps applied at validation time so a malicious or careless config
@@ -37,6 +39,19 @@ const (
 	MaxMCPTools         = 32
 	MaxMCPResultBytes   = 16 << 10
 	MaxMCPSchemaBytes   = 8 << 10
+
+	// SSH identification and session bounds. The defaults keep the sensor
+	// useful for observation while limiting handshake work and connection
+	// lifetime on an untrusted network.
+	DefaultSSHServerVersion           = "SSH-2.0-AegisMesh"
+	DefaultSSHListen                  = "127.0.0.1:2222"
+	MaxSSHServerVersionBytes          = 128
+	DefaultSSHHandshakeTimeoutSeconds = 10
+	MaxSSHHandshakeTimeoutSeconds     = 60
+	DefaultSSHMaxSessionSeconds       = 30
+	MaxSSHSessionSeconds              = 300
+	DefaultSSHMaxAuthAttempts         = 3
+	MaxSSHAuthAttempts                = 6
 
 	defaultDataDir         = "./data"
 	defaultAdminListen     = "127.0.0.1:9110"
@@ -322,6 +337,9 @@ type Sensor struct {
 	Tools        []MCPTool     `yaml:"tools,omitempty"           json:"tools,omitempty"`
 	Resources    []MCPResource `yaml:"resources,omitempty"       json:"resources,omitempty"`
 	Prompts      []MCPPrompt   `yaml:"prompts,omitempty"         json:"prompts,omitempty"`
+
+	// SSH fields.
+	SSH *SSHConfig `yaml:"ssh,omitempty" json:"ssh,omitempty"`
 }
 
 type HTTPPersona struct {
@@ -348,6 +366,84 @@ type TCPSession struct {
 	MaxLineBytes       int `yaml:"max_line_bytes"        json:"max_line_bytes"`
 	IdleTimeoutSeconds int `yaml:"idle_timeout_seconds"  json:"idle_timeout_seconds"`
 	MaxSessionSeconds  int `yaml:"max_session_seconds"   json:"max_session_seconds"`
+}
+
+// SSHConfig contains bounded protocol settings for the synthetic SSH
+// authentication sensor. It never contains host-key paths or credentials.
+type SSHConfig struct {
+	// ServerVersion is the SSH identification string sent by the decoy.
+	// It must begin with SSH-2.0- and contain printable ASCII only.
+	ServerVersion string `yaml:"server_version" json:"server_version"`
+	// HandshakeTimeoutSeconds bounds the protocol handshake.
+	HandshakeTimeoutSeconds int `yaml:"handshake_timeout_seconds" json:"handshake_timeout_seconds"`
+	// MaxSessionSeconds bounds the lifetime of an authenticated connection.
+	MaxSessionSeconds int `yaml:"max_session_seconds" json:"max_session_seconds"`
+	// MaxAuthAttempts bounds synthetic authentication attempts per connection.
+	MaxAuthAttempts int `yaml:"max_auth_attempts" json:"max_auth_attempts"`
+
+	present sshConfigPresence
+}
+
+type sshConfigPresence struct {
+	serverVersion    bool
+	handshakeTimeout bool
+	maxSession       bool
+	maxAuthAttempts  bool
+}
+
+// UnmarshalYAML records field presence so omitted nested settings can receive
+// safe defaults while explicit empty, null, and zero field values reach validation.
+func (c *SSHConfig) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("ssh configuration must be a mapping")
+	}
+	var present sshConfigPresence
+	for i := 0; i < len(node.Content); i += 2 {
+		switch node.Content[i].Value {
+		case "server_version":
+			present.serverVersion = true
+		case "handshake_timeout_seconds":
+			present.handshakeTimeout = true
+		case "max_session_seconds":
+			present.maxSession = true
+		case "max_auth_attempts":
+			present.maxAuthAttempts = true
+		default:
+			return fmt.Errorf("field %s not found in type config.SSHConfig", node.Content[i].Value)
+		}
+	}
+	type plain SSHConfig
+	var decoded plain
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	*c = SSHConfig(decoded)
+	c.present = present
+	return nil
+}
+
+// UnmarshalJSON preserves the same omitted-versus-explicit contract as YAML
+// while retaining strict rejection of unknown nested fields.
+func (c *SSHConfig) UnmarshalJSON(data []byte) error {
+	type plain SSHConfig
+	var decoded plain
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*c = SSHConfig(decoded)
+	c.present = sshConfigPresence{
+		serverVersion:    fields["server_version"] != nil,
+		handshakeTimeout: fields["handshake_timeout_seconds"] != nil,
+		maxSession:       fields["max_session_seconds"] != nil,
+		maxAuthAttempts:  fields["max_auth_attempts"] != nil,
+	}
+	return nil
 }
 
 type TCPRule struct {

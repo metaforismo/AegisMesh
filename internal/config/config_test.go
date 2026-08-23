@@ -70,7 +70,7 @@ func TestValidateTable(t *testing.T) {
 		{"dup ids", func(c *Config) {
 			c.Sensors = append(c.Sensors, c.Sensors[0])
 		}, "duplicates"},
-		{"bad kind", func(c *Config) { c.Sensors[0].Kind = "grpc" }, "http|tcp|mcp"},
+		{"bad kind", func(c *Config) { c.Sensors[0].Kind = "grpc" }, "http|tcp|mcp|ssh"},
 		{"public bind", func(c *Config) { c.Sensors[0].Listen = "0.0.0.0:8081" }, "allow_public_bind"},
 		{"privileged port", func(c *Config) { c.Sensors[0].Listen = "127.0.0.1:80" }, "allow_privileged_ports"},
 		{"admin not loopback", func(c *Config) {

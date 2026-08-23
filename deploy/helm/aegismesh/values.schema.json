@@ -270,7 +270,7 @@
               "id": { "type": "string" },
               "kind": {
                 "description": "Sensor kinds accepted by the runtime (internal/config validate.go).",
-                "enum": ["http", "tcp", "mcp"]
+                "enum": ["http", "tcp", "mcp", "ssh"]
               },
               "listen": { "type": "string" }
             }

@@ -25,7 +25,7 @@ const (
 	// prompt-injection findings inside one window.
 	RuleRepeatedInjection RuleID = "COR-001"
 	// RuleProtocolHopping fires when a source touches several sensor kinds
-	// (http/tcp/mcp) within one window.
+	// (http/tcp/mcp/ssh) within one window.
 	RuleProtocolHopping RuleID = "COR-002"
 	// RuleToolProbing fires when a source invokes many distinct canary tools
 	// within one window.
@@ -75,7 +75,7 @@ type Event struct {
 	Time           time.Time // event time (drives all windows)
 	SourceKey      string
 	SensorID       string
-	SensorKind     string   // http|tcp|mcp
+	SensorKind     string   // http|tcp|mcp|ssh
 	Classification string   // interaction|canary_invocation|...
 	FindingIDs     []string // detection rule ids fired on this event
 	ToolName       string   // canary tool name for mcp calls ("" otherwise)

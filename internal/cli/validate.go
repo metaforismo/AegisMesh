@@ -27,7 +27,7 @@ func (c *validateCmd) Help() string {
 
 With --effective, also preview the resolved policy: provider and egress
 classification, detection rules with the severity-to-action mapping, and
-per-sensor capabilities including MCP decoy surface. Still side-effect
+per-sensor capabilities including MCP decoy surfaces and SSH safety boundaries. Still side-effect
 free — nothing is started, contacted, or written.
 
 Exits non-zero with an actionable message on the first problem. Suitable for
@@ -84,6 +84,8 @@ func printValidateSummary(w io.Writer, cfg *config.Config) {
 			extra = fmt.Sprintf("%d tcp_rule(s)", len(s.TCPResponseRule))
 		case config.SensorKindMCP:
 			extra = fmt.Sprintf("%d tool(s)", len(s.Tools))
+		case config.SensorKindSSH:
+			extra = "synthetic-auth/no-channels"
 		}
 		fmt.Fprintf(w, "  %-20s %-5s %s %s\n", s.ID, s.Kind, s.Listen, extra)
 	}
@@ -141,6 +143,9 @@ func renderEffectiveHuman(w io.Writer, cfg *config.Config, rep effectiveReport) 
 		if s.Fallback {
 			caps = append(caps, "llm-fallback")
 		}
+		if s.SSHMode != "" {
+			caps = append(caps, s.SSHMode)
+		}
 		fmt.Fprintf(w, "    %-20s %-5s %s\n", s.ID, s.Kind, strings.Join(caps, ", "))
 	}
 }
@@ -191,6 +196,7 @@ type sensorSummary struct {
 	Resources int    `json:"mcp_resources,omitempty"`
 	Prompts   int    `json:"mcp_prompts,omitempty"`
 	Fallback  bool   `json:"llm_fallback,omitempty"`
+	SSHMode   string `json:"ssh_mode,omitempty"`
 }
 
 func buildEffectiveReport(cfg *config.Config) effectiveReport {
@@ -240,6 +246,9 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 			HTTPRules: len(s.Rules), TCPRules: len(s.TCPResponseRule),
 			Tools: len(s.Tools), Resources: len(s.Resources), Prompts: len(s.Prompts),
 			Fallback: s.Fallback != nil && s.Fallback.Enabled,
+		}
+		if s.Kind == config.SensorKindSSH {
+			ss.SSHMode = "synthetic-auth/no-channels"
 		}
 		rep.Sensors = append(rep.Sensors, ss)
 	}

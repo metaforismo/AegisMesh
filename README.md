@@ -3,9 +3,9 @@
 **A fully open-source, local-first, secure-by-default deception, detection, and evidence platform for
 human and agentic attackers.**
 
-AegisMesh deploys believable decoy services — HTTP endpoints, TCP services, and MCP canary tools that no
-honest agent should ever call — and records every interaction as bounded, redacted, integrity-checked
-evidence on your own machine. It runs offline by default and never executes attacker input. Response
+AegisMesh deploys bounded HTTP, TCP, authentication-only SSH, and MCP decoys and
+records every interaction as redacted, integrity-checked evidence on your own
+machine. It runs offline by default and never executes attacker input. Response
 recommendations remain roadmap work; the shipped runtime never acts on real assets.
 
 > AegisMesh is an independent implementation in the deception-technology problem space. It contains no code
@@ -14,15 +14,23 @@ recommendations remain roadmap work; the shipped runtime never acts on real asse
 
 ## Status
 
-Early foundation release (v0.1.0): a complete, tested vertical slice — three sensors, CLI, evidence store,
-admin endpoints, extension contract — not yet a full platform. See [docs/ROADMAP.md](docs/ROADMAP.md).
+The v0.1.0 foundation shipped three sensors, CLI, evidence storage, admin
+endpoints, and the extension contract. Current `master` adds a fourth,
+authentication-only SSH sensor; this remains an early platform and carries no
+production-readiness claim. See [docs/ROADMAP.md](docs/ROADMAP.md).
 The finite v0.2 PR train and stop condition are in
 [docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md). Everything below is verified by
 the commands shown; see [docs/verification.md](docs/verification.md).
 
+The SSH sensor completes synthetic password or public-key authentication,
+records only bounded metadata, and rejects every channel and global request.
+It exposes no shell, PTY, SFTP, forwarding, filesystem, or command path; see
+[ADR-0010](docs/architecture/adr.md).
+
 ## Five-minute demo
 
-Requires Go 1.25+.
+Requires Go 1.25.14 or newer. The patch-level floor includes all current Go
+1.25 security fixes plus the latest network-library maintenance release.
 
 ```bash
 git clone https://github.com/metaforismo/AegisMesh && cd AegisMesh
@@ -62,11 +70,11 @@ curl -s -X POST http://127.0.0.1:8090/mcp \
 Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 [deploy README](deploy/compose/README.md)).
 
-## What is inside batch 1
+## Current verified core
 
 | Area | What ships |
 |---|---|
-| Sensors | `http`, `tcp`, `mcp` (JSON-RPC 2.0 over streamable HTTP POST) |
+| Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST) |
 | Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
 | Evidence | Versioned native envelope, integrity checks, rotation/retention, plus opt-in local ECS-compatible export that preserves the native envelope |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |

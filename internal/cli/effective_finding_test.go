@@ -74,6 +74,45 @@ func TestValidateEffectiveHumanAndJSON(t *testing.T) {
 	_ = dir
 }
 
+func TestValidateEffectiveReportsSSHBoundary(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "mesh.yaml")
+	doc := `api_version: aegismesh.io/v1alpha1
+sensors:
+  - id: ssh-one
+    kind: ssh
+    listen: "127.0.0.1:2222"
+`
+	if err := os.WriteFile(cfg, []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, stderr := run(t, "validate", "--config", cfg, "--effective")
+	if code != 0 {
+		t.Fatalf("validate --effective failed: %s%s", out, stderr)
+	}
+	if !strings.Contains(out, "synthetic-auth/no-channels") {
+		t.Fatalf("SSH safety boundary missing from effective output:\n%s", out)
+	}
+
+	code, out, stderr = run(t, "validate", "--config", cfg, "--effective", "--json")
+	if code != 0 {
+		t.Fatalf("validate --effective --json failed: %s%s", out, stderr)
+	}
+	var rep struct {
+		Sensors []struct {
+			Kind    string `json:"kind"`
+			SSHMode string `json:"ssh_mode"`
+		} `json:"sensors"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("decode effective JSON: %v", err)
+	}
+	if len(rep.Sensors) != 1 || rep.Sensors[0].Kind != "ssh" || rep.Sensors[0].SSHMode != "synthetic-auth/no-channels" {
+		t.Fatalf("unexpected SSH effective report: %+v", rep.Sensors)
+	}
+}
+
 func TestValidateEffectiveHonorsDisabledRules(t *testing.T) {
 	_, cfg := scaffoldWithProfile(t, "local")
 	raw, _ := os.ReadFile(cfg)

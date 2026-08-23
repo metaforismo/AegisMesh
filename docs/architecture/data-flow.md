@@ -13,6 +13,7 @@ internal/sensor        Sensor interface + registry
   /httpsensor          HTTP deception sensor (net/http, hardened server)
   /tcpsensor           TCP deception sensor (banner + line protocol)
   /mcpsensor           MCP decoy endpoint (JSON-RPC 2.0 over streamable HTTP POST)
+  /sshsensor           SSH authentication-only decoy (synthetic auth, rejected channels)
 internal/policy        response policy gate: static rules, provider fallback, redaction choke point
 internal/detect        prompt-injection/abuse rule engine (PI-*/EXF-*/ESC-*/OBS-*/RES-* findings)
 internal/llm           Provider interface; deterministic local provider + remote `openai`/`ollama` adapters
@@ -36,10 +37,11 @@ internal/migrate       clean-room importers (beelzebub YAML shapes)
 ```mermaid
 flowchart LR
     subgraph Untrusted side
-        A[Attacker scanner] -->|HTTP/TCP/MCP bytes| B(Sensor listeners\nloopback or explicit opt-in)
+        A[Attacker scanner] -->|HTTP/TCP/MCP/SSH bytes| B(Sensor listeners\nloopback or explicit opt-in)
     end
     B --> C[Sensor handler:\ncap bytes, apply timeouts]
-    C --> D{Policy gate}
+    C -->|HTTP/TCP/MCP| D{Policy gate}
+    C -->|SSH handshake/auth| SSHD[SSH boundary:\nsynthetic auth only,\nreject channels and requests]
     D -->|static rule hit| E[Configured response]
     D -->|rule miss + llm fallback enabled| F[LLM provider interface]
     F -->|deterministic local provider| G[Canned persona text\ntreated as untrusted data]
@@ -48,6 +50,7 @@ flowchart LR
     C --> J[Event construction:\nredact payloads,\nhash, sequence, timestamp]
     E --> K[Response to attacker]
     I --> K
+    SSHD --> J
     J --> L[Bounded event bus\ncapacity 4096, reject new event when full]
     L --> S{Composite sink}
     S -->|"authoritative raw evidence written first"| M[(JSONL evidence store\nrotation + retention)]
@@ -62,6 +65,12 @@ flowchart LR
     P -->|optional --profile ecs; native envelope preserved| ECS[ECS-compatible NDJSON\nlocal output only]
     O --> Q
 ```
+
+The SSH branch is intentionally outside the policy/provider response path. It
+uses an in-memory per-sensor-instance Ed25519 host key, completes only synthetic
+authentication, rejects every channel and global request, and emits bounded
+observation metadata. It has no shell, PTY, subsystem, SFTP, forwarding,
+filesystem, command-execution, or outbound-target path.
 
 After the authoritative store append, the composite sink (`internal/runtime.evidenceSink`) offers every raw
 envelope to enabled consumers in a fixed order: observer extensions (`Deliver`), webhook stream (`Offer`),
@@ -164,3 +173,6 @@ processes supervised by `internal/extmanager`.
 8. Producer offers hold a shared lifecycle lock from the closed-state check through the non-blocking send;
    shutdown closes each queue only under the exclusive lock and waits after releasing it. Global runtime
    shutdown is guarded by `sync.Once`.
+9. The SSH sensor has no post-auth capability: credentials and usernames are omitted rather than hashed,
+   channels and global requests are rejected, and its ephemeral host key never selects a filesystem path or
+   creates an outbound connection.

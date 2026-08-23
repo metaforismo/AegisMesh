@@ -16,7 +16,8 @@ Run `aegismesh migrate beelzebub --help` for flags. Dry-run is the default.
 | tcp service | translated to a `tcp` sensor |
 | mcp service | translated to an `mcp` sensor |
 | core file | report-only (logging/tracings/prometheus notes) |
-| ssh / telnet service | **fully unsupported**; every field listed with the roadmap pointer |
+| ssh service | maps only `protocol`, `address`, and a derived sensor id; command/auth/persona/key fields are reported unsupported |
+| telnet service | **fully unsupported**; every field is listed and no sensor is emitted |
 | anything else | detected as `unknown`, no output |
 
 ## HTTP mapping
@@ -54,8 +55,8 @@ Unsupported (reported per field):
 Unsupported/reported:
 
 - `serverName` — TCP personas are banner-only here; kept as a note.
-- `passwordRegex` — credential-guessing flows belong to SSH decoys
-  (roadmap); AegisMesh TCP decoys never accept secrets.
+- `passwordRegex` — credential-guessing flows belong to the authentication-only
+  SSH sensor; AegisMesh TCP decoys never accept secrets.
 - `commands[].plugin` — reported, skipped.
 
 ## MCP mapping
@@ -66,6 +67,41 @@ Unsupported/reported:
 | `tools[].name/.description` | same | verbatim |
 | `tools[].handler` (JSON) | `result_json` | must parse as JSON; ≤ 16 KiB |
 | `tools[].params[]` | `input_schema` (minimal) | names → properties + required; **per-param descriptions dropped** and flagged as approximated |
+
+## SSH mapping (authentication-only boundary)
+
+The current official Beelzebub service examples define SSH documents with
+`protocol`, `address`, command rules, `serverVersion`, `serverName`,
+`passwordRegex`, `deadlineTimeoutSeconds`, and optional plugin configuration.
+See the [official SSH configuration reference](https://github.com/beelzebub-labs/beelzebub#ssh-deception-service).
+
+The importer now emits an AegisMesh SSH sensor only when the address is a
+valid host/port. It translates only fields with a safe exact equivalent:
+
+| Beelzebub field | AegisMesh target | notes |
+|---|---|---|
+| `protocol: ssh` | `sensors[].kind: ssh` | selects AegisMesh's authentication-only sensor |
+| `address` | `sensors[].listen` | empty host becomes `127.0.0.1`; explicit public or privileged binds remain subject to strict validation |
+| source filename | `sensors[].id` | deterministic `beelzebub-<stem>` id; this is provenance, not source configuration |
+
+The following SSH behavior is reported as unsupported and is never copied into
+the generated config:
+
+- `commands[]` regexes, handlers, and plugins — AegisMesh SSH accepts no
+  channel, shell, PTY, forwarding, or command.
+- `passwordRegex` — AegisMesh records an authentication observation without
+  validating, retaining, or reusing credentials.
+- `serverName` and `serverVersion` — no safe exact persona mapping is assumed.
+- `deadlineTimeoutSeconds` and plugin configuration — source semantics and
+  response behavior are not imported or approximated.
+- host-key fields or paths — AegisMesh generates an ephemeral in-memory
+  Ed25519 host key per sensor instance; no path or key material is accepted by
+  the importer.
+
+Generated SSH configs therefore contain only `kind`, `id`, and `listen`; the
+strict loader supplies bounded SSH defaults. Review the report before using a
+privileged or non-loopback source address: validation fails until the operator
+deliberately changes the relevant security policy.
 
 ## Bind policy (all kinds)
 
@@ -96,7 +132,7 @@ AegisMesh configs are meant for version control; credentials belong in
 ## Honest limitations
 
 - This is an auditable MVP, not full parity. Upstream features without a
-  safe equivalent (plugins, SSH/telnet simulation, TLS on decoys) are
+  safe equivalent (plugins, SSH command/Telnet simulation, TLS on decoys) are
   reported per-field so you can decide what to do manually.
 - IDs derive from source filenames (`beelzebub-<stem>`); collisions get a
   numeric suffix and a note.

@@ -49,5 +49,6 @@ Differences are tabulated in docs/research/competitive-landscape.md.
 **Is this production-ready?**
 No production-readiness claim is made. It is a tested early vertical slice with
 real listeners and evidence paths, plus honest limits: no TLS termination on
-decoys, no at-rest encryption, no SSH sensor, no autonomous response, and no
-verified real-cluster Kubernetes support. Read docs/ROADMAP.md first.
+decoys, no at-rest encryption, an authentication-only SSH decoy with no
+post-authentication channels, no autonomous response, and no verified
+real-cluster Kubernetes support. Read docs/ROADMAP.md first.

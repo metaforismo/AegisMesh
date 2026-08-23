@@ -320,6 +320,7 @@ func seedClassifiedEvidence(t *testing.T) (string, []event.Envelope) {
 type classifiedRow struct {
 	ID             string `json:"id"`
 	Classification string `json:"classification"`
+	Kind           string `json:"kind"`
 	IntegrityOK    *bool  `json:"integrity_ok"`
 }
 
@@ -348,6 +349,41 @@ func ids(rows []classifiedRow) []string {
 		out[i] = r.ID
 	}
 	return out
+}
+
+func TestInspectListFiltersSSHEvidence(t *testing.T) {
+	dir := t.TempDir()
+	st, err := storage.New(storage.Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seq := &event.Sequencer{}
+	appendClassified(t, st, seq, event.ClassificationInteraction, "http-decoy", "http", `{"path":"/admin"}`)
+	firstSSH := appendClassified(t, st, seq, event.ClassificationInteraction, "ssh-decoy-1", "ssh", `{"auth_method":"password"}`)
+	secondSSH := appendClassified(t, st, seq, event.ClassificationInteraction, "ssh-decoy-2", "ssh", `{"auth_method":"publickey"}`)
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, payload := runListJSON(t, dir, "--kind", "ssh")
+	if got := ids(payload.Events); len(got) != 2 || got[0] != firstSSH.ID || got[1] != secondSSH.ID {
+		t.Fatalf("SSH rows = %v", got)
+	}
+	for _, row := range payload.Events {
+		if row.Kind != "ssh" {
+			t.Fatalf("non-SSH row leaked through filter: %+v", row)
+		}
+	}
+
+	_, payload = runListJSON(t, dir, "--kind", "ssh", "--limit", "1")
+	if got := ids(payload.Events); len(got) != 1 || got[0] != firstSSH.ID {
+		t.Fatalf("limited SSH rows = %v", got)
+	}
+
+	code, out, stderr := run(t, "inspect", "list", "--data-dir", dir, "--kind", "ssh")
+	if code != 0 || !strings.Contains(out, "ssh-decoy-1") || strings.Contains(out, "http-decoy") {
+		t.Fatalf("SSH text filter: code=%d out=%q stderr=%q", code, out, stderr)
+	}
 }
 
 func TestInspectListClassificationSubsetsJSON(t *testing.T) {

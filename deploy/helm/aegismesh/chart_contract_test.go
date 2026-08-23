@@ -146,6 +146,20 @@ probes:
 `,
 		"empty-sensors.yaml": "meshConfig:\n  sensors: []\n",
 		"probes-off.yaml":    "probes:\n  enabled: false\n",
+		"ssh-sensor.yaml": `meshConfig:
+  sensors:
+    - id: ssh-decoy
+      kind: ssh
+      listen: "0.0.0.0:2222"
+      ssh:
+        server_version: SSH-2.0-AegisMesh
+        handshake_timeout_seconds: 10
+        max_session_seconds: 30
+        max_auth_attempts: 3
+service:
+  ports:
+    - {name: ssh, port: 2222, targetPort: 2222, protocol: TCP}
+`,
 	}
 	for name, content := range files {
 		path := filepath.Join(scratch, name)
@@ -169,6 +183,9 @@ probes:
 				ready: probeTiming{initialDelaySeconds: 1, periodSeconds: 4, timeoutSeconds: 2, failureThreshold: 2}}},
 		{name: "probes-disabled-explicitly", valuesFile: "probes-off.yaml", wantType: "ClusterIP", wantNetPol: true,
 			wantSAs: 1, wantPodSA: releaseName},
+		{name: "ssh-sensor-schema", valuesFile: "ssh-sensor.yaml", wantType: "ClusterIP", wantNetPol: true,
+			wantSAs: 1, wantPodSA: releaseName,
+			wantProbes: &probePair{live: defaultLiveness, ready: defaultReadiness}},
 	}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {

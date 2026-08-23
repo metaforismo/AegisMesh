@@ -84,7 +84,7 @@ func Marshal(e event.Envelope) ([]byte, error) {
 		Native:   nativeFields{MappingVersion: MappingVersion, Envelope: e},
 	}
 	switch e.Sensor.Kind {
-	case "http", "mcp", "tcp":
+	case "http", "mcp", "ssh", "tcp":
 		doc.Network = &networkFields{Protocol: e.Sensor.Kind, Transport: "tcp"}
 	}
 	return json.Marshal(doc)
