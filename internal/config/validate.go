@@ -450,13 +450,17 @@ func ValidateExtensions(e Extensions) error {
 	}
 	seen := map[string]bool{}
 	for _, m := range e.Manifests {
-		if strings.TrimSpace(m) == "" {
-			return fmt.Errorf("extensions.manifests entries must be non-empty")
+		if strings.TrimSpace(m) == "" || strings.TrimSpace(m) != m {
+			return fmt.Errorf("extensions.manifests entries must be non-empty paths without surrounding whitespace")
 		}
-		if seen[m] {
+		if err := safeRelative(m); err != nil {
+			return fmt.Errorf("extensions.manifests entry %q %v", m, err)
+		}
+		clean := filepath.Clean(m)
+		if seen[clean] {
 			return fmt.Errorf("extensions.manifests entry %q is duplicated", m)
 		}
-		seen[m] = true
+		seen[clean] = true
 	}
 	if e.QueueSize != 0 && (e.QueueSize < MinExtensionQueueSize || e.QueueSize > MaxExtensionQueueSize) {
 		return fmt.Errorf("extensions.queue_size must be within %d..%d (0 = default %d)",
@@ -473,6 +477,33 @@ func ValidateExtensions(e Extensions) error {
 		}
 	}
 	return nil
+}
+
+// ResolveExtensionManifestPath resolves a configured manifest relative to the
+// config file and rejects symlink escapes before the runtime opens it.
+func (c *Config) ResolveExtensionManifestPath(rel string) (string, error) {
+	if strings.TrimSpace(rel) != rel || rel == "" {
+		return "", fmt.Errorf("%w: extension manifest path must be exact and non-empty", errConfig)
+	}
+	if err := safeRelative(rel); err != nil {
+		return "", fmt.Errorf("%w: extension manifest %q %v", errConfig, rel, err)
+	}
+	if strings.TrimSpace(c.SourcePath) == "" {
+		return "", fmt.Errorf("%w: extension manifest resolution requires a config source path", errConfig)
+	}
+	base := filepath.Dir(absClean(c.SourcePath))
+	realBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve config directory: %v", errConfig, err)
+	}
+	realFull, err := filepath.EvalSymlinks(filepath.Join(realBase, filepath.Clean(rel)))
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve extension manifest %q: %v", errConfig, rel, err)
+	}
+	if realFull != realBase && !strings.HasPrefix(realFull, realBase+string(filepath.Separator)) {
+		return "", fmt.Errorf("%w: extension manifest %q resolves outside the config directory", errConfig, rel)
+	}
+	return realFull, nil
 }
 
 // ValidateCorrelation enforces the correlation section's schema bounds and

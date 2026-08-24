@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type extCmd struct {
@@ -13,16 +14,19 @@ type extCmd struct {
 
 func newExtCmd(env *Env) *extCmd { return &extCmd{env: env} }
 
-func (c *extCmd) Name() string  { return "ext" }
-func (c *extCmd) Usage() string { return "ext verify MANIFEST | ext run --manifest FILE" }
+func (c *extCmd) Name() string { return "ext" }
+func (c *extCmd) Usage() string {
+	return "ext verify --manifest FILE | ext run --manifest FILE [--input JSON]"
+}
 func (c *extCmd) Help() string {
 	return `Inspect, verify, and run capability-scoped extensions.
 
-Extensions are untrusted code: they always execute out-of-process behind a
-digest-verified manifest. The runtime never loads or spawns them implicitly.
+Extensions are untrusted code: they execute out-of-process behind an explicitly
+configured, digest-verified observe-only manifest. The runtime starts only the
+manifests listed by an operator when extensions.enabled is true.
 
   ext verify  --manifest FILE   validate schema + digest (+ signature if keyed)
-  ext run     --manifest FILE   run the extension through the reference host`
+  ext run     --manifest FILE   send one synthetic observation probe; extension output never becomes policy`
 }
 
 func (c *extCmd) Run(ctx context.Context, args []string) error {
@@ -42,13 +46,24 @@ func (c *extCmd) Run(ctx context.Context, args []string) error {
 func (c *extCmd) verify(args []string) error {
 	fs := newFlagSet("ext verify")
 	addGlobalFlags(fs, &c.g)
-	mf := fs.String("manifest", "", "path to extension manifest")
-	pub := fs.String("pubkey", "", "ed25519 public key file (hex); optional")
-	fs.Parse(args) //nolint:errcheck // rendered below
-	if *mf == "" {
-		return Usagef("--manifest is required")
+	var mf, pub strictValueFlag
+	fs.Var(&mf, "manifest", "path to extension manifest")
+	fs.Var(&pub, "pubkey", "ed25519 public key file (hex); optional")
+	if err := fs.Parse(args); err != nil {
+		return Usagef("%v", err)
 	}
-	res, err := runVerify(*mf, *pub)
+	if fs.NArg() > 0 {
+		return Usagef("unexpected argument %q (ext verify takes flags only)", fs.Arg(0))
+	}
+	manifestPath, err := requiredExactPath("--manifest", mf.values)
+	if err != nil {
+		return Usagef("%v", err)
+	}
+	pubKeyPath, err := optionalExactPath("--pubkey", pub.values)
+	if err != nil {
+		return Usagef("%v", err)
+	}
+	res, err := runVerify(manifestPath, pubKeyPath)
 	if err != nil {
 		return err
 	}
@@ -80,14 +95,32 @@ func containsStr(list []string, s string) bool {
 func (c *extCmd) runExt(ctx context.Context, args []string) error {
 	fs := newFlagSet("ext run")
 	addGlobalFlags(fs, &c.g)
-	mf := fs.String("manifest", "", "path to extension manifest")
-	input := fs.String("input", "", "single request payload to deliver (JSON)")
-	pub := fs.String("pubkey", "", "ed25519 public key file (hex); optional")
-	fs.Parse(args) //nolint:errcheck // rendered below
-	if *mf == "" {
-		return Usagef("--manifest is required")
+	var mf, input, pub strictValueFlag
+	fs.Var(&mf, "manifest", "path to extension manifest")
+	fs.Var(&input, "input", "synthetic observation payload (JSON)")
+	fs.Var(&pub, "pubkey", "ed25519 public key file (hex); optional")
+	if err := fs.Parse(args); err != nil {
+		return Usagef("%v", err)
 	}
-	out, err := runExtension(ctx, *mf, *input, *pub)
+	if fs.NArg() > 0 {
+		return Usagef("unexpected argument %q (ext run takes flags only)", fs.Arg(0))
+	}
+	manifestPath, err := requiredExactPath("--manifest", mf.values)
+	if err != nil {
+		return Usagef("%v", err)
+	}
+	pubKeyPath, err := optionalExactPath("--pubkey", pub.values)
+	if err != nil {
+		return Usagef("%v", err)
+	}
+	payload := ""
+	if len(input.values) == 1 {
+		if input.values[0] == "" || strings.TrimSpace(input.values[0]) == "" {
+			return Usagef("--input must not be empty or whitespace")
+		}
+		payload = input.values[0]
+	}
+	out, err := runExtension(ctx, manifestPath, payload, pubKeyPath)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("extension exceeded its deadline and was revoked")
@@ -95,4 +128,25 @@ func (c *extCmd) runExt(ctx context.Context, args []string) error {
 		return err
 	}
 	return writeJSON(c.env.Out, out)
+}
+
+func requiredExactPath(name string, values []string) (string, error) {
+	if len(values) != 1 {
+		return "", fmt.Errorf("%s is required", name)
+	}
+	return validateExactPath(name, values[0])
+}
+
+func optionalExactPath(name string, values []string) (string, error) {
+	if len(values) == 0 {
+		return "", nil
+	}
+	return validateExactPath(name, values[0])
+}
+
+func validateExactPath(name, value string) (string, error) {
+	if value == "" || strings.TrimSpace(value) != value || strings.HasPrefix(value, "-") || strings.Contains(value, ",") {
+		return "", fmt.Errorf("%s must be one non-empty path without surrounding whitespace, commas, or a leading '-'", name)
+	}
+	return value, nil
 }

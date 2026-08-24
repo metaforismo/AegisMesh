@@ -259,6 +259,28 @@ func TestDeliverConcurrentWithStop(t *testing.T) {
 	mgr.Deliver(testEnvelope(999))
 }
 
+func TestStopCancelsActiveObserverCall(t *testing.T) {
+	mgr := New([]*ext.Manifest{buildFixture(t, "slow", 5000)}, newFakeMeter(), nil, 8, 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := mgr.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mgr.Deliver(testEnvelope(1))
+	time.Sleep(100 * time.Millisecond)
+
+	started := time.Now()
+	mgr.Stop()
+	if elapsed := time.Since(started); elapsed > 3*time.Second {
+		t.Fatalf("Stop did not cancel the active observer call: %v", elapsed)
+	}
+	started = time.Now()
+	mgr.Stop()
+	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+		t.Fatalf("idempotent Stop took %v", elapsed)
+	}
+}
+
 func TestStartFailureTearsDownAndStopIsIdempotent(t *testing.T) {
 	fm := newFakeMeter()
 	good := buildFixture(t, "acker", 2000)
@@ -271,6 +293,10 @@ func TestStartFailureTearsDownAndStopIsIdempotent(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "obs-missing") {
 		t.Fatalf("expected start failure naming the broken extension, got: %v", err)
 	}
-	mgr.Stop() // must be safe after failed start
-	mgr.Stop() // and idempotent
+	mgr.manifests[1] = good
+	if err := mgr.Start(context.Background()); err != nil {
+		t.Fatalf("retry after partial start failure: %v", err)
+	}
+	mgr.Stop()
+	mgr.Stop()
 }

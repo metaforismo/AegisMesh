@@ -1,13 +1,13 @@
 // Package extmanager supervises verified out-of-process observer extensions:
 // bounded delivery queues, drop accounting, revocation on failure, and a
 // deterministic bounded shutdown. Extensions are data-only sinks — they
-// receive observation envelopes and their replies carry acks/errors that can
-// never influence decoy behavior, evidence, or policy (ADR-0006).
+// receive observation envelopes and must return one canonical event-linked
+// acknowledgement that cannot influence decoy behavior, evidence, or policy
+// (ADR-0006, ADR-0014).
 package extmanager
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -17,15 +17,6 @@ import (
 	"github.com/metaforismo/aegismesh/internal/ext"
 	"github.com/metaforismo/aegismesh/internal/observe"
 )
-
-// maxObservationBytes bounds the per-delivery wire payload. Envelopes are
-// already size-capped upstream; this is an independent defense so a single
-// oversized observation can never wedge a slow extension pipe.
-const maxObservationBytes = 128 << 10
-
-// observeMethod is the only method the supervisor ever calls. The allowlist
-// is the capability boundary: no extension input influences AegisMesh.
-const observeMethod = "observe"
 
 type metrics struct {
 	delivered observe.LabeledCounter
@@ -51,11 +42,13 @@ type Manager struct {
 	manifests []*ext.Manifest
 	m         metrics
 
-	mu      sync.RWMutex
-	entries []*entry
-	started bool
-	stopped bool
-	wg      sync.WaitGroup
+	mu        sync.RWMutex
+	entries   []*entry
+	started   bool
+	stopped   bool
+	wg        sync.WaitGroup
+	force     chan struct{}
+	forceOnce sync.Once
 }
 
 // New builds a manager for the given verified manifests. queueSize bounds
@@ -75,10 +68,11 @@ func New(manifests []*ext.Manifest, meter observe.Meter, log *slog.Logger, queue
 		log:       log,
 		flush:     flush,
 		manifests: manifests,
+		force:     make(chan struct{}),
 		m: metrics{
 			delivered: meter.CounterVec("aegismesh_extension_delivered_total", "observations delivered to observer extensions", maxSeries),
 			dropped:   meter.CounterVec("aegismesh_extension_dropped_total", "observations dropped (queue full, revoked, oversized)", maxSeries),
-			errors:    meter.CounterVec("aegismesh_extension_errors_total", "delivery errors before revocation", maxSeries),
+			errors:    meter.CounterVec("aegismesh_extension_errors_total", "observer delivery errors that caused revocation", maxSeries),
 			revoked:   meter.CounterVec("aegismesh_extension_revoked_total", "extensions revoked after a protocol violation or crash", maxSeries),
 		},
 	}
@@ -101,22 +95,23 @@ func (m *Manager) Start(ctx context.Context) error {
 	if m.started {
 		return fmt.Errorf("extension manager already started")
 	}
+	if m.stopped {
+		return fmt.Errorf("extension manager is stopped")
+	}
 	m.started = true
 
-	var started []*entry
+	hosts := make([]*ext.Host, 0, len(m.entries))
 	for i, e := range m.entries {
-		h, err := ext.Start(ctx, m.manifests[i], func(format string, args ...any) {
-			m.log.Warn("extension host: "+fmt.Sprintf(format, args...), "extension", e.name)
-		})
+		h, err := ext.Start(ctx, m.manifests[i])
 		if err != nil {
-			for _, s := range started {
-				s.host.Stop()
-			}
+			stopHosts(hosts)
 			m.started = false // allow a later retry by the caller if desired
 			return fmt.Errorf("start extension %q: %v", e.name, err)
 		}
-		e.host = h
-		started = append(started, e)
+		hosts = append(hosts, h)
+	}
+	for i, e := range m.entries {
+		e.host = hosts[i]
 		m.wg.Add(1)
 		go m.dispatch(e)
 	}
@@ -125,18 +120,23 @@ func (m *Manager) Start(ctx context.Context) error {
 
 func (m *Manager) dispatch(e *entry) {
 	defer m.wg.Done()
-	for env := range e.ch {
-		raw, err := json.Marshal(observationOf(env))
-		if err != nil || len(raw) > maxObservationBytes {
-			m.m.errors.Inc(e.name)
-			continue
+	for {
+		var env event.Envelope
+		select {
+		case <-m.force:
+			return
+		case next, ok := <-e.ch:
+			if !ok {
+				return
+			}
+			env = next
 		}
 		if e.revoked {
 			m.m.dropped.Inc(e.name)
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(e.callMS)*time.Millisecond)
-		_, err = e.host.Call(ctx, observeMethod, raw)
+		err := e.host.Observe(ctx, observationOf(env))
 		cancel()
 		switch {
 		case err == nil:
@@ -147,6 +147,7 @@ func (m *Manager) dispatch(e *entry) {
 			// storms; evidence flow is unaffected because delivery is
 			// best-effort by design.
 			e.revoked = true
+			m.m.errors.Inc(e.name)
 			m.m.revoked.Inc(e.name)
 			m.log.Warn("observer extension revoked", "extension", e.name)
 		}
@@ -198,26 +199,33 @@ func (m *Manager) Stop() {
 	select {
 	case <-done:
 	case <-time.After(m.flush):
-		// Flush window exceeded: dispatchers stop with the process teardown.
+		m.forceOnce.Do(func() { close(m.force) })
 	}
-
+	hosts := make([]*ext.Host, 0, len(entries))
 	for _, e := range entries {
 		if e.host != nil {
-			e.host.Stop()
+			hosts = append(hosts, e.host)
 		}
 	}
+	stopHosts(hosts)
+	m.forceOnce.Do(func() { close(m.force) })
+	m.wg.Wait()
 }
 
-type observation struct {
-	EventID        string          `json:"event_id"`
-	Time           time.Time       `json:"time"`
-	Classification string          `json:"classification"`
-	Sensor         event.SensorRef `json:"sensor"`
-	Payload        json.RawMessage `json:"payload,omitempty"`
+func stopHosts(hosts []*ext.Host) {
+	var wg sync.WaitGroup
+	for _, host := range hosts {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			host.Stop()
+		}()
+	}
+	wg.Wait()
 }
 
-func observationOf(e event.Envelope) observation {
-	return observation{
+func observationOf(e event.Envelope) ext.Observation {
+	return ext.Observation{
 		EventID:        e.ID,
 		Time:           e.Time,
 		Classification: e.Classification,

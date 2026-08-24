@@ -102,8 +102,8 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 | Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, with no enforcement or new egress |
 | Demo | One-command synthetic HTTP/TCP/MCP/SSH scenario on OS-assigned loopback ports with integrity-verified evidence, a dry-run proposal and complete cleanup |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
-| Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no exec anywhere |
-| Extensions | Digest-verified out-of-process observer extensions receive bounded data-only events; they cannot influence policy or responses |
+| Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no attacker-, provider-, or extension-output-derived execution; only explicitly configured verified observer processes are spawned |
+| Extensions | Explicitly configured, digest-verified out-of-process observers receive bounded stored observations and may return only an exact event-linked acknowledgement; they cannot influence evidence, policy or responses |
 | Migration | Clean-room `aegismesh migrate beelzebub` importer: dry-run default, never touches sources, exact unsupported-field report |
 
 ## Security posture

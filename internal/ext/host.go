@@ -2,13 +2,35 @@ package ext
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/metaforismo/aegismesh/internal/event"
 )
+
+const MaxObservationBytes = 128 << 10
+
+// Observation is the bounded data-only projection available to an observer.
+// It intentionally omits response policy and runtime controls.
+type Observation struct {
+	EventID        string          `json:"event_id"`
+	Time           time.Time       `json:"time"`
+	Classification string          `json:"classification"`
+	Sensor         event.SensorRef `json:"sensor"`
+	Payload        json.RawMessage `json:"payload,omitempty"`
+}
+
+type observeAck struct {
+	EventID  string `json:"event_id"`
+	Accepted bool   `json:"accepted"`
+}
 
 // Frame is one NDJSON message on the extension wire.
 type Frame struct {
@@ -21,36 +43,39 @@ type Frame struct {
 	Params   json.RawMessage `json:"params,omitempty"`
 	Result   json.RawMessage `json:"result,omitempty"`
 	Message  string          `json:"message,omitempty"`
+	raw      []byte
 }
 
-// Host runs a verified extension as an isolated subprocess.
+// Host runs one verified data-only observer subprocess.
 type Host struct {
-	m       *Manifest
-	exe     string
-	cmd     *exec.Cmd
-	stdin   chan<- Frame
-	stdout  <-chan Frame
-	errCh   <-chan error
-	closed  bool
-	closeMu sync.Mutex
-	logf    func(format string, args ...any)
+	m      *Manifest
+	cmd    *exec.Cmd
+	stdin  chan Frame
+	stdout <-chan Frame
+	errCh  <-chan error
+	done   chan struct{}
+	waitCh <-chan error
+	pipe   io.WriteCloser
+
+	callMu   sync.Mutex
+	stopOnce sync.Once
+	seq      atomic.Uint64
 }
 
-// Start spawns the extension and performs the version handshake. Any failure
-// tears the process down before Start returns.
-func Start(ctx context.Context, m *Manifest, logf func(string, ...any)) (*Host, error) {
-	if logf == nil {
-		logf = func(string, ...any) {}
+// Start spawns the observer and binds its handshake identity to the verified
+// manifest. Any failure revokes the process before Start returns.
+func Start(ctx context.Context, m *Manifest) (*Host, error) {
+	if m == nil {
+		return nil, fmt.Errorf("%w: nil manifest", errManifest)
+	}
+	if err := m.Validate(); err != nil {
+		return nil, err
 	}
 	exe, err := m.ExecutablePath()
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(exe, m.Transport.Command[1:]...) //nolint:gosec // binary digest-verified by caller; no shell
-	// Extensions are untrusted: they run with a fixed minimal environment and
-	// the manifest directory as cwd. Inheriting the operator's environment
-	// would leak configuration secrets (e.g. AEGISMESH_LLM_API_KEY) into a
-	// process we do not trust.
+	cmd := exec.Command(exe, m.Transport.Command[1:]...) //nolint:gosec // artifact digest is verified by the caller; no shell
 	cmd.Env = []string{"AEGISMESH_EXTENSION=1"}
 	cmd.Dir = m.Dir
 	stdinPipe, err := cmd.StdinPipe()
@@ -61,150 +86,220 @@ func Start(ctx context.Context, m *Manifest, logf func(string, ...any)) (*Host, 
 	if err != nil {
 		return nil, fmt.Errorf("%w: stdout pipe: %v", errManifest, err)
 	}
-	cmd.Stderr = nil // extensions get no stderr channel into our logs
-
+	cmd.Stderr = nil
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("%w: start %s: %v", errManifest, exe, err)
 	}
 
+	done := make(chan struct{})
 	hErr := make(chan error, 1)
 	frames := make(chan Frame, 16)
-	go readFrames(stdoutPipe, frames, hErr, m.Transport.MaxOutputBytes)
-
 	inCh := make(chan Frame, 4)
-	go writeFrames(stdinPipe, inCh)
-
-	h := &Host{m: m, exe: exe, cmd: cmd, stdin: inCh, stdout: frames, errCh: hErr, logf: logf}
+	waitCh := make(chan error, 1)
+	h := &Host{
+		m: m, cmd: cmd, stdin: inCh, stdout: frames, errCh: hErr,
+		done: done, waitCh: waitCh, pipe: stdinPipe,
+	}
+	go readFrames(stdoutPipe, frames, hErr, done, m.Transport.MaxOutputBytes)
+	go writeFrames(stdinPipe, inCh, done)
+	go func() {
+		waitCh <- cmd.Wait()
+		close(waitCh)
+	}()
 
 	hsCtx, cancel := context.WithTimeout(ctx, time.Duration(m.Transport.HandshakeTimeoutMS)*time.Millisecond)
 	defer cancel()
-	hello := Frame{Type: "hello", Protocol: ProtocolVersion}
 	select {
-	case inCh <- hello:
+	case inCh <- Frame{Type: "hello", Protocol: ProtocolVersion}:
+	case <-done:
+		h.revoke()
+		return nil, fmt.Errorf("%w: observer %s stopped during handshake", errManifest, m.Name)
 	case <-hsCtx.Done():
-		h.kill()
+		h.revoke()
 		return nil, fmt.Errorf("%w: handshake send timed out for %s", errManifest, m.Name)
 	}
 	select {
 	case f, ok := <-frames:
-		if !ok || f.Type != "hello_ok" || f.Protocol != ProtocolVersion {
-			h.kill()
-			return nil, fmt.Errorf("%w: bad handshake from %s (want hello_ok protocol=%d)", errManifest, m.Name, ProtocolVersion)
+		if !ok || !validHello(f, m) {
+			h.revoke()
+			return nil, fmt.Errorf("%w: bad handshake from %s (want hello_ok protocol=%d name=%s version=%s)", errManifest, m.Name, ProtocolVersion, m.Name, m.Version)
 		}
 	case err := <-hErr:
-		h.kill()
+		h.revoke()
 		return nil, fmt.Errorf("%w: handshake read from %s: %v", errManifest, m.Name, err)
 	case <-hsCtx.Done():
-		h.kill()
+		h.revoke()
 		return nil, fmt.Errorf("%w: handshake timed out for %s", errManifest, m.Name)
 	}
 	return h, nil
 }
 
-func readFrames(r interface{ Read([]byte) (int, error) }, out chan<- Frame, errOut chan<- error, maxBytes int) {
+func validHello(f Frame, m *Manifest) bool {
+	expected, err := json.Marshal(Frame{
+		Type:     "hello_ok",
+		Protocol: ProtocolVersion,
+		Name:     m.Name,
+		Version:  m.Version,
+	})
+	return err == nil && bytes.Equal(f.raw, expected)
+}
+
+func readFrames(r io.Reader, out chan<- Frame, errOut chan<- error, done <-chan struct{}, maxBytes int) {
 	defer close(out)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 4096), maxBytes)
 	for sc.Scan() {
-		var f Frame
-		if err := json.Unmarshal(sc.Bytes(), &f); err != nil {
-			errOut <- fmt.Errorf("undecodable frame: %w", err)
+		if err := rejectDuplicateJSONKeys(sc.Bytes()); err != nil {
+			sendFrameError(errOut, done, fmt.Errorf("undecodable frame: %w", err))
 			return
 		}
-		out <- f
+		dec := json.NewDecoder(bytes.NewReader(sc.Bytes()))
+		dec.DisallowUnknownFields()
+		var f Frame
+		if err := dec.Decode(&f); err != nil {
+			sendFrameError(errOut, done, fmt.Errorf("undecodable frame: %w", err))
+			return
+		}
+		if err := requireJSONEOF(dec); err != nil {
+			sendFrameError(errOut, done, fmt.Errorf("undecodable frame: %w", err))
+			return
+		}
+		f.raw = append([]byte(nil), sc.Bytes()...)
+		select {
+		case out <- f:
+		case <-done:
+			return
+		}
 	}
 	if err := sc.Err(); err != nil {
-		// Scanner errors are cap violations (token too long) or I/O failures;
-		// clean EOF ends the loop above without an error.
-		errOut <- fmt.Errorf("read loop: %w (output cap %d bytes enforced)", err, maxBytes)
-	}
-	// Clean EOF signals only via close(out); errOut carries real failures so
-	// callers never race a nil against a useful frame/closed-channel result.
-}
-
-func writeFrames(w interface{ Write([]byte) (int, error) }, in <-chan Frame) {
-	enc := json.NewEncoder(frameWriter{w})
-	for f := range in {
-		if enc.Encode(f) != nil {
-			return
-		}
+		sendFrameError(errOut, done, fmt.Errorf("read loop: %w (output cap %d bytes enforced)", err, maxBytes))
 	}
 }
 
-type frameWriter struct {
-	w interface{ Write([]byte) (int, error) }
-}
-
-func (fw frameWriter) Write(p []byte) (int, error) { return fw.w.Write(p) }
-
-// Call sends one request and waits for its response within the manifest's
-// call deadline. On timeout the process is revoked immediately.
-func (h *Host) Call(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
-	id := fmt.Sprintf("req-%d", time.Now().UnixNano())
-	callCtx, cancel := context.WithTimeout(ctx, time.Duration(h.m.Transport.CallTimeoutMS)*time.Millisecond)
-	defer cancel()
-
+func sendFrameError(errOut chan<- error, done <-chan struct{}, err error) {
 	select {
-	case h.stdin <- Frame{Type: "request", ID: id, Method: method, Params: params}:
-	case <-callCtx.Done():
-		h.kill()
-		return nil, fmt.Errorf("%w: call to %s timed out sending; process revoked", errManifest, h.m.Name)
+	case errOut <- err:
+	case <-done:
 	}
+}
+
+func writeFrames(w io.Writer, in <-chan Frame, done <-chan struct{}) {
+	enc := json.NewEncoder(w)
 	for {
 		select {
-		case f, ok := <-h.stdout:
-			if !ok {
-				return nil, fmt.Errorf("%w: extension %s closed output unexpectedly", errManifest, h.m.Name)
+		case <-done:
+			return
+		case f := <-in:
+			if enc.Encode(f) != nil {
+				return
 			}
-			if f.ID != id {
-				continue // ignore stray notifications; protocol has none today
-			}
-			if f.Type == "error" {
-				return nil, fmt.Errorf("extension error: %s", f.Message)
-			}
-			if f.Type != "response" {
-				return nil, fmt.Errorf("%w: unexpected frame type %q", errManifest, f.Type)
-			}
-			return f.Result, nil
-		case err := <-h.errCh:
-			return nil, fmt.Errorf("%w: extension %s failed: %v", errManifest, h.m.Name, err)
-		case <-callCtx.Done():
-			h.kill()
-			return nil, fmt.Errorf("%w: call deadline exceeded for %s; process revoked", errManifest, h.m.Name)
 		}
 	}
 }
 
-// kill revokes the extension. It never returns an error the caller must handle:
-// best-effort teardown after a violation or shutdown.
-func (h *Host) kill() {
-	h.closeMu.Lock()
-	defer h.closeMu.Unlock()
-	if h.closed {
-		return
+// Observe delivers one bounded observation. Success requires an exact
+// canonical acknowledgement tied to the source event. No extension-produced
+// value is returned to callers or exposed to runtime policy.
+func (h *Host) Observe(ctx context.Context, observation Observation) error {
+	params, err := marshalObservation(observation)
+	if err != nil {
+		return err
 	}
-	h.closed = true
-	if h.cmd != nil && h.cmd.Process != nil {
-		_ = h.cmd.Process.Kill()
-		_ = h.cmd.Wait()
+	expected, err := json.Marshal(observeAck{EventID: observation.EventID, Accepted: true})
+	if err != nil {
+		return fmt.Errorf("%w: build acknowledgement contract: %v", errManifest, err)
+	}
+
+	h.callMu.Lock()
+	defer h.callMu.Unlock()
+	id := fmt.Sprintf("req-%d", h.seq.Add(1))
+	callCtx, cancel := context.WithTimeout(ctx, time.Duration(h.m.Transport.CallTimeoutMS)*time.Millisecond)
+	defer cancel()
+	select {
+	case h.stdin <- Frame{Type: "request", ID: id, Method: "observe", Params: params}:
+	case <-h.done:
+		return fmt.Errorf("%w: observer %s is stopped", errManifest, h.m.Name)
+	case <-callCtx.Done():
+		h.revoke()
+		return fmt.Errorf("%w: call to %s timed out sending; process revoked", errManifest, h.m.Name)
+	}
+	select {
+	case f, ok := <-h.stdout:
+		if !ok {
+			h.revoke()
+			return fmt.Errorf("%w: observer %s closed output unexpectedly; process revoked", errManifest, h.m.Name)
+		}
+		expectedFrame, err := json.Marshal(Frame{Type: "response", ID: id, Result: expected})
+		if err != nil || !bytes.Equal(f.raw, expectedFrame) {
+			h.revoke()
+			return fmt.Errorf("%w: observer %s violated the acknowledgement protocol; process revoked", errManifest, h.m.Name)
+		}
+		return nil
+	case err := <-h.errCh:
+		h.revoke()
+		return fmt.Errorf("%w: observer %s failed; process revoked: %v", errManifest, h.m.Name, err)
+	case <-h.done:
+		return fmt.Errorf("%w: observer %s is stopped", errManifest, h.m.Name)
+	case <-callCtx.Done():
+		h.revoke()
+		return fmt.Errorf("%w: call deadline exceeded for %s; process revoked", errManifest, h.m.Name)
 	}
 }
 
-// Stop shuts the extension down cleanly (close stdin, then wait briefly).
-func (h *Host) Stop() {
-	h.closeMu.Lock()
-	defer h.closeMu.Unlock()
-	if h.closed {
-		return
+func marshalObservation(observation Observation) ([]byte, error) {
+	if observation.EventID == "" {
+		return nil, fmt.Errorf("%w: observation event_id is required", errManifest)
 	}
-	h.closed = true
-	close(h.stdin)
-	done := make(chan struct{})
-	go func() { _ = h.cmd.Wait(); close(done) }()
+	if observation.Time.IsZero() {
+		return nil, fmt.Errorf("%w: observation time is required", errManifest)
+	}
+	if observation.Sensor.ID == "" || observation.Sensor.Kind == "" {
+		return nil, fmt.Errorf("%w: observation sensor is incomplete", errManifest)
+	}
+	switch observation.Classification {
+	case event.ClassificationInteraction, event.ClassificationCanaryHit:
+	default:
+		return nil, fmt.Errorf("%w: observation classification %q is not deliverable", errManifest, observation.Classification)
+	}
+	if !json.Valid(observation.Payload) {
+		return nil, fmt.Errorf("%w: observation payload is not valid JSON", errManifest)
+	}
+	params, err := json.Marshal(observation)
+	if err != nil {
+		return nil, fmt.Errorf("%w: observation is not valid JSON", errManifest)
+	}
+	if len(params) > MaxObservationBytes {
+		return nil, fmt.Errorf("%w: observation exceeds the %d-byte protocol cap", errManifest, MaxObservationBytes)
+	}
+	return params, nil
+}
+
+func (h *Host) revoke() {
+	h.stopOnce.Do(func() {
+		close(h.done)
+		_ = h.pipe.Close()
+		if h.cmd.Process != nil {
+			_ = h.cmd.Process.Kill()
+		}
+	})
+}
+
+// Stop closes observer input, waits briefly for a clean exit, then revokes the
+// process. It is safe to call concurrently with Observe and is idempotent.
+func (h *Host) Stop() {
+	h.stopOnce.Do(func() {
+		close(h.done)
+		_ = h.pipe.Close()
+	})
 	select {
-	case <-done:
+	case <-h.waitCh:
 	case <-time.After(2 * time.Second):
-		_ = h.cmd.Process.Kill()
-		<-done
+		if h.cmd.Process != nil {
+			_ = h.cmd.Process.Kill()
+		}
+		select {
+		case <-h.waitCh:
+		case <-time.After(2 * time.Second):
+		}
 	}
 }

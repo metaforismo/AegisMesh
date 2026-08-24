@@ -93,25 +93,30 @@ decoy response text — never commands, paths, config values, or enforcement tri
 
 ---
 
-## ADR-0006: Capability manifests + digest verification for extensions, host not auto-started
+## ADR-0006: Explicit verified manifests for out-of-process observers
 
 Date: 2026-08-22
 
 **Context.** Beelzebub-style in-process plugin compilation makes every plugin a full-privilege part of the
 honeypot binary. WASM runtimes would be nice but pull large dependencies this early.
 
-**Decision.** Extensions declare JSON manifests (`ext.aegismesh.io/v1alpha1`) with name/version/
-permissions/transport; a lock record carries the sha256 artifact digest (required) and optional ed25519
-signature (verified when a public key is configured). Extensions run as separate OS processes speaking
-newline-delimited JSON on stdin/stdout through an explicit operator-invoked host command: version-negotiated
-handshake, hard deadlines, stdout caps, revocation by kill. The runtime never spawns extensions implicitly.
+**Decision.** Extensions declare strict manifests (`ext.aegismesh.io/v1alpha1`) with
+name/version/permissions/transport; a lock record carries the sha256 artifact
+digest (required) and optional ed25519 signature (verified when a public key is
+configured). The runtime performs no discovery. When an operator explicitly
+enables extensions and lists manifests, it verifies and starts exactly that set
+from config-relative, symlink-contained paths as separate processes speaking
+newline-delimited JSON on stdin/stdout. The host
+uses a version-and-identity-bound handshake, hard deadlines, per-frame output
+caps, a minimal environment and process revocation on violation.
 
 **Consequences.** No untrusted code in-process. The runtime wiring now exists for the **data-only observer
-path**: verified extensions declaring the `observe` permission receive bounded observation envelopes through a
-supervised delivery queue (drop accounting, terminal revocation on violation, bounded shutdown flush) — see
-`internal/extmanager`. Their replies are acks/errors and can never influence behavior, evidence, or policy.
-Response-influencing wiring (`respond`) remains explicitly NOT implemented; WASM remains an option once a
-small, well-audited runtime dependency is justified.
+path**: verified extensions declaring exactly the `observe` permission receive
+bounded observation projections through a supervised delivery queue. Their only
+successful output is a canonical acknowledgement bound to the source event ID;
+the host returns no extension-produced value to the runtime. Response-influencing
+permissions are rejected by the schema. See ADR-0014 for the final live-policy
+boundary. WASM remains an option only if a small audited runtime is justified.
 
 ---
 
@@ -336,3 +341,39 @@ ports, paths, IDs, times and evidence content. The command has intentionally few
 options: only `--json`. Custom deployments continue to use `init`, `validate`,
 `run`, `inspect` and `recommend`; the demo is not a generic configuration runner
 or production-readiness proof.
+
+---
+
+## ADR-0014: Observer acknowledgements close the extension live-policy boundary
+
+Date: 2026-08-24
+
+Status: Accepted.
+
+**Context.** The v1alpha1 manifest reserved a `respond` permission and the host
+exported a generic raw-message call. Runtime policy did not consume the result,
+but those surfaces made a future accidental authority escalation too easy. A
+compromised extension is untrusted code with no business deciding decoy output,
+evidence meaning, configuration or actions against real assets.
+
+**Decision.** v1alpha1 is observe-only. Manifests must declare exactly
+`["observe"]`; unknown fields, duplicate JSON keys, extra documents and
+response-influencing permissions fail closed. `Host` exposes `Observe`, not a
+generic method call. It sends one bounded typed projection and accepts only the
+canonical acknowledgement `{event_id, accepted:true}` for the same event.
+Mismatched IDs, stray frames, extra fields, malformed or oversized output,
+extension errors and deadlines revoke the process. Extension-produced bytes are
+discarded at the host boundary and never become policy, evidence or CLI prose.
+
+The authoritative primary append must succeed before an observation is offered
+to any best-effort consumer. Correlation signals remain store-only; they are not
+re-submitted through the bus or sent to extensions/webhooks. `ext run` is a
+synthetic local protocol probe and reports only core-owned `accepted:true` and
+`applied:false` metadata.
+
+**Consequences.** There is no extension live-policy path in v0.2. Adding one
+requires a new manifest/protocol version, ADR, explicit operator opt-in and a
+separate approval for any new egress. Digest/signature checks identify an
+artifact but do not make its behavior trusted. Direct-child process revocation
+is not a resource or network sandbox; stronger OS isolation remains separate
+work and cannot justify granting extension output runtime authority.

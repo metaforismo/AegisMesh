@@ -58,11 +58,14 @@ Nothing is checked on intent alone.
    `recommendation` / `dry_run` / `proposed` / `signal_not_incident` operator-review output.
    It has no path to runtime policy, webhook, extensions, LLMs, filesystem mutation, command execution,
    or enforcement.
-5. R5: Evidence at rest: optional age/x25519 encryption of JSONL segments.
-6. R6: Wire verified extensions into live policy resolution (behind explicit operator enablement).
-   - [x] Data-only observer path shipped: supervised delivery queue, drop/revocation metrics, bounded
-         shutdown, fail-closed manifest verification (`internal/extmanager`, PR feat/extension-observer-wiring).
-         Response-influencing wiring stays unimplemented by design (ADR-0006).
+5. R5: Evidence at rest: optional age/X25519 encryption of evidence segments.
+6. [ ] R6 — Close the extension live-policy boundary (implementation verified;
+   merge pending): v1alpha1 manifests are
+   observe-only and strict; the host exposes no generic result API and accepts
+   only a bounded canonical acknowledgement tied to the source event. Failed
+   primary appends do not fan out. Response influence, correlation fan-out,
+   execution, path/config mutation and enforcement remain unavailable by
+   design (ADR-0006, ADR-0014).
 7. [x] R7 — `aegismesh demo`: self-contained synthetic HTTP/TCP/MCP/SSH
    scenario with OS-assigned loopback ports, verified evidence, a dry-run
    recommendation, deterministic summaries and complete cleanup.

@@ -138,11 +138,12 @@ type Config struct {
 
 // Extensions configures optional out-of-process observer extensions. They run
 // as digest-verified (optionally ed25519-signed) subprocesses and receive
-// observation envelopes data-only: their replies are acks/errors and can
-// never influence decoy behavior, evidence, or policy.
+// successfully stored observations data-only. Success is one canonical,
+// event-linked acknowledgement; no extension output can influence decoy
+// behavior, evidence, or policy.
 type Extensions struct {
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
-	// Manifests lists paths to extension manifest files (ext.aegismesh.io/v1alpha1).
+	// Manifests lists config-relative paths to extension manifests.
 	Manifests []string `yaml:"manifests,omitempty" json:"manifests,omitempty"`
 	// QueueSize bounds the per-extension delivery queue. Full queues drop
 	// (counted), never block sensors.

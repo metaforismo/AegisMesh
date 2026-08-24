@@ -2,8 +2,8 @@
   "api_version": "ext.aegismesh.io/v1alpha1",
   "name": "echo-responder",
   "version": "0.1.0",
-  "description": "Reference extension: returns a canned synthetic response.",
-  "permissions": ["respond"],
+  "description": "Reference observer: acknowledges bounded observation events.",
+  "permissions": ["observe"],
   "transport": {
     "kind": "subprocess-ndjson",
     "command": ["./echo-responder"],

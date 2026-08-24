@@ -71,6 +71,7 @@ Three product families:
 | Evidence hygiene | Versioned envelope, payload hashing, redaction pipeline, retention bounds, observation≠incident |
 | Explainability | Every response maps to a policy ID; `inspect` shows exactly why a decoy answered what it answered |
 | Operator review | `recommend` emits deterministic proposed guidance linked to verified local evidence; it cannot mutate assets or add egress |
+| Extension authority | Explicitly configured observer subprocesses receive only bounded, successfully stored observations and may return only a canonical event-linked acknowledgement; they cannot alter evidence, responses or policy |
 | First run | `aegismesh demo` exercises HTTP/TCP/MCP/SSH, evidence integrity and a dry-run proposal without config, external tools, cloud access or retained state |
 
 ## Current core scope (honest boundary)

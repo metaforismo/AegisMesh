@@ -314,7 +314,7 @@ func TestExtVerifyDigestMatchAndMismatch(t *testing.T) {
 	  "api_version": "ext.aegismesh.io/v1alpha1",
 	  "name": "echo-responder",
 	  "version": "0.1.0",
-	  "permissions": ["respond"],
+	  "permissions": ["observe"],
 	  "transport": {"kind":"subprocess-ndjson","command":["./ext"],
 	                "handshake_timeout_ms":5000,"call_timeout_ms":5000,"max_output_bytes":1048576},
 	  "digest": {"algorithm":"sha256","value":"%s"}
@@ -324,13 +324,99 @@ func TestExtVerifyDigestMatchAndMismatch(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "verified") {
 		t.Fatalf("digest match must verify: code=%d out=%q", code, out)
 	}
+	code, out, stderr := run(t, "ext", "run", "--manifest", manifest, "--input", `{"synthetic":true}`)
+	if code != 0 || !strings.Contains(out, `"accepted": true`) || !strings.Contains(out, `"applied": false`) || strings.Contains(out, `"result"`) {
+		t.Fatalf("observe probe must return only core-owned non-applied metadata: code=%d out=%q err=%q", code, out, stderr)
+	}
+	code, out, stderr = run(t, "ext", "run", "--manifest", manifest)
+	wantJSON := "{\n  \"accepted\": true,\n  \"applied\": false,\n  \"event_id\": \"extension-probe\",\n  \"extension\": \"echo-responder\",\n  \"version\": \"0.1.0\"\n}\n"
+	if code != 0 || out != wantJSON {
+		t.Fatalf("omitted input must run the deterministic default probe: code=%d out=%q err=%q", code, out, stderr)
+	}
+	for _, input := range []string{`null`, `true`, `[]`, `"synthetic"`} {
+		code, out, stderr = run(t, "ext", "run", "--manifest", manifest, "--input", input)
+		if code != 0 || out != wantJSON {
+			t.Fatalf("valid JSON value %s rejected: code=%d out=%q err=%q", input, code, out, stderr)
+		}
+	}
 
 	corrupt := readFile(t, exe)
 	corrupt = append(corrupt, '\n')
 	os.WriteFile(exe, corrupt, 0o755)
-	code, _, stderr := run(t, "ext", "verify", "--manifest", manifest)
+	code, _, stderr = run(t, "ext", "verify", "--manifest", manifest)
 	if code == 0 || !strings.Contains(stderr, "mismatch") {
 		t.Fatalf("modified artifact must fail verification: code=%d err=%q", code, stderr)
+	}
+}
+
+func TestExtCLIStrictFlags(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"manifest omitted", []string{"ext", "verify"}, "--manifest is required"},
+		{"manifest empty", []string{"ext", "verify", "--manifest="}, "must be one non-empty path"},
+		{"manifest whitespace", []string{"ext", "verify", "--manifest", "  "}, "must be one non-empty path"},
+		{"manifest padded", []string{"ext", "verify", "--manifest", " manifest.json "}, "must be one non-empty path"},
+		{"manifest repeated", []string{"ext", "verify", "--manifest", "a", "--manifest", "b"}, "flag given more than once"},
+		{"manifest comma", []string{"ext", "verify", "--manifest", "a,b"}, "must be one non-empty path"},
+		{"manifest leading dash", []string{"ext", "verify", "--manifest=-a"}, "leading '-"},
+		{"delimiter positional", []string{"ext", "verify", "--manifest", "a", "--", "extra"}, "unexpected argument"},
+		{"unexpected positional", []string{"ext", "verify", "--manifest", "a", "extra"}, "unexpected argument"},
+		{"unknown flag", []string{"ext", "verify", "--manifest", "a", "--unknown"}, "flag provided but not defined"},
+		{"input empty", []string{"ext", "run", "--manifest", "a", "--input="}, "--input must not be empty"},
+		{"input whitespace", []string{"ext", "run", "--manifest", "a", "--input", "  "}, "--input must not be empty"},
+		{"input malformed", []string{"ext", "run", "--manifest", "a", "--input", "{"}, "--input must be one valid JSON value"},
+		{"input repeated", []string{"ext", "run", "--manifest", "a", "--input", `{}`, "--input", `{}`}, "flag given more than once"},
+		{"pubkey empty", []string{"ext", "verify", "--manifest", "a", "--pubkey="}, "must be one non-empty path"},
+		{"pubkey whitespace", []string{"ext", "verify", "--manifest", "a", "--pubkey", "  "}, "must be one non-empty path"},
+		{"pubkey padded", []string{"ext", "verify", "--manifest", "a", "--pubkey", " key.hex "}, "must be one non-empty path"},
+		{"pubkey comma", []string{"ext", "verify", "--manifest", "a", "--pubkey", "a,b"}, "must be one non-empty path"},
+		{"pubkey repeated", []string{"ext", "verify", "--manifest", "a", "--pubkey", "a", "--pubkey", "b"}, "flag given more than once"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, _, stderr := run(t, tc.args...)
+			if code == 0 || !strings.Contains(stderr, tc.want) {
+				t.Fatalf("code=%d stderr=%q, want error containing %q", code, stderr, tc.want)
+			}
+		})
+	}
+
+	code, _, stderr := run(t, "ext", "run", "--manifest", "missing.json", "--input", ` {"padded":true} `)
+	if code == 0 || strings.Contains(stderr, "--input") || !strings.Contains(stderr, "missing.json") {
+		t.Fatalf("padded valid JSON must pass input validation: code=%d stderr=%q", code, stderr)
+	}
+}
+
+func TestExtensionPublicKeyFileBounds(t *testing.T) {
+	dir := t.TempDir()
+	valid := filepath.Join(dir, "valid.hex")
+	if err := os.WriteFile(valid, []byte(strings.Repeat("a", 64)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readExtensionPublicKey(valid)
+	if err != nil || got != strings.Repeat("a", 64) {
+		t.Fatalf("valid public key file: got=%q err=%v", got, err)
+	}
+	if _, err := readExtensionPublicKey(dir); err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("directory public key must fail, got %v", err)
+	}
+	over := filepath.Join(dir, "oversized.hex")
+	f, err := os.OpenFile(over, os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(maxExtensionPublicKeyFileBytes + 1); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readExtensionPublicKey(over); err == nil || !strings.Contains(err.Error(), "no larger") {
+		t.Fatalf("oversized public key must fail, got %v", err)
 	}
 }
 

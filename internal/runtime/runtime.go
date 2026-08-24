@@ -68,23 +68,25 @@ type System struct {
 // store path can neither be slowed nor failed by them.
 type evidenceSink struct {
 	primary event.Sink
-	mgr     *extmanager.Manager // may be nil
-	hook    *webhook.Sink       // may be nil
-	corr    *correlateAdapter   // may be nil
+	mgr     interface{ Deliver(event.Envelope) }    // may be nil
+	hook    interface{ Offer(event.Envelope) bool } // may be nil
+	corr    interface{ observe(event.Envelope) }    // may be nil
 }
 
 func (s evidenceSink) Append(ctx context.Context, e event.Envelope) error {
-	err := s.primary.Append(ctx, e)
+	if err := s.primary.Append(ctx, e); err != nil {
+		return err
+	}
 	if s.mgr != nil {
 		s.mgr.Deliver(e)
 	}
 	if s.hook != nil {
-		s.hook.Offer(e)
+		_ = s.hook.Offer(e)
 	}
 	if s.corr != nil {
 		s.corr.observe(e)
 	}
-	return err
+	return nil
 }
 
 // Build validates and constructs everything. No listener is bound yet.
@@ -126,7 +128,7 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 	}
 
 	if cfg.Extensions.IsEnabled() {
-		manifests, err := loadObserverManifests(cfg.Extensions)
+		manifests, err := loadObserverManifests(cfg)
 		if err != nil {
 			sys.closeAll()
 			return nil, fmt.Errorf("%w: %v", errRuntime, err)
@@ -181,7 +183,17 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 
 	sink := event.Sink(store)
 	if sys.extMgr != nil || sys.hook != nil || sys.corr != nil {
-		sink = evidenceSink{primary: store, mgr: sys.extMgr, hook: sys.hook, corr: sys.corr}
+		fanout := evidenceSink{primary: store}
+		if sys.extMgr != nil {
+			fanout.mgr = sys.extMgr
+		}
+		if sys.hook != nil {
+			fanout.hook = sys.hook
+		}
+		if sys.corr != nil {
+			fanout.corr = sys.corr
+		}
+		sink = fanout
 	}
 	sys.bus = event.NewBus(busCapacity, sink, log)
 
@@ -207,10 +219,15 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 
 // loadObserverManifests loads, verifies, and capability-checks every
 // configured extension manifest. Fail-closed: any problem refuses startup.
-func loadObserverManifests(c config.Extensions) ([]*ext.Manifest, error) {
+func loadObserverManifests(cfg *config.Config) ([]*ext.Manifest, error) {
+	c := cfg.Extensions
 	seen := map[string]bool{}
 	manifests := make([]*ext.Manifest, 0, len(c.Manifests))
-	for _, path := range c.Manifests {
+	for _, rel := range c.Manifests {
+		path, err := cfg.ResolveExtensionManifestPath(rel)
+		if err != nil {
+			return nil, err
+		}
 		m, err := ext.LoadManifest(path)
 		if err != nil {
 			return nil, fmt.Errorf("extension manifest %s: %v", filepath.Base(path), err)
@@ -219,15 +236,6 @@ func loadObserverManifests(c config.Extensions) ([]*ext.Manifest, error) {
 			return nil, fmt.Errorf("extension name %q declared twice (unique names are required for metrics and logs)", m.Name)
 		}
 		seen[m.Name] = true
-		wired := false
-		for _, p := range m.Permissions {
-			if p == "observe" {
-				wired = true
-			}
-		}
-		if !wired {
-			return nil, fmt.Errorf("extension %q must declare the observe permission; no other permission is wired into the runtime today", m.Name)
-		}
 		if _, err := ext.Verify(m, c.Ed25519PubKeyHex); err != nil {
 			return nil, fmt.Errorf("extension %q failed verification: %v", m.Name, err)
 		}

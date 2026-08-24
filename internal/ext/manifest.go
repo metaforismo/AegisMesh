@@ -37,17 +37,10 @@ var (
 	errManifest = errors.New("ext manifest")
 )
 
-// Permissions allowed in v1alpha1:
-//   - respond: extension may contribute response text (not wired into the
-//     runtime yet; reserved by the schema)
-//   - observe: extension receives observation envelopes (data-only; its
-//     replies carry acks/errors and can never influence behavior)
-//
-// Anything more requires a new schema version and ADR.
-var allowedPermissions = map[string]bool{
-	"respond": true,
-	"observe": true,
-}
+// v1alpha1 deliberately exposes one data-only capability. Adding any other
+// permission requires a new schema version and ADR because extension output
+// must never become runtime behavior by accident.
+const observePermission = "observe"
 
 type Manifest struct {
 	APIVersion  string     `json:"api_version"`
@@ -93,16 +86,8 @@ func (m *Manifest) Validate() error {
 	if !versionRe.MatchString(m.Version) {
 		return fmt.Errorf("%w: version %q must be semver (MAJOR.MINOR.PATCH)", errManifest, m.Version)
 	}
-	if len(m.Permissions) == 0 {
-		return fmt.Errorf("%w: permissions must be non-empty (use [\"respond\"]) so grants stay explicit", errManifest)
-	}
-	if len(m.Permissions) > 8 {
-		return fmt.Errorf("%w: too many permissions", errManifest)
-	}
-	for _, p := range m.Permissions {
-		if !allowedPermissions[p] {
-			return fmt.Errorf("%w: permission %q not recognized (allowed: observe|respond)", errManifest, p)
-		}
+	if len(m.Permissions) != 1 || m.Permissions[0] != observePermission {
+		return fmt.Errorf("%w: permissions must be exactly [\"%s\"]; response-influencing permissions are not supported", errManifest, observePermission)
 	}
 	t := &m.Transport
 	if t.Kind != TransportSubprocessNDJSON {
@@ -155,7 +140,18 @@ func (m *Manifest) ExecutablePath() (string, error) {
 	if !withinDir(m.Dir, p) {
 		return "", fmt.Errorf("%w: command resolves outside the manifest directory", errManifest)
 	}
-	return p, nil
+	baseReal, err := filepath.EvalSymlinks(m.Dir)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve manifest directory: %v", errManifest, err)
+	}
+	targetReal, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve executable: %v", errManifest, err)
+	}
+	if !withinDir(baseReal, targetReal) {
+		return "", fmt.Errorf("%w: command symlink resolves outside the manifest directory", errManifest)
+	}
+	return targetReal, nil
 }
 
 func withinDir(base, target string) bool {

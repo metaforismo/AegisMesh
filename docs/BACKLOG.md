@@ -173,18 +173,23 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Verify:** focused storage restart/failure tests; race tests; license and
   secret checks; `make lint test`.
 
-### P1-5 — extension live-policy boundary — TODO
+### P1-5 — extension live-policy boundary — IN PROGRESS
 
-- **Evidence:** ADR-0006 and runtime ship only a bounded data-only observer path;
-  extension responses cannot affect evidence, policy or decoy behavior.
-- **Affected:** extension manifest/host/manager, policy/runtime and threat model.
+- **Evidence:** the former v1alpha1 schema reserved `respond`, the host exposed a
+  generic raw-result call, matching response bodies were discarded without a
+  typed contract, and fan-out still occurred after a failed primary append.
+- **Affected:** extension manifest/host/manager, runtime fan-out, CLI/reference
+  observer, architecture, threat model and operator documentation.
 - **Security/egress:** response influence is a security architecture change.
   Sending correlation signals to extensions or webhooks is new external egress
   and requires explicit approval. Never republish signals with `Bus.Submit`.
-- **Dependencies:** P0-2; explicit operator-enable design and provenance schema;
-  user approval for any new egress.
-- **Acceptance:** strict typed/bounded output, auditable provenance, no execution,
-  path selection, config mutation or enforcement, and no recursion/order races.
+- **Dependencies:** P0-2; ADR-0014. No new egress or response authority was
+  approved or added.
+- **Acceptance:** observe-only strict manifests; identity-bound handshake;
+  canonical event-bound acknowledgements; no extension-produced return value;
+  failed primary append suppresses fan-out; bounded concurrent shutdown and
+  terminal process revocation; no execution, path/config mutation, enforcement,
+  signal recursion or ordering change.
 - **Verify:** adversarial schema/capability tests, shutdown saturation tests,
   runtime race tests and `make lint test`.
 

@@ -410,6 +410,31 @@ func TestExtensionsSectionValidation(t *testing.T) {
 			wantErr: "duplicated",
 		},
 		{
+			name:    "empty manifest path",
+			snippet: "extensions:\n  enabled: true\n  manifests: [\"\"]\n",
+			wantErr: "non-empty paths",
+		},
+		{
+			name:    "padded manifest path",
+			snippet: "extensions:\n  enabled: true\n  manifests: [\" observer.json \"]\n",
+			wantErr: "surrounding whitespace",
+		},
+		{
+			name:    "absolute manifest path",
+			snippet: "extensions:\n  enabled: true\n  manifests: [/tmp/observer.json]\n",
+			wantErr: "relative to the config file directory",
+		},
+		{
+			name:    "traversing manifest path",
+			snippet: "extensions:\n  enabled: true\n  manifests: [../observer.json]\n",
+			wantErr: "must not traverse",
+		},
+		{
+			name:    "normalized duplicate manifest paths",
+			snippet: "extensions:\n  enabled: true\n  manifests: [observer.json, sub/../observer.json]\n",
+			wantErr: "duplicated",
+		},
+		{
 			name:    "queue size out of bounds",
 			snippet: "extensions:\n  enabled: true\n  manifests: [m.json]\n  queue_size: 3\n",
 			wantErr: "queue_size",
@@ -462,6 +487,73 @@ func TestExtensionsSectionValidation(t *testing.T) {
 	if !c.Extensions.IsEnabled() || c.Extensions.QueueSize != DefaultExtensionQueueSize ||
 		c.Extensions.ShutdownFlushSeconds != DefaultExtensionFlushSecs {
 		t.Fatalf("defaults wrong: %+v", c.Extensions)
+	}
+}
+
+func TestExtensionBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		queue int
+		flush int
+		ok    bool
+	}{
+		{name: "queue minimum", queue: MinExtensionQueueSize, flush: DefaultExtensionFlushSecs, ok: true},
+		{name: "queue below minimum", queue: MinExtensionQueueSize - 1, flush: DefaultExtensionFlushSecs},
+		{name: "queue maximum", queue: MaxExtensionQueueSize, flush: DefaultExtensionFlushSecs, ok: true},
+		{name: "queue above maximum", queue: MaxExtensionQueueSize + 1, flush: DefaultExtensionFlushSecs},
+		{name: "flush minimum", queue: DefaultExtensionQueueSize, flush: MinExtensionFlushSecs, ok: true},
+		{name: "flush zero uses default", queue: DefaultExtensionQueueSize, flush: 0, ok: true},
+		{name: "flush negative", queue: DefaultExtensionQueueSize, flush: -1},
+		{name: "flush maximum", queue: DefaultExtensionQueueSize, flush: MaxExtensionFlushSecs, ok: true},
+		{name: "flush above maximum", queue: DefaultExtensionQueueSize, flush: MaxExtensionFlushSecs + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			enabled := true
+			err := ValidateExtensions(Extensions{
+				Enabled:              &enabled,
+				Manifests:            []string{"observer.json"},
+				QueueSize:            tc.queue,
+				ShutdownFlushSeconds: tc.flush,
+			})
+			if tc.ok && err != nil {
+				t.Fatalf("expected valid bounds: %v", err)
+			}
+			if !tc.ok && err == nil {
+				t.Fatal("expected invalid bounds")
+			}
+		})
+	}
+}
+
+func TestResolveExtensionManifestPathContained(t *testing.T) {
+	base := t.TempDir()
+	manifest := filepath.Join(base, "observer.json")
+	if err := os.WriteFile(manifest, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := Config{SourcePath: filepath.Join(base, "mesh.yaml")}
+	got, err := c.ResolveExtensionManifestPath("observer.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	outside := filepath.Join(t.TempDir(), "outside.json")
+	if err := os.WriteFile(outside, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "escape.json")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ResolveExtensionManifestPath("escape.json"); err == nil || !strings.Contains(err.Error(), "outside the config directory") {
+		t.Fatalf("symlink escape must fail closed, got %v", err)
 	}
 }
 

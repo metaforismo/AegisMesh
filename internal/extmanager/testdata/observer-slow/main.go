@@ -12,6 +12,9 @@ type frame struct {
 	Type    string          `json:"type"`
 	ID      string          `json:"id,omitempty"`
 	Proto   int             `json:"protocol,omitempty"`
+	Name    string          `json:"name,omitempty"`
+	Version string          `json:"version,omitempty"`
+	Params  json.RawMessage `json:"params,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Message string          `json:"message,omitempty"`
 }
@@ -33,10 +36,20 @@ func main() {
 		}
 		switch {
 		case f.Type == "hello":
-			write(w, frame{Type: "hello_ok", Proto: f.Proto})
+			write(w, frame{Type: "hello_ok", Proto: f.Proto, Name: "obs-slow", Version: "1.0.0"})
 		case f.Type == "request":
 			time.Sleep(2 * time.Second) // far beyond any test call deadline
-			write(w, frame{Type: "response", ID: f.ID, Result: json.RawMessage(`{"ok":true}`)})
+			var obs struct {
+				EventID string `json:"event_id"`
+			}
+			if json.Unmarshal(f.Params, &obs) != nil || obs.EventID == "" {
+				return
+			}
+			result, _ := json.Marshal(struct {
+				EventID  string `json:"event_id"`
+				Accepted bool   `json:"accepted"`
+			}{EventID: obs.EventID, Accepted: true})
+			write(w, frame{Type: "response", ID: f.ID, Result: result})
 		}
 	}
 }

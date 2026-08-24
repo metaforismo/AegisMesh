@@ -121,7 +121,7 @@ func TestBuildFailsClosedOnMissingExtensionManifest(t *testing.T) {
 	}
 }
 
-func TestBuildFailsClosedOnRespondOnlyExtension(t *testing.T) {
+func TestBuildFailsClosedOnRespondPermission(t *testing.T) {
 	mp := buildAckerExtension(t, 2000)
 	raw, _ := os.ReadFile(mp)
 	var m ext.Manifest
@@ -132,20 +132,18 @@ func TestBuildFailsClosedOnRespondOnlyExtension(t *testing.T) {
 	os.WriteFile(p2, out, 0o600)
 
 	cfg := testConfigWithExtensions(t, p2)
-	if _, err := Build(cfg, quietLogger()); err == nil || !strings.Contains(err.Error(), "observe permission") {
-		t.Fatalf("respond-only manifests must be refused, got: %v", err)
+	if _, err := Build(cfg, quietLogger()); err == nil || !strings.Contains(err.Error(), "permissions must be exactly") {
+		t.Fatalf("response-influencing manifests must be refused, got: %v", err)
 	}
 }
 
 func testConfigWithExtensions(t *testing.T, manifestPath string) *config.Config {
 	t.Helper()
-	dir := t.TempDir()
-	dataDir := filepath.Join(dir, "data")
-	_ = dataDir
 	base := testConfig(t)
+	base.SourcePath = filepath.Join(filepath.Dir(manifestPath), "mesh.yaml")
 	base.Extensions = config.Extensions{
 		Enabled:              boolPtr(true),
-		Manifests:            []string{manifestPath},
+		Manifests:            []string{filepath.Base(manifestPath)},
 		QueueSize:            config.DefaultExtensionQueueSize,
 		ShutdownFlushSeconds: config.DefaultExtensionFlushSecs,
 	}

@@ -193,14 +193,15 @@ Nothing is ever executed — results are canned text.
 
 ## Extensions (observer, optional)
 
-Out-of-process observer extensions receive a bounded stream of observations
-(data-only; their replies are acks/errors and can never influence decoy
-behavior, evidence, or policy — ADR-0006).
+Out-of-process observer extensions receive a bounded stream of successfully
+stored observations. The extension output contract is one exact event-linked
+acknowledgement; no returned content can influence decoy behavior, evidence,
+configuration or policy (ADR-0006 and ADR-0014).
 
 ```yaml
 extensions:
   enabled: true
-  manifests:                      # ext.aegismesh.io/v1alpha1 manifest files
+  manifests:                      # strict config-relative v1alpha1 manifest paths
     - ./extensions/observer/manifest.json
   queue_size: 256                 # per-extension delivery queue (16..4096); full = drop+count
   shutdown_flush_seconds: 2       # bounded drain window at shutdown (1..10)
@@ -211,17 +212,31 @@ Semantics that matter:
 
 - **Verification is fail-closed.** Every manifest must pass digest (sha256,
   mandatory) and — when `ed25519_pubkey_hex` is set — ed25519 signature checks
-  before startup; any failure refuses to start the system.
-- **Capability gate.** Only extensions declaring the `observe` permission are
-  wired today; anything else is refused with an explicit message.
+  before startup; any failure refuses to start the system. Manifest paths must
+  be relative to and remain contained within the config directory, including
+  after symlink resolution. Manifest files are regular, capped at 1 MiB, and
+  strictly reject unknown, duplicate and trailing fields. Referenced artifacts
+  must be regular, remain inside the manifest directory after symlink
+  resolution, and are streamed through a 256 MiB verification cap.
+- **Capability gate.** A v1alpha1 manifest must declare exactly
+  `permissions: ["observe"]`; missing, repeated, mixed or response-influencing
+  permissions are refused.
 - **Delivery is best-effort by design.** Full queues drop (counter
   `aegismesh_extension_dropped_total`), slow/crashing/erroring extensions are
   revoked for the process lifetime (`aegismesh_extension_revoked_total`) — no
-  restart storms. Evidence storage is never affected.
+  restart storms. An observation is offered only after its authoritative store
+  append succeeds; a failed append is never exposed as if it were evidence.
 - **Lifecycle.** Extensions start after admin and before sensors; shutdown
   drains up to `shutdown_flush_seconds`, then stops every host regardless.
 - Payloads are JSON: `{event_id, time, classification, sensor{...}, payload}`
   where `payload` is the same redaction-safe observation stored in evidence.
+  The complete request is capped at 128 KiB. Success requires the canonical
+  response `{"type":"response","id":"req-N","result":{"event_id":"...","accepted":true}}`;
+  unknown, duplicate, reordered or additional response content revokes the
+  process and is never returned to the runtime.
+- Correlation-signal envelopes append directly to the store and are not offered
+  to extensions. Enabling that delivery would be new egress and needs a
+  separate architecture and approval decision.
 
 ## Webhook evidence stream (optional, off by default)
 

@@ -292,11 +292,16 @@ for exact field mappings.
 ## aegismesh ext
 
     ext verify --manifest FILE [--pubkey KEYFILE]
-    ext run    --manifest FILE --input JSON  [--pubkey KEYFILE]
+    ext run    --manifest FILE [--input JSON] [--pubkey KEYFILE]
 
 Verify an extension manifest (sha256 digest required; optional ed25519
-signature over the digest) or execute it under the out-of-process host with
-handshake/deadline/output caps and revocation on violation.
+signature over the digest) or send one synthetic observation probe under the
+out-of-process host. Omitted `--input` means `{}`; an explicit empty,
+whitespace-only or malformed value is rejected. The probe enforces the same
+handshake/deadline/output caps and exact acknowledgement contract as runtime
+delivery. Output is core-owned metadata (`accepted: true`, `applied: false`),
+never extension content or a policy result. `--pubkey` must name one regular
+file no larger than 1 KiB; its contents are never printed.
 
 ## aegismesh version / completion
 
