@@ -68,6 +68,7 @@ jobs:
           go test -run '^$' -fuzz=FuzzSSHMetadataHelpers  ./internal/sensor/sshsensor  -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzGenerateObservation ./internal/recommend         -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzImportBeelzebubDoc  ./internal/migrate/beelzebub -fuzztime=15s -fuzzminimizetime=0
+          go test -run '^$' -fuzz=FuzzRejectDuplicateJSONKeys ./internal/ext            -fuzztime=15s -fuzzminimizetime=0
 
   helm-contract:
     name: helm chart contract
