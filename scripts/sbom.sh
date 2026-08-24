@@ -1,37 +1,61 @@
 #!/usr/bin/env sh
-# sbom.sh — generate a CycloneDX SBOM for the aegismesh binary/module.
+# sbom.sh — generate the deterministic CycloneDX application SBOM.
 #
-# Prefers syft (image/directory SBOM) and falls back to the pure-Go
-# CycloneDX generator from the Go toolchain ecosystem when available.
-# If neither tool is installed, prints exact setup instructions and exits 2 —
-# it never fabricates an SBOM.
+# The generator is deliberately invoked through an exact Go module version:
+# there is no PATH fallback or floating @latest dependency. The output is
+# first written beside the requested destination and then renamed atomically.
 set -eu
 
-out="${1:-dist/sbom-aegismesh.cdx.json}"
-mkdir -p "$(dirname "$out")"
+case "$#" in
+  0) out='dist/sbom-aegismesh.cdx.json' ;;
+  1) out=$1 ;;
+  *)
+    echo "usage: $0 [OUTPUT]" >&2
+    exit 2
+    ;;
+esac
 
-if command -v syft >/dev/null 2>&1; then
-  echo "sbom.sh: using syft"
-  syft dir:. -o cyclonedx-json="$out"
-  echo "sbom.sh: wrote $out"
-  exit 0
-fi
+[ -n "$out" ] || {
+  echo "sbom.sh: output path must not be empty" >&2
+  exit 2
+}
 
-if command -v cyclonedx-gomod >/dev/null 2>&1; then
-  echo "sbom.sh: using cyclonedx-gomod"
-  cyclonedx-gomod mod -json -output "$out" ./go.mod
-  echo "sbom.sh: wrote $out"
-  exit 0
-fi
+out_dir=$(dirname "$out")
+mkdir -p "$out_dir"
+tmp=$(mktemp "$out.tmp.XXXXXX")
+cleanup() {
+  rm -f "$tmp"
+}
+trap cleanup EXIT HUP INT TERM
 
-cat >&2 <<'EOF'
-sbom.sh: no supported SBOM tool found.
+goos=${GOOS:-$(GOTOOLCHAIN=go1.25.14 go env GOOS)}
+goarch=${GOARCH:-$(GOTOOLCHAIN=go1.25.14 go env GOARCH)}
+cgo_enabled=${CGO_ENABLED:-$(GOTOOLCHAIN=go1.25.14 go env CGO_ENABLED)}
 
-Install one of:
-  syft:            https://github.com/anchore/syft (brew install syft)
-  cyclonedx-gomod: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+GOTOOLCHAIN=go1.25.14 \
+GOPROXY=https://proxy.golang.org \
+GOSUMDB=sum.golang.org \
+GONOSUMDB= \
+GOOS="$goos" \
+GOARCH="$goarch" \
+CGO_ENABLED="$cgo_enabled" \
+GOFLAGS=-mod=readonly \
+go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0 \
+  app \
+  -main ./cmd/aegismesh \
+  -licenses \
+  -std \
+  -json \
+  -noserial \
+  -notimestamp \
+  -output-version 1.6 \
+  -output "$tmp" \
+  .
 
-CI generates SBOMs automatically on release tags; this script exists for
-local verification. Exiting 2 (tool unavailable, nothing produced).
-EOF
-exit 2
+[ -s "$tmp" ] || {
+  echo "sbom.sh: generator produced an empty output" >&2
+  exit 1
+}
+mv "$tmp" "$out"
+trap - EXIT HUP INT TERM
+echo "sbom.sh: wrote $out (${goos}/${goarch}, cgo=${cgo_enabled})"

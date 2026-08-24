@@ -15,6 +15,12 @@ authentication with per-instance ephemeral Ed25519 keys, bounded resources,
 and unconditional rejection of every channel and global request. Exact current
 commands and evidence live in `docs/verification.md`.
 
+The supply-chain slice pins Actions, SBOM/vulnerability tools, and both
+container bases; generates deterministic platform-specific CycloneDX 1.6
+application inventories; validates their reference graph; and isolates
+tag-triggered OIDC authority in a binary-only attestation job. It does not
+publish, sign, or attest anything during pull requests.
+
 ## Non-obvious decisions
 
 - Provider output and extension output are untrusted data. Neither can select
@@ -44,19 +50,24 @@ commands and evidence live in `docs/verification.md`.
 - Helm is real packaging with contract tests; real-cluster support is not verified.
 - Correlation signals do not reach webhook or observer extensions. Enabling that
   would be new external egress and requires explicit approval.
-- `golangci-lint`, local CycloneDX tooling and cosign may be unavailable
-  locally; record BLOCKED rather than inferring results. The SSH slice ran
-  pinned `govulncheck` through `go run` with Go 1.25.14.
+- `golangci-lint` and cosign may be unavailable locally; record BLOCKED rather
+  than inferring results. `make vuln` and `make sbom` use exact Go tool
+  versions and fail closed if acquisition fails.
+- No v0.2 tag, GitHub release, provenance statement, or binary signature has
+  been created. The release workflow is readiness evidence; executing its
+  external writes remains a separate approval.
 - GitHub authentication and API access were available on 2026-08-24. Public
   PR/issue state remains mutable; re-check before relying on the captured list.
 
 ## Exact remaining work
 
 `docs/BACKLOG.md` is authoritative. P0 export correctness, lifecycle races,
-claim drift, ECS export, and the SSH deception slice are closed. The next
-ordered slice is supply-chain pinning, followed by the dry-run recommendation
-model and self-contained demo. At-rest encryption, the extension live-policy
-boundary, and optional process isolation remain separate later slices in the
+claim drift, ECS export, the SSH deception slice, and supply-chain hardening are
+closed through PR #47: local gates passed and independent CI generated,
+validated, and reproduced the real application SBOM while also passing the
+pinned vulnerability scan. The next ordered slice is the dry-run recommendation
+model, followed by the self-contained demo. At-rest encryption, the extension
+live-policy boundary, and process isolation remain separate later slices in the
 finite v0.2 delivery plan.
 
 ## Commands that matter
@@ -67,6 +78,9 @@ go test -race -count=20 ./internal/event ./internal/webhook ./internal/extmanage
 go test ./internal/ecsexport ./internal/cli -run 'TestMarshal|TestInspectExport' -count=1
 make fuzz-seed
 make helm-contract
+make supply-chain-check
+make sbom sbom-check
+make vuln
 ./scripts/license-check.sh
 ./scripts/secrets-scan.sh
 ```

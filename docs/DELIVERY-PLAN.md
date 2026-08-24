@@ -22,8 +22,8 @@ shutdown-race fixes, and documentation truth-sync.
 | Slice | Deliverable | Depends on | Acceptance gate | Status |
 |---|---|---|---|---|
 | 1 | Evidence-reader fail-closed hotfix | PR #43 | Metadata/open/scan errors abort verified export without changing its target; focused red regression and full race suite | MERGED — PR #44, `fa70969` |
-| 2 | SSH authentication-deception sensor | 1 | Real loopback SSH handshakes; synthetic authentication only; no shell, PTY, channel acceptance, forwarding, filesystem, credential retention, or exec; bounded concurrency/deadlines; dependency/license proof | IN PROGRESS — PR #46; local gates PASS, CI pending |
-| 3 | Supply-chain pinning | 2 | No mutable tool acquisition or container base tags; schema-valid SBOM path; release claims distinguish checksums, provenance, and signatures; no publication credentials | TODO |
+| 2 | SSH authentication-deception sensor | 1 | Real loopback SSH handshakes; synthetic authentication only; no shell, PTY, channel acceptance, forwarding, filesystem, credential retention, or exec; bounded concurrency/deadlines; dependency/license proof | MERGED — PR #46, `150a305` |
+| 3 | Supply-chain pinning | 2 | No mutable tool acquisition or container base tags; schema-valid SBOM path; release claims distinguish checksums, provenance, and signatures; no publication credentials | PASS — PR #47; local gates and independent CI PASS, merge pending |
 | 4 | Dry-run recommendation engine | 2 | Deterministic typed recommendations linked to immutable evidence; conflict/false-positive tests; no enforcement or external action seam | TODO |
 | 5 | Self-contained `aegismesh demo` | 2, 4 | Loopback-only synthetic HTTP/TCP/MCP/SSH flow, OS-assigned ports, bounded readiness/cleanup, deterministic human and JSON summaries, integrity-verified evidence | TODO |
 | 6 | Optional evidence-at-rest encryption | 1 | Disabled by default; fail closed when enabled; no plaintext downgrade; restart/wrong-key/corruption/truncation/rotation/retention/recovery tests; dependency/license proof | TODO |

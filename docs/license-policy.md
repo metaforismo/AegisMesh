@@ -44,14 +44,36 @@ ADR-0010.
 
 ## SBOM and provenance strategy
 
-- SBOM: the tag-triggered release workflow emits CycloneDX JSON for every binary with
-  `anchore/sbom-action`. `scripts/sbom.sh` is a local helper that exits BLOCKED
-  unless Syft or cyclonedx-gomod is already installed; it never fabricates output.
-- Provenance: tag-triggered release binaries receive GitHub build-provenance
-  attestations. This is evidence about the named binary subjects, not a blanket
-  SLSA level claim for the repository or its dependencies.
+- SBOM: local, CI, and release paths use
+  `cyclonedx-gomod@v1.10.0 app` to emit deterministic CycloneDX 1.6 JSON under
+  the corresponding platform build constraints. License detection stays in the
+  specification's evidence field; AegisMesh does not promote a heuristic match
+  to an asserted license. The repository-owned validator checks the root,
+  references, uniqueness, and dependency relationships and fails closed.
+- Provenance: a separate tag-triggered job receives OIDC/attestation authority,
+  downloads only the named binaries, and creates GitHub build-provenance
+  attestations. This is evidence about those binary subjects, not about the
+  SBOM/checksum files and not a blanket SLSA level claim.
 - Signing: `SHA256SUMS.txt` and binaries are not cosign-signed. Checksums and
   GitHub attestations are distinct controls and are described separately.
+
+## Build and release tooling review
+
+These tools do not enter the runtime module graph. They remain security-sensitive
+because CI executes them, so versions and immutable identities are reviewed in
+the same PR that changes them.
+
+| Tool or base | Immutable identity | License evidence | Purpose and boundary |
+|---|---|---|---|
+| CycloneDX GoMod | `v1.10.0` through the Go checksum database | Apache-2.0 | Build-only application dependency inventory; no runtime import |
+| `golang.org/x/vuln/cmd/govulncheck` | `v1.7.0` | BSD-3-Clause | Build-only reachable-vulnerability gate |
+| Go builder image | `golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59` | upstream Go/Alpine notices | Build environment only; multi-platform index resolved from Docker Hub |
+| Distroless runtime image | `gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab` | upstream Distroless/Debian notices | Minimal runtime filesystem; multi-platform index resolved from GCR |
+| GitHub Actions | full 40-character commit SHAs in workflow files | upstream action repositories | CI orchestration; a static gate rejects mutable references |
+
+Image digests establish exact bytes, not license conclusions or security. Their
+platform manifests and upstream notices must be re-reviewed when Dependabot
+proposes a digest update.
 
 ## Attribution process
 

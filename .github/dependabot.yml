@@ -1,6 +1,6 @@
 # Justification (docs/license-policy.md rule 3): keep our deliberately tiny
 # dependency set current. Actions updates arrive as PRs that re-pin to new
-# immutable SHAs; go modules updates cover gopkg.in/yaml.v3 only.
+# immutable SHAs; Go module updates cover the declared module graph.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -12,5 +12,9 @@ updates:
         patterns: ["*"]
   - package-ecosystem: gomod
     directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /deploy
     schedule:
       interval: weekly

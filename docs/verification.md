@@ -5,6 +5,28 @@ arm64; host Go 1.25.5 and project-required Go 1.25.14) or to CI. Vocabulary: **P
 ran, non-zero (fixed or documented); **BLOCKED** = tool/environment missing,
 fallback noted; **NOT RUN** = deliberately skipped, reason given.
 
+## 2026-08-24 — supply-chain release-evidence hardening
+
+| check | command | result |
+|---|---|---|
+| Isolated baseline | `git status --short --branch`; `git rev-parse HEAD` | PASS — `codex/supply-chain-hardening` based on SSH merge `150a305e074f03f2d25dd1c3a0e3f63f1a0f5ece`; the unrelated primary checkout was not modified |
+| Container index identity | `docker buildx imagetools inspect golang:1.25.14-alpine`; `docker buildx imagetools inspect gcr.io/distroless/static-debian12:nonroot` | PASS — verified multiarch index digests `sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59` and `sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab` before pinning |
+| SBOM validator focused tests | `GOCACHE=/tmp/aegismesh-go-cache go test ./tools/sbomcheck -count=1`; `go vet ./tools/sbomcheck` | PASS — bounded 16 MiB strict JSON/CycloneDX 1.6 parser rejects duplicate fields, trailing data, duplicate/dangling references, empty root graphs, and oversized input |
+| Shell and immutable-reference fixtures | `sh -n scripts/sbom.sh scripts/check-supply-chain.sh scripts/check-supply-chain_test.sh scripts/secrets-scan.sh`; `./scripts/check-supply-chain_test.sh`; `./scripts/check-supply-chain.sh` | PASS — exact action SHAs, Docker digests, and external Go `vMAJOR.MINOR.PATCH` tool refs enforced; negative fixtures include partial semantic versions, branches, mutable tags, and dash-prefixed tracked filenames |
+| Workflow syntax and expression check | `actionlint .github/workflows/ci.yml .github/workflows/release.yml` | PASS |
+| Independent security review | read-only Sol review of the complete supply-chain diff | PASS after fixes — review found publication-wide artifact merging, partial Go version acceptance, incomplete provenance verification, and a local toolchain mismatch; exact named downloads, stricter fixtures, source tag/commit binding, and explicit Go 1.25.14 selection closed them before commit |
+| First full-suite attempt | `GOCACHE=/tmp/aegismesh-go-cache make lint test` | FAIL — sandbox denied loopback binds with `operation not permitted`; package failures were environmental, not accepted as product evidence |
+| Full formatting, vet and race suite with loopback access | same command with scoped execution outside the bind-restricted sandbox | PASS — all packages, including `tools/sbomcheck`; `golangci-lint` unavailable, documented gofmt/vet fallback used |
+| Bounded parser fuzzing | `GOCACHE=/tmp/aegismesh-go-cache make fuzz-seed` | PASS — config, event, TCP, SSH, and Beelzebub-import targets each ran 15 seconds with minimization disabled |
+| Helm contract | `GOCACHE=/tmp/aegismesh-go-cache make helm-contract` | PASS — all positive and adversarial chart cases |
+| Module, license, secret and patch integrity | `GOTOOLCHAIN=go1.25.14 go mod verify`; `./scripts/license-check.sh`; `./scripts/secrets-scan.sh`; `git diff --check` | PASS — seven modules verified and within policy; no dependency graph change or secret-shaped diff |
+| Cross-platform offline compile path | `GOCACHE=/tmp/aegismesh-go-cache make release VERSION=v0.2.0-test`; `file dist/aegismesh-v0.2.0-test-*` | FAIL at the subsequent SBOM acquisition boundary — module verification and all four offline static builds completed with the expected Linux/Darwin amd64/arm64 formats; no checksum file was emitted after the generator failed closed |
+| Local CycloneDX generation and determinism | `make sbom`; repeat generation plus `cmp`; `make sbom-check` | BLOCKED — the exact `cyclonedx-gomod@v1.10.0` module was not cached, sandbox DNS could not reach `proxy.golang.org`, and scoped escalation was rejected because this download lacked separate action-time approval; no SBOM PASS is inferred |
+| Local pinned vulnerability scan | `GOTOOLCHAIN=go1.25.14 GOFLAGS=-mod=readonly go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...` | BLOCKED — the exact tool was not cached and sandbox DNS could not reach the Go proxy; PR CI must pass the identical pinned target |
+| Local Docker build | `docker version`; scoped daemon retry | BLOCKED — client 29.1.3 is installed, but the Docker Desktop daemon did not return server state; no image-build PASS is inferred |
+| PR #47 independent CI | `gh pr checks 47 --repo metaforismo/AegisMesh --watch`; `gh run view 32680525563 --job 97296305774 --log` | PASS at `d7fbc6f` — race/full 1m21s, five-target fuzz 1m54s, govulncheck 28s, Helm 29s, license/secrets 18s, supply-chain 43s; the latter acquired CycloneDX GoMod v1.10.0, emitted a real CycloneDX 1.6 application SBOM, printed `SBOM valid`, and passed a byte-for-byte second-generation `cmp` |
+| Release, attestation and signing writes | tag/release creation, GitHub provenance generation, checksum publication, cosign/GPG signing | NOT RUN — no tag or release workflow was executed; publication/signing remains a separate approval boundary |
+
 ## 2026-08-24 — SSH authentication-deception sensor
 
 | check | command | result |
@@ -173,8 +195,8 @@ resulted (root causes fixed, not assertions bent):
 | item | status |
 |---|---|
 | golangci-lint local run | BLOCKED (not installed). Fallback: gofmt + go vet green; CI lint slot reserved. |
-| govulncheck local run | BLOCKED (not installed). CI runs it on every push. |
-| SBOM generation local run | BLOCKED (syft/cyclonedx-gomod not installed); `scripts/sbom.sh` exits 2 with setup instructions rather than fabricating one. CI generates per-release SBOMs. |
+| govulncheck current local supply-chain rerun | BLOCKED (exact v1.7.0 tool absent from cache and sandbox Go-proxy DNS unavailable). PR #47 CI passed the pinned scan; the local boundary remains BLOCKED rather than rewritten as PASS. |
+| SBOM generation local run | BLOCKED (exact CycloneDX GoMod v1.10.0 tool absent from cache and sandbox Go-proxy DNS unavailable); `scripts/sbom.sh` fails closed and leaves no fabricated output. PR #47 CI generated, validated, and reproduced the application SBOM. |
 | cosign keyless signing | NOT RUN (roadmap; attestations provide tamper-evidence meanwhile). Documented in docs/RELEASE.md. |
 | Real-cluster Kubernetes smoke | NOT RUN; the Helm chart contract is PASS, but no cluster-support claim is made. |
-| Docker image build/push | NOT RUN locally this batch (Docker available but image publishing belongs to CI/tag flow); compose file mirrors the tested demo config. |
+| Docker image build/push | BLOCKED for local build because the Docker Desktop daemon did not return server state; image publication remains NOT RUN and belongs to a separately approved release flow. |

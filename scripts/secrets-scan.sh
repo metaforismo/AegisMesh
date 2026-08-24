@@ -29,12 +29,12 @@ while IFS= read -r f; do
         -e 'ghp_[a-zA-Z0-9]{36}' \
         -e 'github_pat_[a-zA-Z0-9_]{82}' \
         -e 'xox[baprs]-[a-zA-Z0-9-]{10,}' \
-        "$f" 2>/dev/null || true
+        -- "$f" 2>/dev/null || true
       grep -Ein \
         -e 'aws_secret_access_key.{0,10}[0-9a-zA-Z/+]{40}' \
         -e 'authorization["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?bearer[[:space:]]+[a-z0-9._~+/=-]{20,}' \
         -e 'api[_-]?key["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[a-z0-9._-]{32,}' \
-        "$f" 2>/dev/null || true
+        -- "$f" 2>/dev/null || true
     }
   )
   # Filter obvious test fixtures and placeholders before judging a hit.

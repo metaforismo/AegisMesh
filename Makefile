@@ -46,8 +46,8 @@ fuzz-short: ## short real fuzzing pass (~1m/target); CI runs fuzz-seed instead
 	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=60s -fuzzminimizetime=0
 
 .PHONY: vuln
-vuln: ## govulncheck if installed
-	@command -v govulncheck >/dev/null 2>&1 && govulncheck ./... || echo "govulncheck not installed; skipped"
+vuln: ## run the pinned govulncheck release
+	GOTOOLCHAIN=go1.25.14 GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GONOSUMDB= GOFLAGS=-mod=readonly go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
 .PHONY: secrets-scan
 secrets-scan: ## heuristic secret scan over tracked files
@@ -58,8 +58,18 @@ license-check: ## verify dependency licenses against policy
 	./scripts/license-check.sh
 
 .PHONY: sbom
-sbom: ## emit module inventory to dist/
-	@mkdir -p dist && ./scripts/sbom.sh > dist/sbom-modules.txt
+sbom: ## emit the application SBOM to dist/
+	@mkdir -p dist
+	./scripts/sbom.sh dist/sbom-aegismesh.cdx.json
+
+.PHONY: sbom-check
+sbom-check: ## validate an existing application SBOM without acquisition
+	test -s dist/sbom-aegismesh.cdx.json
+	GOTOOLCHAIN=go1.25.14 GOFLAGS=-mod=readonly go run ./tools/sbomcheck dist/sbom-aegismesh.cdx.json
+
+.PHONY: supply-chain-check
+supply-chain-check: ## verify immutable workflow, image, and tool references
+	./scripts/check-supply-chain.sh
 
 .PHONY: demo
 demo: build ## scripted end-to-end demo into a temp dir
@@ -67,12 +77,59 @@ demo: build ## scripted end-to-end demo into a temp dir
 
 .PHONY: release
 release: ## cross-build release artifacts + checksums + sbom into dist/
-	@mkdir -p dist
-	go build -trimpath -buildvcs=true -ldflags '$(LDFLAGS)' -o dist/aegismesh-$(VERSION)-darwin-arm64 ./cmd/aegismesh
-	GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=true -ldflags '$(LDFLAGS)' -o dist/aegismesh-$(VERSION)-linux-amd64 ./cmd/aegismesh
-	GOOS=linux GOARCH=arm64 go build -trimpath -buildvcs=true -ldflags '$(LDFLAGS)' -o dist/aegismesh-$(VERSION)-linux-arm64 ./cmd/aegismesh
-	cd dist && shasum -a 256 aegismesh-* > checksums.txt
-	$(MAKE) sbom
+	@set -eu; \
+	mkdir -p dist; \
+	GOTOOLCHAIN=go1.25.14 go mod download; \
+	GOTOOLCHAIN=go1.25.14 go mod verify; \
+	build() { \
+		os=$$1; arch=$$2; \
+		out="dist/aegismesh-$(VERSION)-$$os-$$arch"; \
+		GOTOOLCHAIN=go1.25.14 GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 GOOS="$$os" GOARCH="$$arch" go build -trimpath -buildvcs=true -ldflags '$(LDFLAGS)' -o "$$out" ./cmd/aegismesh; \
+		test -s "$$out"; \
+	}; \
+	generate_sbom() { \
+		os=$$1; arch=$$2; \
+		GOTOOLCHAIN=go1.25.14 GOOS="$$os" GOARCH="$$arch" CGO_ENABLED=0 ./scripts/sbom.sh "dist/sbom-aegismesh-$$os-$$arch.cdx.json"; \
+	}; \
+	validate_sbom() { \
+		os=$$1; arch=$$2; \
+		GOTOOLCHAIN=go1.25.14 GOFLAGS=-mod=readonly go run ./tools/sbomcheck "dist/sbom-aegismesh-$$os-$$arch.cdx.json"; \
+	}; \
+	build linux amd64; \
+	build linux arm64; \
+	build darwin amd64; \
+	build darwin arm64; \
+	generate_sbom linux amd64; \
+	generate_sbom linux arm64; \
+	generate_sbom darwin amd64; \
+	generate_sbom darwin arm64; \
+	validate_sbom linux amd64; \
+	validate_sbom linux arm64; \
+	validate_sbom darwin amd64; \
+	validate_sbom darwin arm64; \
+	if command -v sha256sum >/dev/null 2>&1; then \
+		(cd dist && sha256sum \
+			aegismesh-$(VERSION)-linux-amd64 \
+			aegismesh-$(VERSION)-linux-arm64 \
+			aegismesh-$(VERSION)-darwin-amd64 \
+			aegismesh-$(VERSION)-darwin-arm64 \
+			sbom-aegismesh-linux-amd64.cdx.json \
+			sbom-aegismesh-linux-arm64.cdx.json \
+			sbom-aegismesh-darwin-amd64.cdx.json \
+			sbom-aegismesh-darwin-arm64.cdx.json > SHA256SUMS.txt); \
+	elif command -v shasum >/dev/null 2>&1; then \
+		(cd dist && shasum -a 256 \
+			aegismesh-$(VERSION)-linux-amd64 \
+			aegismesh-$(VERSION)-linux-arm64 \
+			aegismesh-$(VERSION)-darwin-amd64 \
+			aegismesh-$(VERSION)-darwin-arm64 \
+			sbom-aegismesh-linux-amd64.cdx.json \
+			sbom-aegismesh-linux-arm64.cdx.json \
+			sbom-aegismesh-darwin-amd64.cdx.json \
+			sbom-aegismesh-darwin-arm64.cdx.json > SHA256SUMS.txt); \
+	else \
+		echo "release: sha256sum or shasum is required" >&2; exit 2; \
+	fi
 
 .PHONY: clean
 clean:
