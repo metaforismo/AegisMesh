@@ -202,7 +202,7 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   no production-readiness claim.
 - **Verify:** targeted `rg`, `go list ./...`, workflow inspection, `make lint test`.
 
-### P2-2 — supply-chain hardening — IN PROGRESS
+### P2-2 — supply-chain hardening — PASS
 
 - **Evidence:** the previous release workflow granted OIDC authority to the
   build/SBOM job, scanned the workspace rather than the target application,
@@ -218,7 +218,7 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   publish artifacts, or change repository settings without action-time approval.
   No runtime module, destination, or egress changed.
 - **Dependencies:** Go 1.25.14; CycloneDX GoMod v1.10.0; govulncheck v1.7.0;
-  exact Actions and multiarch image-index digests. PR CI must exercise tool
+  exact Actions and multiarch image-index digests. PR #47 CI exercised tool
   acquisition because the local sandbox denied it.
 - **Acceptance:** pinned tool acquisition; schema-valid CycloneDX inventory with
   direct/transitive relationships; publish bytes come only from exact named
@@ -231,6 +231,8 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   .github/workflows/{ci,release}.yml`; `make lint test`; `make fuzz-seed`;
   `make helm-contract`; `make vuln`; `go mod verify`; license/secret/diff gates.
   Release publication and provenance creation remain NOT RUN without approval.
+  PR #47 independently passed the real SBOM validator and byte-for-byte second
+  generation, pinned govulncheck, full race/fuzz, Helm, license and secret jobs.
 
 ### P2-3 — deployment evidence — TODO
 

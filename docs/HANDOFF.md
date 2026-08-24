@@ -62,13 +62,13 @@ publish, sign, or attest anything during pull requests.
 ## Exact remaining work
 
 `docs/BACKLOG.md` is authoritative. P0 export correctness, lifecycle races,
-claim drift, ECS export, and the SSH deception slice are closed. Supply-chain
-implementation and local static gates are complete, while the real SBOM and
-pinned vulnerability checks still require PR CI because this sandbox could not
-acquire their exact Go tools. After those gates and merge, the next ordered
-slice is the dry-run recommendation model, followed by the self-contained demo.
-At-rest encryption, the extension live-policy boundary, and process isolation
-remain separate later slices in the finite v0.2 delivery plan.
+claim drift, ECS export, the SSH deception slice, and supply-chain hardening are
+closed through PR #47: local gates passed and independent CI generated,
+validated, and reproduced the real application SBOM while also passing the
+pinned vulnerability scan. The next ordered slice is the dry-run recommendation
+model, followed by the self-contained demo. At-rest encryption, the extension
+live-policy boundary, and process isolation remain separate later slices in the
+finite v0.2 delivery plan.
 
 ## Commands that matter
 
