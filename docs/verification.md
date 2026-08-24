@@ -5,6 +5,25 @@ arm64; host Go 1.25.5 and project-required Go 1.25.14) or to CI. Vocabulary: **P
 ran, non-zero (fixed or documented); **BLOCKED** = tool/environment missing,
 fallback noted; **NOT RUN** = deliberately skipped, reason given.
 
+## 2026-08-24 — deterministic dry-run recommendations
+
+| check | command | result |
+|---|---|---|
+| Isolated baseline | `git status --short --branch`; `git rev-parse HEAD`; `git log --oneline -5` | PASS — `codex/dry-run-recommendations` started at supply-chain merge `7d0e59113c699857b256cac7db31f8fc030fc946`; the primary checkout was not modified |
+| HTTP/TCP finding persistence | `GOCACHE=/tmp/aegismesh-go-cache go test -race ./internal/sensor/httpsensor ./internal/sensor/tcpsensor -count=3` | PASS — real loopback interactions persisted deterministic typed findings, omitted benign detection blocks, retained integrity, and did not leak the synthetic credential marker |
+| Core recommendation contract | `GOCACHE=/tmp/aegismesh-go-cache go test ./internal/recommend -count=1`; repeated focused and race runs | PASS — static attacker-independent prose, exact evidence links, deterministic IDs/order, canary-only proposals, correlation resolution, conflict/false-positive metadata, rule-family/schema checks, metadata and collection caps, and filter-before-limit behavior |
+| CLI golden and adversarial matrix | `GOCACHE=/tmp/aegismesh-go-cache go test ./internal/cli -run 'TestRecommend' -count=1`; exact human/JSON files under `internal/cli/testdata` | PASS — byte-stable output plus omitted, explicit-empty, whitespace, padded, repeated, comma, missing, invalid, positional, double-dash, unknown, limit-boundary, no-match, malformed-line, invalid-envelope/hash, duplicate-ID, incompatible-block, and over-cap cases; every input failure left stdout empty |
+| Streaming reader red regression | `GOCACHE=/tmp/aegismesh-go-cache go test ./internal/storage -run TestReaderStreamsBeforeTrailingScannerFailure -count=1` | PASS — callback termination occurs before a trailing overlong line is materialized; segment open/scanner errors still propagate |
+| Sandbox-only focused attempt | `GOCACHE=/tmp/aegismesh-go-cache go test ./internal/storage ./internal/recommend ./internal/cli -count=3` | BLOCKED — unprivileged sandbox denied existing doctor/healthcheck loopback listeners with `operation not permitted`; storage and recommendation passed before the CLI listener boundary |
+| Repeated focused suite with loopback access | same command with scoped loopback execution | PASS — storage, recommendation and complete CLI packages passed three repetitions |
+| Final affected-package race suite | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache go test -race ./internal/storage ./internal/recommend ./internal/cli ./internal/event ./internal/sensor/httpsensor ./internal/sensor/tcpsensor -count=1` | PASS |
+| Independent adversarial review | read-only Sol review of the complete diff, followed by re-review | PASS after fixes — the review found whole-segment buffering, unbounded/unescaped sensor metadata, a vacuous fuzz target and cap test, and missing golden contracts; streaming reads, pre-retention validation, strict metadata bounds, real fuzz coverage and exact goldens closed every blocking finding |
+| Final formatting, vet and all-package race suite | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make lint test` | PASS — all packages passed; `golangci-lint` unavailable, so the documented gofmt/vet fallback ran |
+| Final six-target fuzz suite | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make fuzz-seed` | PASS — config, event, TCP, SSH, recommendation and Beelzebub-import targets each ran 15 seconds with minimization disabled; recommendation executed 1,697,775 cases in the final run |
+| Helm, supply-chain and repository hygiene | `make helm-contract`; `make supply-chain-check`; `go mod verify`; `./scripts/license-check.sh`; `./scripts/secrets-scan.sh`; `git diff --check` | PASS — Helm positive/adversarial contract, immutable references, all seven modules, license policy, secret tripwire and patch whitespace passed; no dependency changed |
+| Local pinned vulnerability scan | `GOCACHE=/tmp/aegismesh-go-cache make vuln`; scoped retry | BLOCKED — the exact `govulncheck@v1.7.0` tool was not cached, sandbox DNS could not reach `proxy.golang.org`, and the external download retry required separate action-time approval; PR CI must pass the identical pinned gate |
+| Runtime actions, release writes and new egress | firewall/credential/process/production mutation; tag/release/signing/attestation; webhook/extension correlation fan-out | NOT RUN — no such path was implemented or invoked; each remains a separate architecture and approval boundary |
+
 ## 2026-08-24 — supply-chain release-evidence hardening
 
 | check | command | result |

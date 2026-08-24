@@ -38,6 +38,9 @@ a JSON-RPC invalid-params error — probing is itself signal.
 3. Feed `inspect export --verify` NDJSON into your existing alerting/SIEM
    pipeline if you have one; the schema is documented in
    docs/architecture/data-flow.md.
+4. Run `aegismesh recommend --data-dir DIR --classification canary_invocation`
+   for deterministic, evidence-linked investigation guidance. The output is a
+   proposal, not an incident determination or enforcement instruction.
 
 ## What this model is NOT
 

@@ -9,9 +9,10 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - A3 Decoy configurations (persona definitions, response rules)
 - A4 Admin endpoints (health/metrics/readiness)
 - A5 Extension manifests and extension host
-- A6 Reputation/integrity of the evidence chain (if evidence can be tampered with, it is worthless)
+- A6 Integrity interpretation of the evidence chain (payload/hash consistency is not provenance)
 - A7 Provider/webhook credential references and operator-configured outbound destinations
 - A8 Release binaries, SBOMs, checksums, provenance statements, and build definitions
+- A9 Recommendation reports and operator interpretation of their evidence links
 
 ## Trust boundaries
 
@@ -24,19 +25,22 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - TB6: Admin listener → operators/monitoring. Loopback-only by default.
 - TB7: Runtime → operator-configured remote provider or webhook collector. Disabled by default; fixed destinations only.
 - TB8: Source, module proxy, Actions, and container registries → CI/release runner → published artifacts.
+- TB9: Local evidence store → recommendation engine → operator. Store contents and envelope metadata may
+  be attacker-influenced or modified by a local writer; recommendation output must remain non-behavioral.
 
 ## STRIDE summary per boundary
 
 | Boundary | Threats | Mitigations in this batch |
 |---|---|---|
 | TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, credential probing, SSH decoy escape | No trust of client-supplied identity fields; HTTP/TCP/MCP inputs use server timeouts, byte caps, bounded loops, and redaction; the SSH boundary uses synthetic authentication only, bounded handshake/session/auth attempts and metadata, an in-memory Ed25519 host key, and rejects every channel/global request; no sensor has filesystem/exec capability |
-| TB2 | Log/evidence forging after compromise, unbounded disk growth | Envelope carries SHA-256 integrity hash over the canonical payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction applied at event construction (single choke point) |
+| TB2 | Log/evidence forging after compromise, unbounded disk growth | Envelope carries a SHA-256 consistency check over the observation payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction applied at event construction (single choke point). The hash is not writer authentication and does not cover envelope metadata |
 | TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body_file | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body_file resolved relative to config dir with symlink+containment checks |
 | TB4 | Prompt-injected provider output instructing follow-on actions, jailbreak content stored/replayed, provider SSRF | Provider output treated exactly like attacker input: size-capped, redacted, stored as quoted text; it can only ever become a decoy *response string* — there is no code path from provider output to exec, paths, config mutation, or enforcement; outbound provider URL is fixed by config, allowlisted scheme http(s), timeout-bounded |
 | TB5 | Malicious extension code, manifest spoofing, output flooding, zombie processes, compromised extension artifact | Out-of-process execution only; manifest schema validation; required sha256 digest + optional ed25519 signature verification; handshake negotiation; deadlines/output caps; minimal environment; revocation = process kill. Configured `observe` extensions may auto-start, but replies are acks/errors and have no path to policy, evidence mutation, filesystem selection or enforcement |
 | TB6 | Recon via metrics/health, header injection into admin responses | Separate loopback-only listener, no attacker-reachable data in responses, explicit opt-out documented but default on |
 | TB7 | SSRF, DNS rebinding, secret disclosure, redirect abuse, data exfiltration, unbounded provider/collector cost | Outbound edges are opt-in and fixed by validated config; destination classification occurs before startup and at dial time; redirects/proxies are refused; credentials resolve before listeners bind and are never logged; requests, responses, queues, retries and time are bounded. Enabling either edge intentionally sends data outside the host |
 | TB8 | Mutable build inputs, compromised actions/tools/base images, dependency substitution, excessive workflow authority, incomplete or misleading release evidence | Actions use full commit SHAs; Go tools use exact versions and checksum-database verification; container bases use verified multiarch digests; a static gate rejects mutable references; modules are downloaded and verified before offline readonly compilation; SBOM work is isolated from OIDC authority; the attestation job downloads named binaries and contains only GitHub-owned pinned actions. Checksums, SBOMs, provenance, and signatures remain distinct claims |
+| TB9 | Malformed evidence, attacker text copied into guidance, false-positive escalation, metadata tampering, recommendation output becoming an action | Complete bounded input is structurally and payload-hash validated before filters/limit; malformed input yields no report; prose comes only from static catalog text; outputs say `recommendation`, `dry_run`, `proposed`, and `signal_not_incident`; no runtime, bus, LLM, extension, webhook, exec, path, config, production-mutation, or enforcement seam exists |
 
 ## Agentic-specific threats
 
@@ -65,6 +69,26 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
    compromise and never triggers enforcement.
 8. **Decoy escape** — decoys expose no interpreter, shell, exec, or file API; MCP "actions" return canned JSON.
    Escape surface is limited to the protocol parsers and Go runtime.
+9. **Recommendation over-interpretation** — a deterministic proposal can still be wrong, conflicting, or
+   based on benign testing. Recommendations link evidence for operator review, expose static false-positive
+   and conflict notes, and never assert an incident or select an enforcement action.
+
+## Recommendation read boundary
+
+The recommendation engine verifies observation-payload hash consistency only.
+Envelope ID, timestamp, sequence, sensor metadata, and classification are not
+covered by that hash. A writer who can modify the evidence store may also
+recompute the payload hash; this is not provenance authentication, a signature,
+or chain of custody.
+
+Every stored envelope is validated before filtering or limiting. Supported
+detection and correlation shapes use strict bounded schemas, and correlation
+contributor IDs become links only when matching verified raw envelopes are in
+the same input. Observation content never supplies report prose: attacker paths,
+hosts, tool names, payloads, summaries, and reasons are not copied. Output is a
+local proposal only and has no path to runtime policy, the event bus, webhooks,
+extensions, LLMs, filesystem selection, commands, configuration mutation, or
+enforcement. Canary activation remains an observation, not proof of an incident.
 
 ## SSH deception sensor boundary
 

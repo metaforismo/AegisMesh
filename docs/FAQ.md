@@ -27,9 +27,17 @@ and an explicitly selected remote provider sends bounded prompt context to its
 fixed API endpoint.
 
 **Is evidence tamper-proof?**
-Tamper-*evident*: each event carries a SHA-256 over its payload, verified at
-read/export time. There is no chain-of-custody anchor yet (roadmap); treat
-integrity failures as compromise of the host, not just the file.
+AegisMesh detects inconsistency between an observation payload and its stored
+SHA-256 value. This does not authenticate the writer, prove provenance, sign
+the envelope, cover its metadata, or stop a writer from recomputing the hash.
+Recommendations preserve this boundary and require operator review. There is
+no chain-of-custody anchor yet.
+
+**Does `recommend` change anything?**
+No. It reads local evidence and emits proposed operator-review guidance. It has
+no path to runtime policy, commands, configuration, webhooks, extensions,
+production assets, or enforcement. The operator selects one read-only evidence
+directory; evidence and recommendation content cannot select any other path.
 
 **Does it send my data to an LLM API?**
 Not by default. The deterministic offline provider is the default. Opt-in

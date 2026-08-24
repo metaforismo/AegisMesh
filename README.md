@@ -6,7 +6,8 @@ human and agentic attackers.**
 AegisMesh deploys bounded HTTP, TCP, authentication-only SSH, and MCP decoys and
 records every interaction as redacted, integrity-checked evidence on your own
 machine. It runs offline by default and never executes attacker input. Response
-recommendations remain roadmap work; the shipped runtime never acts on real assets.
+recommendations are deterministic, local, and dry-run only; the shipped runtime
+never acts on real assets.
 
 > AegisMesh is an independent implementation in the deception-technology problem space. It contains no code
 > or text from other honeypot projects. Inspiration and differences are documented in
@@ -16,8 +17,9 @@ recommendations remain roadmap work; the shipped runtime never acts on real asse
 
 The v0.1.0 foundation shipped three sensors, CLI, evidence storage, admin
 endpoints, and the extension contract. Current `master` adds a fourth,
-authentication-only SSH sensor; this remains an early platform and carries no
-production-readiness claim. See [docs/ROADMAP.md](docs/ROADMAP.md).
+authentication-only SSH sensor and deterministic local dry-run recommendations;
+this remains an early platform and carries no production-readiness claim. See
+[docs/ROADMAP.md](docs/ROADMAP.md).
 The finite v0.2 PR train and stop condition are in
 [docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md). Everything below is verified by
 the commands shown; see [docs/verification.md](docs/verification.md).
@@ -65,6 +67,9 @@ curl -s -X POST http://127.0.0.1:8090/mcp \
 
 # inspect what was recorded (observation ≠ incident; see docs)
 ./bin/aegismesh inspect list --data-dir /tmp/aegismesh-demo/data --limit 5
+
+# produce local operator-review proposals; this never enforces an action
+./bin/aegismesh recommend --data-dir /tmp/aegismesh-demo/data
 ```
 
 Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
@@ -77,6 +82,7 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 | Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST) |
 | Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
 | Evidence | Versioned native envelope, integrity checks, rotation/retention, plus opt-in local ECS-compatible export that preserves the native envelope |
+| Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, with no enforcement or new egress |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
 | Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no exec anywhere |
 | Extensions | Digest-verified out-of-process observer extensions receive bounded data-only events; they cannot influence policy or responses |

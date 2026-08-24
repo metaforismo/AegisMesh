@@ -52,7 +52,8 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   must not imply enforcement or a shipped recommendation engine.
 - **Dependencies:** none.
 - **Acceptance:** implemented, proposed, and aspirational behavior are distinct;
-  canary activations remain observations rather than incidents.
+  the shipped recommendation boundary is distinguished from autonomous
+  enforcement; canary activations remain observations rather than incidents.
 - **Verify:** `rg -n 'recommend|nothing leaves|remote adapters absent|not wired' README.md docs`;
   compare claims with `internal/runtime` and `internal/llm`; `make lint test`.
 
@@ -127,21 +128,35 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   scan, dependency/license checks, full suite, Helm contract, and documentation
   truth-sync passed in the current environment; see `docs/verification.md`.
 
-### P1-3 — dry-run recommendation engine — TODO
+### P1-3 — dry-run recommendation engine — PASS
 
-- **Evidence:** ROADMAP R4 is unchecked and no package or command emits typed,
-  evidence-linked recommendations. Current `policy.Enforcer` changes decoy
-  responses and is not the requested operator recommendation model.
-- **Affected:** future recommendation package/CLI, rule catalog, docs and threat model.
-- **Security/egress:** recommendations only; no firewall, credential, process, or
-  production mutation. Any future action connector needs separate approval.
-- **Dependencies:** architecture decision defining evidence links, conflicts,
-  deterministic ordering, and false-positive semantics.
-- **Acceptance:** every output is labeled `recommendation`, links immutable
-  evidence IDs, remains deterministic, and passes conflicting-rule and
-  false-positive tests without an enforcement seam.
-- **Verify:** focused golden/property tests; CLI malformed-input matrix;
-  `go test -race ./...`; `make lint test`.
+- **Evidence:** the prior baseline had no recommendation package or CLI, and
+  `policy.Enforcer` changes only decoy responses. `internal/recommend` now owns a
+  pure evidence-to-proposal boundary; `aegismesh recommend` performs a complete
+  bounded, fail-closed local read before buffered human or JSON output.
+- **Affected:** HTTP/TCP detection evidence, `internal/storage`, new
+  `internal/recommend`, `internal/cli`, rule catalog, fuzz CI, architecture,
+  product, CLI, threat-model, canary, handoff and verification docs.
+- **Security/egress:** recommendations only. No firewall, credential, process,
+  production mutation, runtime policy, bus, webhook, extension, LLM, command,
+  or enforcement seam; no new egress. Any future action connector needs
+  separate architecture and action-time approval.
+- **Dependencies:** ADR-0012; typed findings persisted by HTTP/TCP/MCP; unified
+  rule catalog; fail-closed streaming evidence reader.
+- **Acceptance:** every output is labeled `recommendation`, `dry_run`,
+  `proposed`, and `signal_not_incident`; links exact evidence IDs and payload
+  hashes from envelopes that passed structural validation and observation-hash
+  consistency checks; states that this is not signature or provenance
+  authentication; remains deterministic; uses static guidance only; exposes
+  conflicts/false-positive limits; filters before the final limit; and writes no
+  stdout for malformed, incompatible, duplicate, oversized, or corrupt input.
+- **Verify:** exact human/JSON goldens; exhaustive CLI empty/whitespace/padded/
+  repeated/comma/missing/invalid/positional matrix; storage streaming regression;
+  core caps/conflict/correlation/canary tests; recommendation fuzz target;
+  affected-package race suite; `make lint test`; see `docs/verification.md`.
+- **Status:** **PASS** — focused and full race suites, six-target fuzz suite,
+  independent adversarial review, documentation truth-sync, and local hygiene
+  gates passed; PR CI remains required before merge.
 
 ### P1-4 — optional evidence-at-rest encryption — TODO
 

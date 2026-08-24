@@ -54,7 +54,10 @@ Nothing is checked on intent alone.
 3. R3 (shipped): ECS-compatible local evidence projection via `inspect export --profile ecs`, with a
    stable mapping, complete native-envelope preservation, deterministic golden tests, strict CLI validation,
    and fail-closed verified export. No connector or automatic upload is implied.
-4. R4: Response recommendation engine v0: rules over events producing *dry-run* playbooks only.
+4. [x] R4 — Response recommendation engine v0: verified local evidence produces deterministic
+   `recommendation` / `dry_run` / `proposed` / `signal_not_incident` operator-review output.
+   It has no path to runtime policy, webhook, extensions, LLMs, filesystem mutation, command execution,
+   or enforcement.
 5. R5: Evidence at rest: optional age/x25519 encryption of JSONL segments.
 6. R6: Wire verified extensions into live policy resolution (behind explicit operator enablement).
    - [x] Data-only observer path shipped: supervised delivery queue, drop/revocation metrics, bounded
