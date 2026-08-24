@@ -1,9 +1,8 @@
 # Release process
 
-Status for v0.1.0: the pipeline below is defined and CI-enforced where the
-environment allows. Steps that require tools not present on the release
-operator's machine are marked honestly; CI performs them so local installs
-are not required.
+The pipeline below is a release-readiness contract. This slice validates its
+structure and local artifact path, but does not create a tag, attestation, or
+GitHub release. Those external writes require separate action-time approval.
 
 ## Versioning
 
@@ -18,45 +17,66 @@ feasible.
 
 ## Cutting a release
 
-1. Ensure CI is green on master (fmt, vet, tests with race, fuzz seeds,
-   govulncheck, license/secret scans).
+1. Ensure CI is green on master (fmt, vet, tests with race, fuzz seeds, Helm
+   contract, module integrity, pinned govulncheck, license/secret scans, SBOM
+   contract, and immutable-reference checks).
 2. Update CHANGELOG.md: new section with date, changes grouped
    Added/Changed/Fixed/Security.
-3. Tag: `git tag -s vX.Y.Z -m "AegisMesh vX.Y.Z" && git push origin vX.Y.Z`.
-   The `release` workflow builds linux/darwin × amd64/arm64 static binaries,
-   generates `SHA256SUMS.txt`, a CycloneDX SBOM per platform, and SLSA build
-   provenance attestations, then publishes a GitHub release with all of it.
-4. Local equivalent: `make release VERSION=vX.Y.Z` produces binaries under
-   `dist/` (`-trimpath`, version stamped from git describe) — CI remains the
-   source of attestations and published artifacts.
+3. After explicit publication approval, create and push a SemVer tag. Sign the
+   tag only when an operator has separately configured and approved a signing
+   identity; the workflow does not treat an unsigned tag as signed. The
+   `release` workflow builds linux/darwin × amd64/arm64 static binaries,
+   generates `SHA256SUMS.txt`, a CycloneDX 1.6 SBOM per build configuration,
+   creates GitHub build-provenance attestations for the binary subjects, and
+   publishes a GitHub release. None of those tag-triggered writes run for a PR.
+4. Local equivalent: `make release VERSION=vX.Y.Z` acquires the exact Go
+   1.25.14 toolchain and pinned SBOM generator, then produces binaries and
+   inventories under `dist/` (`-trimpath`, version stamped from git describe).
+   CI remains the source of attestations and published artifacts.
 
 ## Reproducibility contract
 
-- Builds pin Go via go.mod; CI uses the same major.minor as go.mod.
-- No build step fetches remote content at compile time.
+- Go is pinned by `go.mod`; container bases are pinned to verified multi-platform
+  image-index digests.
+- Dependency and tool acquisition are explicit preparation steps. Release
+  compilation runs with `GOTOOLCHAIN=local`, `GOPROXY=off`, and
+  `-mod=readonly` after `go mod verify`.
+- CycloneDX generation uses the same `GOOS`, `GOARCH`, and `CGO_ENABLED` build
+  constraints as its corresponding binary and omits random serials and
+  timestamps. This is deterministic inventory, not a claim that binaries from
+  different hosts are byte-for-byte reproducible.
 - Binaries embed version metadata via ldflags; `aegismesh version` prints it.
 
 ## Supply-chain properties (and their current limits)
 
 | property | how | status |
 |---|---|---|
-| Builds | `CGO_ENABLED=0 -trimpath -ldflags "-s -w"`; version stamped from tag | done |
-| Checksums | SHA256SUMS.txt over binaries + SBOMs | done |
-| SBOM | anchore/sbom-action, CycloneDX JSON per artifact | done (CI) |
-| Provenance | actions/attest-build-provenance for binary subjects | done on release tags; no repository-wide SLSA level claim |
-| Binary signing | keyless cosign signing is **planned**; attestations currently provide tamper-evidence | roadmap — do not claim signed releases yet |
-| Actions pinned by SHA | enforced in both workflows | done |
+| Builds | Four static binaries; verified module cache, then offline readonly compile; Docker bases pinned by multiarch digest | implemented; container execution still depends on an available Docker daemon |
+| Checksums | Exact four binaries plus exact four SBOMs in `SHA256SUMS.txt`; no wildcard discovery | implemented; checksum is integrity metadata, not a signature |
+| SBOM | `cyclonedx-gomod@v1.10.0 app`, CycloneDX 1.6, platform build constraints, license evidence, repository validator | implemented locally and in CI; detected licenses remain evidence rather than assertions |
+| Provenance | Separate least-privilege job uses `actions/attest-build-provenance` for named binary subjects | tag-only; no SBOM/checksum attestation and no repository-wide SLSA level claim |
+| Binary signing | none | do not claim cosign, GPG, or signed releases |
+| Immutable references | full-SHA Actions, digest-pinned Docker bases, pinned Go tools; static regression gate | enforced in CI and before a tag release |
 
 ## Verifying a download locally
 
     sha256sum --check --ignore-missing SHA256SUMS.txt
-    gh attestation verify ./aegismesh-linux-amd64 -R metaforismo/aegismesh
+    gh attestation verify ./aegismesh-linux-amd64 \
+      -R metaforismo/AegisMesh \
+      --signer-workflow metaforismo/AegisMesh/.github/workflows/release.yml \
+      --source-ref refs/tags/vX.Y.Z \
+      --source-digest EXPECTED_40_HEX_COMMIT
+
+Resolve `EXPECTED_40_HEX_COMMIT` from the reviewed tag before verification.
+Repository and workflow identity alone are insufficient because another run of
+the same workflow can legitimately attest a different artifact.
 
 ## Local tooling honesty note
 
-golangci-lint, govulncheck, syft/sbom-tool, trivy, and cosign were **not
-installed** in the original development environment; local runs recorded
-BLOCKED entries in docs/verification.md with fallbacks (gofmt+vet, scripted
-license/secret scans). CI runs govulncheck on pushes and pull requests; SBOM
-generation belongs to the tag-triggered release workflow. Evidence is recorded
-at the boundary where the command actually ran rather than inferred locally.
+`golangci-lint` and cosign may be absent locally. Formatting/vet use the
+documented Makefile fallback; `make release`, `make vuln`, and `make sbom`
+select Go 1.25.14 and acquire exact pinned Go tool versions through the public
+Go proxy and checksum database. They fail closed if acquisition or validation
+fails. A local SBOM PASS does not imply a tag-triggered provenance or
+publication PASS.
+Evidence is recorded only at the boundary where the command actually ran.

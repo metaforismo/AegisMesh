@@ -1,12 +1,8 @@
 # Release pipeline for tagged builds.
 #
-# Triggers ONLY on tags matching v* (e.g. v0.1.0). Produces:
-#   - static binaries for linux/darwin × amd64/arm64
-#   - SHA256SUMS.txt over all artifacts
-#   - CycloneDX SBOM (anchore/sbom-action)
-#   - SLSA build provenance attestation (actions/attest-build-provenance)
-#
-# All actions pinned by commit SHA; permissions are job-scoped and minimal.
+# Triggers ONLY on tags matching v* (e.g. v0.1.0). Produces four static
+# binaries, one application SBOM per target, exact SHA256SUMS.txt, and binary
+# build-provenance attestations. All actions are pinned by commit SHA.
 
 name: release
 
@@ -29,7 +25,40 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: go test -race ./...
+
+      - name: lint
+        run: make lint
+
+      - name: tests with race detector
+        run: make test
+
+      - name: fuzz seeds
+        run: make fuzz-seed
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'v4.2.2'
+
+      - name: Helm chart contract
+        run: make helm-contract
+
+      - name: verify module graph
+        run: GOTOOLCHAIN=local go mod verify
+
+      - name: pinned vulnerability scan
+        run: make vuln
+
+      - name: dependency license policy
+        run: make license-check
+
+      - name: secret scan
+        run: make secrets-scan
+
+      - name: immutable reference checker
+        run: make supply-chain-check
+
+      - name: immutable reference fixtures
+        run: ./scripts/check-supply-chain_test.sh
 
   build:
     name: build ${{ matrix.goos }}/${{ matrix.goarch }}
@@ -38,8 +67,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      id-token: write     # required by attest-build-provenance
-      attestations: write # required to store the attestation
     strategy:
       matrix:
         include:
@@ -56,39 +83,97 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: build static binary
+      - name: download and verify modules
+        run: GOTOOLCHAIN=local go mod download && GOTOOLCHAIN=local go mod verify
+
+      - name: exact offline static build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
           out="dist/aegismesh-${GOOS}-${GOARCH}"
-          CGO_ENABLED=0 go build -trimpath \
+          GOTOOLCHAIN=local GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go build -trimpath \
             -ldflags "-s -w -X github.com/metaforismo/aegismesh/internal/version.Version=${GITHUB_REF_NAME}" \
             -o "$out" ./cmd/aegismesh
-
-      - name: SBOM (CycloneDX)
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
-        with:
-          format: cyclonedx-json
-          artifact-name: sbom-aegismesh-${{ matrix.goos }}-${{ matrix.goarch }}.cdx.json
-          upload-artifact: false
-          output-file: dist/sbom-aegismesh-${{ matrix.goos }}-${{ matrix.goarch }}.cdx.json
-
-      - name: attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: dist/aegismesh-*
+          test -s "$out"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: aegismesh-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/aegismesh-${{ matrix.goos }}-${{ matrix.goarch }}
           if-no-files-found: error
+
+  sbom:
+    name: SBOM ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: generate and validate platform SBOM
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p dist
+          out="dist/sbom-aegismesh-${GOOS}-${GOARCH}.cdx.json"
+          GOTOOLCHAIN=local ./scripts/sbom.sh "$out"
+          GOTOOLCHAIN=local GOFLAGS=-mod=readonly go run ./tools/sbomcheck "$out"
+          test -s "$out"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/sbom-aegismesh-${{ matrix.goos }}-${{ matrix.goarch }}.cdx.json
+          if-no-files-found: error
+
+  attest:
+    name: attest ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/aegismesh-${{ matrix.goos }}-${{ matrix.goarch }}
 
   publish:
     name: publish release + checksums
-    needs: build
+    needs: [attest, sbom]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -96,16 +181,82 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          merge-multiple: true
+          name: binary-linux-amd64
           path: dist
 
-      - name: generate checksums
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binary-linux-arm64
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binary-darwin-amd64
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binary-darwin-arm64
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sbom-linux-amd64
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sbom-linux-arm64
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sbom-darwin-amd64
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sbom-darwin-arm64
+          path: dist
+
+      - name: assert exact release artifacts
+        run: |
+          set -eu
+          test -s dist/aegismesh-linux-amd64
+          test -s dist/aegismesh-linux-arm64
+          test -s dist/aegismesh-darwin-amd64
+          test -s dist/aegismesh-darwin-arm64
+          test -s dist/sbom-aegismesh-linux-amd64.cdx.json
+          test -s dist/sbom-aegismesh-linux-arm64.cdx.json
+          test -s dist/sbom-aegismesh-darwin-amd64.cdx.json
+          test -s dist/sbom-aegismesh-darwin-arm64.cdx.json
+
+      - name: generate exact SHA256SUMS.txt
         run: |
           cd dist
-          sha256sum aegismesh-* *sbom*.json > SHA256SUMS.txt
+          sha256sum \
+            aegismesh-linux-amd64 \
+            aegismesh-linux-arm64 \
+            aegismesh-darwin-amd64 \
+            aegismesh-darwin-arm64 \
+            sbom-aegismesh-linux-amd64.cdx.json \
+            sbom-aegismesh-linux-arm64.cdx.json \
+            sbom-aegismesh-darwin-amd64.cdx.json \
+            sbom-aegismesh-darwin-arm64.cdx.json \
+            > SHA256SUMS.txt
+          test -s SHA256SUMS.txt
 
       - name: publish GitHub release
         uses: softprops/action-gh-release@fe965f7af51af5f2602596916f38a38df2e33de0 # v3.0.2
         with:
-          files: dist/*
+          files: |
+            dist/aegismesh-linux-amd64
+            dist/aegismesh-linux-arm64
+            dist/aegismesh-darwin-amd64
+            dist/aegismesh-darwin-arm64
+            dist/sbom-aegismesh-linux-amd64.cdx.json
+            dist/sbom-aegismesh-linux-arm64.cdx.json
+            dist/sbom-aegismesh-darwin-amd64.cdx.json
+            dist/sbom-aegismesh-darwin-arm64.cdx.json
+            dist/SHA256SUMS.txt
           generate_release_notes: true

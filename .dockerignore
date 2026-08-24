@@ -1,0 +1,8 @@
+# Send only the Go module manifests and source needed by deploy/Dockerfile.
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**

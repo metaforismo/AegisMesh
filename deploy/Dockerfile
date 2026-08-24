@@ -9,23 +9,23 @@
 #   - No secrets baked in; configuration is mounted at runtime.
 #   - CGO_ENABLED=0 for a fully static binary (works on distroless/scratch).
 
-FROM golang:1.25.14-alpine AS build
+FROM golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS build
 WORKDIR /src
 
 # Cache module downloads independently of source changes.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN GOTOOLCHAIN=local go mod download && GOTOOLCHAIN=local go mod verify
 
 COPY cmd/ cmd/
 COPY internal/ internal/
 # No .git context in image builds; stamp an explicit version rather than a
 # misleading pseudo-version. Release pipelines override via --build-arg.
 ARG VERSION=container
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+RUN GOTOOLCHAIN=local GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 GOOS=linux go build -trimpath \
     -ldflags "-s -w -X github.com/metaforismo/aegismesh/internal/version.Version=${VERSION}" \
     -o /out/aegismesh ./cmd/aegismesh
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 LABEL org.opencontainers.image.title="AegisMesh" \
       org.opencontainers.image.description="Local-first deception, detection, and evidence platform" \
       org.opencontainers.image.licenses="Apache-2.0" \

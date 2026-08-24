@@ -228,3 +228,42 @@ and rejection tests, invalid-proof and input/deadline/concurrency cases,
 redaction assertions, deterministic startup/shutdown race tests, race and fuzz
 coverage, `make lint test`, `go mod verify`, license and secret checks, and a
 pinned vulnerability scan with the current Go 1.25.14 toolchain.
+
+---
+
+## ADR-0011: Release evidence is subject-scoped and privileged signing is isolated
+
+Date: 2026-08-24
+
+Status: Accepted.
+
+**Context.** The initial release workflow named four platform SBOM files but
+allowed the generator to scan the repository workspace. It also granted OIDC
+and attestation authority to a job that executed a third-party SBOM action.
+Checksums, inventories, provenance statements, and signatures answer different
+questions and cannot safely be presented as interchangeable evidence.
+
+**Decision.** Pin every GitHub Action to a full commit SHA, every build tool to
+an exact version, and both container bases to verified multi-platform image
+digests. A static CI gate rejects mutable replacements. Generate CycloneDX 1.6
+application SBOMs with the target binary's build constraints, omit random
+serial/timestamp fields, keep detected licenses as evidence, and validate the
+typed reference graph with a bounded repository-owned stdlib tool.
+
+Release authority is separated by job. Build and SBOM jobs are read-only. The
+attestation job receives OIDC and attestation permissions, downloads one named
+binary, and executes only pinned GitHub-owned actions. The publish job retains
+the existing tag-only `contents: write` boundary, downloads only the eight
+expected artifact names, and accepts exactly four nonempty binaries plus four
+nonempty SBOMs. This prevents an unrelated artifact from being merged over an
+attested filename. Pull requests never execute the tag-triggered attestation or
+publication path.
+
+**Consequences.** A checksum can detect changed bytes but has no signer. An SBOM
+describes components but does not authenticate its subject. GitHub provenance
+binds its named binary subject to the workflow identity but does not sign the
+binary in the cosign/GPG sense, attest the SBOM/checksum, or establish a project
+SLSA level. Tool and module acquisition remains explicit build-time egress;
+compilation itself is offline and readonly. Actual provenance verification and
+release publication remain NOT RUN until an operator separately approves and
+executes a tag release.

@@ -1,6 +1,6 @@
 # AegisMesh threat model
 
-Version: 0.1.0. Method: STRIDE-per-trust-boundary plus agentic-specific threats. Living document.
+Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agentic-specific threats. Living document.
 
 ## Assets
 
@@ -11,6 +11,7 @@ Version: 0.1.0. Method: STRIDE-per-trust-boundary plus agentic-specific threats.
 - A5 Extension manifests and extension host
 - A6 Reputation/integrity of the evidence chain (if evidence can be tampered with, it is worthless)
 - A7 Provider/webhook credential references and operator-configured outbound destinations
+- A8 Release binaries, SBOMs, checksums, provenance statements, and build definitions
 
 ## Trust boundaries
 
@@ -22,6 +23,7 @@ Version: 0.1.0. Method: STRIDE-per-trust-boundary plus agentic-specific threats.
 - TB5: Observer extensions ↔ extension supervisor (out-of-process; untrusted code by definition).
 - TB6: Admin listener → operators/monitoring. Loopback-only by default.
 - TB7: Runtime → operator-configured remote provider or webhook collector. Disabled by default; fixed destinations only.
+- TB8: Source, module proxy, Actions, and container registries → CI/release runner → published artifacts.
 
 ## STRIDE summary per boundary
 
@@ -34,6 +36,7 @@ Version: 0.1.0. Method: STRIDE-per-trust-boundary plus agentic-specific threats.
 | TB5 | Malicious extension code, manifest spoofing, output flooding, zombie processes, compromised extension artifact | Out-of-process execution only; manifest schema validation; required sha256 digest + optional ed25519 signature verification; handshake negotiation; deadlines/output caps; minimal environment; revocation = process kill. Configured `observe` extensions may auto-start, but replies are acks/errors and have no path to policy, evidence mutation, filesystem selection or enforcement |
 | TB6 | Recon via metrics/health, header injection into admin responses | Separate loopback-only listener, no attacker-reachable data in responses, explicit opt-out documented but default on |
 | TB7 | SSRF, DNS rebinding, secret disclosure, redirect abuse, data exfiltration, unbounded provider/collector cost | Outbound edges are opt-in and fixed by validated config; destination classification occurs before startup and at dial time; redirects/proxies are refused; credentials resolve before listeners bind and are never logged; requests, responses, queues, retries and time are bounded. Enabling either edge intentionally sends data outside the host |
+| TB8 | Mutable build inputs, compromised actions/tools/base images, dependency substitution, excessive workflow authority, incomplete or misleading release evidence | Actions use full commit SHAs; Go tools use exact versions and checksum-database verification; container bases use verified multiarch digests; a static gate rejects mutable references; modules are downloaded and verified before offline readonly compilation; SBOM work is isolated from OIDC authority; the attestation job downloads named binaries and contains only GitHub-owned pinned actions. Checksums, SBOMs, provenance, and signatures remain distinct claims |
 
 ## Agentic-specific threats
 
@@ -86,6 +89,10 @@ contract is:
   escape). Per-sensor OS isolation is a roadmap option (ADR-0002 alternative).
 - Local JSONL evidence is plaintext at rest; disk encryption is the operator's responsibility. At-rest
   encryption is roadmap.
+- Build provenance depends on GitHub-hosted runner, OIDC, Sigstore, registry,
+  and source-control integrity. It covers named binary subjects only; current
+  SBOM/checksum files are not attested, and no SLSA level or binary signature is
+  claimed.
 - Remote providers can improve realism but intentionally disclose bounded prompt context to the configured
   endpoint and can incur cost; the deterministic local provider remains the zero-egress default.
 

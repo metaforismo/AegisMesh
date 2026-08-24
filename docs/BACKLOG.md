@@ -202,21 +202,35 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   no production-readiness claim.
 - **Verify:** targeted `rg`, `go list ./...`, workflow inspection, `make lint test`.
 
-### P2-2 — supply-chain hardening — TODO
+### P2-2 — supply-chain hardening — IN PROGRESS
 
-- **Evidence:** actions are immutable-SHA pinned, workflow permissions are
-  scoped, and the SSH prerequisite pins `govulncheck@v1.7.0`. The container
-  builder still uses a mutable tag, local SBOM guidance uses
-  `cyclonedx-gomod@latest`, and provenance/signing are not implemented.
-- **Affected:** CI/release workflows, scripts, release/license docs.
+- **Evidence:** the previous release workflow granted OIDC authority to the
+  build/SBOM job, scanned the workspace rather than the target application,
+  merged every workflow artifact before publication, and used mutable
+  container tags. Local SBOM guidance selected arbitrary installed tools or
+  recommended `@latest`; no regression gate enforced these boundaries. The
+  implementation now separates read-only build/SBOM jobs from exact-subject
+  attestation, downloads eight named publication artifacts, pins tools/actions/
+  image indexes, and validates deterministic CycloneDX 1.6 application graphs.
+- **Affected:** CI/release workflows, Makefile, Docker build context, SBOM/static
+  check scripts, `tools/sbomcheck`, release/license/threat/ADR/handoff docs.
 - **Security/egress:** build-time downloads only. Do not add signing credentials,
   publish artifacts, or change repository settings without action-time approval.
-- **Dependencies:** select immutable tool versions/digests and validate artifacts.
+  No runtime module, destination, or egress changed.
+- **Dependencies:** Go 1.25.14; CycloneDX GoMod v1.10.0; govulncheck v1.7.0;
+  exact Actions and multiarch image-index digests. PR CI must exercise tool
+  acquisition because the local sandbox denied it.
 - **Acceptance:** pinned tool acquisition; schema-valid CycloneDX inventory with
-  direct/transitive relationships; verified provenance language; signing remains
-  explicitly separate until implemented and verified.
-- **Verify:** workflow static checks, SBOM schema validation, provenance verification,
-  license/secret scans. Release publishing remains NOT RUN without approval.
+  direct/transitive relationships; publish bytes come only from exact named
+  artifacts; OIDC exists only in the binary attestation job; provenance
+  verification binds repository, workflow, source tag, and commit; checksums,
+  inventories, provenance, and signing remain distinct claims.
+- **Verify:** `go test ./tools/sbomcheck -count=1`; `sh -n scripts/*.sh`;
+  `./scripts/check-supply-chain_test.sh`; `make supply-chain-check`; `make sbom`;
+  `make sbom-check`; repeat SBOM generation plus `cmp`; `actionlint
+  .github/workflows/{ci,release}.yml`; `make lint test`; `make fuzz-seed`;
+  `make helm-contract`; `make vuln`; `go mod verify`; license/secret/diff gates.
+  Release publication and provenance creation remain NOT RUN without approval.
 
 ### P2-3 — deployment evidence — TODO
 
