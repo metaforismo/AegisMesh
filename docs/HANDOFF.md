@@ -81,8 +81,8 @@ closed through PR #47: local gates passed and independent CI generated,
 validated, and reproduced the real application SBOM while also passing the
 pinned vulnerability scan. The dry-run recommendation model is implemented and
 verified locally and by PR #51 CI, then merged as `86041b8`. The demo slice is
-implemented and locally verified; broader gates and PR review remain. At-rest
-encryption is the next ordered slice after that merge. The extension live-policy
+implemented and verified locally, independently and by PR #52 CI; merge remains.
+At-rest encryption is the next ordered slice after that merge. The extension live-policy
 boundary and process isolation remain separate later slices in the finite v0.2
 delivery plan.
 

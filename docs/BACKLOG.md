@@ -188,7 +188,7 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Verify:** adversarial schema/capability tests, shutdown saturation tests,
   runtime race tests and `make lint test`.
 
-### P1-6 — `aegismesh demo` command — IN PROGRESS
+### P1-6 — `aegismesh demo` command — PASS
 
 - **Evidence:** the former shell walkthrough used fixed ports, external `curl`
   and `nc`, omitted SSH, exposed dynamic state and could not run in parallel.
@@ -206,9 +206,9 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Verify:** exact CLI goldens and adversarial argument matrix; repeated and
   parallel real-loopback integration; affected race suite; `make lint test`;
   see `docs/verification.md`.
-- **Status:** **IN PROGRESS** — focused race tests passed three repetitions,
-  including three concurrent demos. Independent review fixes, final broader
-  gates and PR CI remain required before merge.
+- **Status:** **PASS** — focused race tests passed three repetitions including
+  three concurrent demos; independent review and post-fix re-review, final
+  broader gates and PR #52 CI passed. Merge is the final delivery gate.
 
 ## P2 — operational quality, observability, maintainability, documentation
 
