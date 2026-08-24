@@ -279,22 +279,23 @@ func CountSegment(path string) (int, error) {
 	return n, sc.Err()
 }
 
-func readLines(path string) ([]string, error) {
+func forEachLine(path string, fn func(string) error) error {
 	f, err := os.Open(path) //nolint:gosec // see above
 	if err != nil {
-		return nil, fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
+		return fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
 	}
 	defer f.Close()
-	var out []string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
-		out = append(out, sc.Text())
+		if err := fn(sc.Text()); err != nil {
+			return err
+		}
 	}
 	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
+		return fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
 	}
-	return out, nil
+	return nil
 }
 
 // Reader iterates envelopes across all segments in a directory without
@@ -373,24 +374,20 @@ func (r *Reader) ForEach(fn func(event.Envelope) error, onCorrupt func(line stri
 		return err
 	}
 	for _, sg := range segs {
-		lines, err := readLines(sg.Path)
-		if err != nil {
-			return err
-		}
-		for _, ln := range lines {
+		if err := forEachLine(sg.Path, func(ln string) error {
 			if strings.TrimSpace(ln) == "" {
-				continue
+				return nil
 			}
 			var env event.Envelope
 			if err := json.Unmarshal([]byte(ln), &env); err != nil {
 				if onCorrupt != nil {
 					onCorrupt(ln, err)
 				}
-				continue
+				return nil
 			}
-			if err := fn(env); err != nil {
-				return err
-			}
+			return fn(env)
+		}); err != nil {
+			return err
 		}
 	}
 	return nil

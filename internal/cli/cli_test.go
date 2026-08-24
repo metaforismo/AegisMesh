@@ -34,6 +34,7 @@ func newTestApp(stdin ...io.Reader) (*App, *bytes.Buffer, *bytes.Buffer) {
 		NewValidateCmd(env),
 		NewRunCmd(env),
 		NewInspectCmd(env),
+		NewRecommendCmd(env),
 		NewRulesCmd(env),
 		NewMigrateCmd(env),
 		NewExtCmd(env),

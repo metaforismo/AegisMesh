@@ -23,7 +23,7 @@ Install, e.g.:
   fish: aegismesh completion fish > ~/.config/fish/completions/aegismesh.fish`
 }
 
-var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "inspect", "rules", "migrate", "version", "completion", "ext"}
+var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "inspect", "recommend", "rules", "migrate", "version", "completion", "ext"}
 
 func (c *completionCmd) Run(_ context.Context, args []string) error {
 	if len(args) != 1 {
@@ -61,6 +61,13 @@ _aegismesh_completions() {
           *) COMPREPLY=( $(compgen -W "--data-dir --limit --sensor --kind --verify --id --out --json" -- "$cur") ) ;;
         esac
       fi ;;
+    recommend)
+      case "$prev" in
+        --data-dir) COMPREPLY=( $(compgen -d -- "$cur") ) ;;
+        --classification) COMPREPLY=( $(compgen -W "interaction canary_invocation correlation_signal" -- "$cur") ) ;;
+        --rule) COMPREPLY=( $(compgen -W "PI-001 PI-002 EXF-001 ESC-001 OBS-001 RES-001 COR-001 COR-002 COR-003 COR-004" -- "$cur") ) ;;
+        *) COMPREPLY=( $(compgen -W "--data-dir --limit --rule --sensor --classification --json" -- "$cur") ) ;;
+      esac ;;
     migrate)
       if [ "$COMP_CWORD" -eq 2 ]; then COMPREPLY=( $(compgen -W "beelzebub" -- "$cur") )
       else COMPREPLY=( $(compgen -W "--out --write --force --json" -- "$cur") ); fi ;;
@@ -89,6 +96,13 @@ _aegismesh() {
     args)
       case $words[1] in
         inspect) _values 'subcommand' list show export ;;
+        recommend) _arguments \
+          '--data-dir[evidence directory]:directory:_directories' \
+          '--limit[maximum recommendations]:number:' \
+          '--rule[exact rule id]:rule id:' \
+          '--sensor[exact sensor id]:sensor id:' \
+          '--classification[evidence class]:class:(interaction canary_invocation correlation_signal)' \
+          '--json[emit JSON output]' ;;
         migrate) _values 'target' beelzebub ;;
         completion) _values 'shell' bash zsh fish ;;
       esac ;;
@@ -110,6 +124,12 @@ complete -c aegismesh -n '__fish_use_subcommand' -a '` + strings.Join(knownComma
 complete -c aegismesh -n '__fish_seen_subcommand_from inspect; and __fish_is_first_arg' -a 'list show export'
 complete -c aegismesh -n '__fish_seen_subcommand_from migrate; and __fish_is_first_arg' -a 'beelzebub'
 complete -c aegismesh -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
+complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l data-dir -r -d 'evidence directory'
+complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l limit -r -d 'maximum recommendations'
+complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l rule -r -d 'exact rule id'
+complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l sensor -r -d 'exact sensor id'
+complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l classification -r -a 'interaction canary_invocation correlation_signal' -d 'evidence class'
+complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l json -d 'JSON output'
 complete -c aegismesh -l config -r -d 'config file'
 complete -c aegismesh -l data-dir -r -d 'evidence directory'
 complete -c aegismesh -l json -d 'JSON output'
