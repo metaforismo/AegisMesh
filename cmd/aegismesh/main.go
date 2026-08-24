@@ -18,6 +18,7 @@ func main() {
 		cli.NewValidateCmd(env),
 		cli.NewRunCmd(env),
 		cli.NewInspectCmd(env),
+		cli.NewRecommendCmd(env),
 		cli.NewMigrateCmd(env),
 		cli.NewRulesCmd(env),
 		cli.NewExtCmd(env),

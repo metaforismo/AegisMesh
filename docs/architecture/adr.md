@@ -267,3 +267,43 @@ SLSA level. Tool and module acquisition remains explicit build-time egress;
 compilation itself is offline and readonly. Actual provenance verification and
 release publication remain NOT RUN until an operator separately approves and
 executes a tag release.
+
+---
+
+## ADR-0012: Deterministic evidence-linked recommendations are a read-only dry-run boundary
+
+Date: 2026-08-24
+
+Status: Accepted.
+
+**Context.** Operators need inspectable follow-up guidance without turning a
+decoy observation into an incident claim or giving event, model, extension, or
+configuration data authority over real assets. Existing `policy.Enforcer`
+selects decoy responses and is therefore the wrong ownership boundary.
+
+**Decision.** `internal/recommend` is a pure, deterministic package with event
+and rule-catalog dependencies but no I/O or runtime dependency. The CLI reads a
+bounded local evidence set, and the engine validates every envelope, supported
+observation shape, and observation-payload hash before applying exact filters
+and the final limit. Output is labeled `recommendation`, `dry_run`, `proposed`,
+and `signal_not_incident`; all prose comes from static repository-owned catalog
+text. A canary invocation remains reviewable without a detection block.
+
+Correlation contributor IDs become evidence links only when the complete input
+contains matching verified non-correlation envelopes. Unknown contributor IDs
+are counted but never echoed. The package has no path to `Bus.Submit`, policy,
+LLMs, extensions, webhooks, command execution, filesystem selection,
+configuration mutation, or enforcement. Any future action connector or new
+egress is a separate architecture and approval decision.
+
+**Integrity boundary.** Evidence links carry the exact event ID and stored
+payload hash after verifying `observation_payload_only` as
+`payload_hash_consistent`. This is not a signature, writer authentication,
+provenance proof, or chain-of-custody anchor. Envelope ID, timestamp, sequence,
+sensor metadata, and classification are outside the payload hash even when used
+for deterministic ordering, filters, or display.
+
+**Consequences.** Invalid input fails the complete report with no stdout. Static
+guidance cannot quote attacker-controlled paths, hosts, tools, payloads,
+summaries, or reasons. Operators still decide whether a signal is benign,
+conflicting, or worth action; AegisMesh does not make that decision for them.

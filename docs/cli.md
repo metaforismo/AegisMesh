@@ -112,6 +112,35 @@ mode: invalid records are reported and skipped, so its output is not suitable as
 a verified evidence set. The destination may not resolve to a source evidence
 segment, including through a symlink or hard link.
 
+## aegismesh recommend
+
+    recommend --data-dir DIR [--limit N] [--rule RULE_ID]
+              [--sensor ID]
+              [--classification interaction|canary_invocation|correlation_signal]
+              [--json]
+
+Read local evidence and emit deterministic operator-review proposals. Every
+envelope, supported observation shape, and observation-payload hash is checked
+before filters or the final limit are applied. The default limit is 20 and the
+maximum is 1000. Ordering and recommendation IDs are deterministic; filters are
+exact and conjunctive.
+
+Output is always labeled `recommendation`, `dry_run`, `proposed`, and
+`signal_not_incident`. Guidance is static rule-catalog text: observation fields
+never supply prose. Evidence links contain exact event IDs and payload hashes,
+with `observation_payload_only` / `payload_hash_consistent` scope. This verifies
+payload/hash consistency, not a signature, provenance, writer identity, or
+envelope metadata.
+
+There is no `--verify=false` mode. Malformed lines, invalid envelopes, duplicate
+event IDs, integrity mismatches, malformed supported blocks, input over the
+bounded event cap, and storage read failures abort the whole report before
+stdout is written. Empty or whitespace values, padded values, comma-separated
+filters, repeated flags, missing values, invalid enums/IDs, positional
+arguments, and unknown flags are usage errors. The command is read-only and has
+no runtime-policy, LLM, webhook, extension, command, filesystem-mutation,
+configuration-mutation, external-egress, or enforcement path.
+
 ## aegismesh rules
 
     rules list [--family detection|correlation]

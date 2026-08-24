@@ -9,6 +9,11 @@ an authentication-only SSH sensor,
 detection and bounded correlation, native JSONL evidence, local and opt-in
 remote providers, a bounded signed webhook, data-only observer extensions,
 rule inspection/testing, Docker/Compose and contract-tested Helm packaging.
+The local `recommend` command now turns fully validated stored findings,
+correlation signals, and canary activations into deterministic evidence-linked
+operator-review proposals. It buffers output, is dry-run only, and has no
+runtime, action, or egress path.
+
 Batch 2 R3 adds a local ECS-compatible export profile while preserving the
 native envelope. Batch 2 R1 adds synthetic password/public-key SSH
 authentication with per-instance ephemeral Ed25519 keys, bounded resources,
@@ -32,6 +37,10 @@ publish, sign, or attest anything during pull requests.
   wiring remains unimplemented by ADR-0006.
 - Native evidence remains the source contract. ECS-compatible export is a
   read-boundary projection and nests the complete native envelope.
+- Recommendations are a separate read-only boundary. All input is validated
+  before filters and the final limit; prose is static; evidence IDs and payload
+  hashes prove payload/hash consistency only, not writer identity, metadata
+  integrity, signature, provenance, or chain of custody.
 - Verified export stages output and changes the destination only after all
   records pass structural and integrity checks. It refuses direct, symbolic and
   hard-linked paths to source evidence segments, and any segment read failure
@@ -44,8 +53,8 @@ publish, sign, or attest anything during pull requests.
 
 ## Known gaps and boundaries
 
-- No Telnet/database sensor, decoy-listener TLS, at-rest encryption, response
-  recommendation engine, distributed mesh, or web console.
+- No Telnet/database sensor, decoy-listener TLS, at-rest encryption,
+  distributed mesh, autonomous response connector, or web console.
 - No autonomous enforcement against real assets.
 - Helm is real packaging with contract tests; real-cluster support is not verified.
 - Correlation signals do not reach webhook or observer extensions. Enabling that
@@ -65,8 +74,9 @@ publish, sign, or attest anything during pull requests.
 claim drift, ECS export, the SSH deception slice, and supply-chain hardening are
 closed through PR #47: local gates passed and independent CI generated,
 validated, and reproduced the real application SBOM while also passing the
-pinned vulnerability scan. The next ordered slice is the dry-run recommendation
-model, followed by the self-contained demo. At-rest encryption, the extension
+pinned vulnerability scan. The dry-run recommendation model is implemented and
+verified locally and by PR #51 CI; merge is the remaining gate for this slice.
+The next ordered slice is the self-contained demo. At-rest encryption, the extension
 live-policy boundary, and process isolation remain separate later slices in the
 finite v0.2 delivery plan.
 
@@ -76,6 +86,8 @@ finite v0.2 delivery plan.
 make lint test
 go test -race -count=20 ./internal/event ./internal/webhook ./internal/extmanager
 go test ./internal/ecsexport ./internal/cli -run 'TestMarshal|TestInspectExport' -count=1
+go test ./internal/recommend ./internal/cli -run 'TestGenerate|TestRecommendation|TestRecommend' -count=1
+go test -race ./internal/storage ./internal/recommend ./internal/cli ./internal/sensor/httpsensor ./internal/sensor/tcpsensor -count=1
 make fuzz-seed
 make helm-contract
 make supply-chain-check

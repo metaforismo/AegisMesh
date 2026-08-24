@@ -1,0 +1,41 @@
+{
+  "schema": "aegismesh.recommendation/v1",
+  "mode": "dry_run",
+  "interpretation": "signal_not_incident",
+  "kind": "recommendation",
+  "status": "proposed",
+  "recommendations": [
+    {
+      "schema": "aegismesh.recommendation/v1",
+      "mode": "dry_run",
+      "interpretation": "signal_not_incident",
+      "kind": "recommendation",
+      "status": "proposed",
+      "classification": "interaction",
+      "sensor_id": "http-decoy-1",
+      "sensor_kind": "http",
+      "id": "3b92fa1293b3abcfc0eebcfacbb0180deee045cfcb02f63c8926efa03c8159ca",
+      "rule_ids": [
+        "PI-001"
+      ],
+      "summary": "instruction-override phrasing directed at an automated agent",
+      "operator_review": "Review the linked evidence and surrounding context before deciding whether any response is warranted.",
+      "next_steps": [
+        "Review linked evidence in the context of the decoy configuration.",
+        "Compare the signal with known benign testing and automation.",
+        "Record an operator disposition with the evidence reference."
+      ],
+      "evidence": [
+        {
+          "event_id": "00000000000000000000000000000001",
+          "payload_sha256": "157de8c18fe090f48c62c6b785a1f017c78cfa70de6c627e03137eea1a3409ad",
+          "integrity_scope": "observation_payload_only",
+          "verification": "payload_hash_consistent"
+        }
+      ],
+      "false_positive_notes": [
+        "Signals can result from benign testing, automation, malformed clients, or configuration; they are not proof of an incident."
+      ]
+    }
+  ]
+}

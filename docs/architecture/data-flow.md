@@ -21,6 +21,7 @@ internal/egress        destination classifier shared by validate, LLM providers,
 internal/event         versioned envelope, redaction, integrity hashing, bounded bus
 internal/storage       JSONL append-only store, rotation, retention, export
 internal/ecsexport     deterministic ECS-compatible read-boundary projection
+internal/recommend     pure deterministic evidence-to-proposal engine; no I/O or runtime dependency
 internal/correlate     bounded multi-event correlation engine (COR-001..COR-004 signals)
 internal/webhook       signed best-effort evidence stream to an operator-configured collector
 internal/extmanager    supervised data-only observer extensions (`observe` permission only)
@@ -63,6 +64,9 @@ flowchart LR
     O[Operator] --> P[aegismesh inspect / export / rules]
     M --> P
     P -->|optional --profile ecs; native envelope preserved| ECS[ECS-compatible NDJSON\nlocal output only]
+    O --> REC[aegismesh recommend]
+    M -->|complete fail-closed read| REC
+    REC -->|buffered human or JSON report| PROPOSAL[Dry-run recommendations\nlocal output only]
     O --> Q
 ```
 
@@ -83,6 +87,14 @@ extensions today. That fan-out is deferred work, not shipped behavior; correlati
 interactions are not delivered symmetrically, and nothing here should be read as claiming they are.
 Signals remain observations only — no path from any signal influences decoy behavior or policy.
 
+The recommendation branch is also read-only. It validates and parses the complete
+bounded evidence input before applying filters or a final limit, derives all prose
+from the static rule catalog, and buffers output until generation succeeds. It does
+not submit events, call providers, extensions or webhooks, mutate files or config,
+select commands, or feed runtime policy. Evidence links prove observation-payload
+hash consistency only; ordering, classification and sensor metadata remain outside
+that hash and are not provenance-authenticated.
+
 ## Trust boundary diagram
 
 ```mermaid
@@ -97,6 +109,7 @@ flowchart TB
         COR[Correlation engine]
         WEB[Webhook sink]
         ST[Storage]
+        REC[Recommendation engine]
     end
     subgraph TB3["TB3: semi-trusted files"]
         CF[aegismesh.yaml config]
@@ -116,12 +129,14 @@ flowchart TB
     S --> EV
     POL --> S
     EV --> ST
+    ST --> REC
     EV --> COR
     EV -.->|"optional best-effort raw-envelope offers"| WEB
     COR -->|"signals appended directly;\ncurrently not offered to webhook/extensions"| ST
     EV -.->|"offers only after manifest+digest verification,\nobserve permission required"| EH
     EH -.->|"acks/errors carry no capability"| NFB[No feedback path to sensors or policy]
     WEB -.->|"HMAC-signed, best-effort"| COL[Operator collector]
+    REC -->|"buffered local proposals only"| OUT[Operator output]
 ```
 
 ## Lifecycle
@@ -176,3 +191,5 @@ processes supervised by `internal/extmanager`.
 9. The SSH sensor has no post-auth capability: credentials and usernames are omitted rather than hashed,
    channels and global requests are rejected, and its ephemeral host key never selects a filesystem path or
    creates an outbound connection.
+10. Recommendation text is static catalog guidance. Observation content cannot populate prose, choose a
+    target, or become runtime behavior; recommendations are proposals and never incidents or enforcement.

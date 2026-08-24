@@ -6,7 +6,8 @@ Version: v0.2 development line. Status: active; no production-readiness claim.
 
 AegisMesh is a fully open-source, local-first, secure-by-default agentic deception, detection, and
 evidence platform: you deploy believable decoys and it records every interaction as bounded, redacted,
-integrity-checked evidence. It does not autonomously act on real assets; dry-run recommendations are proposed work.
+integrity-checked evidence. It emits deterministic dry-run recommendations for operator review and does not
+autonomously act on real assets.
 
 ## Problem
 
@@ -56,8 +57,8 @@ Three product families:
 2. **Agent canaries** (shipped MCP sensor): decoy tools registered on an MCP endpoint that no honest
    agent should call. An invocation means either a prompt injection succeeded or someone is exploring your
    agent's tool surface directly — both are worth knowing immediately.
-3. **Response intelligence** (roadmap): replaying collected interactions into detection engineering and
-   recommended (dry-run) containment playbooks.
+3. **Response intelligence** (shipped v0): deterministic local rules turn verified evidence into static,
+   evidence-linked dry-run recommendations for operator review. They never become enforcement.
 
 ## Why AegisMesh is meaningfully better (evidence-linked)
 
@@ -69,14 +70,15 @@ Three product families:
 | Safe defaults | Loopback bind + unprivileged ports validated by `doctor`; strict config schema; dry-run modes |
 | Evidence hygiene | Versioned envelope, payload hashing, redaction pipeline, retention bounds, observation≠incident |
 | Explainability | Every response maps to a policy ID; `inspect` shows exactly why a decoy answered what it answered |
+| Operator review | `recommend` emits deterministic proposed guidance linked to verified local evidence; it cannot mutate assets or add egress |
 
 ## Current core scope (honest boundary)
 
-Ships: CLI (`init`, `doctor`, `validate`, `run`, `inspect`, `rules`, `migrate beelzebub`, `ext`, `healthcheck`,
+Ships: CLI (`init`, `doctor`, `validate`, `run`, `inspect`, `recommend`, `rules`, `migrate beelzebub`, `ext`, `healthcheck`,
 `version`, `completion`), HTTP/TCP/MCP sensors plus authentication-only SSH, static policies, deterministic local and opt-in remote
-providers, JSONL evidence with correlation signals and ECS-compatible local export, loopback admin endpoints,
+providers, JSONL evidence with correlation signals, ECS-compatible local export, deterministic dry-run recommendations, loopback admin endpoints,
 data-only observer extensions, opt-in webhook delivery, Docker/Compose, Helm packaging, CI and docs.
 
-Does not ship yet (see ROADMAP): Telnet and database sensors, OTLP or automatic SIEM connectors, response
-recommendation/playbook engine, evidence-at-rest encryption, distributed deployment, web console, or
+Does not ship yet (see ROADMAP): Telnet and database sensors, OTLP or automatic SIEM connectors, autonomous
+response connectors or enforcement, evidence-at-rest encryption, distributed deployment, web console, or
 verified real-cluster Kubernetes support.

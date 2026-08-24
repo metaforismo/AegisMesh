@@ -30,7 +30,8 @@ The upstream README describes the project as production-ready and uses strong
 intelligence/detection language. AegisMesh does not import those claims as
 facts. A decoy interaction can also be operator testing, benign scanning or
 misconfiguration. AegisMesh records observations, makes no production-readiness
-claim, and has no autonomous enforcement or shipped recommendation engine.
+claim, and ships a deterministic dry-run recommendation engine but no autonomous
+enforcement or action connectors.
 
 ### 1.3 Design observations relevant to AegisMesh
 

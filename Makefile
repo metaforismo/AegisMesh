@@ -39,6 +39,7 @@ fuzz-seed: ## run bounded real fuzzing without post-discovery minimization
 	go test -run '^$$' -fuzz=FuzzDecodeEventEnvelope ./internal/event -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzMatchTCPLine ./internal/sensor/tcpsensor -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzSSHMetadataHelpers ./internal/sensor/sshsensor -fuzztime=15s -fuzzminimizetime=0
+	go test -run '^$$' -fuzz=FuzzGenerateObservation ./internal/recommend -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzImportBeelzebubDoc ./internal/migrate/beelzebub -fuzztime=15s -fuzzminimizetime=0
 
 .PHONY: fuzz-short

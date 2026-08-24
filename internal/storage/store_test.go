@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,6 +161,29 @@ func TestCorruptLinesSkipped(t *testing.T) {
 		func(string, error) { corrupt++ })
 	if err != nil || good != 1 || corrupt != 1 {
 		t.Fatalf("good=%d corrupt=%d err=%v", good, corrupt, err)
+	}
+}
+
+func TestReaderStreamsBeforeTrailingScannerFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, segName(time.Now()))
+	valid := `{"schema":"aegismesh.event/v1","id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","time":"2026-01-01T00:00:00Z","seq":1,"sensor":{"id":"sensor-1","kind":"http"},"classification":"interaction","observation":{},"integrity":{"payload_sha256":"x","algorithm":"sha256"}}`
+	content := valid + "\n" + strings.Repeat("x", (1<<20)+1) + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewReader(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := errors.New("stop after first envelope")
+	seen := 0
+	err = r.ForEach(func(event.Envelope) error {
+		seen++
+		return stop
+	}, nil)
+	if !errors.Is(err, stop) || seen != 1 {
+		t.Fatalf("reader preloaded trailing segment data: seen=%d err=%v", seen, err)
 	}
 }
 
