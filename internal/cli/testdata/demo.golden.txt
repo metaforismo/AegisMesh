@@ -1,0 +1,11 @@
+AEGISMESH DEMO: PASS
+mode: synthetic
+network: loopback-only (OS-assigned unprivileged ports)
+egress: none
+sensors: http, tcp, mcp, ssh
+evidence: 4 observations (3 interaction, 1 canary invocation)
+integrity: verified observation payload hashes
+recommendations: 1 dry-run proposal (no enforcement)
+semantics: observation, not incident
+shutdown: listeners released
+cleanup: complete

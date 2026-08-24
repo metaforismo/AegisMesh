@@ -56,6 +56,7 @@ type System struct {
 	log       *slog.Logger
 	started   atomic.Uint64
 	failed    atomic.Uint64
+	stopped   atomic.Bool
 	stopMaint chan struct{}
 	maintOnce sync.Once
 	stopOnce  sync.Once
@@ -377,7 +378,10 @@ func (s *System) maintenanceLoop() {
 
 // Stop shuts down gracefully: stop intake, drain sensors, flush store.
 func (s *System) Stop(_ context.Context) {
-	s.stopOnce.Do(s.closeAll)
+	s.stopOnce.Do(func() {
+		s.stopped.Store(true)
+		s.closeAll()
+	})
 }
 
 func (s *System) closeAll() {

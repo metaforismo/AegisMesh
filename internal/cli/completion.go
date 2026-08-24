@@ -23,7 +23,7 @@ Install, e.g.:
   fish: aegismesh completion fish > ~/.config/fish/completions/aegismesh.fish`
 }
 
-var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "inspect", "recommend", "rules", "migrate", "version", "completion", "ext"}
+var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "rules", "migrate", "version", "completion", "ext"}
 
 func (c *completionCmd) Run(_ context.Context, args []string) error {
 	if len(args) != 1 {
@@ -75,7 +75,7 @@ _aegismesh_completions() {
       COMPREPLY=( $(compgen -W "--config --dry-run --json -o" -- "$cur"); compgen -f -X '!*.yaml' -- "$cur" >/dev/null 2>&1 && true ) ;;
     init)
       COMPREPLY=( $(compgen -W "--dir --force --json" -- "$cur"); true ) ;;
-    version) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
+    demo|version) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
     completion) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ) ;;
   esac
 }
@@ -103,6 +103,7 @@ _aegismesh() {
           '--sensor[exact sensor id]:sensor id:' \
           '--classification[evidence class]:class:(interaction canary_invocation correlation_signal)' \
           '--json[emit JSON output]' ;;
+        demo) _arguments '--json[emit JSON output]' ;;
         migrate) _values 'target' beelzebub ;;
         completion) _values 'shell' bash zsh fish ;;
       esac ;;
@@ -130,6 +131,7 @@ complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l rule -r -d '
 complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l sensor -r -d 'exact sensor id'
 complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l classification -r -a 'interaction canary_invocation correlation_signal' -d 'evidence class'
 complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l json -d 'JSON output'
+complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l json -d 'JSON output'
 complete -c aegismesh -l config -r -d 'config file'
 complete -c aegismesh -l data-dir -r -d 'evidence directory'
 complete -c aegismesh -l json -d 'JSON output'
