@@ -63,7 +63,9 @@ Nothing is checked on intent alone.
    - [x] Data-only observer path shipped: supervised delivery queue, drop/revocation metrics, bounded
          shutdown, fail-closed manifest verification (`internal/extmanager`, PR feat/extension-observer-wiring).
          Response-influencing wiring stays unimplemented by design (ADR-0006).
-7. R7: `aegismesh demo` self-contained scripted scenario command.
+7. [x] R7 — `aegismesh demo`: self-contained synthetic HTTP/TCP/MCP/SSH
+   scenario with OS-assigned loopback ports, verified evidence, a dry-run
+   recommendation, deterministic summaries and complete cleanup.
 8. R8: Optional per-sensor process isolation mode for fault containment.
 
 ## Later batches (direction, not commitments)

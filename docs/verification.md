@@ -5,6 +5,24 @@ arm64; host Go 1.25.5 and project-required Go 1.25.14) or to CI. Vocabulary: **P
 ran, non-zero (fixed or documented); **BLOCKED** = tool/environment missing,
 fallback noted; **NOT RUN** = deliberately skipped, reason given.
 
+## 2026-08-24 — self-contained synthetic demo
+
+| check | command | result |
+|---|---|---|
+| Isolated baseline | `git status --short --branch`; `git rev-parse HEAD`; `git remote -v` | PASS — clean `codex/demo-command` worktree started from recommendation merge `86041b87257d4da57bab996ee46ce49312409cce`; the primary checkout was not modified |
+| Bind-restricted baseline attempt | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make lint test` | BLOCKED — the sandbox denied existing loopback listener tests with `operation not permitted`; this was retried with scoped loopback access |
+| Baseline full race suite | same command with scoped loopback access | PASS — every package passed before implementation; `golangci-lint` unavailable, so the documented gofmt/vet fallback ran |
+| Runtime endpoint seam | `go test -race ./internal/runtime -run 'TestSystem(Endpoints|AdminAddr)' -count=1` | PASS — configured-order fresh snapshots for HTTP/TCP/MCP/SSH, admin discovery, before-start/disabled/post-stop/address-less failures; public `sensor.Sensor` was not widened |
+| Demo focused and parallel race suite | `go test -race ./internal/demo ./internal/cli ./internal/runtime -run 'TestDemo|TestRunEndToEnd|TestRunParallel|TestRunCancellation|TestRequestRejectsRedirect|TestInteractTCP|TestValidatedAddresses|TestSystemEndpoints|TestSystemAdminAddr' -count=3` | PASS — three repeated runs plus three concurrent demos; real cancellation removed private state; redirects, oversized TCP banner/reply, unsafe addresses, listener release and strict CLI failures were exercised |
+| User-facing human and JSON paths | `make demo`; `./bin/aegismesh demo --json` | PASS — both completed the real four-sensor scenario and matched stable output: four integrity-verified observations, one dry-run proposal, no enforcement, listeners released, cleanup complete |
+| Independent architecture and test audits | two read-only Luna fast-mode audits of runtime ownership, CLI contracts and failure paths | PASS — both selected a runtime-owned immutable address snapshot without widening the sensor interface, fixed loopback scenario ownership, exact goldens and parallel lifecycle evidence |
+| Independent adversarial security review | read-only Sol review plus post-fix re-review | PASS after fixes — the first pass blocked redirects, allocation-unbounded TCP lines, unprovable clean-shutdown wording, inaccurate total-deadline wording and missing real cancellation evidence; redirect refusal, bounded reads, listener-release proof, narrowed claims and lifecycle cleanup tests closed every blocking finding; post-fix race tests passed ten repetitions |
+| Final formatting, vet and all-package race suite | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make lint test` | PASS — all packages passed; `golangci-lint` unavailable, documented gofmt/vet fallback used |
+| Final six-target fuzz suite | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-fuzz-cache make fuzz-seed` | PASS — config 959,123; event 2,078,609; TCP 1,342,604; SSH 676,384; recommendation 1,379,186; Beelzebub import 1,051,167 executions; each target ran 15 seconds with minimization disabled |
+| Helm, supply-chain and repository hygiene | `make helm-contract`; `make supply-chain-check`; `go mod verify`; `./scripts/license-check.sh`; `./scripts/secrets-scan.sh`; `git diff --check`; `sh -n scripts/demo.sh` | PASS — Helm positive/adversarial contract, immutable references, seven modules, license policy, secret tripwire, patch whitespace and wrapper syntax passed; no dependency changed |
+| Local pinned vulnerability scan | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make vuln` | BLOCKED — `govulncheck@v1.7.0` was not cached and sandbox DNS could not reach `proxy.golang.org`; PR CI must pass the identical pinned gate |
+| External effects | remote/cloud requests, proxy use, arbitrary destinations, extensions/webhooks, action enforcement, publication/signing/attestation/settings changes | NOT RUN — no such path was implemented or invoked; the demo's traffic was confined to its own validated numeric loopback listeners |
+
 ## 2026-08-24 — deterministic dry-run recommendations
 
 | check | command | result |

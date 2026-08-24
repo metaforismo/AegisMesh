@@ -22,6 +22,7 @@ internal/event         versioned envelope, redaction, integrity hashing, bounded
 internal/storage       JSONL append-only store, rotation, retention, export
 internal/ecsexport     deterministic ECS-compatible read-boundary projection
 internal/recommend     pure deterministic evidence-to-proposal engine; no I/O or runtime dependency
+internal/demo          owned synthetic four-sensor scenario; loopback clients and verified summary
 internal/correlate     bounded multi-event correlation engine (COR-001..COR-004 signals)
 internal/webhook       signed best-effort evidence stream to an operator-configured collector
 internal/extmanager    supervised data-only observer extensions (`observe` permission only)
@@ -94,6 +95,16 @@ not submit events, call providers, extensions or webhooks, mutate files or confi
 select commands, or feed runtime policy. Evidence links prove observation-payload
 hash consistency only; ordering, classification and sensor metadata remain outside
 that hash and are not provenance-authenticated.
+
+The demo path is an internal composition boundary, not a general orchestration
+API. It builds a repository-owned config with `127.0.0.1:0` listeners, obtains
+fresh immutable bound-address snapshots from `internal/runtime`, rejects any
+non-loopback or privileged result, and uses fixed bounded clients with HTTP proxy
+lookup and redirects disabled. After Stop returns it verifies every listener is
+unreachable before reading exactly four
+validated envelopes and generating one dry-run proposal. Random IDs, times,
+paths and ports never reach its stable summary; its private temporary directory
+is removed before success is returned.
 
 ## Trust boundary diagram
 

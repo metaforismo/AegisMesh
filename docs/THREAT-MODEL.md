@@ -107,6 +107,25 @@ contract is:
 - activity is an observation, not proof of a real account or incident, and cannot influence policy,
   configuration, execution, or enforcement.
 
+## Self-contained demo boundary
+
+`aegismesh demo` accepts no config, path, port, credential, API key, URL or
+destination. Its repository-owned scenario binds HTTP, TCP, MCP, SSH and admin
+listeners to `127.0.0.1:0`; every resolved address is re-checked as an IP
+loopback with an OS-assigned unprivileged port before a client connects. HTTP
+clients ignore proxy environment variables and reject redirects; all network
+requests, response bodies and TCP lines have explicit deadlines or byte caps.
+
+The SSH username and password are fixed synthetic markers and the evidence
+readback rejects them if redaction regresses. Success is buffered until Stop
+returns, every bound listener is verified unreachable, all four envelopes pass
+structural and observation-hash checks, one dry-run proposal exists, and the
+private temporary workspace is removed. Filesystem cleanup calls are not given
+a false wall-clock guarantee; their scope and retained evidence count are fixed
+and removal failure suppresses success. No shell, `os/exec`, user-selected path,
+extension, webhook, remote provider, external egress or enforcement seam is
+reachable. The summary still describes observations, not an incident.
+
 ## Residual risks accepted in this batch
 
 - Single-process runtime: a parser 0-day in Go's net stack could crash the runtime (availability loss, not

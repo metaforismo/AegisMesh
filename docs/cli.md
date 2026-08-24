@@ -1,8 +1,8 @@
 # CLI reference
 
-All commands accept `--log-level {debug|info|warn|error}`. Exit codes:
-`0` success, `1` failure, `2` usage error. Human output goes to stdout;
-errors and hints to stderr; most report commands support `--json`.
+Exit codes are `0` success, `1` failure, and `2` usage error. Human output goes
+to stdout; errors and hints go to stderr; report commands document `--json`
+where supported. Runtime logging level and format come from the config file.
 
 ## aegismesh init
 
@@ -77,6 +77,28 @@ intake, drains sensors, flushes evidence.
 `--dry-run` binds every listener, proves the environment works, prints each
 sensor's bind address, then shuts down — nothing is recorded, no decoy ever
 answers. Use it before any production-ish deployment.
+
+## aegismesh demo
+
+    demo [--json]
+
+Run one self-contained synthetic scenario through real HTTP, TCP, MCP and
+authentication-only SSH listeners. Every listener is bound to `127.0.0.1` on an
+OS-assigned unprivileged port. The command checks readiness, performs one fixed
+interaction per sensor, drains the event bus, validates all four native
+envelopes and their observation hashes, generates one dry-run recommendation,
+stops the runtime and removes its private temporary workspace.
+
+The stable summary contains no event ID, timestamp, path, process ID, port,
+credential or observation content. `--json` emits the same typed result. Empty,
+whitespace, padded, comma-separated, repeated and invalid boolean forms plus
+unknown flags and positional arguments are usage errors; a runtime, evidence or
+cleanup failure writes no success output.
+
+There is deliberately no `--config`, `--data-dir`, `--port`, `--keep`, URL or
+timeout flag. The demo cannot select an arbitrary path or destination, consult
+proxy environment variables, load an API key, call a cloud provider, start an
+extension or webhook, or perform enforcement.
 
 ## aegismesh inspect
 
