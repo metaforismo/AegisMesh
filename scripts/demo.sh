@@ -2,7 +2,7 @@
 # demo.sh — end-to-end local demo: scaffold, run, poke decoys, show evidence.
 #
 # Binds loopback only, uses unprivileged ports, cleans up after itself.
-# Requires: go (>= 1.25), curl.
+# Requires: go (>= 1.25.14), curl.
 set -eu
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

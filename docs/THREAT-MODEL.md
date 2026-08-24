@@ -14,7 +14,7 @@ Version: 0.1.0. Method: STRIDE-per-trust-boundary plus agentic-specific threats.
 
 ## Trust boundaries
 
-- TB1: Attacker network → sensor listeners (HTTP/TCP/MCP). Everything crossing this line is untrusted.
+- TB1: Attacker network → sensor listeners (HTTP/TCP/MCP/SSH). Everything crossing this line is untrusted.
 - TB2: Sensor runtime core → storage (evidence writes).
 - TB3: Config files on disk → runtime (operator-controlled, but must be validated: configs may come from
   repos, migration imports, or other machines — treat as semi-trusted input).
@@ -27,7 +27,7 @@ Version: 0.1.0. Method: STRIDE-per-trust-boundary plus agentic-specific threats.
 
 | Boundary | Threats | Mitigations in this batch |
 |---|---|---|
-| TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, decoy escape | No trust of client-supplied identity fields (recorded as data, never used for authz); server timeouts + MaxBytesReader + bounded read loops; Go regexp (RE2, no catastrophic backtracking) + pattern length caps at validation time; all payload bytes percent-encoded/redacted before write; sensors have no filesystem/exec capability — responses come from config rules or provider text only |
+| TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, credential probing, SSH decoy escape | No trust of client-supplied identity fields; HTTP/TCP/MCP inputs use server timeouts, byte caps, bounded loops, and redaction; the SSH boundary uses synthetic authentication only, bounded handshake/session/auth attempts and metadata, an in-memory Ed25519 host key, and rejects every channel/global request; no sensor has filesystem/exec capability |
 | TB2 | Log/evidence forging after compromise, unbounded disk growth | Envelope carries SHA-256 integrity hash over the canonical payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction applied at event construction (single choke point) |
 | TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body_file | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body_file resolved relative to config dir with symlink+containment checks |
 | TB4 | Prompt-injected provider output instructing follow-on actions, jailbreak content stored/replayed, provider SSRF | Provider output treated exactly like attacker input: size-capped, redacted, stored as quoted text; it can only ever become a decoy *response string* — there is no code path from provider output to exec, paths, config mutation, or enforcement; outbound provider URL is fixed by config, allowlisted scheme http(s), timeout-bounded |
@@ -62,6 +62,23 @@ Version: 0.1.0. Method: STRIDE-per-trust-boundary plus agentic-specific threats.
    compromise and never triggers enforcement.
 8. **Decoy escape** — decoys expose no interpreter, shell, exec, or file API; MCP "actions" return canned JSON.
    Escape surface is limited to the protocol parsers and Go runtime.
+
+## SSH deception sensor boundary
+
+The shipped SSH sensor is an observation-only protocol surface. Its security
+contract is:
+
+- authentication is synthetic: password and public-key callbacks complete bounded protocol handshakes but
+  never validate, reuse, compare, hash, log, or retain real credentials;
+- usernames and credential contents are omitted from evidence entirely, not hashed;
+- one Ed25519 host key is generated per sensor instance and held in memory; no configured host-key
+  file/path or persistent key lifecycle exists, so reconstructing the sensor rotates the advertised key;
+- all channels and global requests are rejected, including shell, PTY, subsystem, SFTP, and forwarding
+  requests; no filesystem, command execution, or outbound target is reachable through SSH;
+- loopback and unprivileged listener defaults, handshake/session deadlines, authentication attempts,
+  concurrent connections, and input metadata remain bounded and fail closed on invalid configuration;
+- activity is an observation, not proof of a real account or incident, and cannot influence policy,
+  configuration, execution, or enforcement.
 
 ## Residual risks accepted in this batch
 

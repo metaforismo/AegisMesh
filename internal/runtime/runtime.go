@@ -25,6 +25,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/sensor"
 	"github.com/metaforismo/aegismesh/internal/sensor/httpsensor"
 	"github.com/metaforismo/aegismesh/internal/sensor/mcpsensor"
+	"github.com/metaforismo/aegismesh/internal/sensor/sshsensor"
 	"github.com/metaforismo/aegismesh/internal/sensor/tcpsensor"
 	"github.com/metaforismo/aegismesh/internal/storage"
 	"github.com/metaforismo/aegismesh/internal/webhook"
@@ -53,6 +54,7 @@ type System struct {
 	hook      *webhook.Sink
 	corr      *correlateAdapter
 	log       *slog.Logger
+	started   atomic.Uint64
 	failed    atomic.Uint64
 	stopMaint chan struct{}
 	maintOnce sync.Once
@@ -277,6 +279,8 @@ func buildSensor(c *config.Sensor, cfg *config.Config, prov llm.Provider, enf *p
 		return tcpsensor.New(*c, gate)
 	case config.SensorKindMCP:
 		return mcpsensor.New(*c, enf)
+	case config.SensorKindSSH:
+		return sshsensor.New(*c)
 	default:
 		return nil, fmt.Errorf("unknown kind %q", c.Kind)
 	}
@@ -315,6 +319,7 @@ func (s *System) Start(ctx context.Context) error {
 			s.Stop(context.Background())
 			return fmt.Errorf("%w: start sensor %q: %v", errRuntime, sen.ID(), err)
 		}
+		s.started.Add(1)
 	}
 	go s.maintenanceLoop()
 	return nil
@@ -331,8 +336,13 @@ func (s *System) sensorCfg(id string) *config.Sensor {
 
 // Status reports readiness for the admin endpoints.
 func (s *System) Status() admin.Status {
+	started := s.started.Load()
+	failed := s.failed.Load()
+	if failed > started {
+		failed = started
+	}
 	return admin.Status{
-		SensorsStarted: len(s.sensors) - int(s.failed.Load()),
+		SensorsStarted: int(started - failed),
 		SensorsWanted:  len(s.sensors),
 		StoreHealthy:   true,
 		DroppedEvents:  s.bus.Dropped(),

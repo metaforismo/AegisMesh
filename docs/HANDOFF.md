@@ -4,13 +4,16 @@ Read `AGENTS.md`, then `docs/BACKLOG.md`, then `docs/ROADMAP.md`.
 
 ## Current state
 
-The foundation and secure-intelligence layers ship HTTP/TCP/MCP sensors,
+The foundation and secure-intelligence layers ship HTTP/TCP/MCP sensors plus
+an authentication-only SSH sensor,
 detection and bounded correlation, native JSONL evidence, local and opt-in
 remote providers, a bounded signed webhook, data-only observer extensions,
 rule inspection/testing, Docker/Compose and contract-tested Helm packaging.
 Batch 2 R3 adds a local ECS-compatible export profile while preserving the
-native envelope. Exact current commands and evidence live in
-`docs/verification.md`.
+native envelope. Batch 2 R1 adds synthetic password/public-key SSH
+authentication with per-instance ephemeral Ed25519 keys, bounded resources,
+and unconditional rejection of every channel and global request. Exact current
+commands and evidence live in `docs/verification.md`.
 
 ## Non-obvious decisions
 
@@ -28,29 +31,33 @@ native envelope. Exact current commands and evidence live in
   hard-linked paths to source evidence segments, and any segment read failure
   aborts the export without changing the destination.
 - Port `0` means an OS-assigned ephemeral port. Admin remains loopback-only.
+- `/readyz` counts only successfully started sensor listeners; extension startup
+  completes before sensor readiness can become true.
 - Extensions inherit only `AEGISMESH_EXTENSION=1` and use the manifest
   directory as their working directory.
 
 ## Known gaps and boundaries
 
-- No SSH/Telnet sensor, decoy-listener TLS, at-rest encryption, response
+- No Telnet/database sensor, decoy-listener TLS, at-rest encryption, response
   recommendation engine, distributed mesh, or web console.
 - No autonomous enforcement against real assets.
 - Helm is real packaging with contract tests; real-cluster support is not verified.
 - Correlation signals do not reach webhook or observer extensions. Enabling that
   would be new external egress and requires explicit approval.
-- `golangci-lint`, `govulncheck`, local CycloneDX tooling and cosign may be
-  unavailable locally; record BLOCKED rather than inferring CI results.
-- Open PR/issue state was BLOCKED in the 2026-08-23 development run because the
-  GitHub API could not connect. Re-check before relying on that state.
+- `golangci-lint`, local CycloneDX tooling and cosign may be unavailable
+  locally; record BLOCKED rather than inferring results. The SSH slice ran
+  pinned `govulncheck` through `go run` with Go 1.25.14.
+- GitHub authentication and API access were available on 2026-08-24. Public
+  PR/issue state remains mutable; re-check before relying on the captured list.
 
 ## Exact remaining work
 
-`docs/BACKLOG.md` is authoritative. P0 export correctness, lifecycle races and
-claim drift are closed. The next P1 vertical slice is the SSH deception sensor;
-architecture must pin its synthetic-authentication boundary, host-key lifecycle,
-resource caps and dependency/license decision before code. The dry-run
-recommendation model and at-rest encryption remain separate later slices.
+`docs/BACKLOG.md` is authoritative. P0 export correctness, lifecycle races,
+claim drift, ECS export, and the SSH deception slice are closed. The next
+ordered slice is supply-chain pinning, followed by the dry-run recommendation
+model and self-contained demo. At-rest encryption, the extension live-policy
+boundary, and optional process isolation remain separate later slices in the
+finite v0.2 delivery plan.
 
 ## Commands that matter
 

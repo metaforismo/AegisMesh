@@ -1,9 +1,39 @@
 # Verification ledger
 
 Every claim in this repository maps to a command run locally (macOS 26.5.2,
-arm64, Go 1.25.5) or to CI. Vocabulary: **PASS** = ran, exit 0; **FAIL** =
+arm64; host Go 1.25.5 and project-required Go 1.25.14) or to CI. Vocabulary: **PASS** = ran, exit 0; **FAIL** =
 ran, non-zero (fixed or documented); **BLOCKED** = tool/environment missing,
 fallback noted; **NOT RUN** = deliberately skipped, reason given.
+
+## 2026-08-24 — SSH authentication-deception sensor
+
+| check | command | result |
+|---|---|---|
+| Isolated baseline | `git status --short --branch`; `git rev-parse HEAD` | PASS — `codex/ssh-auth-sensor` worktree based on `d548d57ceb6ead7ba44b8a697e2f4676897735e9`; unrelated checkout state was not modified |
+| GitHub public state before the SSH PR | `gh auth status`; `gh pr list --state open --limit 50 --json number,title,headRefName,baseRefName,isDraft,url`; `gh issue list --state open --limit 50 --json number,title,labels,url` | PASS — authenticated as `metaforismo`; one unrelated open Dependabot PR (#2), no open issues; default branch separately verified as `master` |
+| Exa availability and primary-source research | one small `web_search_exa` probe, then multi-pass search/fetch of official repositories, RFC 4252/4254, Go release notes and `x/crypto/ssh` documentation | PASS — connector search/fetch tools were exposed; upstream claims were kept separate from repository facts and engineering inferences |
+| Pre-fix vulnerability gate | `go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...` with host Go 1.25.5 | FAIL — exit 3; 17 reachable standard-library findings, including GO-2026-5972 through `sshsensor → ssh.NewServerConn → asn1.Unmarshal`; this blocked the slice until the Go floor was raised |
+| Intermediate security-fixed toolchain | `env GOTOOLCHAIN=go1.25.13+auto GOCACHE=/tmp/aegismesh-go-cache go version` | PASS — `go version go1.25.13 darwin/arm64`; this removed the reachable findings before the final current-patch refresh |
+| Current patch toolchain | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache go version` | PASS — `go version go1.25.14 darwin/arm64`; official Go release history and Docker Hub were rechecked before advancing the final floor |
+| Container builder reference | official Docker Hub tag listing for `golang:1.25.14-alpine` | PASS — the official multi-platform tag exists; immutable digest pinning remains the next supply-chain slice |
+| Local container build | `docker version --format '{{.Client.Version}} {{.Server.Version}}'` | BLOCKED — client 29.1.3 is installed, but the local daemon socket was unavailable and the scoped retry did not return a server version; no build result inferred |
+| Pinned vulnerability scan | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 -show verbose ./...` | PASS — 0 reachable symbol vulnerabilities and 0 imported-package vulnerabilities; module-only GO-2026-5932 concerns unused `x/crypto/openpgp`, which is not imported |
+| Focused SSH/config repeat | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache go test ./internal/config ./internal/sensor/sshsensor -count=3` | PASS — real password/public-key loopback handshakes, invalid proof, channel/request rejection, strict explicit-zero/empty config, connection/deadline caps and shutdown races |
+| Affected-package race suite | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache go test -race ./internal/sensor/sshsensor ./internal/runtime ./internal/config ./internal/cli ./internal/ecsexport ./internal/migrate/beelzebub -count=1` | PASS |
+| SSH fuzz smoke | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache go test -run '^$' -fuzz FuzzSSHMetadataHelpers -fuzztime 5s ./internal/sensor/sshsensor` | PASS — 86,309 executions; no failure |
+| Module integrity and license graph | `go list -m all`; `go mod verify`; `./scripts/license-check.sh` under Go 1.25.14 | PASS — seven non-main modules resolved, all checksums verified and all licenses within policy |
+| First full-suite attempt | `env GOTOOLCHAIN=go1.25.13+auto GOCACHE=/tmp/aegismesh-go-cache make lint test` | FAIL — existing extension negative-handshake case timed out under full race-suite load; all SSH/config/runtime packages passed |
+| Extension timeout diagnosis | `go test -race ./internal/ext -run TestHostHandshakeFailures -count=10 -v` | PASS — all 30 subtests passed; no SSH dependency or runtime regression found |
+| Pre-fix runtime readiness repeat | affected-package race command above after the final test additions | FAIL — the extension integration test timed out waiting for the HTTP listener; review showed `/readyz` counted configured sensors before their listeners started |
+| Runtime readiness regression repeat | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache go test -race ./internal/runtime -run 'TestSystemEndToEndLifecycle|TestSystemDeliversObservationsToExtension|TestSystemStreamsEvidenceToWebhook' -count=5 -v` | PASS — five cycles each; `/readyz` now becomes ready only after all four sensor listeners start |
+| Final formatting, vet and all-package race suite | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make lint test` | PASS — all 30 packages evaluated after the readiness fix; `golangci-lint` unavailable, documented `gofmt`/`go vet` fallback used |
+| Initial concurrent fuzz attempt | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make fuzz-seed` while Helm and vulnerability checks ran concurrently | FAIL — config fuzzing returned `context deadline exceeded` after 92,709 executions; no crashing input was produced |
+| Fuzz deadline diagnosis | config fuzz with default minimization, one worker, and `-fuzzminimizetime=0` variants | PASS — the stall was Go's independent 60-second post-discovery minimization under contention, not a reproduced parser loop; disabling minimization sustained 923,359 executions in 15 seconds |
+| Repository fuzz suite, clean rerun | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make fuzz-seed` | PASS — config, event, TCP-line, SSH-metadata and Beelzebub-import targets ran for 15 seconds each; the final bounded rerun after adding `-fuzzminimizetime=0` is recorded below |
+| Final bounded fuzz rerun | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make fuzz-seed` | BLOCKED — the Codex execution reviewer rejected the local command after the session reached its usage limit; no local PASS is inferred. The PR fuzz job runs the same five commands with `-fuzzminimizetime=0` and is required before merge |
+| PR #46 independent CI | `gh pr checks 46 --repo metaforismo/AegisMesh --watch` at `31c9e395d67ff9b98d854cf1761bdcf661ae8f06` | PASS — full race suite (1m19s), five-target bounded fuzz (1m55s), Helm contract, pinned govulncheck, and dependency-license/secret checks all completed successfully |
+| Helm SSH packaging contract | `env GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make helm-contract` | PASS — positive SSH sensor/schema render plus existing positive and adversarial cases |
+| Secret and patch hygiene | `./scripts/secrets-scan.sh`; `git diff --check` | PASS |
 
 ## 2026-08-23 — Batch 2 R3 and shutdown correctness
 
@@ -17,7 +47,7 @@ fallback noted; **NOT RUN** = deliberately skipped, reason given.
 | Bus regression before fix | `go test ./internal/event -run TestBusSubmitAfterCloseReturnsFalse -count=1` | FAIL — reproduced `panic: send on closed channel`; fixed in this batch |
 | Concurrent lifecycle stress | `go test -race ./internal/event ./internal/webhook ./internal/extmanager -run 'TestBusSubmitAfterCloseReturnsFalse\|TestBusConcurrentSubmitAndClose\|TestOfferConcurrentWithClose\|TestDeliverConcurrentWithStop' -count=10`; extension test repeated separately with `-count=3` | PASS |
 | Global shutdown idempotence | `go test -race ./internal/runtime -run TestSystemStopConcurrentIsIdempotent -count=10` | PASS |
-| Runtime extension readiness after full-suite timeout diagnosis | `go test -race ./internal/runtime -run 'TestSystemDeliversObservationsToExtension\|TestSystemStopConcurrentIsIdempotent' -count=3` | PASS — readiness wait now matches the 15-second production startup deadline plus test margin |
+| Runtime extension readiness after full-suite timeout diagnosis | `go test -race ./internal/runtime -run 'TestSystemDeliversObservationsToExtension\|TestSystemStopConcurrentIsIdempotent' -count=3` | PASS at that snapshot — the test wait was lengthened; the later SSH slice fixed the underlying premature `/readyz` status |
 | Final formatting, vet, build and all package races | `make lint test` | PASS — 29 packages enumerated by `go list ./...`; scoped loopback permission was required for integration listeners |
 | Parser fuzz seeds | `make fuzz-seed` | PASS — config, event, TCP-line and Beelzebub-import fuzz targets, 15 seconds each |
 | Helm packaging contract | `make helm-contract` | PASS — positive and adversarial chart cases |
@@ -39,10 +69,10 @@ fallback noted; **NOT RUN** = deliberately skipped, reason given.
 
 Current evidence boundaries:
 
-- **BLOCKED — Exa connector tools are not exposed to this task.** Native web research used official sources instead.
-- **BLOCKED:** `gh pr list` and `gh issue list` could not connect to `api.github.com`, including a scoped network retry. Authentication status was available, but public PR/issue state remains unverified.
-- **BLOCKED:** the first full-suite attempt could not bind loopback listeners inside the sandbox. The identical scoped retry ran; one runtime readiness test then exposed a real load-sensitive timeout, which was fixed and followed by a green final suite.
-- **BLOCKED:** local `golangci-lint`, `govulncheck`, CycloneDX tooling and cosign are unavailable. No result was inferred for those tools.
+- **BLOCKED:** local `golangci-lint`, CycloneDX tooling and cosign are unavailable. The Makefile's documented formatting/vet fallback and pinned `govulncheck` through `go run` were used; no SBOM or signature result was inferred.
+- **BLOCKED:** the local Docker daemon was unavailable, so this environment did
+  not produce a container build; the official builder tag was verified and CI
+  remains the executable container gate.
 - **NOT RUN:** release publication/signing, real-cluster deployment, repository-setting changes, new egress and correlation-signal fan-out were outside this batch's authority.
 
 ## Prior captured full-suite evidence (through `cf8bdee`)
@@ -66,9 +96,10 @@ Current evidence boundaries:
 | config parser | `go test -run '^$' -fuzz FuzzParseConfig -fuzztime 10s ./internal/config/` | PASS (earlier 10s + final 5s) |
 | event envelope decode | `go test -run '^$' -fuzz FuzzDecodeEventEnvelope -fuzztime 5s ./internal/event/` | PASS |
 | TCP line reader | `go test -run '^$' -fuzz FuzzMatchTCPLine -fuzztime 5s ./internal/sensor/tcpsensor/` | PASS (~389k execs) |
+| SSH metadata bounds | `go test -run '^$' -fuzz FuzzSSHMetadataHelpers -fuzztime 5s ./internal/sensor/sshsensor/` | PASS (86,309 execs) |
 | Beelzebub importer | `go test -run '^$' -fuzz FuzzImportBeelzebubDoc -fuzztime 8s ./internal/migrate/beelzebub/` | PASS (~224k execs, 300 corpus entries) |
 
-CI runs all four targets at 15s each on every push.
+CI runs all five targets at 15s each on every push.
 
 ## End-to-end behavior
 
@@ -119,7 +150,7 @@ resulted (root causes fixed, not assertions bent):
 5. `migrate beelzebub` never parsed flags (files always "missing", flags
    ignored). Interleaved positional/flag parsing implemented; CLI tests pin it.
 6. Sensor listeners raced across goroutines (`Addr()` vs `Close()`); guarded
-   with mutexes in all three sensors.
+   with mutexes across sensor implementations.
 7. Runtime maintenance goroutine leaked after Stop; now halts via closed
    channel.
 8. Port `0` rejected by validation although ephemeral binds are legitimate;
@@ -130,9 +161,9 @@ resulted (root causes fixed, not assertions bent):
 10. Event, webhook and extension producers could race channel closure. Lifecycle
     locks now cover the closed-state check through each non-blocking send; runtime
     shutdown is whole-sequence idempotent.
-11. The extension integration readiness wait was shorter than the production
-    startup deadline and failed under full race-suite load. The test now derives
-    its bound from `startTimeout` and the focused repeated run is green.
+11. Runtime readiness previously counted every configured sensor before any
+    listener started. `SensorsStarted` now advances only after successful
+    starts, so `/readyz` is the integration tests' authoritative startup gate.
 12. Native export trusted a matching payload hash without structural validation,
     and `--out` could resolve to an authoritative source segment. All profiles now
     validate envelopes, and segment identity checks cover direct, symbolic and hard links.

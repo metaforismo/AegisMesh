@@ -38,10 +38,14 @@ Nothing is checked on intent alone.
 - [x] `validate --effective` resolved-policy preview (human + JSON); `inspect list --finding RULE_ID`
 - [x] Importer credential safety gate (refuse inline material, report references, non-zero exit on refusal)
 
-## Batch 2 — Depth on the same spine (proposed next)
+## Batch 2 — Depth on the same spine (delivery train)
 
-1. R1: SSH deception sensor (crypto/ed25519 host key generation guidance, synthetic auth only) behind the
-   same Sensor interface.
+1. [x] R1 — SSH deception sensor behind the same Sensor interface.
+   Password/public-key authentication is synthetic only; each sensor instance
+   holds an ephemeral in-memory Ed25519 host key; handshake/session/auth and
+   connection resources are bounded; every channel and global request is
+   rejected. There is no shell, PTY, subsystem, SFTP, forwarding, filesystem,
+   command execution, persistent host key, or outbound target.
 2. R2 (shipped): Real remote provider adapter — done. OpenAI-compatible chat completions via `openai` and
    `ollama` adapters (`internal/llm.Remote`) behind strict config: fail-closed construction before any
    listener binds, egress-classified dialing, loopback allowed only for `ollama`, response size + timeout

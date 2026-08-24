@@ -33,7 +33,7 @@ not become the only copy of AegisMesh-specific evidence.
 | `service.address` | `envelope.sensor.listen` |
 | `service.name` | `envelope.sensor.id` |
 | `service.type` | `envelope.sensor.kind` |
-| `network.protocol` | known sensor kind (`http`, `mcp`, or `tcp`) |
+| `network.protocol` | known sensor kind (`http`, `mcp`, `ssh`, or `tcp`) |
 | `network.transport` | `tcp` for those known sensor kinds |
 | `aegismesh.mapping_version` | `aegismesh.ecs/v1` |
 | `aegismesh.envelope` | complete native envelope, including redaction and observation |

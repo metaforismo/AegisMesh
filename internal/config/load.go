@@ -231,6 +231,25 @@ func (c *Config) applyDefaults() {
 			if s.ServerVer == "" {
 				s.ServerVer = "1.0.0"
 			}
+		case SensorKindSSH:
+			if s.Listen == "" {
+				s.Listen = DefaultSSHListen
+			}
+			if s.SSH == nil {
+				s.SSH = &SSHConfig{}
+			}
+			if !s.SSH.present.serverVersion && s.SSH.ServerVersion == "" {
+				s.SSH.ServerVersion = DefaultSSHServerVersion
+			}
+			if !s.SSH.present.handshakeTimeout && s.SSH.HandshakeTimeoutSeconds == 0 {
+				s.SSH.HandshakeTimeoutSeconds = DefaultSSHHandshakeTimeoutSeconds
+			}
+			if !s.SSH.present.maxSession && s.SSH.MaxSessionSeconds == 0 {
+				s.SSH.MaxSessionSeconds = DefaultSSHMaxSessionSeconds
+			}
+			if !s.SSH.present.maxAuthAttempts && s.SSH.MaxAuthAttempts == 0 {
+				s.SSH.MaxAuthAttempts = DefaultSSHMaxAuthAttempts
+			}
 		}
 	}
 }

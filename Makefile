@@ -34,15 +34,16 @@ helm-contract: ## verify Helm chart contract (guarded test; needs local helm v4)
 	AEGISMESH_HELM_CONTRACT_TEST=1 go test ./deploy/helm/aegismesh -count=1 -v
 
 .PHONY: fuzz-seed
-fuzz-seed: ## run fuzz targets over seed corpora only (fast, deterministic)
-	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=15s
-	go test -run '^$$' -fuzz=FuzzDecodeEventEnvelope ./internal/event -fuzztime=15s
-	go test -run '^$$' -fuzz=FuzzMatchTCPLine ./internal/sensor/tcpsensor -fuzztime=15s
-	go test -run '^$$' -fuzz=FuzzImportBeelzebubDoc ./internal/migrate/beelzebub -fuzztime=15s
+fuzz-seed: ## run bounded real fuzzing without post-discovery minimization
+	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=15s -fuzzminimizetime=0
+	go test -run '^$$' -fuzz=FuzzDecodeEventEnvelope ./internal/event -fuzztime=15s -fuzzminimizetime=0
+	go test -run '^$$' -fuzz=FuzzMatchTCPLine ./internal/sensor/tcpsensor -fuzztime=15s -fuzzminimizetime=0
+	go test -run '^$$' -fuzz=FuzzSSHMetadataHelpers ./internal/sensor/sshsensor -fuzztime=15s -fuzzminimizetime=0
+	go test -run '^$$' -fuzz=FuzzImportBeelzebubDoc ./internal/migrate/beelzebub -fuzztime=15s -fuzzminimizetime=0
 
 .PHONY: fuzz-short
 fuzz-short: ## short real fuzzing pass (~1m/target); CI runs fuzz-seed instead
-	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=60s
+	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=60s -fuzzminimizetime=0
 
 .PHONY: vuln
 vuln: ## govulncheck if installed

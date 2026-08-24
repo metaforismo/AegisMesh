@@ -12,8 +12,9 @@ Date: 2026-08-22
 build complexity; heavy CLI frameworks add supply-chain surface.
 
 **Decision.** One Go module (`github.com/metaforismo/aegismesh`), one binary, conventional `cmd/` +
-`internal/` layout. CLI implemented on a small internal dispatcher over stdlib `flag`. The only third-party
-dependency in the core is `gopkg.in/yaml.v3` (config parsing).
+`internal/` layout. CLI implemented on a small internal dispatcher over stdlib `flag`. At v0.1.0 the only
+third-party dependency in the core is `gopkg.in/yaml.v3` (config parsing); later dependencies require a
+separate ADR and license review.
 
 **Consequences.** Slightly more hand-written code (subcommand dispatch, metrics exposition) in exchange for
 a tiny auditable dependency tree and reproducible builds. If a future need justifies it (e.g., OTLP
@@ -176,3 +177,54 @@ interpret sensor-private observation JSON. We accept fewer normalized fields in
 exchange for a stable contract and honest semantics. This adds no external
 egress; a future connector or automatic upload is a separate architecture and
 approval decision.
+
+---
+
+## ADR-0010: SSH sensor is an authentication-only synthetic decoy
+
+Date: 2026-08-24
+
+Status: Accepted and shipped.
+
+**Context.** SSH is a useful protocol surface for observing scanner and credential-guessing behavior, but
+an SSH server that accepts a channel can accidentally become a shell, filesystem, forwarding, or execution
+boundary. A persistent host-key file would also add secret lifecycle, path, backup, and permission concerns
+that are not required for an observation-only sensor.
+
+**Decision.** Add an in-process `sshsensor` behind the existing `Sensor` interface. It uses
+the pinned `golang.org/x/crypto/ssh` version `v0.55.0`; the resolved module
+graph and licenses are verified in the introducing change. The sensor creates
+one Ed25519 host key per sensor instance and keeps it in memory only. It has no configured host-key path or
+persistent key material, so reconstructing the sensor rotates the advertised host key by design.
+
+The SSH protocol boundary is deliberately narrow:
+
+- password and public-key callbacks complete synthetic authentication only; no real credential is
+  validated, reused, compared, hashed, logged, or retained;
+- usernames and credential contents are omitted from evidence entirely, not hashed;
+- handshake and session deadlines, authentication attempts, concurrent connections, and protocol metadata
+  are bounded by validated configuration and fixed implementation caps;
+- every channel and global request is rejected; no session, shell, PTY, subsystem, SFTP, forwarding,
+  filesystem, or command-execution capability exists;
+- the listener follows the common loopback and unprivileged-port defaults; it creates no outbound target.
+
+The sensor emits bounded observation evidence for protocol outcomes only. Authentication is an observation
+boundary, not proof of a real account or incident, and it cannot influence policy, configuration, execution,
+or enforcement.
+
+**Alternatives rejected.** A fake shell or PTY-backed host shell was rejected because it would create an
+execution and filesystem escape surface. A configured or persisted host-key path was rejected because it
+would create a new secret/path lifecycle without improving the sensor's observation contract. Rejecting all
+authentication before protocol completion was also rejected: synthetic completion gives a more useful,
+bounded protocol observation while still exposing no post-auth capability.
+
+**Consequences.** Operators should expect host-key changes after each process restart and should not use the
+sensor as a compatibility test for a stable SSH identity. The dependency is larger than a stdlib-only
+listener, but implementing SSH transport and cryptographic verification from scratch would be less
+auditable and less safe. No external egress is added.
+
+**Verification.** The introducing change includes real loopback authentication
+and rejection tests, invalid-proof and input/deadline/concurrency cases,
+redaction assertions, deterministic startup/shutdown race tests, race and fuzz
+coverage, `make lint test`, `go mod verify`, license and secret checks, and a
+pinned vulnerability scan with the current Go 1.25.14 toolchain.

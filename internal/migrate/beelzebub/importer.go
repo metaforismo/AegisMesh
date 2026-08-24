@@ -169,18 +169,107 @@ func importService(name string, doc map[string]any) (*Result, error) {
 	case "mcp":
 		importMCP(doc, r)
 		return r, nil
-	case "ssh", "telnet":
-		// Entire protocol out of scope for this release's importer.
+	case "ssh":
+		importSSH(doc, r)
+		return r, nil
+	case "telnet":
+		// Telnet remains out of scope for this release's importer.
 		for _, k := range keys(doc) {
 			r.Unsupported = append(r.Unsupported, FieldNote{
 				Path:   k,
-				Reason: fmt.Sprintf("protocol %s is not supported by this importer release; AegisMesh roadmap item R1 covers SSH decoys", proto),
+				Reason: "protocol telnet is not supported by this importer release; AegisMesh has no Telnet sensor",
 			})
 		}
 		return r, nil
 	default:
 		r.Detected = "unknown"
 		return r, nil
+	}
+}
+
+func importSSH(doc map[string]any, r *Result) {
+	sensor := map[string]any{"kind": "ssh"}
+	r.Mapped = append(r.Mapped, "protocol -> sensors[0].kind=ssh")
+	listenOK := commonServiceFields(doc, r, sensor)
+	if id, ok := sensor["id"].(string); ok {
+		r.Mapped = append(r.Mapped, "source filename -> sensors[0].id="+id)
+	}
+
+	for _, k := range keys(doc) {
+		switch strings.ToLower(k) {
+		case "protocol", "address", "description":
+			// protocol/address are mapped above; commonServiceFields keeps a
+			// description as a note without putting it in the generated config.
+		case "commands":
+			reportSSHCommands(doc[k], r)
+		case "passwordregex":
+			r.Unsupported = append(r.Unsupported, FieldNote{
+				Path:   k,
+				Reason: "credential matching has no safe exact equivalent; AegisMesh SSH authentication is synthetic and never validates or reuses credentials",
+			})
+		case "servername":
+			r.Unsupported = append(r.Unsupported, FieldNote{
+				Path:   k,
+				Reason: "server persona has no safe exact equivalent; the AegisMesh SSH server version is operator configuration",
+			})
+		case "serverversion":
+			r.Unsupported = append(r.Unsupported, FieldNote{
+				Path:   k,
+				Reason: "source server version is not copied because its value may not satisfy AegisMesh SSH identification validation",
+			})
+		case "hostkey", "hostkeyfile", "host_key", "host_key_file", "keyfile", "privatekey", "private_key":
+			r.Unsupported = append(r.Unsupported, FieldNote{
+				Path:   k,
+				Reason: "host-key material or paths are never imported; AegisMesh generates an in-memory Ed25519 key per sensor instance",
+			})
+		case "plugin":
+			r.Unsupported = append(r.Unsupported, FieldNote{
+				Path:   k,
+				Reason: "plugins and their response behavior cannot be imported; AegisMesh SSH accepts no channel or command",
+			})
+		default:
+			r.Unsupported = append(r.Unsupported, FieldNote{
+				Path:   k,
+				Reason: "no safe exact AegisMesh SSH equivalent; review manually",
+			})
+		}
+	}
+	if listenOK {
+		r.Sensor = sensor
+	}
+}
+
+func reportSSHCommands(v any, r *Result) {
+	commands, ok := v.([]any)
+	if !ok {
+		r.Unsupported = append(r.Unsupported, FieldNote{
+			Path:   "commands",
+			Reason: "expected a list; command behavior was not imported",
+		})
+		return
+	}
+	r.Unsupported = append(r.Unsupported, FieldNote{
+		Path:   "commands",
+		Reason: "SSH command handling is intentionally unsupported; AegisMesh SSH is authentication-only and rejects every channel",
+	})
+	for i, command := range commands {
+		path := fmt.Sprintf("commands[%d]", i)
+		fields, ok := command.(map[string]any)
+		if !ok {
+			r.Unsupported = append(r.Unsupported, FieldNote{Path: path, Reason: "not a mapping; command behavior was not imported"})
+			continue
+		}
+		if len(fields) == 0 {
+			r.Unsupported = append(r.Unsupported, FieldNote{Path: path, Reason: "empty command definition; command behavior was not imported"})
+			continue
+		}
+		for _, field := range keys(fields) {
+			reason := "SSH command field has no safe exact equivalent; channels are never accepted"
+			if strings.EqualFold(field, "plugin") {
+				reason = "SSH command plugins cannot be imported; extension output must never influence SSH behavior"
+			}
+			r.Unsupported = append(r.Unsupported, FieldNote{Path: path + "." + field, Reason: reason})
+		}
 	}
 }
 

@@ -15,14 +15,32 @@ product lives in this repository under the same license.
 4. `go.sum` is security-sensitive; changes are reviewed like code.
 5. CI runs a license check over the resolved module graph (`scripts/license-check.sh`).
 
-## Current third-party dependencies
+## Current direct third-party dependencies
 
 | Module | Version | License | Why |
 |---|---|---|---|
 | gopkg.in/yaml.v3 | v3.0.1 | MIT (+Apache-2.0 portions) | Config parsing; YAML is a user-facing requirement and stdlib has none |
+| `golang.org/x/crypto` (`ssh` package) | `v0.55.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
 
-That is the entire list at v0.1.0. Metrics exposition, CLI dispatch, JSON-RPC/MCP handling, JSONL storage,
-and crypto digests/signatures are implemented on the standard library deliberately (ADR-0001, ADR-0008).
+The v0.1.0 release used only the YAML module. The SSH slice adds the pinned
+`x/crypto` module. Metrics exposition, CLI dispatch, JSON-RPC/MCP handling,
+JSONL storage, and crypto digests/signatures remain standard-library code
+deliberately (ADR-0001, ADR-0008).
+
+## Resolved SSH dependency review
+
+The resolved graph also contains the transitive modules selected by
+`x/crypto`: `golang.org/x/net v0.57.0`, `golang.org/x/sys v0.47.0`,
+`golang.org/x/term v0.45.0`, and `golang.org/x/text v0.41.0`, plus the existing
+YAML test dependency `gopkg.in/check.v1`. All seven non-main modules passed the
+repository's allowed-license scan and `go mod verify`.
+
+Pinned `govulncheck v1.7.0` reports no reachable symbol or imported-package
+vulnerability with Go 1.25.14. It reports the module-only advisory
+`GO-2026-5932` for the unmaintained `x/crypto/openpgp` package; AegisMesh does
+not import or call that package. A future imported or reachable advisory blocks
+the dependency; no silent fallback may be substituted without amending
+ADR-0010.
 
 ## SBOM and provenance strategy
 

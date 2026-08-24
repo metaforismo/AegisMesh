@@ -75,7 +75,7 @@ func (c *inspectCmd) list(args []string) error {
 	dataDir := fs.String("data-dir", "./data", "evidence directory")
 	limit := fs.Int("limit", 20, "max events to print")
 	sensorID := fs.String("sensor", "", "filter by sensor id")
-	kind := fs.String("kind", "", "filter by sensor kind (http|tcp|mcp)")
+	kind := fs.String("kind", "", "filter by sensor kind (http|tcp|mcp|ssh)")
 	finding := fs.String("finding", "", "only events where this detection rule id fired (e.g. PI-001)")
 	var class singleValueFlag
 	fs.Var(&class, "classification", "filter to one evidence class (interaction|canary_invocation|correlation_signal)")

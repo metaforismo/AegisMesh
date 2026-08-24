@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/ssh"
+
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/storage"
@@ -64,6 +66,9 @@ sensors:
       - name: canary_tool
         description: d
         result_json: '{"ok":true}'
+  - id: ssh-decoy
+    kind: ssh
+    listen: "127.0.0.1:0"
 `, filepath.Join(dir, "data"))
 	cfgPath := filepath.Join(dir, "mesh.yaml")
 	if err := os.WriteFile(cfgPath, []byte(raw), 0o600); err != nil {
@@ -105,6 +110,10 @@ func TestSystemEndToEndLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	before := sys.Status()
+	if before.SensorsStarted != 0 || before.SensorsWanted != len(cfg.Sensors) {
+		t.Fatalf("pre-start readiness = %+v, want zero of %d sensors", before, len(cfg.Sensors))
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	runErr := make(chan error, 1)
@@ -113,6 +122,10 @@ func TestSystemEndToEndLifecycle(t *testing.T) {
 	// Wait for readiness via the admin endpoint on the ephemeral port.
 	addr := adminAddr(t, sys)
 	waitHealthy(t, addr)
+	ready := sys.Status()
+	if ready.SensorsStarted != ready.SensorsWanted {
+		t.Fatalf("ready status = %+v", ready)
+	}
 
 	// Drive every sensor kind and confirm an event lands in evidence.
 	dataDir := cfg.Runtime.DataDir
@@ -132,7 +145,21 @@ func TestSystemEndToEndLifecycle(t *testing.T) {
 	}
 	mcpResp.Body.Close()
 
-	evs := waitForEvents(t, dataDir, 3)
+	sshClient, err := ssh.Dial("tcp", sensorAddr(t, sys, "ssh-decoy"), &ssh.ClientConfig{
+		User:            "runtime-synthetic-user",
+		Auth:            []ssh.AuthMethod{ssh.Password("runtime-synthetic-password")},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // test-only ephemeral decoy key
+		Timeout:         2 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sshClient.OpenChannel("session", nil); err == nil {
+		t.Fatal("SSH session channel must be rejected")
+	}
+	sshClient.Close()
+
+	evs := waitForEvents(t, dataDir, 4)
 	classes := map[string]int{}
 	for _, e := range evs {
 		if err := e.VerifyIntegrity(); err != nil {
@@ -140,7 +167,7 @@ func TestSystemEndToEndLifecycle(t *testing.T) {
 		}
 		classes[e.Classification]++
 	}
-	if classes["interaction"] < 2 || classes["canary_invocation"] < 1 {
+	if classes["interaction"] < 3 || classes["canary_invocation"] < 1 {
 		t.Fatalf("class mix wrong: %v", classes)
 	}
 

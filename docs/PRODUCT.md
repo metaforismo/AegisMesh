@@ -1,6 +1,6 @@
 # AegisMesh product brief
 
-Version: 0.1.0 (first batch). Status: active.
+Version: v0.2 development line. Status: active; no production-readiness claim.
 
 ## One-liner
 
@@ -47,11 +47,13 @@ marketing that conflates "someone touched a decoy" with "you are breached".
 
 ## What "agentic deception" means here
 
-Three product families, with both current sensor families shipped:
+Three product families:
 
-1. **Infrastructure decoys** (HTTP, TCP now; SSH/Telnet/DB personas roadmap): fake services that record
-   probes and credential guessing attempts against synthetic credentials only.
-2. **Agent canaries** (MCP sensor, this batch): decoy tools registered on an MCP endpoint that no honest
+1. **Infrastructure decoys** (HTTP/TCP/SSH shipped; Telnet/DB later): fake services that
+   record probes and credential guessing attempts against synthetic credentials only. SSH is
+   authentication-only, keeps a distinct Ed25519 host key in memory for each sensor instance, and rejects every
+   channel and global request.
+2. **Agent canaries** (shipped MCP sensor): decoy tools registered on an MCP endpoint that no honest
    agent should call. An invocation means either a prompt injection succeeded or someone is exploring your
    agent's tool surface directly — both are worth knowing immediately.
 3. **Response intelligence** (roadmap): replaying collected interactions into detection engineering and
@@ -63,18 +65,18 @@ Three product families, with both current sensor families shipped:
 |---|---|
 | Licensing | Apache-2.0 end to end; zero GPL dependencies; license policy in CI and CycloneDX SBOMs on release tags |
 | Offline | Deterministic local provider + static policies = fully functional without network egress |
-| Supply chain | Single third-party Go dependency at launch (YAML parser); extensions out-of-process behind manifests |
+| Supply chain | Two direct third-party Go modules: the YAML parser and pinned `golang.org/x/crypto/ssh`; the full resolved graph is license-checked |
 | Safe defaults | Loopback bind + unprivileged ports validated by `doctor`; strict config schema; dry-run modes |
 | Evidence hygiene | Versioned envelope, payload hashing, redaction pipeline, retention bounds, observation≠incident |
 | Explainability | Every response maps to a policy ID; `inspect` shows exactly why a decoy answered what it answered |
 
-## First-batch MVP scope (honest boundary)
+## Current core scope (honest boundary)
 
 Ships: CLI (`init`, `doctor`, `validate`, `run`, `inspect`, `rules`, `migrate beelzebub`, `ext`, `healthcheck`,
-`version`, `completion`), HTTP/TCP/MCP sensors, static policies, deterministic local and opt-in remote
+`version`, `completion`), HTTP/TCP/MCP sensors plus authentication-only SSH, static policies, deterministic local and opt-in remote
 providers, JSONL evidence with correlation signals and ECS-compatible local export, loopback admin endpoints,
 data-only observer extensions, opt-in webhook delivery, Docker/Compose, Helm packaging, CI and docs.
 
-Does not ship yet (see ROADMAP): SSH/Telnet sensors, OTLP or automatic SIEM connectors, response
+Does not ship yet (see ROADMAP): Telnet and database sensors, OTLP or automatic SIEM connectors, response
 recommendation/playbook engine, evidence-at-rest encryption, distributed deployment, web console, or
 verified real-cluster Kubernetes support.

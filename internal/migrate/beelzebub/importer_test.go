@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -196,14 +197,133 @@ tools:
 	}
 }
 
-func TestImportSSHTelnetAndCoreUnsupported(t *testing.T) {
-	r := importYAML(t, "protocol: ssh\naddress: \":22\"\n")
-	if r.Detected != "ssh" || r.Sensor != nil {
-		t.Fatalf("ssh must produce no sensor: %+v", r)
+func TestImportSSHMapsOnlySafeFields(t *testing.T) {
+	doc := `
+apiVersion: "v1"
+protocol: ssh
+address: ":2222"
+description: "SSH interactive"
+commands:
+  - regex: "^ls$"
+    handler: "Documents Images"
+  - regex: "^(.+)$"
+    plugin: "LLMHoneypot"
+serverVersion: "OpenSSH"
+serverName: "ubuntu"
+passwordRegex: "^(root|qwerty)$"
+deadlineTimeoutSeconds: 60
+hostKeyFile: "/etc/beelzebub/host_key"
+plugin:
+  llmProvider: "ollama"
+`
+	r, err := ImportFile("ssh-service.yaml", []byte(doc))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(r.Unsupported) == 0 {
-		t.Fatal("ssh document must report every field as unsupported")
+	if r.Detected != "ssh" || r.Sensor == nil {
+		t.Fatalf("ssh should produce an authentication-only sensor: %+v", r)
 	}
+	if got := r.Sensor["kind"]; got != "ssh" {
+		t.Fatalf("sensor kind = %v, want ssh", got)
+	}
+	if got := r.Sensor["id"]; got != "beelzebub-ssh-service" {
+		t.Fatalf("derived id = %v, want beelzebub-ssh-service", got)
+	}
+	if got := r.Sensor["listen"]; got != "127.0.0.1:2222" {
+		t.Fatalf("listen = %v, want loopback translation", got)
+	}
+	if len(r.Sensor) != 3 {
+		t.Fatalf("SSH migration must emit only kind/id/listen, got %+v", r.Sensor)
+	}
+	for _, want := range []string{
+		"protocol -> sensors[0].kind=ssh",
+		"source filename -> sensors[0].id=beelzebub-ssh-service",
+		"address -> sensors[0].listen=127.0.0.1:2222",
+	} {
+		if !slices.Contains(r.Mapped, want) {
+			t.Errorf("mapped fields missing %q: %v", want, r.Mapped)
+		}
+	}
+	for _, want := range []string{
+		"apiVersion",
+		"commands",
+		"commands[0].regex",
+		"commands[0].handler",
+		"commands[1].plugin",
+		"serverVersion",
+		"serverName",
+		"passwordRegex",
+		"deadlineTimeoutSeconds",
+		"hostKeyFile",
+		"plugin",
+	} {
+		if !hasPath(r.Unsupported, want) {
+			t.Errorf("SSH field %s must be reported unsupported: %+v", want, r.Unsupported)
+		}
+	}
+	emitted, err := EmitConfig([]*Result{r})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(emitted)
+	for _, forbidden := range []string{"passwordRegex", "hostKeyFile", "commands:", "plugin:"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("unsafe/unsupported SSH field %q escaped into generated config:\n%s", forbidden, text)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "ssh.yaml")
+	if err := os.WriteFile(path, emitted, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(path); err != nil {
+		t.Fatalf("safe loopback SSH output must pass strict validation: %v\n%s", err, text)
+	}
+}
+
+func TestImportSSHPrivilegedAndInvalidAddressRemainFailClosed(t *testing.T) {
+	cases := []struct {
+		name        string
+		address     string
+		emitsSensor bool
+		want        string
+	}{
+		{name: "privileged", address: ":22", emitsSensor: true, want: "allow_privileged_ports"},
+		{name: "missing port", address: "localhost", emitsSensor: false, want: "cannot derive a valid host:port"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := importYAML(t, "protocol: ssh\naddress: \""+tc.address+"\"\n")
+			if (r.Sensor != nil) != tc.emitsSensor {
+				t.Fatalf("sensor presence = %v, want %v: %+v", r.Sensor != nil, tc.emitsSensor, r)
+			}
+			var joined strings.Builder
+			joined.WriteString(strings.Join(r.Notes, "\n"))
+			for _, note := range r.Unsupported {
+				joined.WriteByte('\n')
+				joined.WriteString(note.Path)
+				joined.WriteByte(' ')
+				joined.WriteString(note.Reason)
+			}
+			if !strings.Contains(joined.String(), tc.want) {
+				t.Fatalf("migration result does not explain %q: %s", tc.want, joined.String())
+			}
+		})
+	}
+}
+
+func TestImportTelnetRemainsUnsupported(t *testing.T) {
+	r := importYAML(t, "protocol: telnet\naddress: \":2323\"\nserverName: router\n")
+	if r.Detected != "telnet" || r.Sensor != nil {
+		t.Fatalf("telnet must produce no sensor: %+v", r)
+	}
+	for _, want := range []string{"protocol", "address", "serverName"} {
+		if !hasPath(r.Unsupported, want) {
+			t.Fatalf("telnet field %s must be reported: %+v", want, r.Unsupported)
+		}
+	}
+}
+
+func TestImportCoreAndUnknownDocuments(t *testing.T) {
 
 	rc := importYAML(t, "core:\n  logging:\n    level: debug\n  tracings: []\n  prometheus: {}\n")
 	if rc.Detected != "core" {
@@ -280,6 +400,11 @@ tools:
   - name: t1
     description: d
     handler: '{}'
+`, `
+protocol: ssh
+address: ":2222"
+serverName: ubuntu
+passwordRegex: "^(root)$"
 `} {
 		r, err := ImportFile("x.yaml", []byte(doc))
 		if err != nil {
@@ -304,8 +429,8 @@ tools:
 	if err != nil {
 		t.Fatalf("emitted config fails strict validation: %v\n---\n%s", err, text)
 	}
-	if len(cfg.Sensors) != 3 {
-		t.Fatalf("want 3 sensors, got %d", len(cfg.Sensors))
+	if len(cfg.Sensors) != 4 {
+		t.Fatalf("want 4 sensors, got %d", len(cfg.Sensors))
 	}
 	for _, s := range cfg.Sensors {
 		if !strings.HasPrefix(s.Listen, "127.0.0.1:") {

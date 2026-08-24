@@ -31,6 +31,8 @@ sensors:    [ ... ]                   # 1..64 entries
 | `listen` | `127.0.0.1:9110` | **invariant:** must be loopback. Health/metrics are internal surface; this is not configurable permissively. |
 
 Endpoints: `/healthz`, `/readyz`, `/metrics` (Prometheus text), `/version`.
+`/readyz` returns ready only after every configured sensor listener has started;
+it does not treat constructed but unbound sensors as available.
 
 ### security
 
@@ -79,7 +81,7 @@ Common fields for all kinds:
 
 ```yaml
 - id: http-admin-decoy     # unique, [a-z0-9][a-z0-9.-]{2,63}
-  kind: http               # http | tcp | mcp
+  kind: http               # http | tcp | mcp | ssh
   listen: "127.0.0.1:8081"
 ```
 
@@ -133,6 +135,40 @@ tcp_rules:
 Rules evaluate top-down; first match answers. Sessions end at EOF, deadline,
 oversized line, or write failure. Every exchange emits one event containing a
 bounded preview + SHA-256 of the last line — never the raw stream.
+
+### kind: ssh
+
+The SSH sensor is an authentication-only observation boundary. Omitting
+`listen` uses `127.0.0.1:2222`. An omitted or empty `ssh` mapping uses the
+defaults below. Explicit empty, null, or zero values for individual nested
+settings are rejected rather than silently replaced with defaults; an
+explicitly null `ssh` block is also rejected.
+
+```yaml
+- id: ssh-admin-decoy
+  kind: ssh
+  listen: "127.0.0.1:2222"
+  ssh:
+    server_version: "SSH-2.0-AegisMesh"
+    handshake_timeout_seconds: 10  # default 10; hard cap 60
+    max_session_seconds: 30        # default 30; hard cap 300
+    max_auth_attempts: 3           # default 3; hard cap 6
+```
+
+Each sensor instance generates one Ed25519 host key and keeps it in memory.
+There is deliberately no `host_key_file`, host-key path, or persisted key
+configuration; reconstructing the sensor rotates the advertised key. Password
+and public-key callbacks complete synthetic authentication only. They do not
+validate, reuse, compare, hash, log, or retain real credentials. Usernames and
+credential contents are omitted from evidence entirely, not hashed.
+
+After synthetic authentication, every channel and global request is rejected.
+The sensor exposes no shell, PTY, subsystem, SFTP, forwarding, filesystem, or
+command-execution surface. Handshake/session deadlines, authentication
+attempts, concurrent connections, and protocol metadata are bounded; fixed
+input caps include username, password, and public-key fields. SSH evidence is
+an observation of protocol activity, not proof of a real account or incident,
+and creates no outbound target.
 
 ### kind: mcp
 

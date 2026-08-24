@@ -32,8 +32,11 @@ Behavior:
   - Unsupported fields are listed exactly; privileged-port or public-bind
     implications are reported, never auto-enabled.
 
-Supported sources: http, tcp, and mcp service documents; core files produce a
-report only. ssh/telnet documents are reported as fully unsupported.`
+Supported sources: http, tcp, mcp, and SSH service documents. SSH imports map
+only protocol, address, and a derived sensor id; authentication remains
+synthetic and commands, plugins, passwords, personas, and host keys are
+reported unsupported. Core files produce a report only; Telnet remains fully
+unsupported.`
 }
 
 func (c *migrateCmd) Run(_ context.Context, args []string) error {

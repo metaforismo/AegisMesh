@@ -227,8 +227,9 @@ base name only.
 
     migrate beelzebub FILE... [--out DIR] [--write] [--force]
 
-Clean-room importer for Beelzebub YAML service documents (http/tcp/mcp;
-core files produce a report only; ssh/telnet are reported fully unsupported).
+Clean-room importer for Beelzebub YAML service documents (http/tcp/mcp plus a
+conservative SSH mapping; core files produce a report only; telnet is reported
+fully unsupported).
 Dry-run by default; `--write` emits `<stem>.aegismesh.yaml` per translatable
 file, refusing overwrites without `--force`. Source documents containing
 credential material (API keys, tokens, PEM blocks) refuse the import with a

@@ -84,22 +84,7 @@ func TestSystemDeliversObservationsToExtension(t *testing.T) {
 	addr := adminAddr(t, sys)
 	waitHealthy(t, addr)
 
-	// Extensions start before sensors, so admin health precedes decoy
-	// readiness by design; poll for the listener rather than assume.
-	var url string
-	waitForCondition(t, startTimeout+2*time.Second, func() bool {
-		for _, sen := range sys.sensors {
-			if sen.ID() != "http-decoy" {
-				continue
-			}
-			type addrer interface{ Addr() string }
-			if a, ok := sen.(addrer); ok && a.Addr() != "" {
-				url = "http://" + a.Addr() + "/"
-				return true
-			}
-		}
-		return false
-	}, "http decoy listener")
+	url := sensorURL(t, sys, "http-decoy") + "/"
 	resp, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -258,20 +243,7 @@ sensors:
 	addr := adminAddr(t, sys)
 	waitHealthy(t, addr)
 
-	var url string
-	waitForCondition(t, startTimeout+2*time.Second, func() bool {
-		for _, sen := range sys.sensors {
-			if sen.ID() != "http-decoy" {
-				continue
-			}
-			type addrer interface{ Addr() string }
-			if a, ok := sen.(addrer); ok && a.Addr() != "" {
-				url = "http://" + a.Addr() + "/"
-				return true
-			}
-		}
-		return false
-	}, "http decoy listener")
+	url := sensorURL(t, sys, "http-decoy") + "/"
 	resp, err := http.Get(url) //nolint:noctx // test-local loopback probe
 	if err != nil {
 		t.Fatal(err)

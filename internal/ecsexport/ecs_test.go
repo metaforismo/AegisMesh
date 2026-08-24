@@ -65,6 +65,7 @@ func TestMarshalClassificationAndNetworkMapping(t *testing.T) {
 	}{
 		{"canary", event.ClassificationCanaryHit, "mcp", true},
 		{"correlation", event.ClassificationCorrelationSignal, "tcp", true},
+		{"ssh interaction", event.ClassificationInteraction, "ssh", true},
 		{"future sensor", event.ClassificationInteraction, "future", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,6 +89,28 @@ func TestMarshalClassificationAndNetworkMapping(t *testing.T) {
 				t.Fatalf("action=%q network=%+v", got.Event.Action, got.Network)
 			}
 		})
+	}
+}
+
+func TestMarshalSSHNetworkAndServiceFields(t *testing.T) {
+	env := fixedEnvelope()
+	env.Sensor = event.SensorRef{ID: "ssh-decoy", Kind: "ssh", Listen: "127.0.0.1:2222"}
+	raw, err := Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Service serviceFields `json:"service"`
+		Network networkFields `json:"network"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Network.Protocol != "ssh" || got.Network.Transport != "tcp" {
+		t.Fatalf("network = %+v, want SSH over TCP", got.Network)
+	}
+	if got.Service.Name != "ssh-decoy" || got.Service.Type != "ssh" || got.Service.Address != "127.0.0.1:2222" {
+		t.Fatalf("service = %+v", got.Service)
 	}
 }
 
