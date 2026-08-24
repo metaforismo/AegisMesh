@@ -39,7 +39,9 @@ publish, sign, or attest anything during pull requests.
   correlation offers. Derived correlation signals append directly to storage;
   never republish them through `Bus.Submit`.
 - Observer extensions are live but data-only. Response-influencing extension
-  wiring remains unimplemented by ADR-0006.
+  wiring remains unimplemented by ADR-0006. V1alpha1 permissions are exactly
+  `["observe"]`; successful delivery accepts only a canonical event-linked
+  acknowledgement and no extension-derived policy is representable.
 - Native evidence remains the source contract. ECS-compatible export is a
   read-boundary projection and nests the complete native envelope.
 - Recommendations are a separate read-only boundary. All input is validated
@@ -54,7 +56,8 @@ publish, sign, or attest anything during pull requests.
 - `/readyz` counts only successfully started sensor listeners; extension startup
   completes before sensor readiness can become true.
 - Extensions inherit only `AEGISMESH_EXTENSION=1` and use the manifest
-  directory as their working directory.
+  directory as their working directory. Manifest paths are config-relative and
+  cannot escape that directory through traversal or symlinks.
 
 ## Known gaps and boundaries
 
@@ -81,10 +84,11 @@ closed through PR #47: local gates passed and independent CI generated,
 validated, and reproduced the real application SBOM while also passing the
 pinned vulnerability scan. The dry-run recommendation model is implemented and
 verified locally and by PR #51 CI, then merged as `86041b8`. The demo slice is
-implemented and verified locally, independently and by PR #52 CI; merge remains.
-At-rest encryption is the next ordered slice after that merge. The extension live-policy
-boundary and process isolation remain separate later slices in the finite v0.2
-delivery plan.
+verified locally, independently and by PR #52 CI, then merged as `1911678`.
+The observer-only extension live-policy boundary is the active slice. Optional
+at-rest encryption is architecture-complete but dependency acquisition remains
+approval-gated; process isolation follows as a separate slice in the finite
+v0.2 delivery plan.
 
 ## Commands that matter
 

@@ -5,6 +5,29 @@ arm64; host Go 1.25.5 and project-required Go 1.25.14) or to CI. Vocabulary: **P
 ran, non-zero (fixed or documented); **BLOCKED** = tool/environment missing,
 fallback noted; **NOT RUN** = deliberately skipped, reason given.
 
+## 2026-08-24 — observe-only extension live-policy boundary
+
+| Check | Command / evidence | Status |
+|---|---|---|
+| Isolated baseline | `git status --short --branch`; `git rev-parse HEAD`; `git remote -v` | PASS — `codex/extension-live-policy` started from merged demo commit `191167840b273f05e7a5cbd8c7e1074c003ff218`; the primary checkout was not modified |
+| Exa connector probe | callable-tool inventory for `web_search_exa` and `web_fetch_exa` | BLOCKED — Exa connector tools are not exposed to this task. Native primary-source research remained the authorized fallback |
+| Initial all-package race attempt | `make lint test` | FAIL — one pre-existing negative extension handshake timed out under the full race load; the exact test then passed five consecutive repetitions, so no result was silently relabeled |
+| Temporary-disk boundary | focused `go test` with a fresh temporary Go cache | FAIL — the host volume reached `no space left on device`; only regenerable `/tmp/aegismesh-*` Go caches from already merged SSH/recommendation/demo work were removed, freeing 3 GiB; no source, worktree or evidence data was removed |
+| Strict manifest/config tests | `go test ./internal/config ./internal/ext ./internal/extmanager` plus cap, traversal, symlink, duplicate-field and malformed-frame cases | PASS — config-relative containment, regular-file and size caps, exact observe capability, identity-bound handshake, canonical acknowledgement, invalid metadata, `null`, reordered keys, `128 KiB` and cap+1 all exercised |
+| CLI contract | `go test ./internal/cli ./internal/runtime` with scoped loopback access | PASS — omitted/empty/whitespace/padded/repeated/comma/leading-dash/positional forms, arbitrary valid JSON values, deterministic core-owned output, bounded pubkey files and real runtime delivery passed |
+| Sandbox-only listener attempt | touched-package tests without scoped loopback access | BLOCKED — existing doctor/demo/healthcheck listeners were denied with `operation not permitted`; config, extension and manager packages passed before that boundary |
+| Affected race suite | `go test -race ./internal/config ./internal/ext ./internal/extmanager ./internal/runtime ./internal/cli -count=1` with scoped loopback access | PASS |
+| Protocol/lifecycle stress | `go test -race ./internal/ext ./internal/extmanager -run 'TestHostRejectsNonCanonicalAcknowledgements|TestHostCallDeadlineRevokesProcess|TestDeliverConcurrentWithStop|TestStopCancelsActiveObserverCall|TestStartFailureTearsDownAndStopIsIdempotent' -count=5` | PASS — five repetitions of revocation, active-call cancellation, partial-start cleanup and concurrent delivery/stop |
+| Independent fast-mode reviews | two read-only security and docs/test reviews after implementation and deslop | PASS — no P0/P1 blocker remained; README execution wording, delivery method naming, roadmap status and evidence-link language were corrected; direct-child sandbox limits and artifact verification-to-launch TOCTOU remain explicitly assigned to process isolation |
+| Extension parser fuzz | `go test -run '^$' -fuzz=FuzzRejectDuplicateJSONKeys ./internal/ext -fuzztime=10s -fuzzminimizetime=0` | PASS — 1,485,021 executions with no crash; the target is now part of `make fuzz-seed` |
+| Complete fuzz seed set | `make fuzz-seed` | PASS — config, event, TCP, SSH, recommendation, migration and extension parsers each completed 15 seconds of real fuzzing |
+| Final formatting, vet and all-package race suite | `make lint test` with a temporary Go cache and scoped loopback access | PASS — every package passed; `golangci-lint` unavailable, so the documented gofmt/vet fallback ran |
+| Helm contract | `make helm-contract` | PASS after retry with the writable temporary Go cache — all positive and adversarial chart cases passed; the first sandbox-cache command returned FAIL because macOS denied its default cache path |
+| Supply-chain and repository hygiene | `make supply-chain-check`; `./scripts/license-check.sh`; `./scripts/secrets-scan.sh`; `go mod verify`; `git diff --check` | PASS — immutable references, seven-module license policy, secret tripwire, module checksums and patch whitespace passed; no dependency changed |
+| Pinned vulnerability scan | cached `govulncheck@v1.7.0` binary against the official `vuln.go.dev` database | BLOCKED — scoped read access to the external vulnerability database was rejected as new egress; no local PASS is inferred and the PR vulnerability job remains a required merge gate |
+| Local CycloneDX generation | `make sbom sbom-check` | NOT RUN — the pinned generator is not cached and acquiring it is separately approval-gated; no dependency changed, and the PR SBOM generation/validation/reproducibility jobs remain required merge gates |
+| External effects | response influence, correlation-signal fan-out, runtime enforcement, arbitrary destinations, release publication/signing/attestation/settings changes | NOT RUN — none was implemented or invoked; extension delivery remains local, explicit and observation-only |
+
 ## 2026-08-24 — self-contained synthetic demo
 
 | check | command | result |
@@ -22,7 +45,7 @@ fallback noted; **NOT RUN** = deliberately skipped, reason given.
 | Helm, supply-chain and repository hygiene | `make helm-contract`; `make supply-chain-check`; `go mod verify`; `./scripts/license-check.sh`; `./scripts/secrets-scan.sh`; `git diff --check`; `sh -n scripts/demo.sh` | PASS — Helm positive/adversarial contract, immutable references, seven modules, license policy, secret tripwire, patch whitespace and wrapper syntax passed; no dependency changed |
 | Local pinned vulnerability scan | `GOTOOLCHAIN=go1.25.14+auto GOCACHE=/tmp/aegismesh-go-cache make vuln` | BLOCKED — `govulncheck@v1.7.0` was not cached and sandbox DNS could not reach `proxy.golang.org`; PR CI must pass the identical pinned gate |
 | PR #52 independent CI | `gh pr checks 52 --repo metaforismo/AegisMesh --watch` at `64293ab` | PASS — full race suite 1m23s, six-target bounded fuzz 2m7s, pinned govulncheck 31s, Helm contract 25s, dependency-license/secret checks 13s, and supply-chain contracts 39s |
-| External effects | remote/cloud requests, proxy use, arbitrary destinations, extensions/webhooks, action enforcement, publication/signing/attestation/settings changes | NOT RUN — no such path was implemented or invoked; the demo's traffic was confined to its own validated numeric loopback listeners |
+| External effects | remote/cloud requests, proxy use, arbitrary destinations, extensions/webhooks, action enforcement, publication/signing/attestation/settings changes | NOT RUN — no such path was invoked by the demo; its traffic was confined to its own validated numeric loopback listeners |
 
 ## 2026-08-24 — deterministic dry-run recommendations
 
@@ -176,7 +199,7 @@ CI runs all five targets at 15s each on every push.
 | Example migration fixtures round-trip through the strict loader | `go test -run TestMigrateExampleFixturesRoundTrip ./internal/cli/` | PASS |
 | Race detector on touched packages | `go test -race -count=1 ./internal/cli/ ./internal/migrate/beelzebub/` | PASS |
 | Extension observer supervisor (slow/failing/crashing/backpressured synthetic extensions, revocation, bounded shutdown, drop accounting) | `go test -race -count=1 ./internal/extmanager/` | PASS |
-| Runtime wiring: observations delivered to a real observer subprocess; fail-closed on missing manifest / respond-only extension | `go test -race -count=1 -run 'TestSystemDelivers|TestBuildFailsClosedOnMissing|TestBuildFailsClosedOnRespond' ./internal/runtime/` | PASS |
+| Runtime wiring: observations delivered to a real observer subprocess; fail-closed on missing manifest / respond-only extension | `go test -race -count=1 -run 'TestSystemDelivers|TestBuildFailsClosedOnMissing|TestBuildFailsClosedOnRespondPermission' ./internal/runtime/` | PASS |
 | Webhook config schema: egress-validated destinations, secret references, bounds, defaults | `go test -run 'TestWebhookSectionValidation|TestResolveWebhookSecret' ./internal/config/` | PASS |
 | Webhook delivery engine: signed batches, retry+jitter, redirect refusal, dial-time egress re-classification, bounded shutdown | `go test -race -count=3 ./internal/webhook/` | PASS |
 | Runtime fan-out: decoy → store AND signed webhook batch end-to-end; unresolvable secret fails startup | `go test -race -run 'TestSystemStreamsEvidenceToWebhook|TestBuildFailsClosedOnUnresolvableWebhookSecret' ./internal/runtime/` | PASS |
@@ -185,7 +208,7 @@ CI runs all five targets at 15s each on every push.
 | Importer refuses inline credential material with non-zero exit; references reported, never carried or echoed | `go test -run 'TestMigrateRefuses|TestMigrateReports' ./internal/cli/` | PASS |
 | Example migration fixtures round-trip through the strict loader | `go test -run TestMigrateExampleFixturesRoundTrip ./internal/cli/` | PASS |
 | Importer output passes strict loader (in-test round trip) | `go test -run TestEmitConfigRoundTripsThroughStrictLoader ./internal/migrate/beelzebub/` | PASS |
-| Extension contract incl. real subprocess handshake/call/revocation | `go test -race ./internal/ext/` | PASS |
+| Historical extension contract at that snapshot: real subprocess handshake/call/revocation | `go test -race ./internal/ext/` | PASS — superseded by the typed `Observe` and canonical acknowledgement contract recorded above |
 | License policy scan | `./scripts/license-check.sh` | PASS (2 modules within policy) |
 | Secret tripwire scan | `./scripts/secrets-scan.sh` | PASS |
 | Shell scripts syntax | `sh -n scripts/*.sh` | PASS |

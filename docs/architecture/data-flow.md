@@ -77,10 +77,12 @@ authentication, rejects every channel and global request, and emits bounded
 observation metadata. It has no shell, PTY, subsystem, SFTP, forwarding,
 filesystem, command-execution, or outbound-target path.
 
-After the authoritative store append, the composite sink (`internal/runtime.evidenceSink`) offers every raw
-envelope to enabled consumers in a fixed order: observer extensions (`Deliver`), webhook stream (`Offer`),
-correlation (`observe`). Each offer is non-blocking with its own drop counter; none can slow or fail the
-store path.
+Only after the authoritative store append succeeds, the composite sink
+(`internal/runtime.evidenceSink`) offers the raw envelope to enabled consumers
+in a fixed order: observer extensions (`Deliver`), webhook stream (`Offer`), then
+correlation (`observe`). A failed append returns immediately and is never
+offered. Each offer is non-blocking with its own drop counter; none can slow or
+fail the store path.
 
 **Known wiring gap:** fired correlation signals are persisted by appending directly to the primary store,
 bypassing the bus and the composite sink. Signals therefore reach neither the webhook stream nor observer
@@ -144,8 +146,8 @@ flowchart TB
     EV --> COR
     EV -.->|"optional best-effort raw-envelope offers"| WEB
     COR -->|"signals appended directly;\ncurrently not offered to webhook/extensions"| ST
-    EV -.->|"offers only after manifest+digest verification,\nobserve permission required"| EH
-    EH -.->|"acks/errors carry no capability"| NFB[No feedback path to sensors or policy]
+    EV -.->|"only after successful append;\nexact observe permission required"| EH
+    EH -.->|"canonical event-linked ack only"| NFB[No feedback path to sensors or policy]
     WEB -.->|"HMAC-signed, best-effort"| COL[Operator collector]
     REC -->|"buffered local proposals only"| OUT[Operator output]
 ```
@@ -194,6 +196,9 @@ processes supervised by `internal/extmanager`.
    envelopes, and fired signals append straight to the primary store without traversing the bus.
 7. Observer consumers (webhook, extensions, correlation) are strictly read-side: their failures, drops,
    replies, or outputs can never slow an evidence write, alter a decoy response, or mutate configuration.
+   Extension requests are capped at 128 KiB and successful replies must equal
+   the canonical event-linked acknowledgement byte for byte; extension text is
+   never surfaced as a runtime result.
    Fired signals reach only the store today; delivering signals to webhook/extensions is deferred and
    unimplemented.
 8. Producer offers hold a shared lifecycle lock from the closed-state check through the non-blocking send;
