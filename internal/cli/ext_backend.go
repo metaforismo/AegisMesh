@@ -4,10 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
+	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/ext"
 )
+
+const maxExtensionPublicKeyFileBytes = 1024
 
 // runVerify bridges the ext command to manifest verification.
 func runVerify(manifestPath, pubKeyPath string) (*ext.VerifyResult, error) {
@@ -17,11 +22,10 @@ func runVerify(manifestPath, pubKeyPath string) (*ext.VerifyResult, error) {
 	}
 	pubHex := ""
 	if pubKeyPath != "" {
-		b, err := os.ReadFile(pubKeyPath) //nolint:gosec // explicit operator path
+		pubHex, err = readExtensionPublicKey(pubKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("read pubkey: %v", err)
+			return nil, err
 		}
-		pubHex = trimSpace(string(b))
 	}
 	res, err := ext.Verify(m, pubHex)
 	if err != nil && res == nil {
@@ -30,46 +34,71 @@ func runVerify(manifestPath, pubKeyPath string) (*ext.VerifyResult, error) {
 	return res, err
 }
 
-// runExtension verifies then executes one call against an extension through
-// the out-of-process host.
+// runExtension verifies an observer, sends one synthetic data-only probe, and
+// returns only core-owned acknowledgement metadata.
 func runExtension(ctx context.Context, manifestPath, input, pubKeyPath string) (map[string]any, error) {
+	payload := json.RawMessage(input)
+	if len(payload) == 0 {
+		payload = json.RawMessage(`{}`)
+	}
+	if !json.Valid(payload) {
+		return nil, fmt.Errorf("--input must be one valid JSON value")
+	}
 	m, err := ext.LoadManifest(manifestPath)
 	if err != nil {
 		return nil, err
 	}
 	pubHex := ""
 	if pubKeyPath != "" {
-		b, err := os.ReadFile(pubKeyPath) //nolint:gosec // explicit operator path
+		pubHex, err = readExtensionPublicKey(pubKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("read pubkey: %v", err)
+			return nil, err
 		}
-		pubHex = trimSpace(string(b))
 	}
 	if _, err := ext.Verify(m, pubHex); err != nil {
 		return nil, fmt.Errorf("verification failed; refusing to run: %v", err)
 	}
 
-	h, err := ext.Start(ctx, m, func(format string, args ...any) {
-		fmt.Fprintf(os.Stderr, format+"\n", args...)
-	})
+	h, err := ext.Start(ctx, m)
 	if err != nil {
 		return nil, err
 	}
 	defer h.Stop()
 
-	params := json.RawMessage(input)
-	if len(params) == 0 {
-		params = json.RawMessage(`{}`)
-	}
-	result, err := h.Call(ctx, "respond", params)
-	if err != nil {
+	const eventID = "extension-probe"
+	if err := h.Observe(ctx, ext.Observation{
+		EventID:        eventID,
+		Time:           time.Unix(0, 0).UTC(),
+		Classification: event.ClassificationInteraction,
+		Sensor:         event.SensorRef{ID: "extension-probe", Kind: "probe", Listen: "local"},
+		Payload:        payload,
+	}); err != nil {
 		return nil, err
 	}
-	var parsed any
-	if json.Unmarshal(result, &parsed) == nil {
-		return map[string]any{"extension": m.Name, "version": m.Version, "result": parsed}, nil
+	return map[string]any{
+		"extension": m.Name,
+		"version":   m.Version,
+		"event_id":  eventID,
+		"accepted":  true,
+		"applied":   false,
+	}, nil
+}
+
+func readExtensionPublicKey(path string) (string, error) {
+	f, err := os.Open(path) //nolint:gosec // explicit operator CLI path
+	if err != nil {
+		return "", fmt.Errorf("read pubkey: %v", err)
 	}
-	return map[string]any{"extension": m.Name, "version": m.Version, "result_raw": string(result)}, nil
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxExtensionPublicKeyFileBytes {
+		return "", fmt.Errorf("read pubkey: must be a regular file no larger than %d bytes", maxExtensionPublicKeyFileBytes)
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxExtensionPublicKeyFileBytes+1))
+	if err != nil || len(b) > maxExtensionPublicKeyFileBytes {
+		return "", fmt.Errorf("read pubkey: must be no larger than %d bytes", maxExtensionPublicKeyFileBytes)
+	}
+	return trimSpace(string(b)), nil
 }
 
 func trimSpace(s string) string {

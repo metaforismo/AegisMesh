@@ -11,6 +11,8 @@ type frame struct {
 	Type    string          `json:"type"`
 	ID      string          `json:"id,omitempty"`
 	Proto   int             `json:"protocol,omitempty"`
+	Name    string          `json:"name,omitempty"`
+	Version string          `json:"version,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Message string          `json:"message,omitempty"`
 }
@@ -32,7 +34,7 @@ func main() {
 		}
 		switch {
 		case f.Type == "hello":
-			write(w, frame{Type: "hello_ok", Proto: f.Proto})
+			write(w, frame{Type: "hello_ok", Proto: f.Proto, Name: "obs-failer", Version: "1.0.0"})
 		case f.Type == "request":
 			write(w, frame{Type: "error", ID: f.ID, Message: "synthetic failure"})
 		}

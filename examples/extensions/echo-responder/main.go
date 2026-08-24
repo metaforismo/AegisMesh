@@ -1,9 +1,9 @@
-// Command echo-responder is the AegisMesh reference extension: a minimal
-// out-of-process responder demonstrating the subprocess-NDJSON contract.
+// Command echo-responder is the AegisMesh reference observer extension.
 //
 // Contract: reads newline-delimited JSON frames on stdin, writes single-line
-// JSON frames on stdout, answers the handshake, and responds to "respond"
-// calls with a canned synthetic payload. It performs no IO beyond stdio.
+// JSON frames on stdout, answers the handshake, and acknowledges "observe"
+// calls without returning policy or response data. It performs no IO beyond
+// stdio.
 package main
 
 import (
@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 )
 
 type frame struct {
@@ -24,6 +23,15 @@ type frame struct {
 	Params   json.RawMessage `json:"params,omitempty"`
 	Result   json.RawMessage `json:"result,omitempty"`
 	Message  string          `json:"message,omitempty"`
+}
+
+type observation struct {
+	EventID string `json:"event_id"`
+}
+
+type acknowledgement struct {
+	EventID  string `json:"event_id"`
+	Accepted bool   `json:"accepted"`
 }
 
 func main() {
@@ -51,13 +59,17 @@ func main() {
 			}
 			enc(frame{Type: "hello_ok", Protocol: 1, Name: "echo-responder", Version: "0.1.0"})
 		case "request":
-			if f.Method != "respond" {
+			if f.Method != "observe" {
 				enc(frame{Type: "error", ID: f.ID, Message: "unknown method"})
 				continue
 			}
-			result := `{"status":"ok","note":"synthetic reference response","echo_len":` +
-				fmt.Sprint(len(strings.TrimSpace(string(f.Params)))) + `}`
-			enc(frame{Type: "response", ID: f.ID, Result: json.RawMessage(result)})
+			var obs observation
+			if json.Unmarshal(f.Params, &obs) != nil || obs.EventID == "" {
+				enc(frame{Type: "error", ID: f.ID, Message: "invalid observation"})
+				continue
+			}
+			result, _ := json.Marshal(acknowledgement{EventID: obs.EventID, Accepted: true})
+			enc(frame{Type: "response", ID: f.ID, Result: result})
 		default:
 			enc(frame{Type: "error", Message: "unknown frame type"})
 		}
