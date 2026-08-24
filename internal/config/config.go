@@ -315,9 +315,10 @@ type Correlation struct {
 func (c Correlation) IsEnabled() bool { return c.Enabled != nil && *c.Enabled }
 
 type Sensor struct {
-	ID     string `yaml:"id"     json:"id"`
-	Kind   string `yaml:"kind"   json:"kind"`
-	Listen string `yaml:"listen" json:"listen"`
+	ID               string `yaml:"id"                         json:"id"`
+	Kind             string `yaml:"kind"                       json:"kind"`
+	Listen           string `yaml:"listen"                     json:"listen"`
+	ProcessIsolation bool   `yaml:"process_isolation,omitempty" json:"process_isolation,omitempty"`
 
 	// HTTP fields.
 	Persona      *HTTPPersona `yaml:"persona,omitempty"      json:"persona,omitempty"`

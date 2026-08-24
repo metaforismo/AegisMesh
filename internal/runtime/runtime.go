@@ -23,10 +23,8 @@ import (
 	"github.com/metaforismo/aegismesh/internal/observe"
 	"github.com/metaforismo/aegismesh/internal/policy"
 	"github.com/metaforismo/aegismesh/internal/sensor"
-	"github.com/metaforismo/aegismesh/internal/sensor/httpsensor"
-	"github.com/metaforismo/aegismesh/internal/sensor/mcpsensor"
-	"github.com/metaforismo/aegismesh/internal/sensor/sshsensor"
-	"github.com/metaforismo/aegismesh/internal/sensor/tcpsensor"
+	"github.com/metaforismo/aegismesh/internal/sensorfactory"
+	"github.com/metaforismo/aegismesh/internal/sensorproc"
 	"github.com/metaforismo/aegismesh/internal/storage"
 	"github.com/metaforismo/aegismesh/internal/webhook"
 )
@@ -55,7 +53,6 @@ type System struct {
 	corr      *correlateAdapter
 	log       *slog.Logger
 	started   atomic.Uint64
-	failed    atomic.Uint64
 	stopped   atomic.Bool
 	stopMaint chan struct{}
 	maintOnce sync.Once
@@ -198,7 +195,17 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 	sys.bus = event.NewBus(busCapacity, sink, log)
 
 	for i := range cfg.Sensors {
-		s, err := buildSensor(&cfg.Sensors[i], cfg, prov, enf)
+		var s sensor.Sensor
+		var err error
+		if cfg.Sensors[i].ProcessIsolation {
+			var spec sensorproc.WorkerSpec
+			spec, err = isolatedSensorSpec(cfg.Sensors[i], cfg)
+			if err == nil {
+				s, err = sensorproc.NewProxy(sensorproc.ProxyOptions{Spec: spec})
+			}
+		} else {
+			s, err = sensorfactory.Build(cfg.Sensors[i], cfg.ResolveBodyFile, prov, enf)
+		}
 		if err != nil {
 			sys.closeAll()
 			return nil, fmt.Errorf("%w: sensor %q: %v", errRuntime, cfg.Sensors[i].ID, err)
@@ -272,29 +279,6 @@ func providerFor(c config.Config) (llm.Provider, error) {
 	}
 }
 
-func buildSensor(c *config.Sensor, cfg *config.Config, prov llm.Provider, enf *policy.Enforcer) (sensor.Sensor, error) {
-	switch c.Kind {
-	case config.SensorKindHTTP:
-		gate, err := policy.NewHTTPGate(*c, cfg.ResolveBodyFile, prov, enf)
-		if err != nil {
-			return nil, err
-		}
-		return httpsensor.New(*c, gate)
-	case config.SensorKindTCP:
-		gate, err := policy.NewTCPGate(*c, enf)
-		if err != nil {
-			return nil, err
-		}
-		return tcpsensor.New(*c, gate)
-	case config.SensorKindMCP:
-		return mcpsensor.New(*c, enf)
-	case config.SensorKindSSH:
-		return sshsensor.New(*c)
-	default:
-		return nil, fmt.Errorf("unknown kind %q", c.Kind)
-	}
-}
-
 // Start brings up admin, observer extensions, and all sensors. Partial
 // failures tear everything down.
 func (s *System) Start(ctx context.Context) error {
@@ -345,13 +329,15 @@ func (s *System) sensorCfg(id string) *config.Sensor {
 
 // Status reports readiness for the admin endpoints.
 func (s *System) Status() admin.Status {
-	started := s.started.Load()
-	failed := s.failed.Load()
-	if failed > started {
-		failed = started
+	startedTotal := int(s.started.Load())
+	startedHealthy := startedTotal
+	for i := 0; i < startedTotal && i < len(s.sensors); i++ {
+		if h, ok := s.sensors[i].(healthProvider); ok && !h.Healthy() {
+			startedHealthy--
+		}
 	}
 	return admin.Status{
-		SensorsStarted: int(started - failed),
+		SensorsStarted: startedHealthy,
 		SensorsWanted:  len(s.sensors),
 		StoreHealthy:   true,
 		DroppedEvents:  s.bus.Dropped(),
@@ -397,13 +383,7 @@ func (s *System) closeAll() {
 	if s.stopMaint != nil {
 		s.maintOnce.Do(func() { close(s.stopMaint) })
 	}
-	for _, sen := range s.sensors {
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
-		if err := sen.Close(ctx); err != nil {
-			s.log.Warn("sensor close error", "sensor", sen.ID(), "err", err)
-		}
-		cancel()
-	}
+	s.closeSensors()
 	if s.adminSrv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 		if err := s.adminSrv.Close(ctx); err != nil {
@@ -434,8 +414,25 @@ func (s *System) closeAll() {
 	}
 }
 
+func (s *System) closeSensors() {
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+	defer cancel()
+	var wg sync.WaitGroup
+	for _, sen := range s.sensors {
+		wg.Add(1)
+		go func(se sensor.Sensor) {
+			defer wg.Done()
+			if err := se.Close(ctx); err != nil {
+				s.log.Warn("sensor close error", "sensor", se.ID(), "err", err)
+			}
+		}(sen)
+	}
+	wg.Wait()
+}
+
 // Run blocks until ctx is cancelled, then stops the system. Returns an error
-// if any sensor failed terminally while running.
+// if an in-process sensor failed terminally while running. An isolated sensor
+// failure degrades readiness while the remaining sensors continue serving.
 func (s *System) Run(ctx context.Context) error {
 	if err := s.Start(ctx); err != nil {
 		return err
@@ -448,7 +445,10 @@ func (s *System) Run(ctx context.Context) error {
 			select {
 			case err := <-se.Done():
 				if err != nil {
-					s.failed.Add(1)
+					if isolated, ok := se.(failureContained); ok && isolated.FailureContained() {
+						s.log.Error("isolated sensor failed; readiness degraded", "sensor", se.ID(), "err", err)
+						return
+					}
 					failures <- fmt.Errorf("sensor %s: %v", se.ID(), err)
 				}
 			case <-ctx.Done():

@@ -174,6 +174,17 @@ func TestResolveBodyFileContainment(t *testing.T) {
 	if _, err := c.ResolveBodyFile("../outside.html"); err == nil {
 		t.Fatal("traversal outside config dir must fail")
 	}
+	outside := filepath.Join(t.TempDir(), "outside.html")
+	if err := os.WriteFile(outside, []byte("outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "pages", "escape.html")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := c.ResolveBodyFile("pages/escape.html"); err == nil || !strings.Contains(err.Error(), "within config directory") {
+		t.Fatalf("symlink escape must fail closed, got %v", err)
+	}
 }
 
 func TestCheckKindFields(t *testing.T) {

@@ -144,9 +144,12 @@ func (r *Registry) CounterVec(name, help string, maxSeries int) LabeledCounter {
 	if maxSeries > maxSeriesHardCap {
 		maxSeries = maxSeriesHardCap
 	}
-	v := &counterVec{reg: r, name: name, cap: maxSeries, series: map[string]*counter{}}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if existing := r.vecs[name]; existing != nil {
+		return existing
+	}
+	v := &counterVec{reg: r, name: name, cap: maxSeries, series: map[string]*counter{}}
 	r.vecs[name] = v
 	if help != "" {
 		r.metas[name] = sanitizeHelp(help)

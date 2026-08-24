@@ -42,6 +42,11 @@ jobs:
       - name: build
         run: go build -trimpath ./...
 
+      - name: cross-build supported worker targets
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath ./...
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath ./...
+
       - name: test (-race)
         run: go test -race ./...
 
@@ -69,6 +74,7 @@ jobs:
           go test -run '^$' -fuzz=FuzzGenerateObservation ./internal/recommend         -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzImportBeelzebubDoc  ./internal/migrate/beelzebub -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzRejectDuplicateJSONKeys ./internal/ext            -fuzztime=15s -fuzzminimizetime=0
+          go test -run '^$' -fuzz=FuzzDecodeSensorProcessFrame ./internal/sensorproc     -fuzztime=15s -fuzzminimizetime=0
 
   helm-contract:
     name: helm chart contract

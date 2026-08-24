@@ -22,22 +22,26 @@ exporter), dependencies are added per ADR-0007's policy.
 
 ---
 
-## ADR-0002: In-process sensors; out-of-process only for untrusted extensions
+## ADR-0002: In-process sensors; out-of-process only for untrusted extensions (superseded)
 
 Date: 2026-08-22
+
+Status: Superseded by [ADR-0015](#adr-0015-optional-per-sensor-process-isolation-for-fault-containment).
 
 **Context.** Two structurally distinct designs were considered: (A) one process hosting all sensors behind
 an internal interface with strict capability boundaries; (B) a supervisor spawning each sensor as a separate
 OS process for fault isolation.
 
-**Decision.** A. First-party sensors are compiled into the trusted core — they contain no untrusted logic;
-all inbound data is treated as data. OS-level isolation is reserved for *untrusted* code: third-party
-extensions run as separate processes under the extension host (ADR-0006), never compiled into the binary.
+**Historical decision.** A. First-party sensors were compiled into the trusted core — they contain no
+untrusted logic; all inbound data is treated as data. OS-level isolation was reserved for *untrusted* code:
+third-party extensions ran as separate processes under the extension host (ADR-0006), never compiled into the
+binary.
 
 **Consequences.** Simplest possible ops story (one binary, one config); a parser crash can take down all
 sensors simultaneously (accepted residual risk, documented in THREAT-MODEL.md; revisiting per-sensor
-isolation is roadmap item R8). The important security boundary (untrusted code/data vs. operator assets)
-is preserved.
+isolation was roadmap item R8). The later opt-in worker mode and its narrower fault-containment claim are
+defined by ADR-0015. The important security boundary (untrusted code/data vs. operator assets) remains
+preserved.
 
 ---
 
@@ -377,3 +381,69 @@ separate approval for any new egress. Digest/signature checks identify an
 artifact but do not make its behavior trusted. Direct-child process revocation
 is not a resource or network sandbox; stronger OS isolation remains separate
 work and cannot justify granting extension output runtime authority.
+
+---
+
+## ADR-0015: Optional per-sensor process isolation for fault containment
+
+Date: 2026-08-24
+
+Status: Accepted.
+
+**Context.** A parser or protocol defect in one first-party sensor can
+currently terminate the shared runtime or make all listeners unavailable.
+The existing `Sensor` lifecycle seam is sufficient to supervise a worker, but
+turning sensor configuration into a general process launcher would create a
+new path from semi-trusted configuration to `os/exec`, filesystem selection,
+or inherited credentials. A worker also must not be mistaken for a complete
+security sandbox.
+
+**Decision.** Add the common boolean `process_isolation` to every sensor kind.
+Omitted and explicit `false` retain the exact in-process path. When `true`,
+the runtime launches the same AegisMesh executable through a fixed hidden
+worker argument, a minimal fixed environment, a private temporary working
+directory, and a bounded canonical versioned stdio protocol. No command,
+executable path, environment entry, provider credential, extension setting, or
+filesystem path is selected by configuration or worker data.
+
+The parent resolves and materializes `body_file` content before launch. The
+worker receives only the bounded sensor specification and detection settings;
+it does not read host files or resolve credentials. The sensor specification
+may contain the bounded static prompt used by local fallback, but never a
+provider destination, model, or credential reference. An isolated HTTP sensor
+with enabled remote LLM fallback is rejected during configuration validation,
+because the worker has no provider credential or remote-provider authority.
+The worker must echo a per-launch random challenge received in the start frame
+and bind before startup is reported. It may send only bounded redaction-safe
+observations classified as `interaction` or `canary_invocation`. Metrics use a
+fixed first-party name set, a declaration cap, and declaration-before-use. The
+parent discards worker identity/time/sequence/integrity claims and constructs
+the authoritative event envelope and storage submission.
+
+All four sensor kinds are supported. An unexpected worker exit marks that
+sensor unhealthy and degrades readiness while siblings continue. v0.2 does
+not automatically restart workers. Shutdown closes workers concurrently under
+one bounded deadline and reaps each direct process. Unix escalation signals
+the worker's current process group. A descendant can survive if the leader
+exits before escalation or the descendant creates a new session; built-in
+workers do not intentionally spawn descendants, and stronger descendant
+containment remains outside this claim.
+
+This is fault/process containment only. It is not a network, filesystem, CPU,
+memory, syscall, or malware sandbox: the worker retains the same UID,
+container/host namespace, filesystem view, and network policy. Container or
+Kubernetes resource limits remain aggregate limits for the runtime and its
+workers. The mode adds no outbound destination or other external egress.
+
+Startup failure and cancellation wait through the fixed termination grace to
+reap the direct child. This can extend the caller's startup deadline by that
+bounded cleanup interval; returning earlier would leave process ownership
+ambiguous.
+
+**Consequences.** An isolated sensor can fail without directly taking down
+sibling listeners, at the cost of one bounded child process and IPC lifecycle
+to supervise per enabled sensor. A worker crash is visible through readiness,
+health/metrics, and runtime shutdown semantics rather than silently recovered.
+Operators requiring stronger resource or namespace isolation must supply it at
+the container/host layer; enabling this setting alone is not a malware
+execution boundary. Protocol changes require a new protocol version and ADR.

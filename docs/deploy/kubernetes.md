@@ -26,7 +26,9 @@ AegisMesh is a single static binary with local-first evidence storage. On
 Kubernetes that translates to:
 
 - **One container per Pod** running `aegismesh run --config /etc/aegismesh/mesh.yaml`.
-  No sidecars, no operators, no CRDs for the MVP.
+  No sidecars, no operators, no CRDs for the MVP. A sensor with
+  `process_isolation: true` starts a same-binary child inside this container;
+  it does not create a Pod, sidecar, or new network identity.
 - **ConfigMap** holds `mesh.yaml` (non-secret configuration).
 - **Secrets**, when a remote LLM provider is used, come from a Secret mounted
   as an env source (`llm.api_key_env`) or file (`llm.api_key_file`) — never
@@ -37,6 +39,27 @@ Kubernetes that translates to:
 - **Loopback defaults stay meaningful**: decoy listeners bind inside the Pod
   network namespace. Exposure to the cluster is an explicit Service decision —
   the same deliberate-exposure model as Compose's loopback publishing.
+
+## Per-sensor worker implications
+
+`process_isolation` is an optional common sensor setting for HTTP, TCP, MCP,
+and SSH. Omitted or `false` keeps in-process execution. When enabled, the
+parent launches the same AegisMesh binary with a fixed hidden worker argument,
+minimal environment, private temporary working directory, and bounded
+canonical stdio protocol. The parent materializes `body_file` values before
+launch and passes no paths, credentials, provider destinations, models, or
+credential references. A local fallback's bounded prompt remains sensor data. Startup fails
+closed until the worker handshakes and binds; a worker crash degrades
+readiness for that sensor while sibling sensors continue, and v0.2 does not
+automatically restart it.
+
+This is process/fault containment only. It is not a network, filesystem, CPU,
+memory, syscall, or malware sandbox: the child keeps the Pod's UID, namespace,
+filesystem view, and network policy. The chart's CPU and memory requests/limits
+therefore apply to the runtime and all sensor workers in aggregate; they are
+not per-worker caps. The stdio worker edge adds no egress. Use separate Pods,
+container-level policy, or host isolation when stronger boundaries are
+required, and verify those controls on the target cluster.
 
 ## Current shape (rendered by the chart)
 

@@ -31,6 +31,18 @@ application inventories; validates their reference graph; and isolates
 tag-triggered OIDC authority in a binary-only attestation job. It does not
 publish, sign, or attest anything during pull requests.
 
+PR #53 (`ee54a63`) closes the extension live-policy boundary: observer
+manifests are strictly observe-only, acknowledgements are bounded and
+event-linked, failed primary appends suppress fan-out, and no extension output
+can represent runtime response authority.
+
+The active process-isolation slice adds opt-in fixed same-binary workers for
+HTTP, TCP, MCP, and SSH while preserving exact in-process defaults. The parent
+owns readiness challenges, event envelopes, metric allowlists, shutdown and
+direct-child reap. Worker crashes degrade only that sensor's readiness while
+siblings continue. This is fault containment, not a network, filesystem,
+resource, syscall, or malware sandbox.
+
 ## Non-obvious decisions
 
 - Provider output and extension output are untrusted data. Neither can select
@@ -85,10 +97,11 @@ validated, and reproduced the real application SBOM while also passing the
 pinned vulnerability scan. The dry-run recommendation model is implemented and
 verified locally and by PR #51 CI, then merged as `86041b8`. The demo slice is
 verified locally, independently and by PR #52 CI, then merged as `1911678`.
-The observer-only extension live-policy boundary is the active slice. Optional
+The observer-only extension boundary merged in PR #53. Per-sensor process
+isolation is implemented and passes its local focused, race, fuzz, full-suite,
+cross-build, Helm and repository-hygiene gates; PR CI and merge remain. Optional
 at-rest encryption is architecture-complete but dependency acquisition remains
-approval-gated; process isolation follows as a separate slice in the finite
-v0.2 delivery plan.
+approval-gated. The final v0.2 audit follows those delivery gates.
 
 ## Commands that matter
 

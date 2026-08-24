@@ -8,6 +8,10 @@ by `values.schema.json`; the rendered
 config is strict-decoded at startup (`aegismesh.io/v1alpha1`) — typos fail the
 rollout, not production.
 
+The optional sensor setting `process_isolation: true` starts a same-binary
+worker inside this Pod for any HTTP, TCP, MCP, or SSH sensor. It does not add a
+sidecar, Service port, Pod, or network identity.
+
 Evidence labels used below —
 - **VERIFIED LOCALLY** — ran against this checkout with Helm 4.2.2; no cluster involved.
 - **REQUIRES A CLUSTER** — touches a Kubernetes API; **NOT RUN locally** for this release. Do not treat as tested.
@@ -120,6 +124,25 @@ so local inference, remote LLM providers, webhook delivery, and event sinks
 keep working unchanged. Two caveats: a CNI that enforces NetworkPolicy is required
 (otherwise the object is inert decoration), and `enabled=false` restores flat
 networking — every relaxation widens attack surface.
+
+## Per-sensor process workers
+
+Omitted or `process_isolation: false` keeps the exact in-process default. With
+`true`, the parent uses a fixed hidden worker argument, minimal environment,
+private temporary working directory, and bounded canonical stdio protocol.
+`body_file` content is materialized by the parent; no paths, credentials, API
+keys, provider destinations, models, or credential references cross into the
+worker. A local fallback's bounded prompt remains sensor data. An isolated HTTP sensor with
+an enabled remote LLM fallback fails closed during strict configuration
+validation. The worker must complete its handshake and bind before the sensor
+counts as started.
+
+The worker boundary is fault/process containment, not a network, filesystem,
+CPU, memory, syscall, or malware sandbox. Workers share the Pod's UID,
+filesystem view, network namespace, and aggregate `resources` requests/limits.
+Their stdio edge adds no egress. A worker crash degrades readiness for that
+sensor while sibling sensors continue; v0.2 does not automatically restart a
+crashed worker. Container or host controls are required for stronger isolation.
 
 ## PDB: off by default, opt-in with exactly one threshold
 

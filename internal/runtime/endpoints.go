@@ -15,6 +15,14 @@ type addrProvider interface {
 	Addr() string
 }
 
+type healthProvider interface {
+	Healthy() bool
+}
+
+type failureContained interface {
+	FailureContained() bool
+}
+
 // Endpoints returns sensors in their configured order after a successful
 // Start. Discovery rejects calls before all sensors start and after Stop has
 // completed; callers must still serialize discovery with a concurrent Stop.
@@ -28,6 +36,9 @@ func (s *System) Endpoints() ([]Endpoint, error) {
 
 	endpoints := make([]Endpoint, len(s.sensors))
 	for i, sen := range s.sensors {
+		if h, ok := sen.(healthProvider); ok && !h.Healthy() {
+			return nil, fmt.Errorf("%w: sensor %q (%s) is not healthy", errRuntime, sen.ID(), sen.Kind())
+		}
 		addrer, ok := sen.(addrProvider)
 		if !ok {
 			return nil, fmt.Errorf("%w: sensor %q (%s) does not expose a bound address", errRuntime, sen.ID(), sen.Kind())
