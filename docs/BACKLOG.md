@@ -156,7 +156,7 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   affected-package race suite; `make lint test`; see `docs/verification.md`.
 - **Status:** **PASS** — focused and full race suites, six-target fuzz suite,
   independent adversarial review, documentation truth-sync, and local hygiene
-  gates passed; PR CI remains required before merge.
+  gates passed; PR #51 CI passed and merge remains the final delivery gate.
 
 ### P1-4 — optional evidence-at-rest encryption — TODO
 

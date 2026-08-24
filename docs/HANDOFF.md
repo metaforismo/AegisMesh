@@ -75,8 +75,8 @@ claim drift, ECS export, the SSH deception slice, and supply-chain hardening are
 closed through PR #47: local gates passed and independent CI generated,
 validated, and reproduced the real application SBOM while also passing the
 pinned vulnerability scan. The dry-run recommendation model is implemented and
-locally verified; PR CI/merge is the remaining gate for this slice. The next
-ordered slice is the self-contained demo. At-rest encryption, the extension
+verified locally and by PR #51 CI; merge is the remaining gate for this slice.
+The next ordered slice is the self-contained demo. At-rest encryption, the extension
 live-policy boundary, and process isolation remain separate later slices in the
 finite v0.2 delivery plan.
 
