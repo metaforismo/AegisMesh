@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/observe"
 	"github.com/metaforismo/aegismesh/internal/policy"
@@ -255,6 +256,7 @@ func (s *Sensor) emit(d sensor.Deps, ref event.SensorRef, remote string, lines [
 			Via:          string(dec.From),
 			ReplyPreview: safePreview(dec.Response),
 		},
+		Detection: newDetectionInfo(dec.Detection),
 	}
 	raw, err := json.Marshal(obs)
 	if err != nil {
@@ -278,20 +280,36 @@ func safePreview(b []byte) string {
 }
 
 type observation struct {
-	LinesExchanged    int          `json:"lines_exchanged"`
-	BytesTotal        int          `json:"bytes_total"`
-	LastLineLen       int          `json:"last_line_len"`
-	LastLineSHA256    string       `json:"last_line_sha256"`
-	LastLinePreview   string       `json:"last_line_preview,omitempty"`
-	LastLineTruncated bool         `json:"last_line_truncated,omitempty"`
-	RemoteHost        string       `json:"remote_host"`
-	Response          responseInfo `json:"response"`
+	LinesExchanged    int            `json:"lines_exchanged"`
+	BytesTotal        int            `json:"bytes_total"`
+	LastLineLen       int            `json:"last_line_len"`
+	LastLineSHA256    string         `json:"last_line_sha256"`
+	LastLinePreview   string         `json:"last_line_preview,omitempty"`
+	LastLineTruncated bool           `json:"last_line_truncated,omitempty"`
+	RemoteHost        string         `json:"remote_host"`
+	Response          responseInfo   `json:"response"`
+	Detection         *detectionInfo `json:"detection,omitempty"`
 }
 
 type responseInfo struct {
 	RuleID       string `json:"rule_id"`
 	Via          string `json:"via"`
 	ReplyPreview string `json:"reply_preview,omitempty"`
+}
+
+// detectionInfo carries the enforcement verdict into evidence. Findings are
+// static rule-authored metadata from the policy seam; matched input is never
+// part of a policy finding.
+type detectionInfo struct {
+	Action   string           `json:"action"`
+	Findings []detect.Finding `json:"findings,omitempty"`
+}
+
+func newDetectionInfo(dec policy.Decision) *detectionInfo {
+	if len(dec.Findings) == 0 {
+		return nil
+	}
+	return &detectionInfo{Action: string(dec.Action), Findings: dec.Findings}
 }
 
 func (s *Sensor) Close(ctx context.Context) error {
