@@ -71,3 +71,15 @@ func TestHelpSanitization(t *testing.T) {
 		t.Fatalf("raw newline survived in HELP: %q", lines[0])
 	}
 }
+
+func TestCounterVecConstructionPreservesExistingSeries(t *testing.T) {
+	r := NewRegistry()
+	r.CounterVec("shared_total", "first", 4).Inc("one")
+	r.CounterVec("shared_total", "second", 8).Inc("two")
+	out := r.WritePrometheus()
+	for _, want := range []string{`shared_total{label="one"} 1`, `shared_total{label="two"} 1`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("repeated CounterVec construction lost %q:\n%s", want, out)
+		}
+	}
+}

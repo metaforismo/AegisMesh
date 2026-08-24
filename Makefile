@@ -42,6 +42,7 @@ fuzz-seed: ## run bounded real fuzzing without post-discovery minimization
 	go test -run '^$$' -fuzz=FuzzGenerateObservation ./internal/recommend -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzImportBeelzebubDoc ./internal/migrate/beelzebub -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzRejectDuplicateJSONKeys ./internal/ext -fuzztime=15s -fuzzminimizetime=0
+	go test -run '^$$' -fuzz=FuzzDecodeSensorProcessFrame ./internal/sensorproc -fuzztime=15s -fuzzminimizetime=0
 
 .PHONY: fuzz-short
 fuzz-short: ## short real fuzzing pass (~1m/target); CI runs fuzz-seed instead
