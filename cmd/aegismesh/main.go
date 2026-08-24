@@ -6,9 +6,16 @@ import (
 	"os"
 
 	"github.com/metaforismo/aegismesh/internal/cli"
+	"github.com/metaforismo/aegismesh/internal/sensorproc"
 )
 
 func main() {
+	if sensorproc.IsBuiltinWorkerInvocation(os.Args) {
+		if err := sensorproc.RunBuiltinWorker(context.Background(), os.Stdin, os.Stdout); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	env := &cli.Env{Out: os.Stdout, Err: os.Stderr, Stdin: os.Stdin}
 	app := cli.NewApp("aegismesh", "local-first deception, detection, and evidence", env.Out, env.Err)
 	commands := []cli.Command{

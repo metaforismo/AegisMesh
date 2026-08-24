@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -74,10 +75,73 @@ func strictYAML(b []byte, v any) error {
 }
 
 func strictJSON(b []byte, v any) error {
-	dec := json.NewDecoder(strings.NewReader(string(b)))
+	if err := rejectDuplicateJSONKeys(b); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return translateDecodeError(err)
+	}
+	return nil
+}
+
+func rejectDuplicateJSONKeys(b []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if err := walkJSONValue(dec, "$"); err != nil {
+		return err
+	}
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("trailing JSON data")
+		}
+		return err
+	}
+	return nil
+}
+
+func walkJSONValue(dec *json.Decoder, path string) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	delim, isDelim := tok.(json.Delim)
+	if !isDelim {
+		return nil
+	}
+	switch delim {
+	case '{':
+		seen := make(map[string]struct{})
+		for dec.More() {
+			keyTok, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyTok.(string)
+			if !ok {
+				return fmt.Errorf("invalid JSON object key at %s", path)
+			}
+			if _, exists := seen[key]; exists {
+				return fmt.Errorf("duplicate JSON key %q at %s", key, path)
+			}
+			seen[key] = struct{}{}
+			if err := walkJSONValue(dec, path+"."+key); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for i := 0; dec.More(); i++ {
+			if err := walkJSONValue(dec, fmt.Sprintf("%s[%d]", path, i)); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q at %s", delim, path)
+	}
+	_, err = dec.Token()
+	if err != nil {
+		return err
 	}
 	return nil
 }

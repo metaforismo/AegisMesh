@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ var (
 	envNameRe   = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
 	uriRe       = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^\s]{1,512}$`)
 
-	allowedCommon = map[string]bool{"id": true, "kind": true, "listen": true}
+	allowedCommon = map[string]bool{"id": true, "kind": true, "listen": true, "process_isolation": true}
 	allowedByKind = map[string]map[string]bool{
 		SensorKindHTTP: {"persona": true, "rules": true, "fallback": true, "max_body_bytes": true},
 		SensorKindTCP:  {"banner": true, "session": true, "tcp_rules": true},
@@ -121,6 +122,9 @@ func (c *Config) Validate() error {
 	if err := validateLLM(&c.LLM); err != nil {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
+	if err := c.validateProcessIsolation(); err != nil {
+		return err
+	}
 	if err := ValidateDetection(c.Detection); err != nil {
 		return fmt.Errorf("%w: %v", errConfig, err)
 	}
@@ -144,6 +148,24 @@ func (c *Config) Validate() error {
 	}
 	if c.Storage.Retention.MaxAgeDays <= 0 || c.Storage.Retention.MaxAgeDays > 3650 {
 		return fmt.Errorf("%w: storage.retention.max_age_days must be within 1..3650", errConfig)
+	}
+	return nil
+}
+
+func (c *Config) validateProcessIsolation() error {
+	provider := strings.TrimSpace(c.LLM.Provider)
+	for i := range c.Sensors {
+		s := &c.Sensors[i]
+		if !s.ProcessIsolation {
+			continue
+		}
+		host, _, _ := net.SplitHostPort(s.Listen) // validated earlier in this pass
+		if host != "localhost" && net.ParseIP(host) == nil {
+			return fmt.Errorf("%w: sensors[%d].process_isolation requires listen to use an IP literal or localhost so the parent can validate the worker-reported address without DNS", errConfig, i)
+		}
+		if provider != "" && provider != "local" && s.Kind == SensorKindHTTP && s.Fallback != nil && s.Fallback.Enabled {
+			return fmt.Errorf("%w: sensors[%d].process_isolation with fallback.enabled=true requires llm.provider=local or omitted; provider %q is not allowed for an isolated HTTP worker", errConfig, i, provider)
+		}
 	}
 	return nil
 }
@@ -668,6 +690,16 @@ func CheckKindFields(raw []byte, ext string) error {
 		if allowed == nil {
 			continue // kind validity handled by Validate
 		}
+		if value, ok := m["process_isolation"]; ok {
+			switch value.(type) {
+			case bool:
+				// valid
+			case nil:
+				return fmt.Errorf("%w: sensors[%d].process_isolation must be a boolean, not null", errConfig, i)
+			default:
+				return fmt.Errorf("%w: sensors[%d].process_isolation must be a boolean", errConfig, i)
+			}
+		}
 		if value, ok := m["ssh"]; kind == SensorKindSSH && ok && value == nil {
 			return fmt.Errorf("%w: sensors[%d].ssh must be a mapping, not null", errConfig, i)
 		}
@@ -699,22 +731,27 @@ func safeRelative(p string) error {
 // ResolveBodyFile resolves a rule body_file relative to the config directory,
 // enforcing containment, and returns its contents.
 func (c *Config) ResolveBodyFile(rel string) ([]byte, error) {
+	if err := safeRelative(rel); err != nil {
+		return nil, fmt.Errorf("body_file %q %v", rel, err)
+	}
 	base := filepath.Dir(c.SourcePath)
-	full := filepath.Join(base, filepath.Clean(rel))
 	absBase, err := filepath.Abs(base)
 	if err != nil {
 		return nil, err
 	}
-	absFull, err := filepath.Abs(full)
+	root, err := os.OpenRoot(absBase)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open config directory for body_file %q: %w", rel, err)
 	}
-	if absFull != absBase && !strings.HasPrefix(absFull, absBase+string(filepath.Separator)) {
-		return nil, fmt.Errorf("body_file %q resolves outside the config directory", rel)
-	}
-	b, err := os.ReadFile(absFull) //nolint:gosec // containment verified above
+	defer root.Close()
+	f, err := root.Open(filepath.Clean(rel))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read body_file %q within config directory: %w", rel, err)
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, MaxHTTPBodyBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read body_file %q: %w", rel, err)
 	}
 	if len(b) > MaxHTTPBodyBytes {
 		return nil, fmt.Errorf("body_file %q is %d bytes; cap is %d", rel, len(b), MaxHTTPBodyBytes)
