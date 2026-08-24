@@ -38,6 +38,23 @@ Requires Go 1.25.14 or newer. The patch-level floor includes all current Go
 git clone https://github.com/metaforismo/AegisMesh && cd AegisMesh
 make build
 
+# one self-contained HTTP/TCP/MCP/SSH-to-evidence scenario
+./bin/aegismesh demo
+
+# the same deterministic result as typed JSON
+./bin/aegismesh demo --json
+```
+
+The command accepts no config, path, port, credential, API key or destination.
+It uses synthetic data and OS-assigned loopback ports, verifies every recorded
+observation hash, produces one dry-run recommendation, then stops and removes
+its private temporary workspace. It requires no cloud service, `curl`, `nc`,
+privileged port or external network access. `make demo` invokes the same path.
+
+For a persistent workspace and manual protocol exploration:
+
+```bash
+
 # 1) scaffold a safe local workspace (synthetic data only)
 ./bin/aegismesh init --dir /tmp/aegismesh-demo
 
@@ -83,6 +100,7 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 | Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
 | Evidence | Versioned native envelope, integrity checks, rotation/retention, plus opt-in local ECS-compatible export that preserves the native envelope |
 | Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, with no enforcement or new egress |
+| Demo | One-command synthetic HTTP/TCP/MCP/SSH scenario on OS-assigned loopback ports with integrity-verified evidence, a dry-run proposal and complete cleanup |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
 | Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no exec anywhere |
 | Extensions | Digest-verified out-of-process observer extensions receive bounded data-only events; they cannot influence policy or responses |

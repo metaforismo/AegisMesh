@@ -14,6 +14,11 @@ correlation signals, and canary activations into deterministic evidence-linked
 operator-review proposals. It buffers output, is dry-run only, and has no
 runtime, action, or egress path.
 
+The self-contained `demo` command now exercises all four sensors through real
+OS-assigned loopback listeners, validates four stored envelopes and observation
+hashes, generates one dry-run proposal, and removes its private workspace. It
+accepts no operator path, config, port, credential, API key or destination.
+
 Batch 2 R3 adds a local ECS-compatible export profile while preserving the
 native envelope. Batch 2 R1 adds synthetic password/public-key SSH
 authentication with per-instance ephemeral Ed25519 keys, bounded resources,
@@ -75,10 +80,11 @@ claim drift, ECS export, the SSH deception slice, and supply-chain hardening are
 closed through PR #47: local gates passed and independent CI generated,
 validated, and reproduced the real application SBOM while also passing the
 pinned vulnerability scan. The dry-run recommendation model is implemented and
-verified locally and by PR #51 CI; merge is the remaining gate for this slice.
-The next ordered slice is the self-contained demo. At-rest encryption, the extension
-live-policy boundary, and process isolation remain separate later slices in the
-finite v0.2 delivery plan.
+verified locally and by PR #51 CI, then merged as `86041b8`. The demo slice is
+implemented and verified locally, independently and by PR #52 CI; merge remains.
+At-rest encryption is the next ordered slice after that merge. The extension live-policy
+boundary and process isolation remain separate later slices in the finite v0.2
+delivery plan.
 
 ## Commands that matter
 
@@ -88,6 +94,7 @@ go test -race -count=20 ./internal/event ./internal/webhook ./internal/extmanage
 go test ./internal/ecsexport ./internal/cli -run 'TestMarshal|TestInspectExport' -count=1
 go test ./internal/recommend ./internal/cli -run 'TestGenerate|TestRecommendation|TestRecommend' -count=1
 go test -race ./internal/storage ./internal/recommend ./internal/cli ./internal/sensor/httpsensor ./internal/sensor/tcpsensor -count=1
+go test -race ./internal/demo ./internal/cli ./internal/runtime -run 'TestDemo|TestRunEndToEnd|TestRunParallel|TestSystemEndpoints' -count=3
 make fuzz-seed
 make helm-contract
 make supply-chain-check

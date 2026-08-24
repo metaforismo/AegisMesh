@@ -17,6 +17,7 @@ func main() {
 		cli.NewHealthcheckCmd(env),
 		cli.NewValidateCmd(env),
 		cli.NewRunCmd(env),
+		cli.NewDemoCmd(env),
 		cli.NewInspectCmd(env),
 		cli.NewRecommendCmd(env),
 		cli.NewMigrateCmd(env),

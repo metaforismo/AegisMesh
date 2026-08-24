@@ -155,8 +155,8 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   core caps/conflict/correlation/canary tests; recommendation fuzz target;
   affected-package race suite; `make lint test`; see `docs/verification.md`.
 - **Status:** **PASS** — focused and full race suites, six-target fuzz suite,
-  independent adversarial review, documentation truth-sync, and local hygiene
-  gates passed; PR #51 CI passed and merge remains the final delivery gate.
+  independent adversarial review, documentation truth-sync, local hygiene and
+  PR #51 CI passed; merged as `86041b8`.
 
 ### P1-4 — optional evidence-at-rest encryption — TODO
 
@@ -188,18 +188,27 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Verify:** adversarial schema/capability tests, shutdown saturation tests,
   runtime race tests and `make lint test`.
 
-### P1-6 — `aegismesh demo` command — TODO
+### P1-6 — `aegismesh demo` command — PASS
 
-- **Evidence:** `scripts/demo.sh` and `make demo` exist, but the command dispatcher
-  has no `demo` command.
-- **Affected:** CLI, runtime/test harness, docs and examples.
+- **Evidence:** the former shell walkthrough used fixed ports, external `curl`
+  and `nc`, omitted SSH, exposed dynamic state and could not run in parallel.
+  The shipped CLI now owns the complete scenario and the script is a thin
+  compatibility wrapper.
+- **Affected:** `internal/demo`, runtime endpoint discovery, CLI registration,
+  completion, exact goldens, script, product/CLI/architecture/security docs.
 - **Security/egress:** loopback-only, synthetic-only, no API key/cloud/privileged
-  port. No external egress.
-- **Dependencies:** a safe way to expose OS-assigned listener addresses without
-  widening the public `sensor.Sensor` interface speculatively.
-- **Acceptance:** meaningful HTTP/TCP/MCP/SSH-to-evidence flow, deterministic summary,
-  bounded readiness, cleanup on failure/signal, repeatable parallel runs.
-- **Verify:** focused CLI tests; repeated real loopback integration; `make lint test`.
+  port, proxy, user path or destination. No external egress, exec or enforcement.
+- **Dependencies:** runtime-owned immutable endpoint snapshots without widening
+  `sensor.Sensor`; the merged recommendation engine; existing SSH dependency.
+- **Acceptance:** meaningful HTTP/TCP/MCP/SSH-to-evidence flow, deterministic
+  human/JSON summaries, bounded readiness/requests, complete cleanup, strict
+  four-envelope/hash verification, one dry-run proposal, repeated parallel runs.
+- **Verify:** exact CLI goldens and adversarial argument matrix; repeated and
+  parallel real-loopback integration; affected race suite; `make lint test`;
+  see `docs/verification.md`.
+- **Status:** **PASS** — focused race tests passed three repetitions including
+  three concurrent demos; independent review and post-fix re-review, final
+  broader gates and PR #52 CI passed. Merge is the final delivery gate.
 
 ## P2 — operational quality, observability, maintainability, documentation
 

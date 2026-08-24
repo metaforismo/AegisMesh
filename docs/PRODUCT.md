@@ -29,7 +29,7 @@ marketing that conflates "someone touched a decoy" with "you are breached".
    in the audit log. No hidden behavior, no black-box scoring.
 5. **Bounded resources everywhere.** Queues, bodies, sessions, regex complexity, event sizes, retention:
    all have explicit caps that fail closed rather than degrade silently.
-6. **Progressive disclosure.** Five-minute golden path with one command each; depth (custom sensors,
+6. **Progressive disclosure.** A self-contained one-command demo comes first; depth (custom sensors,
    extensions, SIEM export, response playbooks) appears only when the operator asks for it.
 7. **Minimal dependencies.** Few third-party packages, pinned and reviewed; the smaller the supply chain,
    the smaller the attack surface.
@@ -71,10 +71,11 @@ Three product families:
 | Evidence hygiene | Versioned envelope, payload hashing, redaction pipeline, retention bounds, observation≠incident |
 | Explainability | Every response maps to a policy ID; `inspect` shows exactly why a decoy answered what it answered |
 | Operator review | `recommend` emits deterministic proposed guidance linked to verified local evidence; it cannot mutate assets or add egress |
+| First run | `aegismesh demo` exercises HTTP/TCP/MCP/SSH, evidence integrity and a dry-run proposal without config, external tools, cloud access or retained state |
 
 ## Current core scope (honest boundary)
 
-Ships: CLI (`init`, `doctor`, `validate`, `run`, `inspect`, `recommend`, `rules`, `migrate beelzebub`, `ext`, `healthcheck`,
+Ships: CLI (`init`, `doctor`, `validate`, `run`, `demo`, `inspect`, `recommend`, `rules`, `migrate beelzebub`, `ext`, `healthcheck`,
 `version`, `completion`), HTTP/TCP/MCP sensors plus authentication-only SSH, static policies, deterministic local and opt-in remote
 providers, JSONL evidence with correlation signals, ECS-compatible local export, deterministic dry-run recommendations, loopback admin endpoints,
 data-only observer extensions, opt-in webhook delivery, Docker/Compose, Helm packaging, CI and docs.

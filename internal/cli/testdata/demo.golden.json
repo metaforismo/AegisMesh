@@ -1,0 +1,22 @@
+{
+  "schema": "aegismesh.demo/v1",
+  "mode": "synthetic",
+  "network": "loopback-only",
+  "egress": "none",
+  "sensors": [
+    "http",
+    "tcp",
+    "mcp",
+    "ssh"
+  ],
+  "events": 4,
+  "interactions": 3,
+  "canary_invocations": 1,
+  "integrity_verified": true,
+  "recommendations": 1,
+  "dry_run": true,
+  "enforcement": false,
+  "signal_not_incident": true,
+  "listeners_released": true,
+  "cleanup_complete": true
+}

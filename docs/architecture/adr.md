@@ -307,3 +307,32 @@ for deterministic ordering, filters, or display.
 guidance cannot quote attacker-controlled paths, hosts, tools, payloads,
 summaries, or reasons. Operators still decide whether a signal is benign,
 conflicting, or worth action; AegisMesh does not make that decision for them.
+
+---
+
+## ADR-0013: The product demo is an owned loopback composition, not a configurable runner
+
+Date: 2026-08-24
+
+Status: Accepted.
+
+**Context.** The shell walkthrough used fixed ports and external tools, omitted
+SSH, and could not run concurrently. Accepting arbitrary config, paths, ports or
+destinations in a replacement would turn onboarding into a new orchestration and
+egress surface.
+
+**Decision.** `internal/demo` owns one repository-defined synthetic scenario.
+It uses `127.0.0.1:0`, the local provider, no webhook/extensions/correlation,
+fixed bounded clients and a private temporary directory. Runtime exposes fresh
+typed endpoint values through `System.Endpoints` without widening the sensor
+interface; the demo independently rejects non-loopback, unassigned and
+privileged results before connecting. HTTP redirects are refused. Success output
+is buffered until Stop returns, every listener is unreachable, evidence/hash
+verification and dry-run recommendation generation complete, and directory
+cleanup finishes.
+
+**Consequences.** Human and JSON summaries are deterministic because they omit
+ports, paths, IDs, times and evidence content. The command has intentionally few
+options: only `--json`. Custom deployments continue to use `init`, `validate`,
+`run`, `inspect` and `recommend`; the demo is not a generic configuration runner
+or production-readiness proof.
