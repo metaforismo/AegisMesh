@@ -17,6 +17,25 @@ What you get:
 Ports are published to host **loopback only**. The admin listener is not
 published at all; use `exec` for inspection.
 
+The demo configuration keeps the sensors in-process. For a reviewed
+deployment, any sensor kind can opt into `process_isolation: true` in
+`mesh.yaml`. That setting starts one same-binary worker inside this same
+container using a fixed hidden argument, minimal environment, private
+temporary working directory, and bounded canonical stdio protocol. The parent
+materializes `body_file` content and sends no paths, credentials, or provider
+destinations, models, or credential references. A local fallback's bounded
+static prompt remains part of the sensor specification. An isolated HTTP
+sensor with an enabled remote LLM fallback fails
+closed during validation.
+
+Process isolation is fault containment, not a network, filesystem, CPU,
+memory, syscall, or malware sandbox. Workers share this container's UID,
+filesystem view, network namespace, and aggregate resource limits; no new
+egress or network identity is created. A worker crash degrades readiness for
+that sensor while siblings continue, and v0.2 does not automatically restart
+it. The container boundary remains the operator's control for stronger
+isolation.
+
 ## Poke the decoys
 
 ```sh
@@ -40,6 +59,8 @@ compromise; treat them as signals to investigate.
 - distroless runtime image, unprivileged uid 10001, no shell
 - `read_only: true` root filesystem; writable space only via tmpfs + volume
 - `cap_drop: ALL` and `no-new-privileges:true`
+- process workers, when enabled, remain inside the same container and inherit
+  these aggregate container controls
 
 ## Stop
 

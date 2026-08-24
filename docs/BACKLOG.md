@@ -173,7 +173,7 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Verify:** focused storage restart/failure tests; race tests; license and
   secret checks; `make lint test`.
 
-### P1-5 — extension live-policy boundary — IN PROGRESS
+### P1-5 — extension live-policy boundary — PASS
 
 - **Evidence:** the former v1alpha1 schema reserved `respond`, the host exposed a
   generic raw-result call, matching response bodies were discarded without a
@@ -192,6 +192,8 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   signal recursion or ordering change.
 - **Verify:** adversarial schema/capability tests, shutdown saturation tests,
   runtime race tests and `make lint test`.
+- **Status:** **PASS** — focused and full race suites, parser fuzzing,
+  independent review, truth-sync and PR #53 CI passed; merged as `ee54a63`.
 
 ### P1-6 — `aegismesh demo` command — PASS
 
@@ -263,7 +265,7 @@ documentation truth-sync, and evidence in `docs/verification.md`.
   PR #47 independently passed the real SBOM validator and byte-for-byte second
   generation, pinned govulncheck, full race/fuzz, Helm, license and secret jobs.
 
-### P2-3 — deployment evidence — TODO
+### P2-3 — deployment evidence — PASS (packaging-only boundary)
 
 - **Evidence:** Helm chart contract tests exist, but no real-cluster proof or
   published-image contract establishes supported Kubernetes operation.
@@ -275,21 +277,34 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 - **Acceptance:** real-cluster smoke and failure-path evidence with exact platform
   boundary, or continued clearly labeled packaging-only status.
 - **Verify:** `make helm-contract`; later kind/k3d smoke commands documented when run.
+- **Status:** **PASS for the v0.2 claim boundary** — the chart remains
+  contract-tested packaging only; real-cluster support, published-image
+  operation, upgrades and rollback remain explicitly unverified and are not
+  presented as shipped support. No cluster or publication action was run.
 
 ## P3 — later research and optional improvements
 
-### P3-1 — per-sensor process isolation — TODO
+### P3-1 — per-sensor process isolation — IN PROGRESS
 
-- **Evidence:** ADR-0002 intentionally keeps first-party sensors in-process and
-  the threat model accepts shared-process availability loss.
+- **Evidence:** the default remains the ADR-0002 in-process path; opted-in
+  HTTP/TCP/MCP/SSH sensors now run behind one fixed same-binary worker each.
 - **Affected:** runtime/sensor lifecycle, IPC, health/admin, packaging and ADR.
 - **Security/egress:** fault containment only; untrusted bytes remain data. Avoid
   a large orchestrator without evidence.
-- **Dependencies:** architecture/blast-radius analysis of IPC, resource caps,
-  restart policy, readiness and shutdown.
+- **Dependencies:** ADR-0015 and completed architecture/blast-radius analysis;
+  no automatic restart in v0.2.
 - **Acceptance:** minimal auditable protocol, bounded resources, clear ownership,
   deterministic shutdown and proof that input cannot become behavior.
-- **Verify:** process crash/restart/IPC fuzz/race tests and full suite.
+- **Verify:** real sibling-worker crash containment; all-four-sensor loopback
+  E2E; binary `body_file`; blocked-write, cancellation, shutdown and readiness
+  lifecycle tests; IPC fuzz/race; cross-build; full suite.
+- **Status:** **IN PROGRESS** — fixed executable/argv,
+  minimal environment, private working directory, challenge-bound canonical
+  IPC, parent-owned envelopes, allowlisted declaration-first metrics, bounded
+  resources and direct-child reap are implemented; focused, race, full-suite,
+  fuzz, cross-build, Helm and repository-hygiene gates pass locally. This
+  remains fault containment, not a sandbox. PR CI and merge are still required
+  before this item becomes PASS.
 
 ### P3-2 — MCP/agentic threat model maintenance — PASS
 
@@ -320,9 +335,8 @@ documentation truth-sync, and evidence in `docs/verification.md`.
 
 ## Current evidence boundaries
 
-- **PASS:** Exa search/fetch connector tools were exposed and used for
-  multi-pass primary-source research; official repositories, RFCs, Go release
-  notes, and package documentation were checked.
+- **BLOCKED:** Exa connector tools are not exposed to this task. Native web
+  research was the explicitly authorized fallback and used primary sources.
 - **PASS:** loopback integration and race tests ran with scoped host access; no
   pass is inferred from the restricted sandbox's bind policy.
 - **PASS:** scoped GitHub API access verified authentication, open pull requests

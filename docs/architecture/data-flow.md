@@ -1,6 +1,6 @@
 # Architecture and data flow
 
-Version: 0.1.0. Single Go module `github.com/metaforismo/aegismesh`, single binary `aegismesh`.
+Version: 0.2.0. Single Go module `github.com/metaforismo/aegismesh`, single binary `aegismesh`.
 
 ## Component map
 
@@ -10,6 +10,8 @@ internal/cli           command dispatch, output rendering (human/JSON), errors
 internal/config        schema-versioned load/validate/env-override/migrate hooks
 internal/runtime       supervisor: sensor lifecycle, bounded event bus, graceful shutdown
 internal/sensor        Sensor interface + registry
+internal/sensorfactory shared first-party constructors for in-process and worker paths
+internal/sensorproc    optional same-binary sensor workers; bounded canonical stdio protocol
   /httpsensor          HTTP deception sensor (net/http, hardened server)
   /tcpsensor           TCP deception sensor (banner + line protocol)
   /mcpsensor           MCP decoy endpoint (JSON-RPC 2.0 over streamable HTTP POST)
@@ -33,6 +35,16 @@ internal/admin         loopback listener: /healthz /readyz /metrics /version
 internal/ext           extension manifest schema, digest/signature verifier, subprocess host
 internal/migrate       clean-room importers (beelzebub YAML shapes)
 ```
+
+`process_isolation: true` places one selected sensor behind
+`internal/sensorproc`; omitted and `false` use the in-process constructors.
+The parent uses a fixed hidden worker invocation and sends a bounded typed
+specification. It materializes `body_file` values first and sends no paths,
+credentials, provider destinations, models, or credential references. A local
+fallback's bounded prompt remains sensor data. All four sensor kinds use the
+same boundary. The worker's stdout projection carries only redaction-safe
+observations with `interaction` or `canary_invocation` classification; the
+parent owns the event envelope and primary append.
 
 ## Runtime data flow
 
@@ -77,6 +89,20 @@ authentication, rejects every channel and global request, and emits bounded
 observation metadata. It has no shell, PTY, subsystem, SFTP, forwarding,
 filesystem, command-execution, or outbound-target path.
 
+For an isolated sensor, the listener lives in the worker process but its
+authoritative event still enters the parent pipeline. The parent validates the
+worker identity, protocol version, readiness challenge, frame size,
+classification, redaction, and observation shape. Worker metrics are limited
+to declared first-party names. The parent then creates the event ID, timestamp,
+sequence, and integrity hash locally. Startup is fail-closed until the
+challenge-bound handshake and bind succeed. A worker crash marks only that
+sensor unhealthy and degrades
+readiness; sibling sensors continue. v0.2 does not restart a crashed worker.
+This boundary is fault/process containment, not network, filesystem, CPU,
+memory, syscall, or malware sandboxing. Same UID, host/container namespace,
+filesystem view, and network policy remain in effect, and it creates no new
+egress.
+
 Only after the authoritative store append succeeds, the composite sink
 (`internal/runtime.evidenceSink`) offers the raw envelope to enabled consumers
 in a fixed order: observer extensions (`Deliver`), webhook stream (`Offer`), then
@@ -115,7 +141,7 @@ flowchart TB
     subgraph TB1["TB1: untrusted network"]
         X[Attacker input]
     end
-    subgraph CORE["Trusted core process"]
+    subgraph CORE["Trusted runtime process"]
         S[Sensors]
         POL[Policy gate]
         EV[Event pipeline]
@@ -123,6 +149,9 @@ flowchart TB
         WEB[Webhook sink]
         ST[Storage]
         REC[Recommendation engine]
+    end
+    subgraph WORKER["Optional same-binary worker process"]
+        SW[Fixed worker + bounded stdio]
     end
     subgraph TB3["TB3: semi-trusted files"]
         CF[aegismesh.yaml config]
@@ -135,6 +164,8 @@ flowchart TB
         EH[Observer extension hosts\nsupervised by extmanager]
     end
     X --> S
+    S -.->|process_isolation=true| SW
+    SW --> EV
     CF --> POL
     S --> POL
     LP --> POL
@@ -163,12 +194,13 @@ sequenceDiagram
     participant Ad as Admin listener
     U->>CLI: run --config mesh.yaml
     CLI->>R: Build(config)
-    R->>S: Start each sensor (bounded concurrency)
+    R->>S: Start each in-process sensor or fixed worker
+    S-->>R: handshake + listener bind
     R->>Ad: Start loopback admin
     Note over S: interactions produce events -> store
     U->>CLI: SIGINT/SIGTERM
     CLI->>R: Shutdown(ctx with timeout)
-    R->>S: Stop listeners, drain in-flight
+    R->>S: Stop listeners and workers concurrently under one bounded deadline
     R->>Ad: Stop admin
     R->>CLI: exit code reflects failures
 ```
@@ -180,14 +212,16 @@ distroless image). The command GETs `/healthz`/`/readyz` on the loopback admin l
 same strict config as the runtime; the verdict is the exit code and body content never influences it.
 Outbound observer edges lead only to operator-configured destinations: the webhook sink re-classifies
 every dial target against `internal/egress` at connect time, and extension hosts run as separate
-processes supervised by `internal/extmanager`.
+processes supervised by `internal/extmanager`. Sensor workers are a separate fixed same-binary child edge;
+they use stdio only and introduce no destination or other external egress.
 
 ## Invariants (enforced in code)
 
 1. Every sensor response originates from validated config or from a provider whose output passes the same
    redaction/size pipeline as attacker input.
-2. No code path exists from inbound bytes or provider text to `os/exec`, file writes outside the configured
-   data dir, or configuration mutation at runtime.
+2. Inbound bytes and provider text cannot reach `os/exec`, file writes outside the configured data dir, or
+   configuration mutation. The only runtime process launch is the fixed same-binary sensor worker with a
+   literal hidden argument, minimal environment, private temporary directory, and validated typed spec.
 3. The event bus never blocks sensors indefinitely: fixed capacity, explicit overflow counter.
 4. Default bind is `127.0.0.1` and port >1024; overrides require validation that fails closed with an
    actionable error.
@@ -209,3 +243,7 @@ processes supervised by `internal/extmanager`.
    creates an outbound connection.
 10. Recommendation text is static catalog guidance. Observation content cannot populate prose, choose a
     target, or become runtime behavior; recommendations are proposals and never incidents or enforcement.
+11. An isolated worker can send only bounded redaction-safe `interaction` or `canary_invocation` projections;
+    the parent owns event identity, time, sequence, integrity, storage, readiness, and shutdown. Worker
+    protocol or startup failures fail closed for that sensor and never select a command, path, credential,
+    provider destination, or enforcement action.

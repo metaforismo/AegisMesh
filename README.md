@@ -29,6 +29,19 @@ records only bounded metadata, and rejects every channel and global request.
 It exposes no shell, PTY, SFTP, forwarding, filesystem, or command path; see
 [ADR-0010](docs/architecture/adr.md).
 
+Every sensor kind also supports the opt-in `process_isolation: true` setting.
+The default is exact in-process execution. Isolation launches the same
+audited AegisMesh binary as a hidden worker with a fixed argument, minimal
+environment, private temporary working directory, and a typed canonical
+bounded stdio protocol. The parent materializes configured body files before
+launch and sends no paths, credentials, or provider settings to the worker.
+Here, provider settings means destinations, models, and credential references;
+an enabled local fallback's bounded static prompt remains part of its sensor
+specification.
+This is fault/process containment, not a network, filesystem, CPU, memory, or
+malware sandbox: the worker retains the same OS identity and container
+namespace, and the setting adds no egress.
+
 ## Five-minute demo
 
 Requires Go 1.25.14 or newer. The patch-level floor includes all current Go
@@ -96,13 +109,13 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 
 | Area | What ships |
 |---|---|
-| Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST) |
+| Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST); optional fixed-worker process isolation for all four kinds |
 | Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
 | Evidence | Versioned native envelope, integrity checks, rotation/retention, plus opt-in local ECS-compatible export that preserves the native envelope |
 | Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, with no enforcement or new egress |
 | Demo | One-command synthetic HTTP/TCP/MCP/SSH scenario on OS-assigned loopback ports with integrity-verified evidence, a dry-run proposal and complete cleanup |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
-| Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no attacker-, provider-, or extension-output-derived execution; only explicitly configured verified observer processes are spawned |
+| Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no attacker-, provider-, or extension-output-derived execution; only fixed same-binary sensor workers and explicitly configured verified observer processes are spawned |
 | Extensions | Explicitly configured, digest-verified out-of-process observers receive bounded stored observations and may return only an exact event-linked acknowledgement; they cannot influence evidence, policy or responses |
 | Migration | Clean-room `aegismesh migrate beelzebub` importer: dry-run default, never touches sources, exact unsupported-field report |
 
@@ -120,7 +133,7 @@ Read [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md). Highlights:
 
 ```text
 cmd/aegismesh                   entrypoint
-internal/*                      sensors, runtime, storage, cli, extensions, migration
+internal/*                      sensors, runtime, storage, cli, sensor workers, extensions, migration
 docs/                           brief, threat model, ADRs, roadmap, verification
 deploy/                         Dockerfile, compose demo, Helm chart
 examples/demo/                  demo config + scripted walkthrough

@@ -59,8 +59,8 @@ Nothing is checked on intent alone.
    It has no path to runtime policy, webhook, extensions, LLMs, filesystem mutation, command execution,
    or enforcement.
 5. R5: Evidence at rest: optional age/X25519 encryption of evidence segments.
-6. [ ] R6 — Close the extension live-policy boundary (implementation verified;
-   merge pending): v1alpha1 manifests are
+6. [x] R6 — Close the extension live-policy boundary (merged in PR #53):
+   v1alpha1 manifests are
    observe-only and strict; the host exposes no generic result API and accepts
    only a bounded canonical acknowledgement tied to the source event. Failed
    primary appends do not fan out. Response influence, correlation fan-out,
@@ -69,7 +69,12 @@ Nothing is checked on intent alone.
 7. [x] R7 — `aegismesh demo`: self-contained synthetic HTTP/TCP/MCP/SSH
    scenario with OS-assigned loopback ports, verified evidence, a dry-run
    recommendation, deterministic summaries and complete cleanup.
-8. R8: Optional per-sensor process isolation mode for fault containment.
+8. [ ] R8 — Optional per-sensor process isolation mode for fault containment
+   (implementation and local gates complete; PR CI/merge pending).
+   The exact default remains in-process. Opted-in HTTP/TCP/MCP/SSH sensors use
+   fixed same-binary workers, challenge-bound bounded IPC, parent-authoritative
+   evidence, allowlisted metrics and contained crash/readiness semantics. This
+   is not a resource, network, filesystem, syscall, or malware sandbox.
 
 ## Later batches (direction, not commitments)
 

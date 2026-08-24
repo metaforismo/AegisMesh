@@ -83,7 +83,62 @@ Common fields for all kinds:
 - id: http-admin-decoy     # unique, [a-z0-9][a-z0-9.-]{2,63}
   kind: http               # http | tcp | mcp | ssh
   listen: "127.0.0.1:8081"
+  process_isolation: false # optional; exact default is in-process execution
 ```
+
+### Optional per-sensor process isolation
+
+`process_isolation` is a common boolean accepted by all four sensor kinds.
+Omitted and explicit `false` are identical: the sensor is constructed and
+served in the main runtime process. With `true`, the runtime launches one
+same-binary hidden worker for that sensor. The parent uses a fixed executable
+identity and argument, a minimal environment, and a private temporary working
+directory; configuration cannot select a command, executable, path, or
+environment entry.
+
+An isolated sensor's `listen` host must be an IP literal or `localhost`.
+This lets the parent validate the bound address reported by the worker without
+performing DNS resolution or accepting a child-selected outbound target.
+
+The parent resolves and materializes any configured `body_file` through a
+root-contained, size-limited open before the worker starts, preserves its
+response bytes, then clears file references. The worker receives only the
+bounded typed sensor specification and detection settings needed to construct
+the selected sensor. It receives no credential, API-key, provider destination,
+provider model, extension, or filesystem-path setting. A bounded static prompt
+for an enabled local fallback remains part of the sensor specification. An
+isolated HTTP sensor with an enabled remote LLM fallback is rejected during
+strict validation; use the deterministic local provider or disable that
+fallback.
+
+Parent and worker communicate over canonical, versioned, newline-delimited
+JSON on stdin/stdout. Frames and queues are bounded. A per-launch random
+challenge binds readiness to the received start frame. A worker must complete
+that handshake and bind successfully before the sensor counts as started;
+malformed protocol, handshake, or bind failure fails closed. The worker sends
+only redaction-safe projections classified as `interaction` or
+`canary_invocation`. Metric names are restricted to the first-party sensor and
+policy set, declaration counts are capped, and operations require a matching
+declaration. The parent creates the authoritative event envelope, including
+event ID, time, sequence, and integrity hash, before storage.
+
+If an isolated worker exits unexpectedly, its sensor becomes unhealthy and
+readiness degrades; sibling sensors continue serving. v0.2 does not
+automatically restart a crashed worker. Shutdown closes workers concurrently
+within the runtime's bounded deadline and reaps each direct worker. On Unix,
+shutdown escalation signals the worker's current process group. A descendant
+can survive if the leader exits before escalation or the descendant creates a
+new session; built-in workers do not intentionally spawn descendants.
+When startup is cancelled or fails, `Start` may remain blocked for the fixed
+termination grace while it reaps the direct worker; that cleanup extension is
+bounded and avoids returning with an unsupervised child.
+
+This setting is fault/process containment, not a general sandbox. It does not
+provide network, filesystem, CPU, memory, syscall, or malware containment.
+The worker keeps the same UID, container/host namespace, filesystem view, and
+network policy as its parent. Kubernetes or container resource limits remain
+the aggregate limit for the runtime and its workers. Enabling it creates no
+new external egress.
 
 ### kind: http
 

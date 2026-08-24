@@ -5,6 +5,32 @@ arm64; host Go 1.25.5 and project-required Go 1.25.14) or to CI. Vocabulary: **P
 ran, non-zero (fixed or documented); **BLOCKED** = tool/environment missing,
 fallback noted; **NOT RUN** = deliberately skipped, reason given.
 
+## 2026-08-24 — optional per-sensor process isolation
+
+| Check | Command / evidence | Status |
+|---|---|---|
+| Isolated baseline | `git status --short --branch`; `git rev-parse HEAD`; `git remote -v` | PASS — `codex/sensor-process-isolation` started from merged extension-boundary commit `ee54a631e364706263a38cef3378d31a98f6d7bd`; the primary checkout was not modified |
+| Exa connector probe | callable-tool inventory for `web_search_exa` and `web_fetch_exa` | BLOCKED — Exa connector tools are not exposed to this task. Native primary-source research remained the authorized fallback |
+| Config and IPC focused regression set | `TMPDIR=/tmp GOCACHE=/tmp/aegismesh-v02-cache go test ./internal/config ./internal/sensorproc -run 'TestResolveBodyFileContainment|TestProxyRejectsReady|TestMetricValidation|TestObservationIdentity|TestDecode|TestMaximumValidated|TestIPCMeter|TestProxyClose' -count=1` | PASS — rooted symlink-safe body reads, readiness challenge, metric allowlist/declaration, nested JSON, frame bounds, pre-ready metric ordering and shutdown cancellation passed |
+| Concurrent lifecycle stress | `go test ./internal/sensorproc -run 'TestProxyClose|TestProxyConcurrent|TestFrameWriter|TestIPCMeter|TestMaximumValidated' -count=20` | PASS — blocked start writes, close-before-ready, start/close ordering and writer close races passed twenty repetitions |
+| Real worker crash containment | `go test ./internal/sensorproc -run TestDefaultWorkersContainCrashAndKeepSiblingServing -count=10` with scoped loopback access | PASS — a real fixed-invocation child was killed and reaped while a sibling worker still served its loopback HTTP response |
+| Four-worker E2E red regression | `go test ./internal/runtime -run TestIsolatedSensorsEndToEndLifecycle -count=3` | FAIL — strict nested-observation canonicalization reordered struct keys and dropped all four observations; the validator was changed to preserve key order while rejecting whitespace, duplicates and depth overflow |
+| Four-worker E2E after root-cause fix | `TMPDIR=/private/tmp GOCACHE=/private/tmp/aegismesh-v02-cache go test ./internal/runtime -run TestIsolatedSensorsEndToEndLifecycle -count=3` with scoped loopback access | PASS — three repetitions of real HTTP/TCP/MCP/SSH children bound, served traffic, preserved a binary `body_file`, emitted four integrity-valid envelopes and metrics, and shut down without close errors |
+| Bind-restricted focused attempt | affected package tests in the default sandbox | BLOCKED — existing loopback listeners were denied with `operation not permitted`; non-listener config, observe and sensorproc cases passed before the boundary, then scoped loopback access was used |
+| Temporary-disk boundary during race suite | `go test -race ./internal/sensorproc ./internal/runtime ./internal/cli ./internal/config ./internal/observe -count=1` | FAIL after `sensorproc` and `runtime` passed — the host volume reached `no space left on device` in a CLI `TempDir`; only the exact regenerable `/tmp/aegismesh-isolation-cache` and `/tmp/aegismesh-process-isolation-cache` directories were removed, freeing about 1 GiB |
+| Final-gate disk recovery | exact removal of `/private/tmp/aegismesh-sensorproc-gocache`, `/private/tmp/aegismesh-gocache`, `/private/tmp/aegismesh-extension-final-security` and `/private/tmp/aegismesh-sbomcheck-review.OSWNPv` after size inspection | PASS — only regenerable Go/review caches from this task and merged slices were removed; worktrees, source and evidence were preserved; the current v0.2 cache remained |
+| Independent fast-mode lifecycle review and re-review | read-only concurrency audit before and after fixes | PASS — bounded protocol writes, close-driven startup cancellation, ready/close ordering and post-handshake health findings were fixed; the bounded direct-child reap extension and descendant process-group residual are documented |
+| Final focused package suite | `TMPDIR=/private/tmp GOCACHE=/private/tmp/aegismesh-v02-cache go test ./internal/config ./internal/observe ./internal/sensorfactory ./internal/sensorproc ./internal/runtime ./internal/cli -count=1` with scoped loopback access | PASS — all affected packages and real listeners passed after the final deslop and protocol changes |
+| Final affected race suite | `TMPDIR=/private/tmp GOCACHE=/private/tmp/aegismesh-v02-cache go test -race ./internal/sensorproc ./internal/runtime ./internal/cli ./internal/config ./internal/observe -count=1` with scoped loopback access | PASS |
+| Final formatting, vet and all-package race suite | `TMPDIR=/private/tmp GOCACHE=/private/tmp/aegismesh-v02-cache make lint test` with scoped loopback access | PASS — every package passed; `golangci-lint` was unavailable, so the documented gofmt/vet fallback ran |
+| Final eight-target fuzz suite | `TMPDIR=/private/tmp GOCACHE=/private/tmp/aegismesh-v02-cache make fuzz-seed` | PASS — config, event, TCP, SSH, recommendation, Beelzebub import, extension JSON and sensor-process IPC targets each completed 15 seconds of real fuzzing with minimization disabled |
+| Cross-build | `GOOS=linux GOARCH=amd64 go build ./cmd/aegismesh`; `GOOS=darwin GOARCH=arm64 go build ./cmd/aegismesh` with the writable temporary cache | PASS — both target binaries built; the generated local artifact was removed after verification |
+| Helm, supply-chain and repository hygiene | `make helm-contract`; `make supply-chain-check`; `make license-check secrets-scan`; `go mod verify`; `sh -n scripts/*.sh`; `git diff --check`; formatting check | PASS — Helm positive/adversarial contract, immutable references, seven-module license policy, secret tripwire, module checksums, shell syntax, formatting and patch whitespace passed |
+| Pinned vulnerability scan | `make vuln` | BLOCKED — the exact tool/database requires separately approval-gated acquisition or external database access; no local PASS is inferred and the PR vulnerability job remains a required merge gate |
+| Local CycloneDX generation | `make sbom sbom-check` | NOT RUN — the pinned generator is not cached and acquiring it remains separately approval-gated; the PR generation, validation and reproducibility jobs remain required merge gates |
+| Dependency and egress change | `git diff -- go.mod go.sum`; runtime destination review | PASS — no dependency or runtime egress changed; workers use stdio and their existing inbound listener only |
+| External effects | release publication, tag/signing/attestation, repository settings, correlation fan-out or other new destination | NOT RUN — none was invoked or implemented |
+
 ## 2026-08-24 — observe-only extension live-policy boundary
 
 | Check | Command / evidence | Status |
@@ -183,7 +209,9 @@ Current evidence boundaries:
 | SSH metadata bounds | `go test -run '^$' -fuzz FuzzSSHMetadataHelpers -fuzztime 5s ./internal/sensor/sshsensor/` | PASS (86,309 execs) |
 | Beelzebub importer | `go test -run '^$' -fuzz FuzzImportBeelzebubDoc -fuzztime 8s ./internal/migrate/beelzebub/` | PASS (~224k execs, 300 corpus entries) |
 
-CI runs all five targets at 15s each on every push.
+This historical table records the original five targets. Current CI runs eight
+targets at 15 seconds each, including recommendation, extension and sensor
+process protocol fuzzing.
 
 ## End-to-end behavior
 

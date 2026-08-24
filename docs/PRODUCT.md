@@ -23,7 +23,7 @@ marketing that conflates "someone touched a decoy" with "you are breached".
    unprivileged ports; inbound content is data, never code; nothing in AegisMesh executes attacker input.
 2. **Local-first.** The core runtime runs offline. The deterministic local provider makes demos and tests
    reproducible without API keys. Cloud LLM providers are opt-in adapters, not requirements.
-3. **Evidence over alarmism.** Events record *observations*. Classification ("interaction", "canary-hit")
+3. **Evidence over alarmism.** Events record *observations*. Classification ("interaction", "canary_invocation")
    is mechanical; "incident" requires human verification. We never market interaction as proof of compromise.
 4. **Transparent everything.** Every response a decoy gives is traceable to a config rule or provider call
    in the audit log. No hidden behavior, no black-box scoring.
@@ -67,7 +67,7 @@ Three product families:
 | Licensing | Apache-2.0 end to end; zero GPL dependencies; license policy in CI and CycloneDX SBOMs on release tags |
 | Offline | Deterministic local provider + static policies = fully functional without network egress |
 | Supply chain | Two direct third-party Go modules: the YAML parser and pinned `golang.org/x/crypto/ssh`; the full resolved graph is license-checked |
-| Safe defaults | Loopback bind + unprivileged ports validated by `doctor`; strict config schema; dry-run modes |
+| Safe defaults | Loopback bind + unprivileged ports validated by `doctor`; strict config schema; dry-run modes; optional fault-contained fixed workers with exact in-process default |
 | Evidence hygiene | Versioned envelope, payload hashing, redaction pipeline, retention bounds, observation≠incident |
 | Explainability | Every response maps to a policy ID; `inspect` shows exactly why a decoy answered what it answered |
 | Operator review | `recommend` emits deterministic proposed guidance linked to verified local evidence; it cannot mutate assets or add egress |
@@ -78,7 +78,7 @@ Three product families:
 
 Ships: CLI (`init`, `doctor`, `validate`, `run`, `demo`, `inspect`, `recommend`, `rules`, `migrate beelzebub`, `ext`, `healthcheck`,
 `version`, `completion`), HTTP/TCP/MCP sensors plus authentication-only SSH, static policies, deterministic local and opt-in remote
-providers, JSONL evidence with correlation signals, ECS-compatible local export, deterministic dry-run recommendations, loopback admin endpoints,
+providers, optional per-sensor fixed-worker fault containment, JSONL evidence with correlation signals, ECS-compatible local export, deterministic dry-run recommendations, loopback admin endpoints,
 data-only observer extensions, opt-in webhook delivery, Docker/Compose, Helm packaging, CI and docs.
 
 Does not ship yet (see ROADMAP): Telnet and database sensors, OTLP or automatic SIEM connectors, autonomous

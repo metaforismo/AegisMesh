@@ -13,6 +13,7 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - A7 Provider/webhook credential references and operator-configured outbound destinations
 - A8 Release binaries, SBOMs, checksums, provenance statements, and build definitions
 - A9 Recommendation reports and operator interpretation of their evidence links
+- A10 Sensor-worker lifecycle, IPC projections, readiness state, and sibling availability
 
 ## Trust boundaries
 
@@ -27,20 +28,23 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - TB8: Source, module proxy, Actions, and container registries → CI/release runner → published artifacts.
 - TB9: Local evidence store → recommendation engine → operator. Store contents and envelope metadata may
   be attacker-influenced or modified by a local writer; recommendation output must remain non-behavioral.
+- TB10: Parent runtime ↔ optional same-binary sensor worker. The worker is a fault-containment process, not
+  an untrusted extension or a general host sandbox.
 
 ## STRIDE summary per boundary
 
 | Boundary | Threats | Mitigations in this batch |
 |---|---|---|
-| TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, credential probing, SSH decoy escape | No trust of client-supplied identity fields; HTTP/TCP/MCP inputs use server timeouts, byte caps, bounded loops, and redaction; the SSH boundary uses synthetic authentication only, bounded handshake/session/auth attempts and metadata, an in-memory Ed25519 host key, and rejects every channel/global request; no sensor has filesystem/exec capability |
+| TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, credential probing, SSH decoy escape | No trust of client-supplied identity fields; HTTP/TCP/MCP inputs use server timeouts, byte caps, bounded loops, and redaction; the SSH boundary uses synthetic authentication only, bounded handshake/session/auth attempts and metadata, an in-memory Ed25519 host key, and rejects every channel/global request; sensor behavior has no attacker-controlled filesystem/exec capability |
 | TB2 | Log/evidence forging after compromise, unbounded disk growth | Envelope carries a SHA-256 consistency check over the observation payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction applied at event construction (single choke point). The hash is not writer authentication and does not cover envelope metadata |
-| TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body or extension-manifest files | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body and extension-manifest files resolved relative to the config directory with traversal and real symlink containment checks |
+| TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body or extension-manifest files, unsafe worker launch | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body and extension-manifest files resolved relative to the config directory with traversal and real symlink containment checks; process isolation accepts only a boolean and launches a fixed same-binary worker with no config-derived command, path, environment, credential, or provider setting |
 | TB4 | Prompt-injected provider output instructing follow-on actions, jailbreak content stored/replayed, provider SSRF | Provider output treated exactly like attacker input: size-capped, redacted, stored as quoted text; it can only ever become a decoy *response string* — there is no code path from provider output to exec, paths, config mutation, or enforcement; outbound provider URL is fixed by config, allowlisted scheme http(s), timeout-bounded |
 | TB5 | Malicious extension code, manifest spoofing, output flooding, zombie processes, compromised extension artifact | Explicitly configured observer subprocesses only; strict bounded manifests; required sha256 digest plus optional ed25519 signature; exact `["observe"]` capability; identity-bound canonical handshake and event-linked acknowledgement; request/deadline/output caps; minimal environment; protocol violation revokes the process. Unknown/duplicate fields and untrusted error text are rejected, and no output reaches policy, evidence mutation, filesystem selection or enforcement |
 | TB6 | Recon via metrics/health, header injection into admin responses | Separate loopback-only listener, no attacker-reachable data in responses, explicit opt-out documented but default on |
 | TB7 | SSRF, DNS rebinding, secret disclosure, redirect abuse, data exfiltration, unbounded provider/collector cost | Outbound edges are opt-in and fixed by validated config; destination classification occurs before startup and at dial time; redirects/proxies are refused; credentials resolve before listeners bind and are never logged; requests, responses, queues, retries and time are bounded. Enabling either edge intentionally sends data outside the host |
 | TB8 | Mutable build inputs, compromised actions/tools/base images, dependency substitution, excessive workflow authority, incomplete or misleading release evidence | Actions use full commit SHAs; Go tools use exact versions and checksum-database verification; container bases use verified multiarch digests; a static gate rejects mutable references; modules are downloaded and verified before offline readonly compilation; SBOM work is isolated from OIDC authority; the attestation job downloads named binaries and contains only GitHub-owned pinned actions. Checksums, SBOMs, provenance, and signatures remain distinct claims |
 | TB9 | Malformed evidence, attacker text copied into guidance, false-positive escalation, metadata tampering, recommendation output becoming an action | Complete bounded input is structurally and payload-hash validated before filters/limit; malformed input yields no report; prose comes only from static catalog text; outputs say `recommendation`, `dry_run`, `proposed`, and `signal_not_incident`; no runtime, bus, LLM, extension, webhook, exec, path, config, production-mutation, or enforcement seam exists |
+| TB10 | Worker protocol injection, forged event metadata, frame flooding, worker crash, orphaned descendants, false readiness | Fixed hidden same-binary invocation, minimal environment, private temporary working directory, canonical versioned stdio frames, bounded frames/queues, random challenge-bound readiness, strict identity/classification/redaction/nested-JSON validation, allowlisted declaration-first metrics, parent-owned event envelope, bounded concurrent shutdown and direct-child reap; Unix escalation signals the current process group; crash degrades readiness for that sensor while siblings continue, with no automatic restart in v0.2 |
 
 ## Agentic-specific threats
 
@@ -107,6 +111,48 @@ contract is:
 - activity is an observation, not proof of a real account or incident, and cannot influence policy,
   configuration, execution, or enforcement.
 
+## Per-sensor process boundary
+
+`process_isolation` is a common opt-in boolean for HTTP, TCP, MCP, and SSH.
+Omitted and `false` preserve the in-process path. With `true`, the parent
+launches the same AegisMesh binary using a fixed hidden worker argument, a
+minimal fixed environment, and a private temporary working directory. The
+configuration cannot choose an executable, command, argument, path, or
+environment entry. The parent materializes `body_file` content and sends no
+paths, credentials, API keys, remote-provider destinations, models, or
+credential references to the child. A local fallback's bounded static prompt
+remains part of the sensor specification.
+
+The worker protocol is versioned, canonical, newline-delimited JSON over
+stdin/stdout with fixed frame, queue, observation, metric, redaction, and
+deadline bounds. A random per-launch challenge binds readiness to the received
+start frame. Startup is fail-closed until the worker handshake and
+listener bind succeed. Worker observations are projections only: the allowed
+classifications are `interaction` and `canary_invocation`, and the parent
+creates the event ID, timestamp, sequence, integrity hash, and storage write.
+Worker metadata cannot impersonate an authoritative event or select runtime
+behavior. Metric names are allowlisted, declaration counts are capped, and an
+operation must follow a matching declaration. An isolated HTTP sensor with
+enabled remote LLM fallback is rejected
+by configuration validation because the worker has no remote-provider
+credential or destination authority.
+
+An unexpected worker exit marks that sensor unhealthy and degrades readiness;
+sibling sensors continue to serve. v0.2 does not restart the failed worker.
+Shutdown closes workers concurrently under one bounded deadline and reaps each
+direct worker. Unix escalation signals the worker's current process group. A
+descendant can survive if the leader exits first or it deliberately creates a
+new session; built-in workers do not intentionally spawn descendants. The
+parent-worker edge is stdio-only and adds no external egress.
+
+This boundary is fault/process containment, not a network, filesystem, CPU,
+memory, syscall, or malware sandbox. The child keeps the same UID,
+host/container namespace, filesystem view, and network policy. Container or
+Kubernetes resource limits apply to the runtime and workers in aggregate.
+Operators needing stronger isolation must configure it at the container or
+host layer and must not interpret this setting as permission to execute
+captured samples or attacker-supplied commands.
+
 ## Self-contained demo boundary
 
 `aegismesh demo` accepts no config, path, port, credential, API key, URL or
@@ -128,16 +174,16 @@ reachable. The summary still describes observations, not an incident.
 
 ## Residual risks accepted in this batch
 
-- Single-process runtime: a parser 0-day in Go's net stack could crash the runtime (availability loss, not
-  escape). Per-sensor OS isolation is a roadmap option (ADR-0002 alternative).
-- Observer subprocess separation is not a resource or network sandbox. The host
-  supervises the direct child, bounds protocol I/O and kills it on revocation;
-  OS-level descendant, CPU, memory and network confinement remain part of the
-  separate process-isolation slice.
-- Artifact digest verification and process launch are separate filesystem
-  operations. A hostile local writer able to replace the executable in that
-  interval could win a time-of-check/time-of-use race; fixed executable identity
-  and launch staging belong to the process-isolation slice.
+- In-process mode remains the default: a parser 0-day in Go's net stack can
+  still crash the shared runtime (availability loss, not escape). Operators
+  seeking fault containment must opt into the per-sensor worker boundary.
+- Sensor and observer subprocesses are not resource or network sandboxes. The
+  host bounds protocol I/O and lifecycle, but CPU, memory, filesystem,
+  namespace, syscall, and network confinement remain host/container concerns.
+- Fixed executable identity narrows the worker launch surface but does not
+  attest the host binary or defeat a privileged local writer that replaces it.
+  Host integrity, deployment immutability, and release provenance remain
+  separate controls.
 - Local JSONL evidence is plaintext at rest; disk encryption is the operator's responsibility. At-rest
   encryption is roadmap.
 - Build provenance depends on GitHub-hosted runner, OIDC, Sigstore, registry,
