@@ -51,6 +51,7 @@ for parallel test runs; still subject to host-loopback rules.
 | field | default | notes |
 |---|---|---|
 | `max_file_bytes` | `16777216` (16 MiB) | rotate evidence segment above this size |
+| `max_event_bytes` | `262144` (256 KiB) | reject an encoded event above this size before it reaches a segment |
 | `retention.max_events` | `100000` | delete oldest closed segments beyond this |
 | `retention.max_age_days` | `30` | delete segments older than this |
 

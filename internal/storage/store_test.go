@@ -195,6 +195,38 @@ func TestOversizeEventRejected(t *testing.T) {
 	}
 }
 
+func TestMaxEventBytesIsEnforcedIndependentlyOfSegmentSize(t *testing.T) {
+	s := newStore(t, Options{
+		Dir:           t.TempDir(),
+		MaxFileBytes:  1 << 20,
+		MaxEventBytes: 1024,
+	})
+	large := `{"pad":"` + strings.Repeat("x", 2048) + `"}`
+	err := s.Append(context.Background(), mkEnv(t, &event.Sequencer{}, large))
+	if err == nil || !strings.Contains(err.Error(), "max_event_bytes 1024") {
+		t.Fatalf("expected max_event_bytes rejection, got %v", err)
+	}
+	if s.appended != 0 {
+		t.Fatalf("rejected event changed append count: %d", s.appended)
+	}
+}
+
+func TestMaxEventBytesDefaultsToConfiguredSchemaValue(t *testing.T) {
+	s := newStore(t, Options{Dir: t.TempDir(), MaxFileBytes: 1 << 20})
+	large := `{"pad":"` + strings.Repeat("x", defaultMaxEventBytes) + `"}`
+	err := s.Append(context.Background(), mkEnv(t, &event.Sequencer{}, large))
+	if err == nil || !strings.Contains(err.Error(), "max_event_bytes 262144") {
+		t.Fatalf("expected default max_event_bytes rejection, got %v", err)
+	}
+}
+
+func TestMaxEventBytesMinimum(t *testing.T) {
+	_, err := New(Options{Dir: t.TempDir(), MaxFileBytes: 4096, MaxEventBytes: 1023})
+	if err == nil || !strings.Contains(err.Error(), "max_event_bytes must be >= 1024") {
+		t.Fatalf("expected minimum validation, got %v", err)
+	}
+}
+
 func FuzzDecodeEventEnvelope(f *testing.F) {
 	f.Add([]byte(`{"schema":"aegismesh.event/v1"}`))
 	f.Add([]byte(`{"schema":123}`))

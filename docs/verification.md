@@ -10,6 +10,21 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-08-31 — storage `max_event_bytes` enforcement
+
+| Check | Command / evidence | Status |
+|---|---|---|
+| Isolated source and toolchain | exact `master` source snapshot with temporary branch-only workflow removed; `/mnt/data/aegismesh-workspace/toolchain/x64/bin/go version` | PASS — source matches public `52b6ead` outside the removed temporary workflow; Go `1.25.14 linux/amd64` |
+| Red implementation audit | compare config default/validation, `runtime.Build` and `storage.Options` | FAIL before fix — `storage.max_event_bytes` was never passed to or enforced by the store |
+| Focused storage regressions | `go test ./internal/storage -run 'Test(MaxEventBytes|OversizeEventRejected|AppendAndReadBack)' -count=1 -v` | PASS |
+| Runtime wiring regression | `go test ./internal/runtime -run TestBuildWiresStorageMaxEventBytes -count=1 -v` | PASS |
+| Affected race suite | `go test -race -count=1 ./internal/storage ./internal/runtime` | PASS |
+| Repository-wide local gate | two `make lint test` attempts, the second with a warm cache | BLOCKED — `go vet ./...` passed and the race run completed through 23 packages before this execution wrapper terminated the still-running aggregate command; affected packages and additional sensor packages passed separately, and exact-head PR CI remains the authoritative aggregate gate |
+| Dependency and egress change | `git diff -- go.mod go.sum`; runtime destination review | PASS — no dependency, secret, provider, webhook, extension or destination changed |
+| Module, supply-chain, license and secret checks | `go mod verify`; `make supply-chain-check`; offline cached `make license-check`; `make secrets-scan` | PASS — seven resolved modules remained within policy; no module graph changed |
+| Helm contract locally | `make helm-contract` | BLOCKED — no Helm binary is installed in this environment; the unchanged chart remains covered by required PR CI |
+| Release and repository administration | publication, tag, signing, settings and cluster actions | NOT RUN |
+
 ## 2026-08-31 — repository ground truth and PR #54 truth-sync
 
 | Check | Command / evidence | Status |

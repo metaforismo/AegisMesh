@@ -24,6 +24,10 @@ changes bump MINOR).
 
 ### Fixed
 
+- `storage.max_event_bytes` is now an actual runtime/store bound rather than a
+  validation-only setting. Oversized encoded envelopes are rejected before
+  segment mutation even when they would fit within `max_file_bytes`.
+
 - MCP sensor returned an empty `{}` body (HTTP 200) for unparseable JSON-RPC
   instead of a proper parse-error object; protocol errors now always render
   complete JSON-RPC error envelopes, and notifications answer 202.

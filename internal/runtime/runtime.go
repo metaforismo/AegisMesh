@@ -97,10 +97,11 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 
 	reg := observe.NewRegistry()
 	storeOpts := storage.Options{
-		Dir:          cfg.Runtime.DataDir,
-		MaxFileBytes: cfg.Storage.MaxFileBytes,
-		MaxEvents:    cfg.Storage.Retention.MaxEvents,
-		MaxAgeDays:   cfg.Storage.Retention.MaxAgeDays,
+		Dir:           cfg.Runtime.DataDir,
+		MaxFileBytes:  cfg.Storage.MaxFileBytes,
+		MaxEventBytes: cfg.Storage.MaxEventBytes,
+		MaxEvents:     cfg.Storage.Retention.MaxEvents,
+		MaxAgeDays:    cfg.Storage.Retention.MaxAgeDays,
 	}
 	store, err := storage.New(storeOpts)
 	if err != nil {
