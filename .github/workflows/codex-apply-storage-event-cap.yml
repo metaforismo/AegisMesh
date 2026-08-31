@@ -1,0 +1,38 @@
+name: codex-apply-storage-event-cap
+
+on:
+  push:
+    branches:
+      - codex/storage-event-cap
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/storage-event-cap
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Apply reviewed patch and remove transport files
+        run: |
+          printf '%s  %s\n' \
+            '1c35026d218db07c0225d22c812fa1d720275cf39747182d4970153e9c8d0b3c' '.codex/storage-cap-code.patch' \
+            'ecb1adf301cb03bd4de84b50ff5940c9091d2954a5e18c95ea5fb31d5fa75595' '.codex/storage-cap-docs.patch' | sha256sum -c -
+          git apply --check .codex/storage-cap-code.patch
+          git apply --check .codex/storage-cap-docs.patch
+          git apply .codex/storage-cap-code.patch
+          git apply .codex/storage-cap-docs.patch
+          rm -rf .codex .github/workflows/codex-apply-storage-event-cap.yml
+          gofmt -w internal/runtime/runtime.go internal/runtime/runtime_test.go internal/storage/store.go internal/storage/store_test.go
+          git diff --check
+          git config user.name 'metaforismo'
+          git config user.email '39646696+metaforismo@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(storage): enforce configured event-size cap' -m 'Wire storage.max_event_bytes into the runtime store, enforce it before segment mutation, and add direct and runtime-level regressions. This restores the documented bounded-record invariant required before encrypted framing.'
+          git push origin HEAD:codex/storage-event-cap
