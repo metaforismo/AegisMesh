@@ -11,8 +11,9 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 ## Current baseline
 
 - Default branch: `master`.
-- Baseline at the start of this run: `eef2b93c5e6bad06c03fe3e400094aedbe0ec9d4`.
-- PR #54 is merged and its exact head passed all six hosted CI jobs.
+- Current public `master` at the start of this block:
+  `52b6ead4fc5848d90e29eeb6de6b2c8272485d8d`.
+- PR #54 and the subsequent product truth-sync PR #55 are merged.
 - No open product issues were present at the start of this run.
 - Two automated dependency PRs (#48 and #49) require policy-aware review.
 - The operator's macOS checkout is not mounted in the current execution
@@ -21,7 +22,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## P0 — correctness, security, data loss, broken builds, dishonest claims
 
-### P0-1 — post-PR-54 documentation and evidence truth-sync — IN PROGRESS
+### P0-1 — post-PR-54 documentation and evidence truth-sync — PASS
 
 - **Evidence:** `docs/ROADMAP.md`, `docs/HANDOFF.md`,
   `docs/DELIVERY-PLAN.md`, this backlog and the top verification entry still
@@ -39,8 +40,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   control plane or multi-tenancy.
 - **Verify:** inspect the exact PR #54 head and hosted jobs; compare current docs
   with `master`; `git diff --check`; normal documentation PR CI.
-- **Status:** **IN PROGRESS** — implementation is on the current truth-sync
-  branch; hosted CI and merge remain required before this item becomes PASS.
+- **Status:** **PASS** — PR #55 merged as `52b6ead`.
 
 ### P0-2 — unresolved code correctness/security defects — PASS
 
@@ -58,6 +58,30 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Verify:** `make lint test`, focused red regressions, applicable fuzz/race and
   hosted vulnerability gates.
 - **Status:** **PASS for the current audit snapshot**.
+
+### P0-3 — enforce the configured storage event-size cap — IN PROGRESS
+
+- **Evidence:** `storage.max_event_bytes` was strictly decoded, defaulted and
+  documented, but `runtime.Build` did not pass it to `storage.Options` and the
+  store had no independent event-size field. An event larger than the declared
+  cap was therefore accepted whenever it still fit inside `max_file_bytes`.
+- **Affected:** `internal/storage`, `internal/runtime`, storage configuration,
+  changelog and verification evidence.
+- **Security/egress:** restores the promised local encoded-record and disk
+  bound. No new destination, credential, dependency or egress.
+- **Dependencies:** must land before encrypted framing derives ciphertext caps
+  from the maximum plaintext event size.
+- **Acceptance:** direct store construction defaults to 256 KiB, rejects values
+  below 1024 bytes, rejects an encoded envelope above the configured cap before
+  any append-count or segment mutation, and runtime construction wires the
+  loaded value into the store.
+- **Verify:** `go test ./internal/storage -run
+  'Test(MaxEventBytes|OversizeEventRejected|AppendAndReadBack)' -count=1`;
+  `go test ./internal/runtime -run TestBuildWiresStorageMaxEventBytes -count=1`;
+  `go test -race ./internal/storage ./internal/runtime -count=1`;
+  `make lint test`; hosted CI on the exact PR head.
+- **Status:** **IN PROGRESS** — focused and affected-package race tests pass
+  locally; hosted CI and merge remain required.
 
 ## P1 — v0.2 completion and important architectural gaps
 

@@ -141,6 +141,32 @@ func TestSystemStopConcurrentIsIdempotent(t *testing.T) {
 	callers.Wait()
 }
 
+func TestBuildWiresStorageMaxEventBytes(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Storage.MaxFileBytes = 1 << 20
+	cfg.Storage.MaxEventBytes = 1024
+	disabled := false
+	cfg.Admin.Enabled = &disabled
+
+	sys, err := Build(cfg, quietLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sys.closeAll)
+
+	observation := json.RawMessage(`{"pad":"` + strings.Repeat("x", 2048) + `"}`)
+	envelope, err := event.New(&event.Sequencer{}, cfg.Runtime.InstanceName,
+		event.SensorRef{ID: "http-decoy", Kind: config.SensorKindHTTP, Listen: "127.0.0.1:0"},
+		event.ClassificationInteraction, observation, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sys.store.Append(context.Background(), envelope); err == nil ||
+		!strings.Contains(err.Error(), "max_event_bytes 1024") {
+		t.Fatalf("runtime store ignored configured event cap: %v", err)
+	}
+}
+
 func TestCloseSensorsStartsAllClosuresBeforeWaiting(t *testing.T) {
 	entered := make(chan string, 3)
 	release := make(chan struct{})

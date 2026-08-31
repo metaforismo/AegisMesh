@@ -27,10 +27,11 @@ const (
 )
 
 type Options struct {
-	Dir          string
-	MaxFileBytes int64 // rotate when a segment reaches this size (0 = use default)
-	MaxEvents    int   // retention cap across all segments (0 = use default)
-	MaxAgeDays   int   // drop segments older than this (0 = never age out)
+	Dir           string
+	MaxFileBytes  int64 // rotate when a segment reaches this size (0 = use default)
+	MaxEventBytes int   // reject larger encoded envelopes (0 = use default)
+	MaxEvents     int   // retention cap across all segments (0 = use default)
+	MaxAgeDays    int   // drop segments older than this (0 = never age out)
 }
 
 // Store is a durable append-only JSONL store. Safe for concurrent use.
@@ -45,14 +46,23 @@ type Store struct {
 	appended uint64
 }
 
-const defaultMaxFileBytes = 16 << 20
+const (
+	defaultMaxFileBytes  = 16 << 20
+	defaultMaxEventBytes = 256 << 10
+)
 
 func New(opts Options) (*Store, error) {
 	if opts.MaxFileBytes == 0 {
 		opts.MaxFileBytes = defaultMaxFileBytes
 	}
+	if opts.MaxEventBytes == 0 {
+		opts.MaxEventBytes = defaultMaxEventBytes
+	}
 	if opts.MaxFileBytes < 4096 {
 		return nil, fmt.Errorf("%w: max_file_bytes must be >= 4096", errStore)
+	}
+	if opts.MaxEventBytes < 1024 {
+		return nil, fmt.Errorf("%w: max_event_bytes must be >= 1024", errStore)
 	}
 	if err := os.MkdirAll(opts.Dir, 0o700); err != nil {
 		return nil, fmt.Errorf("%w: create data dir %s: %v", errStore, opts.Dir, err)
@@ -99,6 +109,9 @@ func (s *Store) Append(_ context.Context, e event.Envelope) error {
 	b, err := json.Marshal(e)
 	if err != nil {
 		return fmt.Errorf("%w: marshal: %v", errStore, err)
+	}
+	if len(b) > s.opts.MaxEventBytes {
+		return fmt.Errorf("%w: encoded event (%d bytes) exceeds max_event_bytes %d", errStore, len(b), s.opts.MaxEventBytes)
 	}
 	b = append(b, '\n')
 
