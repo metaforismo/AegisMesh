@@ -1,90 +1,103 @@
 # AegisMesh roadmap
 
-Checked items are implemented **and verified** in this repository (see docs/verification.md for evidence).
-Nothing is checked on intent alone.
+Updated: 2026-08-31. Checked items are implemented **and verified** in this
+repository. Intent, research and product direction remain unchecked until an
+implementation and its acceptance gates are complete.
 
-## Batch 1 — Foundation (this batch)
+## Batch 1 — foundation
 
-- [x] Product brief, principles, non-goals, threat model, trust boundaries, data-flow diagrams
-- [x] Competitive landscape research with claims/evidence separation
-- [x] Governance: Apache-2.0 LICENSE/NOTICE, CONTRIBUTING, CoC, SECURITY, SUPPORT, RELEASE policy, AGENTS.md
+- [x] Product brief, principles, non-goals, threat model, trust boundaries and data-flow diagrams
+- [x] Competitive-landscape research with claims/evidence separation
+- [x] Apache-2.0 governance, contribution, security, support and release policies
 - [x] CLI: `init`, `doctor`, `validate`, `run`, `inspect`, `migrate beelzebub`, `version`, `completion`
-- [x] Schema-versioned strict config with env overrides and documented precedence
-- [x] HTTP deception sensor (hardened net/http server)
-- [x] TCP deception sensor (banner + line protocol, deadlines, caps)
-- [x] MCP deception sensor (JSON-RPC 2.0 streamable HTTP; canary tool semantics)
-- [x] Policy gate + deterministic local LLM provider (no API key required)
-- [x] Event envelope v1 (integrity hash, sequence, redaction record) + JSONL store w/ rotation & retention
-- [x] Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text), `/version`
-- [x] Extension manifest schema + digest/signature verifier + out-of-process reference host + contract tests
-- [x] Clean-room `migrate beelzebub` importer (dry-run default, compatibility report, source preserved)
-- [x] Dockerfile (non-root), docker-compose demo, reviewable install script
-- [x] Helm chart packaging with schema and contract tests; real-cluster support remains unverified
-- [x] Tests: unit, integration, golden/CLI snapshot, fuzz seeds, race; CI workflows pinned by commit SHA
-- [x] docs/verification.md + docs/HANDOFF.md
+- [x] Schema-versioned strict configuration with documented precedence
+- [x] HTTP, TCP and MCP deception sensors
+- [x] Static policy gate and deterministic local provider
+- [x] Event envelope v1 and bounded JSONL storage with rotation and retention
+- [x] Loopback admin listener: `/healthz`, `/readyz`, `/metrics`, `/version`
+- [x] Verified out-of-process observer-extension contract
+- [x] Clean-room Beelzebub configuration importer
+- [x] Docker/Compose packaging and contract-tested Helm chart
+- [x] Unit, integration, golden, fuzz and race coverage in pinned CI workflows
 
-## Batch 1.5 — Secure intelligence layer (complete; merged through PR #12)
+## Batch 1.5 — secure intelligence layer
 
-- [x] Deterministic prompt-injection / abuse rule engine (`internal/detect`: PI-001/PI-002, EXF-001,
-      ESC-001, OBS-001, RES-001; static evidence-safe reasons; fail-open by design)
-- [x] Provider credential references (`api_key_env` / `api_key_file`) with runtime resolution and
-      strict loader containment checks; `ollama` provider profile (loopback http allowed for it only)
-- [x] `init --profile local|ollama|remote` scaffolds
-- [x] Detection enforcement in the MCP sensor (severity→action: observe/tag/isolate/refuse) with
-      per-sensor throttling
-- [x] LLM fallback analysis path behind sensor opt-in (`fallback.enabled`), untrusted-output pipeline
-      (size caps, redaction-before-storage, structured findings)
-- [x] `doctor` provider readiness without secret disclosure; shared egress classifier with validate
-- [x] `validate --effective` resolved-policy preview (human + JSON); `inspect list --finding RULE_ID`
-- [x] Importer credential safety gate (refuse inline material, report references, non-zero exit on refusal)
+- [x] Deterministic prompt-injection and abuse findings
+- [x] Credential references and strict remote-provider construction
+- [x] Local, Ollama and OpenAI-compatible provider profiles
+- [x] MCP finding enforcement limited to decoy response behavior
+- [x] Provider output treated as bounded, redacted, untrusted response data
+- [x] Effective-policy preview, provider readiness and rule-oriented inspection
+- [x] Import safety gate that refuses inline credential material
 
-## Batch 2 — Depth on the same spine (delivery train)
+## Batch 2 — defensible single-node v0.2
 
-1. [x] R1 — SSH deception sensor behind the same Sensor interface.
-   Password/public-key authentication is synthetic only; each sensor instance
-   holds an ephemeral in-memory Ed25519 host key; handshake/session/auth and
-   connection resources are bounded; every channel and global request is
-   rejected. There is no shell, PTY, subsystem, SFTP, forwarding, filesystem,
-   command execution, persistent host key, or outbound target.
-2. R2 (shipped): Real remote provider adapter — done. OpenAI-compatible chat completions via `openai` and
-   `ollama` adapters (`internal/llm.Remote`) behind strict config: fail-closed construction before any
-   listener binds, egress-classified dialing, loopback allowed only for `ollama`, response size + timeout
-   caps enforced, off by default (PR deliver/llm-remote-provider). Provider output still passes the
-   untrusted-output pipeline. Cost accounting beyond those size/timeout bounds stays future work.
-3. R3 (shipped): ECS-compatible local evidence projection via `inspect export --profile ecs`, with a
-   stable mapping, complete native-envelope preservation, deterministic golden tests, strict CLI validation,
-   and fail-closed verified export. No connector or automatic upload is implied.
-4. [x] R4 — Response recommendation engine v0: verified local evidence produces deterministic
-   `recommendation` / `dry_run` / `proposed` / `signal_not_incident` operator-review output.
-   It has no path to runtime policy, webhook, extensions, LLMs, filesystem mutation, command execution,
-   or enforcement.
-5. R5: Evidence at rest: optional age/X25519 encryption of evidence segments.
-6. [x] R6 — Close the extension live-policy boundary (merged in PR #53):
-   v1alpha1 manifests are
-   observe-only and strict; the host exposes no generic result API and accepts
-   only a bounded canonical acknowledgement tied to the source event. Failed
-   primary appends do not fan out. Response influence, correlation fan-out,
-   execution, path/config mutation and enforcement remain unavailable by
-   design (ADR-0006, ADR-0014).
-7. [x] R7 — `aegismesh demo`: self-contained synthetic HTTP/TCP/MCP/SSH
-   scenario with OS-assigned loopback ports, verified evidence, a dry-run
-   recommendation, deterministic summaries and complete cleanup.
-8. [ ] R8 — Optional per-sensor process isolation mode for fault containment
-   (implementation and local gates complete; PR CI/merge pending).
-   The exact default remains in-process. Opted-in HTTP/TCP/MCP/SSH sensors use
-   fixed same-binary workers, challenge-bound bounded IPC, parent-authoritative
-   evidence, allowlisted metrics and contained crash/readiness semantics. This
-   is not a resource, network, filesystem, syscall, or malware sandbox.
+1. [x] **SSH authentication deception.** Synthetic password/public-key
+   authentication, ephemeral in-memory Ed25519 host key, bounded resources and
+   unconditional rejection of channels and global requests. No shell, PTY,
+   SFTP, forwarding, filesystem or command execution.
+2. [x] **Remote providers.** Opt-in OpenAI-compatible and Ollama adapters with
+   fail-closed startup, destination classification, redirect/proxy refusal,
+   time and byte caps. Provider output remains untrusted data.
+3. [x] **ECS-compatible local export.** Conservative deterministic projection
+   that preserves the complete native envelope and adds no connector or egress.
+4. [x] **Dry-run recommendations.** Deterministic evidence-linked proposals for
+   operator review with no enforcement, asset mutation or runtime feedback path.
+5. [ ] **Optional evidence-at-rest encryption.** age/X25519 segment encryption,
+   disabled by default, with no silent plaintext downgrade and explicit key
+   rotation, recovery and mixed-history semantics.
+6. [x] **Observe-only extension boundary.** Strict manifests and exact
+   event-linked acknowledgements; extension output cannot affect evidence,
+   policy, responses, paths, configuration or enforcement.
+7. [x] **Self-contained demo.** Synthetic HTTP/TCP/MCP/SSH flow on OS-assigned
+   loopback ports with verified evidence, one dry-run proposal and cleanup.
+8. [x] **Optional per-sensor process isolation.** Merged in PR #54 as
+   `eef2b93`. The exact default remains in-process. Opted-in sensors use a fixed
+   same-binary worker, challenge-bound bounded IPC and parent-authoritative
+   evidence. This is fault containment, not a resource, network, filesystem,
+   syscall or malware sandbox.
+9. [ ] **v0.2 release-readiness audit.** Complete only after item 5 is merged
+   and the final `master` commit passes the full race, fuzz, Helm, license,
+   secret, vulnerability and SBOM gates with documentation truth-synced.
 
-## Later batches (direction, not commitments)
+The finite acceptance contract is in [DELIVERY-PLAN.md](DELIVERY-PLAN.md), the
+live queue is in [BACKLOG.md](BACKLOG.md), and current evidence is in
+[verification.md](verification.md).
 
-- Distributed mesh: multi-host sensor fleets with a control channel, per-sensor attestation.
-- Continuous adversarial simulation harness that probes your own decoys in CI.
-- Threat intelligence pipeline: clustering of captured interactions into TTP summaries (local models first).
-- Web console (read-only by default) once the API surface stabilizes.
-- Kubernetes operation: the Helm chart is packaging, not real-cluster support. Add image, persistence,
-  upgrade/rollback and cluster failure-path evidence before any production-readiness claim.
+## Later product direction — not shipped commitments
 
-## Explicit non-goals reminder
+- A managed AegisMesh SaaS/control plane around the Apache-2.0 core: fleet
+  inventory, authenticated enrollment, tenant isolation, searchable retention,
+  SSO/RBAC, audit administration, usage metering and managed upgrades.
+- Distributed sensor fleets with explicit control-channel authorization,
+  per-sensor identity and attestation, offline buffering and deterministic
+  reconciliation.
+- A read-only-by-default web console after the query and authorization contracts
+  are stable.
+- Continuous adversarial simulation that probes only operator-owned decoys in
+  CI and never becomes an offensive execution framework.
+- Local-first clustering and TTP summaries over redacted evidence, with model
+  output kept non-behavioral.
+- Additional bounded protocol sensors where they add real defensive value;
+  Telnet and database emulation remain research rather than implied parity.
+- Real-cluster Kubernetes evidence for image, persistence, upgrades, rollback,
+  NetworkPolicy and failure paths before any cluster-support claim.
 
-See docs/PRODUCT.md. No autonomous enforcement, no offensive capability, no open-core split, ever.
+## Commercial and open-source boundary
+
+AegisMesh is intended to be commercially usable and sellable without turning
+its defensive core into a crippled teaser. The runtime, evidence format and
+single-node defensive capabilities remain Apache-2.0 and self-hostable. A future
+SaaS may charge for managed operation, collaboration, hosted retention and
+control-plane services. That direction does **not** imply that multi-tenancy,
+billing, public APIs or hosted operation ship today.
+
+## Permanent non-goals
+
+- Autonomous exploitation, credential theft, persistence, phishing, botnet
+  behavior, destructive containment or execution of captured malware.
+- Commands, filesystem choices, configuration mutation or enforcement derived
+  from attacker input, configuration content, model output or extension output.
+- Treating a decoy activation or recommendation as proof of an incident.
+- Production-readiness, false-positive or compliance-certification claims
+  without explicit independent evidence.
