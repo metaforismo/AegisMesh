@@ -1,129 +1,135 @@
 # HANDOFF — current verified state
 
-Read `AGENTS.md`, then `docs/BACKLOG.md`, then `docs/ROADMAP.md`.
+Updated: 2026-08-31. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
+`docs/ROADMAP.md` before changing code.
 
-## Current state
+## Authoritative baseline
 
-The foundation and secure-intelligence layers ship HTTP/TCP/MCP sensors plus
-an authentication-only SSH sensor,
-detection and bounded correlation, native JSONL evidence, local and opt-in
-remote providers, a bounded signed webhook, data-only observer extensions,
-rule inspection/testing, Docker/Compose and contract-tested Helm packaging.
-The local `recommend` command now turns fully validated stored findings,
-correlation signals, and canary activations into deterministic evidence-linked
-operator-review proposals. It buffers output, is dry-run only, and has no
-runtime, action, or egress path.
+- Repository: `metaforismo/AegisMesh`
+- Default branch: `master`
+- Verified baseline before this truth-sync: `eef2b93c5e6bad06c03fe3e400094aedbe0ec9d4`
+- That commit merged PR #54, optional fixed-worker process isolation.
+- PR #54 head `6ded0223235fbb383f65accf762aa67fe481e316`
+  passed every hosted CI job: full race/build/cross-build, eight fuzz targets,
+  Helm contract, pinned vulnerability scan, dependency-license/secret checks,
+  and deterministic CycloneDX generation/validation.
 
-The self-contained `demo` command now exercises all four sensors through real
-OS-assigned loopback listeners, validates four stored envelopes and observation
-hashes, generates one dry-run proposal, and removes its private workspace. It
-accepts no operator path, config, port, credential, API key or destination.
+Re-check these values before relying on them. Public repository state is mutable.
 
-Batch 2 R3 adds a local ECS-compatible export profile while preserving the
-native envelope. Batch 2 R1 adds synthetic password/public-key SSH
-authentication with per-instance ephemeral Ed25519 keys, bounded resources,
-and unconditional rejection of every channel and global request. Exact current
-commands and evidence live in `docs/verification.md`.
+## What ships
 
-The supply-chain slice pins Actions, SBOM/vulnerability tools, and both
-container bases; generates deterministic platform-specific CycloneDX 1.6
-application inventories; validates their reference graph; and isolates
-tag-triggered OIDC authority in a binary-only attestation job. It does not
-publish, sign, or attest anything during pull requests.
+AegisMesh is an early, defensive, local-first deception and evidence platform.
+It currently ships:
 
-PR #53 (`ee54a63`) closes the extension live-policy boundary: observer
-manifests are strictly observe-only, acknowledgements are bounded and
-event-linked, failed primary appends suppress fan-out, and no extension output
-can represent runtime response authority.
+- bounded HTTP, TCP, MCP and authentication-only SSH sensors;
+- strict configuration, loopback and unprivileged defaults, redaction and
+  bounded resource ownership;
+- deterministic local responses plus opt-in OpenAI-compatible and Ollama
+  providers whose output remains untrusted response data;
+- native JSONL evidence with integrity checks, rotation and retention;
+- a conservative ECS-compatible local projection that preserves the native
+  envelope;
+- deterministic evidence-linked dry-run recommendations for operator review;
+- a one-command synthetic four-sensor demo;
+- signed opt-in webhooks and verified observe-only subprocess extensions;
+- optional same-binary process workers for every sensor kind;
+- Docker/Compose and contract-tested Helm packaging;
+- pinned CI/release definitions, vulnerability checks and CycloneDX SBOM paths.
 
-The active process-isolation slice adds opt-in fixed same-binary workers for
-HTTP, TCP, MCP, and SSH while preserving exact in-process defaults. The parent
-owns readiness challenges, event envelopes, metric allowlists, shutdown and
-direct-child reap. Worker crashes degrade only that sensor's readiness while
-siblings continue. This is fault containment, not a network, filesystem,
-resource, syscall, or malware sandbox.
+No activation or recommendation proves an incident. Nothing shipped can execute
+attacker/model/extension instructions or autonomously mutate real assets.
 
-## Non-obvious decisions
+## Process-isolation truth
 
-- Provider output and extension output are untrusted data. Neither can select
-  commands, paths, configuration, or enforcement actions.
-- The authoritative store append precedes best-effort webhook, extension and
-  correlation offers. Derived correlation signals append directly to storage;
-  never republish them through `Bus.Submit`.
-- Observer extensions are live but data-only. Response-influencing extension
-  wiring remains unimplemented by ADR-0006. V1alpha1 permissions are exactly
-  `["observe"]`; successful delivery accepts only a canonical event-linked
-  acknowledgement and no extension-derived policy is representable.
-- Native evidence remains the source contract. ECS-compatible export is a
-  read-boundary projection and nests the complete native envelope.
-- Recommendations are a separate read-only boundary. All input is validated
-  before filters and the final limit; prose is static; evidence IDs and payload
-  hashes prove payload/hash consistency only, not writer identity, metadata
-  integrity, signature, provenance, or chain of custody.
-- Verified export stages output and changes the destination only after all
-  records pass structural and integrity checks. It refuses direct, symbolic and
-  hard-linked paths to source evidence segments, and any segment read failure
-  aborts the export without changing the destination.
-- Port `0` means an OS-assigned ephemeral port. Admin remains loopback-only.
-- `/readyz` counts only successfully started sensor listeners; extension startup
-  completes before sensor readiness can become true.
-- Extensions inherit only `AEGISMESH_EXTENSION=1` and use the manifest
-  directory as their working directory. Manifest paths are config-relative and
-  cannot escape that directory through traversal or symlinks.
+The process-isolation slice is **merged**, not pending. Omitted or
+`process_isolation: false` preserves the in-process path. `true` launches the
+same audited binary with one fixed hidden argument, a minimal environment, a
+private temporary working directory and bounded canonical stdio IPC. The parent
+owns readiness, event identity, integrity, storage, metrics and shutdown.
 
-## Known gaps and boundaries
+This contains first-party sensor crashes; it is not a network, filesystem, CPU,
+memory, syscall or malware sandbox. Workers retain the runtime UID and host or
+container namespaces. v0.2 does not automatically restart them.
 
-- No Telnet/database sensor, decoy-listener TLS, at-rest encryption,
-  distributed mesh, autonomous response connector, or web console.
-- No autonomous enforcement against real assets.
-- Helm is real packaging with contract tests; real-cluster support is not verified.
-- Correlation signals do not reach webhook or observer extensions. Enabling that
-  would be new external egress and requires explicit approval.
-- `golangci-lint` and cosign may be unavailable locally; record BLOCKED rather
-  than inferring results. `make vuln` and `make sbom` use exact Go tool
-  versions and fail closed if acquisition fails.
-- No v0.2 tag, GitHub release, provenance statement, or binary signature has
-  been created. The release workflow is readiness evidence; executing its
-  external writes remains a separate approval.
-- GitHub authentication and API access were available on 2026-08-24. Public
-  PR/issue state remains mutable; re-check before relying on the captured list.
+## Exact remaining v0.2 work
 
-## Exact remaining work
+1. **Optional evidence-at-rest encryption.** Design and implement age/X25519
+   segment encryption behind an explicit opt-in. It must fail closed, never
+   silently write plaintext, preserve the disabled path byte-for-byte, and cover
+   restart, wrong-key, corruption, truncation, rotation, retention and recovery.
+2. **Final release-readiness audit.** Re-run every required gate on the resulting
+   `master`, reconcile all product/security/deployment claims, and leave release
+   publication, tags, signing and real-cluster operation explicitly unexecuted
+   unless separately approved.
+3. **Dependency PR triage.** Review open Dependabot PRs against the repository's
+   immutable-reference and whole-toolchain policies. Do not merge a Docker-only
+   Go major-version bump as if it were a complete supported-toolchain upgrade.
 
-`docs/BACKLOG.md` is authoritative. P0 export correctness, lifecycle races,
-claim drift, ECS export, the SSH deception slice, and supply-chain hardening are
-closed through PR #47: local gates passed and independent CI generated,
-validated, and reproduced the real application SBOM while also passing the
-pinned vulnerability scan. The dry-run recommendation model is implemented and
-verified locally and by PR #51 CI, then merged as `86041b8`. The demo slice is
-verified locally, independently and by PR #52 CI, then merged as `1911678`.
-The observer-only extension boundary merged in PR #53. Per-sensor process
-isolation is implemented and passes its local focused, race, fuzz, full-suite,
-cross-build, Helm and repository-hygiene gates; PR CI and merge remain. Optional
-at-rest encryption is architecture-complete but dependency acquisition remains
-approval-gated. The final v0.2 audit follows those delivery gates.
+`docs/BACKLOG.md` is the authoritative current queue. The previous cumulative
+queue and verification ledger are preserved in timestamped history files.
+
+## Product direction
+
+The intended commercial model is an Apache-2.0, self-hostable defensive core
+plus a future managed SaaS/control plane. Plausible hosted value includes fleet
+management, authenticated enrollment, tenant isolation, SSO/RBAC, collaborative
+investigation, searchable retention, audit administration, managed upgrades and
+support. None of those control-plane or multi-tenant capabilities is shipped or
+claimed today; they require separate authorization and threat models.
+
+## Non-obvious invariants
+
+- Authoritative storage append succeeds before webhook, extension or correlation
+  offers. A failed append suppresses fan-out.
+- Derived correlation signals append directly to storage and never re-enter
+  `Bus.Submit`; they do not currently reach webhooks or extensions. Adding that
+  delivery is new egress and needs explicit approval.
+- Provider and extension output are untrusted data. Neither can select commands,
+  paths, configuration, evidence meaning or enforcement.
+- Native evidence is the source contract. ECS export and recommendations are
+  read-boundary projections.
+- Evidence hashes prove observation-payload consistency only, not writer
+  identity, metadata integrity, provenance or chain of custody.
+- SSH authentication is synthetic. Usernames and credential contents are
+  omitted, all channels/global requests are rejected, and host keys are
+  ephemeral in memory.
+- Process workers receive no config-selected executable, argv, path, credential,
+  remote-provider destination or enforcement authority.
+
+## Known boundaries
+
+- Evidence is plaintext at rest until the remaining encryption slice lands.
+- There is no Telnet/database sensor, decoy-listener TLS, distributed mesh,
+  public control API, multi-tenancy, web console or autonomous response path.
+- Helm is verified packaging, not verified real-cluster support.
+- No v0.2 tag, GitHub release, published image, binary signature or executed
+  provenance statement exists.
+- The local macOS checkout named by the operator is not mounted in every agent
+  environment. Record local commands as `BLOCKED` rather than inferring them;
+  hosted CI can provide independent evidence but does not retroactively turn an
+  unrun local command into `PASS`.
 
 ## Commands that matter
 
 ```text
 make lint test
-go test -race -count=20 ./internal/event ./internal/webhook ./internal/extmanager
-go test ./internal/ecsexport ./internal/cli -run 'TestMarshal|TestInspectExport' -count=1
-go test ./internal/recommend ./internal/cli -run 'TestGenerate|TestRecommendation|TestRecommend' -count=1
-go test -race ./internal/storage ./internal/recommend ./internal/cli ./internal/sensor/httpsensor ./internal/sensor/tcpsensor -count=1
-go test -race ./internal/demo ./internal/cli ./internal/runtime -run 'TestDemo|TestRunEndToEnd|TestRunParallel|TestSystemEndpoints' -count=3
 make fuzz-seed
 make helm-contract
 make supply-chain-check
 make sbom sbom-check
 make vuln
-./scripts/license-check.sh
-./scripts/secrets-scan.sh
+make license-check secrets-scan
+go mod verify
+git diff --check
 ```
 
-## Suggested skills
+For encryption work, add focused storage/config/CLI tests, wrong-key and
+corruption cases, restart/rotation/retention integration, affected-package race
+runs, dependency/license review and exact CLI argument matrices.
 
-Use `$research` for primary-source refreshes, `$architect` and `$blast-radius`
-for new trust boundaries, `$diagnosing-bugs` for red-capable regressions,
-`$deslop` on each task diff, and `$show-me-your-work` plus `$handoff` for the
-verification trail.
+## External-state rules
+
+PRs, merges and integrated-branch cleanup are authorized for this engineering
+run. Release publication, tags, signing credentials, repository settings,
+real-cluster deployment and any new runtime destination or signal egress remain
+separate actions and must not be inferred from that authorization.
