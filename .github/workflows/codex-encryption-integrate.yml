@@ -1,0 +1,95 @@
+name: codex-encryption-integrate
+
+on:
+  push:
+    branches:
+      - codex/evidence-at-rest-age
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Verify feature identity
+        run: |
+          test "${GITHUB_REF_NAME}" = "codex/evidence-at-rest-age"
+          grep -q 'filippo.io/age' go.mod
+          grep -Rqs 'jsonl.age' internal
+          test -f docs/verification.md
+      - name: Full repository gates
+        run: |
+          make lint test
+          make fuzz-seed
+          make helm-contract
+          make vuln
+          make license-check secrets-scan
+          make supply-chain-check
+          make sbom sbom-check
+          go mod verify
+          git diff --check
+      - name: Remove temporary integration workflow
+        id: cleanup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/codex-encryption-integrate.yml
+          git commit -m 'chore(ci): remove temporary encryption integration gate'
+          git push origin HEAD:codex/evidence-at-rest-age
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Wait for exact-head CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.cleanup.outputs.sha }}
+        run: |
+          set -eu
+          deadline=$((SECONDS+1200))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            run_id=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=30" --jq '.workflow_runs[] | select(.name == "ci") | .id' | head -1)
+            if [ -n "$run_id" ]; then
+              status=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')
+              [ "$status" = completed ] && break
+            fi
+            sleep 15
+          done
+          test -n "${run_id:-}"
+          jobs=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100")
+          printf '%s' "$jobs" | python3 -c '
+import json, sys
+expected = {
+    "fmt, vet, build, test (-race)",
+    "fuzz seeds (bounded)",
+    "helm chart contract",
+    "govulncheck",
+    "dependency licenses + secret scan",
+    "supply-chain contracts",
+}
+seen = {j["name"]: j.get("conclusion") for j in json.load(sys.stdin).get("jobs", [])}
+missing = expected - seen.keys()
+bad = {k: seen.get(k) for k in expected if seen.get(k) != "success"}
+if missing or bad:
+    raise SystemExit(f"CI gate failed: missing={sorted(missing)} bad={bad}")
+'
+      - name: Merge exact reviewed feature head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.cleanup.outputs.sha }}
+        run: |
+          set -eu
+          pr=$(gh api "/repos/${GITHUB_REPOSITORY}/pulls?state=open&head=metaforismo:codex/evidence-at-rest-age&base=master" --jq '.[0].number')
+          test -n "$pr"
+          current=$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq '.head.sha')
+          test "$current" = "$HEAD_SHA"
+          gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$HEAD_SHA"
