@@ -1,0 +1,103 @@
+name: codex-promote-evidence-encryption-v2
+
+on:
+  push:
+    branches:
+      - codex/evidence-encryption-promote-v2
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Locate, verify and promote
+        run: |
+          set -euo pipefail
+
+          master_sha=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          master_go_mod=$(gh api "repos/$REPO/contents/go.mod?ref=$master_sha" --jq .content | base64 --decode)
+          if grep -q '^\s*filippo.io/age ' <<<"$master_go_mod"; then
+            echo "evidence encryption already present on master $master_sha"
+          else
+            prs=$(gh api "repos/$REPO/pulls?state=open&head=metaforismo:codex/evidence-at-rest-age-review&per_page=10")
+            test "$(jq length <<<"$prs")" -eq 1
+            pr=$(jq -r '.[0].number' <<<"$prs")
+            pr_json=$(jq '.[0]' <<<"$prs")
+            test "$(jq -r .draft <<<"$pr_json")" = true
+            test "$(jq -r .base.ref <<<"$pr_json")" = master
+            test "$(jq -r .head.ref <<<"$pr_json")" = codex/evidence-at-rest-age-review
+            head_sha=$(jq -r .head.sha <<<"$pr_json")
+            test -n "$head_sha"
+
+            files=$(gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100" --jq '.[].filename')
+            test -n "$files"
+            if grep -Eq '^\.codex/|^\.github/workflows/codex-' <<<"$files"; then
+              echo 'temporary transport file present in encryption PR' >&2
+              exit 1
+            fi
+            grep -Eq '^internal/storage/' <<<"$files"
+            grep -qx 'go.mod' <<<"$files"
+            grep -qx 'go.sum' <<<"$files"
+
+            head_tree=$(gh api "repos/$REPO/git/commits/$head_sha" --jq .tree.sha)
+            required=$(printf '%s\n' \
+              'fmt, vet, build, test (-race)' \
+              'fuzz seeds (bounded)' \
+              'helm chart contract' \
+              'govulncheck' \
+              'dependency licenses + secret scan' \
+              'supply-chain contracts' | sort)
+
+            run_id=''
+            for _ in $(seq 1 240); do
+              runs=$(gh api "repos/$REPO/actions/runs?head_sha=$head_sha&event=pull_request&per_page=50")
+              run_id=$(jq -r --arg sha "$head_sha" '.workflow_runs[] | select(.name == "ci" and .head_sha == $sha) | .id' <<<"$runs" | head -n1)
+              if [ -n "$run_id" ]; then
+                state=$(gh api "repos/$REPO/actions/runs/$run_id")
+                status=$(jq -r .status <<<"$state")
+                conclusion=$(jq -r '.conclusion // ""' <<<"$state")
+                if [ "$status" = completed ]; then
+                  test "$conclusion" = success
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test -n "$run_id"
+
+            jobs=$(gh api "repos/$REPO/actions/runs/$run_id/jobs?per_page=100")
+            actual=$(jq -r '.jobs[] | select(.conclusion == "success") | .name' <<<"$jobs" | sort)
+            test "$actual" = "$required"
+            test "$(jq '[.jobs[] | select(.conclusion != "success")] | length' <<<"$jobs")" -eq 0
+
+            gh pr ready "$pr" --repo "$REPO"
+            gh pr comment "$pr" --repo "$REPO" --body "Exact-head promotion PASS for \`$head_sha\`: the product diff is transport-free and all six pinned CI jobs succeeded in run \`$run_id\`."
+            result=$(jq -n --arg sha "$head_sha" '{sha:$sha,merge_method:"squash",commit_title:"feat(storage): encrypt evidence at rest with age/X25519",commit_message:"Add opt-in, bounded native age/X25519 evidence segments with explicit identity-based reads, fail-closed corruption handling, mixed-history retention, and documented recovery semantics. Preserve the plaintext default and add no runtime egress or enforcement authority."}' \
+              | gh api --method PUT "repos/$REPO/pulls/$pr/merge" --input -)
+            test "$(jq -r .merged <<<"$result")" = true
+            merge_sha=$(jq -r .sha <<<"$result")
+            master_after=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+            test "$master_after" = "$merge_sha"
+            master_tree=$(gh api "repos/$REPO/git/commits/$merge_sha" --jq .tree.sha)
+            test "$master_tree" = "$head_tree"
+          fi
+
+          for branch in \
+            codex/evidence-at-rest-age-review \
+            codex/evidence-at-rest-age-v1 \
+            codex/evidence-encryption-promote \
+            codex/ext-digest-test-stability; do
+            encoded=${branch//\//%2F}
+            gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
+          done
+          encoded=${GITHUB_REF_NAME//\//%2F}
+          gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
