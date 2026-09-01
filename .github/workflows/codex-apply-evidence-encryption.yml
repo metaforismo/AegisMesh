@@ -1,4 +1,4 @@
-name: codex-apply-evidence-encryption
+name: codex-recover-evidence-encryption
 
 on:
   push:
@@ -6,56 +6,73 @@ on:
       - codex/evidence-at-rest-age-v1
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply-and-gate:
-    if: github.actor != 'github-actions[bot]'
+  recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      GOTOOLCHAIN: local
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: codex/evidence-at-rest-age-v1
           fetch-depth: 20
-          persist-credentials: true
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+          persist-credentials: false
+      - name: Recover every decompressible byte
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import pathlib
+          import zlib
+
+          parts = sorted(pathlib.Path('.codex').glob('encryption.part*'))
+          if not parts:
+              raise SystemExit('no encryption payload parts')
+          encoded = ''.join(''.join(path.read_text().split()) for path in parts)
+          payload = base64.b64decode(encoded, validate=True)
+          stream = zlib.decompressobj(16 + zlib.MAX_WBITS)
+          recovered = stream.decompress(payload)
+          try:
+              recovered += stream.flush()
+          except zlib.error:
+              pass
+          pathlib.Path('encryption.payload.gz').write_bytes(payload)
+          pathlib.Path('encryption.partial.mbox').write_bytes(recovered)
+          report = [
+              f'parts={len(parts)}',
+              f'encoded_bytes={len(encoded)}',
+              f'payload_bytes={len(payload)}',
+              f'payload_sha256={hashlib.sha256(payload).hexdigest()}',
+              f'recovered_bytes={len(recovered)}',
+              f'recovered_sha256={hashlib.sha256(recovered).hexdigest()}',
+              f'gzip_eof={stream.eof}',
+              f'unused_data_bytes={len(stream.unused_data)}',
+              f'unconsumed_tail_bytes={len(stream.unconsumed_tail)}',
+              f'from_lines={sum(line.startswith(b"From ") for line in recovered.splitlines())}',
+              f'subject_lines={sum(line.startswith(b"Subject: [PATCH") for line in recovered.splitlines())}',
+          ]
+          pathlib.Path('recovery-report.txt').write_text('\n'.join(report) + '\n')
+          print('\n'.join(report))
+          if not recovered:
+              raise SystemExit('payload yielded no recoverable mbox bytes')
+          PY
+          git archive --format=tar.gz --output=source-master.tgz 01579d3073d7497ea7ba83e684c92016c2a2da5f
+          {
+            cat recovery-report.txt
+            printf '\nsubjects:\n'
+            grep -n '^Subject: \[PATCH' encryption.partial.mbox || true
+            printf '\ntail:\n'
+            tail -n 120 encryption.partial.mbox
+          } | tee recovery-diagnostics.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          go-version-file: go.mod
-      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
-        with:
-          version: 'v4.2.2'
-      - name: Reconstruct and apply reviewed series
-        run: |
-          test "$(git merge-base HEAD 01579d3073d7497ea7ba83e684c92016c2a2da5f)" = 01579d3073d7497ea7ba83e684c92016c2a2da5f
-          find .codex -maxdepth 1 -type f -name 'encryption.part*' -print0 | sort -z | xargs -0 cat \
-            | tr -d '\r\n ' | base64 --decode | gzip --decompress > "$RUNNER_TEMP/encryption.mbox"
-          test -s "$RUNNER_TEMP/encryption.mbox"
-          grep -q '^Subject: \[PATCH' "$RUNNER_TEMP/encryption.mbox"
-          git reset --hard 01579d3073d7497ea7ba83e684c92016c2a2da5f
-          git am --3way "$RUNNER_TEMP/encryption.mbox"
-          test ! -e .codex
-          test ! -e .github/workflows/codex-apply-evidence-encryption.yml
-          git diff --check 01579d3073d7497ea7ba83e684c92016c2a2da5f..HEAD
-      - name: Focused encryption and CLI tests
-        run: |
-          go test ./internal/storage ./internal/config -count=1
-          go test ./internal/cli ./internal/runtime -count=1
-          go test -race ./internal/storage ./internal/config -count=1
-          go test -race ./internal/cli ./internal/runtime -count=1
-      - name: Repository gates
-        run: |
-          make lint test
-          make fuzz-seed
-          make helm-contract
-          make vuln
-          make license-check
-          make secrets-scan
-          make supply-chain-check
-          make sbom sbom-check
-          go mod verify
-          git diff --check 01579d3073d7497ea7ba83e684c92016c2a2da5f..HEAD
-      - name: Publish exact gated series
-        run: git push --force-with-lease origin HEAD:codex/evidence-at-rest-age-v1
+          name: encryption-recovery
+          path: |
+            encryption.payload.gz
+            encryption.partial.mbox
+            recovery-report.txt
+            recovery-diagnostics.txt
+            source-master.tgz
+          if-no-files-found: error
+          retention-days: 1
