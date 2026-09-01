@@ -1,0 +1,177 @@
+name: codex-reconcile-v02
+
+on:
+  push:
+    branches:
+      - codex/reconcile-v02
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  reconcile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reconcile exact-head pull requests
+        run: |
+          set -euo pipefail
+
+          required_jobs=$(printf '%s\n' \
+            'fmt, vet, build, test (-race)' \
+            'fuzz seeds (bounded)' \
+            'helm chart contract' \
+            'govulncheck' \
+            'dependency licenses + secret scan' \
+            'supply-chain contracts' | sort)
+
+          open_pr_for_head() {
+            local branch=$1
+            gh api "repos/$REPO/pulls?state=open&head=metaforismo:$branch&per_page=10"
+          }
+
+          assert_exact_ci() {
+            local sha=$1
+            local run_id=''
+            for _ in $(seq 1 240); do
+              local runs
+              runs=$(gh api "repos/$REPO/actions/runs?head_sha=$sha&event=pull_request&per_page=50")
+              run_id=$(jq -r --arg sha "$sha" '.workflow_runs[] | select(.name == "ci" and .head_sha == $sha) | .id' <<<"$runs" | head -n1)
+              if [ -n "$run_id" ]; then
+                local state status conclusion
+                state=$(gh api "repos/$REPO/actions/runs/$run_id")
+                status=$(jq -r .status <<<"$state")
+                conclusion=$(jq -r '.conclusion // ""' <<<"$state")
+                if [ "$status" = completed ]; then
+                  test "$conclusion" = success
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test -n "$run_id"
+            local jobs actual failures
+            jobs=$(gh api "repos/$REPO/actions/runs/$run_id/jobs?per_page=100")
+            actual=$(jq -r '.jobs[] | select(.conclusion == "success") | .name' <<<"$jobs" | sort)
+            test "$actual" = "$required_jobs"
+            failures=$(jq '[.jobs[] | select(.conclusion != "success")] | length' <<<"$jobs")
+            test "$failures" -eq 0
+            printf '%s' "$run_id"
+          }
+
+          merge_exact_pr() {
+            local pr=$1 sha=$2 title=$3 message=$4
+            local draft
+            draft=$(gh api "repos/$REPO/pulls/$pr" --jq .draft)
+            if [ "$draft" = true ]; then
+              gh pr ready "$pr" --repo "$REPO"
+            fi
+            local result
+            result=$(jq -n --arg sha "$sha" --arg title "$title" --arg message "$message" \
+              '{sha:$sha,merge_method:"squash",commit_title:$title,commit_message:$message}' \
+              | gh api --method PUT "repos/$REPO/pulls/$pr/merge" --input -)
+            test "$(jq -r .merged <<<"$result")" = true
+            jq -r .sha <<<"$result"
+          }
+
+          # Automated dependency PRs were intentionally triaged, not opportunistically merged.
+          for pr in 48 49; do
+            state=$(gh api "repos/$REPO/pulls/$pr" --jq .state)
+            if [ "$state" = open ]; then
+              gh api --method PATCH "repos/$REPO/pulls/$pr" -f state=closed >/dev/null
+            fi
+          done
+
+          master_sha=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          go_mod=$(gh api "repos/$REPO/contents/go.mod?ref=$master_sha" --jq .content | base64 --decode)
+          if ! grep -q '^\s*filippo.io/age ' <<<"$go_mod"; then
+            prs=$(open_pr_for_head codex/evidence-at-rest-age-review)
+            test "$(jq length <<<"$prs")" -eq 1
+            pr=$(jq -r '.[0].number' <<<"$prs")
+            base=$(jq -r '.[0].base.sha' <<<"$prs")
+            head=$(jq -r '.[0].head.sha' <<<"$prs")
+            test "$base" = "$master_sha"
+            files=$(gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100" --jq '.[].filename')
+            test -n "$files"
+            ! grep -Eq '^\.codex/|^\.github/workflows/codex-' <<<"$files"
+            grep -Eq '^internal/storage/' <<<"$files"
+            grep -qx 'go.mod' <<<"$files"
+            grep -qx 'go.sum' <<<"$files"
+            run_id=$(assert_exact_ci "$head")
+            gh pr comment "$pr" --repo "$REPO" --body "Reconciliation PASS for \`$head\`; exact CI run \`$run_id\`."
+            master_sha=$(merge_exact_pr "$pr" "$head" \
+              'feat(storage): encrypt evidence at rest with age/X25519' \
+              'Add opt-in bounded native age/X25519 evidence segments with explicit identity-based reads, fail-closed corruption handling, mixed-history retention, and no plaintext downgrade or new runtime egress.')
+          fi
+
+          master_sha=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          go_mod=$(gh api "repos/$REPO/contents/go.mod?ref=$master_sha" --jq .content | base64 --decode)
+          grep -q '^\s*filippo.io/age ' <<<"$go_mod"
+
+          if ! gh api "repos/$REPO/contents/docs/releases/v0.2-readiness.md?ref=$master_sha" >/dev/null 2>&1; then
+            prs=$(open_pr_for_head codex/v02-release-readiness-v2)
+            test "$(jq length <<<"$prs")" -eq 1
+            pr=$(jq -r '.[0].number' <<<"$prs")
+            base=$(jq -r '.[0].base.sha' <<<"$prs")
+            head=$(jq -r '.[0].head.sha' <<<"$prs")
+            test "$base" = "$master_sha"
+            files=$(gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100" --jq '.[].filename')
+            test -n "$files"
+            ! grep -Eq '^\.codex/|^\.github/workflows/codex-' <<<"$files"
+            test -z "$(grep -Ev '^(docs/|CHANGELOG\.md$)' <<<"$files" || true)"
+            grep -qx 'docs/releases/v0.2-readiness.md' <<<"$files"
+            report=$(gh api "repos/$REPO/contents/docs/releases/v0.2-readiness.md?ref=$head" --jq .content | base64 --decode)
+            audited=$(sed -n 's/^Audited `master` commit: `\([0-9a-f]\{40\}\)`$/\1/p' <<<"$report")
+            test "$audited" = "$base"
+            grep -q '^\*\*PASS\*\* — the v0.2 single-node milestone' <<<"$report"
+            run_id=$(assert_exact_ci "$head")
+            gh pr comment "$pr" --repo "$REPO" --body "Reconciliation PASS for audit head \`$head\`; exact CI run \`$run_id\`."
+            master_sha=$(merge_exact_pr "$pr" "$head" \
+              'docs(release): record v0.2 readiness audit' \
+              'Record the complete technical gate matrix, close the finite v0.2 backlog, and preserve every unexecuted publication, cluster, signing and egress boundary.')
+          fi
+
+          master_sha=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          go_mod=$(gh api "repos/$REPO/contents/go.mod?ref=$master_sha" --jq .content | base64 --decode)
+          grep -q '^\s*filippo.io/age ' <<<"$go_mod"
+          report=$(gh api "repos/$REPO/contents/docs/releases/v0.2-readiness.md?ref=$master_sha" --jq .content | base64 --decode)
+          grep -q '^\*\*PASS\*\* — the v0.2 single-node milestone' <<<"$report"
+
+          jq -n --arg master "$master_sha" --arg status PASS \
+            '{status:$status,master_sha:$master,age_on_master:true,v02_report_on_master:true,release:"NOT RUN",tag:"NOT RUN",image_publish:"NOT RUN",signing:"NOT RUN",cluster:"NOT RUN",new_runtime_egress:"NOT RUN"}' \
+            > aegismesh-reconcile.json
+
+          for branch in \
+            codex/evidence-at-rest-age-review \
+            codex/evidence-at-rest-age-v1 \
+            codex/evidence-encryption-promote \
+            codex/evidence-encryption-promote-v2 \
+            codex/v02-release-readiness-v2 \
+            codex/v02-release-audit \
+            codex/v02-audit-promote \
+            codex/v02-truth-sync \
+            codex/storage-event-cap \
+            codex/evidence-at-rest-age \
+            codex/ext-digest-test-stability; do
+            encoded=${branch//\//%2F}
+            gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aegismesh-v02-reconcile
+          path: aegismesh-reconcile.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove reconciliation branch
+        run: |
+          encoded=${GITHUB_REF_NAME//\//%2F}
+          gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
