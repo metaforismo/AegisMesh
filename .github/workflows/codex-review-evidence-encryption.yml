@@ -1,0 +1,65 @@
+name: codex-review-evidence-encryption
+
+on:
+  push:
+    branches:
+      - codex/evidence-at-rest-age-review
+
+permissions:
+  contents: write
+
+jobs:
+  review:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/evidence-at-rest-age-review
+          fetch-depth: 20
+          persist-credentials: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'v4.2.2'
+      - name: Verify product-only diff
+        run: |
+          test "$(git merge-base HEAD 01579d3073d7497ea7ba83e684c92016c2a2da5f)" = 01579d3073d7497ea7ba83e684c92016c2a2da5f
+          changed=$(git diff --name-only 01579d3073d7497ea7ba83e684c92016c2a2da5f..HEAD)
+          test -n "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^\.codex/|^\.github/workflows/codex-'; then
+            echo 'temporary transport file present in product diff' >&2
+            exit 1
+          fi
+          test -f internal/storage/crypto.go -o -f internal/storage/encryption.go -o -f internal/storage/age.go
+          grep -R -q 'filippo.io/age' internal go.mod
+          git diff --check 01579d3073d7497ea7ba83e684c92016c2a2da5f..HEAD
+      - name: Focused security review gates
+        run: |
+          go test ./internal/storage ./internal/config ./internal/cli ./internal/runtime -count=1
+          go test -race ./internal/storage ./internal/config ./internal/cli ./internal/runtime -count=1
+          go test ./internal/storage -run 'Encryption|Encrypted|Identity|WrongKey|Corrupt|Trunc|Retention|Restart|Symlink|FIFO|Special' -count=5
+      - name: Full repository gates
+        run: |
+          make lint test
+          make fuzz-seed
+          make helm-contract
+          make vuln
+          make license-check
+          make secrets-scan
+          make supply-chain-check
+          make sbom sbom-check
+          go mod verify
+      - name: Remove review transport and publish frozen head
+        run: |
+          rm .github/workflows/codex-review-evidence-encryption.yml
+          git config user.name 'metaforismo'
+          git config user.email '39646696+metaforismo@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore(review): remove temporary encryption gate'
+          git push origin HEAD:codex/evidence-at-rest-age-review
