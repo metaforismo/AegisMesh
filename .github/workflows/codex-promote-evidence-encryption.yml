@@ -1,0 +1,128 @@
+name: codex-promote-evidence-encryption
+
+on:
+  push:
+    branches:
+      - codex/evidence-encryption-promote
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: '58'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate pull request boundary
+        id: boundary
+        run: |
+          set -euo pipefail
+          pr_json=$(gh api "repos/$REPO/pulls/$PR")
+          test "$(jq -r .state <<<"$pr_json")" = open
+          test "$(jq -r .draft <<<"$pr_json")" = true
+          test "$(jq -r .base.ref <<<"$pr_json")" = master
+          test "$(jq -r .head.ref <<<"$pr_json")" = codex/evidence-at-rest-age-review
+          head_sha=$(jq -r .head.sha <<<"$pr_json")
+          test -n "$head_sha"
+
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')
+          test -n "$files"
+          if grep -Eq '^\.codex/|^\.github/workflows/codex-' <<<"$files"; then
+            echo 'temporary transport file present in PR' >&2
+            exit 1
+          fi
+          grep -Eq '^internal/storage/' <<<"$files"
+          grep -qx 'go.mod' <<<"$files"
+          grep -qx 'go.sum' <<<"$files"
+
+          head_tree=$(gh api "repos/$REPO/git/commits/$head_sha" --jq .tree.sha)
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "head_tree=$head_tree" >> "$GITHUB_OUTPUT"
+      - name: Wait for exact-head CI
+        id: ci
+        env:
+          HEAD_SHA: ${{ steps.boundary.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          required=$(printf '%s\n' \
+            'fmt, vet, build, test (-race)' \
+            'fuzz seeds (bounded)' \
+            'helm chart contract' \
+            'govulncheck' \
+            'dependency licenses + secret scan' \
+            'supply-chain contracts' | sort)
+
+          run_id=''
+          for _ in $(seq 1 180); do
+            runs=$(gh api "repos/$REPO/actions/runs?head_sha=$HEAD_SHA&event=pull_request&per_page=50")
+            run_id=$(jq -r --arg sha "$HEAD_SHA" '.workflow_runs[] | select(.name == "ci" and .head_sha == $sha) | .id' <<<"$runs" | head -n1)
+            if [ -n "$run_id" ]; then
+              state=$(gh api "repos/$REPO/actions/runs/$run_id")
+              status=$(jq -r .status <<<"$state")
+              conclusion=$(jq -r '.conclusion // ""' <<<"$state")
+              if [ "$status" = completed ]; then
+                test "$conclusion" = success
+                break
+              fi
+            fi
+            sleep 10
+          done
+          test -n "$run_id"
+
+          jobs=$(gh api "repos/$REPO/actions/runs/$run_id/jobs?per_page=100")
+          actual=$(jq -r '.jobs[] | select(.conclusion == "success") | .name' <<<"$jobs" | sort)
+          test "$actual" = "$required"
+          failures=$(jq '[.jobs[] | select(.conclusion != "success")] | length' <<<"$jobs")
+          test "$failures" -eq 0
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      - name: Mark ready and merge exact SHA
+        id: merge
+        env:
+          HEAD_SHA: ${{ steps.boundary.outputs.head_sha }}
+          RUN_ID: ${{ steps.ci.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          gh pr ready "$PR" --repo "$REPO"
+          gh pr comment "$PR" --repo "$REPO" --body "Exact-head gate PASS for \`$HEAD_SHA\`: all six pinned CI jobs succeeded in run \`$RUN_ID\`; product diff contains no temporary transport files."
+          result=$(jq -n --arg sha "$HEAD_SHA" '{sha:$sha,merge_method:"squash",commit_title:"feat(storage): encrypt evidence at rest with age/X25519",commit_message:"Add opt-in, bounded native age/X25519 evidence segments with explicit identity-based reads, fail-closed corruption handling, mixed-history retention, and documented recovery semantics. Preserve the plaintext default and add no runtime egress or enforcement authority."}' \
+            | gh api --method PUT "repos/$REPO/pulls/$PR/merge" --input -)
+          test "$(jq -r .merged <<<"$result")" = true
+          merge_sha=$(jq -r .sha <<<"$result")
+          test -n "$merge_sha"
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+      - name: Verify tested tree reached master
+        env:
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+          HEAD_TREE: ${{ steps.boundary.outputs.head_tree }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            master_sha=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+            [ "$master_sha" = "$MERGE_SHA" ] && break
+            sleep 2
+          done
+          test "$master_sha" = "$MERGE_SHA"
+          master_tree=$(gh api "repos/$REPO/git/commits/$MERGE_SHA" --jq .tree.sha)
+          test "$master_tree" = "$HEAD_TREE"
+      - name: Clean integrated branches
+        run: |
+          set -euo pipefail
+          for branch in \
+            codex/evidence-at-rest-age-review \
+            codex/evidence-at-rest-age-v1 \
+            codex/ext-digest-test-stability; do
+            encoded=${branch//\//%2F}
+            gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" || true
+          done
+          encoded=${GITHUB_REF_NAME//\//%2F}
+          gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" || true
