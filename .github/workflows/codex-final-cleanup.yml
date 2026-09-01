@@ -1,0 +1,53 @@
+name: codex-final-cleanup
+
+on:
+  push:
+    branches:
+      - codex/final-cleanup
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Verify completed master and delete only integrated or temporary branches
+        run: |
+          set -euo pipefail
+          master=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          go_mod=$(gh api "repos/$REPO/contents/go.mod?ref=$master" --jq .content | base64 --decode)
+          grep -q '^\s*filippo.io/age ' <<<"$go_mod"
+          report=$(gh api "repos/$REPO/contents/docs/releases/v0.2-readiness.md?ref=$master" --jq .content | base64 --decode)
+          grep -q '^\*\*PASS\*\* — the v0.2 single-node milestone' <<<"$report"
+
+          open_heads=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq '.[].head.ref')
+          for branch in \
+            codex/evidence-at-rest-age-review \
+            codex/evidence-at-rest-age-v1 \
+            codex/evidence-encryption-promote \
+            codex/evidence-encryption-promote-v2 \
+            codex/v02-release-readiness-v2 \
+            codex/v02-release-audit \
+            codex/v02-audit-promote \
+            codex/reconcile-v02 \
+            codex/v02-truth-sync \
+            codex/storage-event-cap \
+            codex/evidence-at-rest-age \
+            codex/ext-digest-test-stability; do
+            if grep -qx "$branch" <<<"$open_heads"; then
+              echo "retain open PR head $branch" >&2
+              exit 1
+            fi
+            encoded=${branch//\//%2F}
+            gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
+          done
+
+          encoded=${GITHUB_REF_NAME//\//%2F}
+          gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
