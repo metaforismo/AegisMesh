@@ -32,10 +32,9 @@ jobs:
           tab = chr(9)
           nl = chr(10)
           old = (
-              tab + "corrupt := append(readFile(t, exe), '\\n')" + nl
-              + tab + "if err := os.WriteFile(exe, corrupt, 0o755); err != nil {" + nl
-              + tab + tab + "t.Fatal(err)" + nl
-              + tab + "}" + nl
+              tab + "corrupt := readFile(t, exe)" + nl
+              + tab + "corrupt = append(corrupt, '\\n')" + nl
+              + tab + "os.WriteFile(exe, corrupt, 0o755)" + nl
           )
           new = (
               tab + "corrupt := append(readFile(t, exe), '\\n')" + nl
