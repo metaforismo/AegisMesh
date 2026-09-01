@@ -340,9 +340,14 @@ func TestExtVerifyDigestMatchAndMismatch(t *testing.T) {
 		}
 	}
 
-	corrupt := readFile(t, exe)
-	corrupt = append(corrupt, '\n')
-	os.WriteFile(exe, corrupt, 0o755)
+	corrupt := append(readFile(t, exe), '\n')
+	replacement := filepath.Join(dir, "corrupt-ext")
+	if err := os.WriteFile(replacement, corrupt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, exe); err != nil {
+		t.Fatal(err)
+	}
 	code, _, stderr = run(t, "ext", "verify", "--manifest", manifest)
 	if code == 0 || !strings.Contains(stderr, "mismatch") {
 		t.Fatalf("modified artifact must fail verification: code=%d err=%q", code, stderr)
