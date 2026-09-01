@@ -1,0 +1,347 @@
+name: codex-v02-release-audit-v3
+
+on:
+  push:
+    branches:
+      - codex/v02-release-readiness-v3
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  audit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GOTOOLCHAIN: local
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/v02-release-readiness-v3
+          fetch-depth: 50
+          persist-credentials: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'v4.2.2'
+      - name: Establish post-encryption base
+        id: base
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          base=$(git rev-parse origin/master)
+          test "$(git merge-base HEAD "$base")" = "$base"
+          test "$(git rev-list --count "$base"..HEAD)" -eq 1
+          grep -q '^\s*filippo.io/age ' go.mod
+          grep -R -q '\.jsonl\.age\|segmentEncryptedExt\|encryptedSegment' internal/storage
+
+          merged=$(gh api "repos/$REPO/pulls?state=closed&head=metaforismo:codex/evidence-at-rest-age-review&per_page=20" \
+            | jq '[.[] | select(.merged_at != null)] | sort_by(.merged_at) | last')
+          test "$merged" != null
+          encryption_pr=$(jq -r .number <<<"$merged")
+          encryption_merge=$(jq -r .merge_commit_sha <<<"$merged")
+          test -n "$encryption_merge"
+          git merge-base --is-ancestor "$encryption_merge" "$base"
+
+          test "$(gh api "repos/$REPO/pulls/48" --jq .state)" = closed
+          test "$(gh api "repos/$REPO/pulls/49" --jq .state)" = closed
+
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+          echo "encryption_pr=$encryption_pr" >> "$GITHUB_OUTPUT"
+          echo "encryption_merge=$encryption_merge" >> "$GITHUB_OUTPUT"
+      - name: Full repository release gates
+        run: |
+          set -euo pipefail
+          make lint test
+          make fuzz-seed
+          make helm-contract
+          make vuln
+          make license-check
+          make secrets-scan
+          make supply-chain-check
+          make sbom sbom-check
+          go mod verify
+          git diff --check
+      - name: Record post-merge audit and truth-sync
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          ENCRYPTION_PR: ${{ steps.base.outputs.encryption_pr }}
+          ENCRYPTION_MERGE: ${{ steps.base.outputs.encryption_merge }}
+        run: |
+          set -euo pipefail
+          AGE_VERSION=$(go list -m -f '{{.Version}}' filippo.io/age)
+          GO_VERSION=$(go version)
+          HELM_VERSION=$(helm version --short)
+          export AGE_VERSION GO_VERSION HELM_VERSION
+          python3 - <<'PY'
+          from pathlib import Path
+          import datetime
+          import os
+          import re
+
+          base = os.environ['BASE_SHA']
+          short = base[:12]
+          enc_pr = os.environ['ENCRYPTION_PR']
+          enc_merge = os.environ['ENCRYPTION_MERGE']
+          enc_short = enc_merge[:12]
+          age_version = os.environ['AGE_VERSION']
+          go_version = os.environ['GO_VERSION']
+          helm_version = os.environ['HELM_VERSION']
+          today = datetime.date.today().isoformat()
+
+          def read(path: str) -> tuple[Path, str]:
+              p = Path(path)
+              return p, p.read_text(encoding='utf-8')
+
+          report_path = Path('docs/releases/v0.2-readiness.md')
+          report_path.parent.mkdir(parents=True, exist_ok=True)
+          report_path.write_text(f'''# v0.2 release-readiness audit
+
+Audited: {today}
+
+Audited `master` commit: `{base}`
+
+Evidence-at-rest encryption: PR #{enc_pr}, merge commit `{enc_merge}`
+
+## Outcome
+
+**PASS** — the v0.2 single-node milestone satisfies its repository-defined implementation and verification gates on the exact commit above. This is a technical milestone result, not a claim of production readiness, incident certainty, compliance certification, or real-cluster support.
+
+## Executed gates
+
+| Command | Result |
+|---|---|
+| `make lint test` | PASS |
+| `make fuzz-seed` | PASS |
+| `make helm-contract` | PASS |
+| `make vuln` | PASS |
+| `make license-check` | PASS |
+| `make secrets-scan` | PASS |
+| `make supply-chain-check` | PASS |
+| `make sbom sbom-check` | PASS |
+| `go mod verify` | PASS |
+| `git diff --check` | PASS |
+
+Tool evidence:
+
+- `{go_version}`
+- `{helm_version}`
+- `filippo.io/age {age_version}`
+
+The audit branch adds documentation only after these commands succeed. Normal pull-request CI must still pass on the exact documentation head before this record reaches `master`.
+
+## Verified milestone surface
+
+- bounded HTTP, TCP, MCP and authentication-only SSH deception sensors;
+- strict configuration, loopback/unprivileged defaults and redaction;
+- deterministic local and opt-in bounded remote providers;
+- bounded native evidence with rotation, retention and integrity checks;
+- optional native age/X25519 evidence-at-rest encryption with explicit identities and no plaintext downgrade;
+- ECS-compatible local projection preserving the native envelope;
+- deterministic evidence-linked dry-run recommendations;
+- observe-only verified extensions and opt-in signed webhooks;
+- optional fixed same-binary sensor fault containment;
+- synthetic four-sensor demo;
+- Docker/Compose and contract-tested Helm packaging;
+- immutable workflow references, vulnerability/license/secret gates and deterministic CycloneDX SBOM generation.
+
+## Known boundaries retained
+
+- A decoy activation and every recommendation remain observations, not proof of an incident.
+- Encrypted segment filenames, sizes and timing metadata remain visible. Exported NDJSON is plaintext unless protected separately by the operator.
+- Process isolation is fault containment, not a network, filesystem, syscall, resource or malware sandbox.
+- Helm is verified packaging; no real-cluster support claim is made.
+- There is no distributed mesh, hosted control plane, multi-tenancy, billing, public administration API, web console or autonomous enforcement path in v0.2.
+
+## External actions
+
+| Action | Result |
+|---|---|
+| Git tag | NOT RUN |
+| GitHub release | NOT RUN |
+| Artifact or image publication | NOT RUN |
+| Signing/provenance publication | NOT RUN |
+| Repository-setting change | NOT RUN |
+| Real-cluster deployment | NOT RUN |
+| New runtime egress | NOT RUN |
+
+Those are separate operator decisions. Passing this audit does not authorize them.
+
+## Dependency triage
+
+- Dependabot PR #48 was closed because it changed only the Docker Go major version and would have made the module, CI, release and container toolchains inconsistent.
+- Dependabot PR #49 was closed because it combined two Action major upgrades, including the tag-only publication path, without a no-publication fixture that exercises the changed behavior.
+- A future toolchain or release-action upgrade remains valid work, but must be submitted as an explicit whole-boundary slice.
+''', encoding='utf-8')
+
+          p, text = read('docs/ROADMAP.md')
+          for number, title in [
+              ('5', 'Optional evidence-at-rest encryption.'),
+              ('9', 'v0.2 release-readiness audit.'),
+          ]:
+              pattern = rf'({number}\. \[)[ x](\] \*\*{re.escape(title)}\*\*)'
+              text, n = re.subn(pattern, r'\1x\2', text, count=1)
+              if n != 1:
+                  raise SystemExit(f'ROADMAP item {number} not found exactly once')
+          p.write_text(text, encoding='utf-8')
+
+          p, text = read('docs/DELIVERY-PLAN.md')
+          lines = text.splitlines()
+          found6 = found9 = False
+          for i, line in enumerate(lines):
+              if line.startswith('| 6 | Optional evidence-at-rest encryption |'):
+                  parts = line.split('|')
+                  if len(parts) < 7:
+                      raise SystemExit('unexpected delivery-plan row 6 shape')
+                  parts[-2] = f' MERGED — PR #{enc_pr}, `{enc_short}` '
+                  lines[i] = '|'.join(parts)
+                  found6 = True
+              elif line.startswith('| 9 | v0.2 release-readiness audit |'):
+                  parts = line.split('|')
+                  if len(parts) < 7:
+                      raise SystemExit('unexpected delivery-plan row 9 shape')
+                  parts[-2] = f' PASS — audited base `{short}`; record pending docs PR '
+                  lines[i] = '|'.join(parts)
+                  found9 = True
+          if not (found6 and found9):
+              raise SystemExit('delivery-plan rows 6/9 not found')
+          p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+          p, text = read('docs/BACKLOG.md')
+          def close_section(text: str, heading_pattern: str, evidence: str) -> str:
+              match = re.search(heading_pattern + r'.*?(?=\n### |\n## |\Z)', text, flags=re.S)
+              if not match:
+                  raise SystemExit(f'backlog section not found: {heading_pattern}')
+              section = match.group(0)
+              section = re.sub(r'(### .*? — )(?:TODO|IN PROGRESS|BLOCKED|FAIL|NOT RUN|PASS)', r'\1PASS', section, count=1)
+              status = f'- **Status:** **PASS** — {evidence}'
+              if re.search(r'- \*\*Status:\*\*.*', section):
+                  section = re.sub(r'- \*\*Status:\*\*.*', status, section, count=1)
+              else:
+                  section = section.rstrip() + '\n' + status + '\n'
+              return text[:match.start()] + section + text[match.end():]
+
+          text = close_section(text, r'### P1-1 — optional evidence-at-rest encryption — ', f'merged in PR #{enc_pr} as `{enc_short}` and reverified by the v0.2 audit.')
+          text = close_section(text, r'### P1-2 — final v0\.2 release-readiness audit — ', f'all repository gates passed on audited master `{short}`; see `docs/releases/v0.2-readiness.md`.')
+          text = close_section(text, r'### P1-3 — automated dependency PR triage — ', 'PRs #48 and #49 were reviewed and closed with explicit whole-boundary follow-up requirements; neither was merged opportunistically.')
+          p.write_text(text, encoding='utf-8')
+
+          Path('docs/HANDOFF.md').write_text(f'''# HANDOFF — v0.2 verified state
+
+Updated: {today}.
+
+Read `AGENTS.md`, then `docs/releases/v0.2-readiness.md`, then `docs/ROADMAP.md` before changing code.
+
+## Authoritative baseline
+
+- Repository: `metaforismo/AegisMesh`
+- Default branch: `master`
+- Audited implementation commit: `{base}`
+- Evidence-at-rest encryption: PR #{enc_pr}, merge `{enc_merge}`
+- Technical v0.2 audit: **PASS** on the implementation commit above
+
+The documentation-only audit record must pass normal pull-request CI before it reaches `master`. Re-check public repository state before relying on these values.
+
+## What v0.2 ships
+
+- bounded HTTP, TCP, MCP and authentication-only SSH sensors;
+- strict configuration, loopback/unprivileged defaults, redaction and explicit resource caps;
+- deterministic local and opt-in remote providers whose output remains untrusted response data;
+- native evidence rotation, retention and integrity checks;
+- optional native age/X25519 evidence-at-rest encryption, disabled by default, with explicit identity-based reads and no silent plaintext downgrade;
+- ECS-compatible local export preserving the native envelope;
+- deterministic evidence-linked dry-run recommendations;
+- observe-only verified subprocess extensions and opt-in signed webhooks;
+- optional same-binary per-sensor fault containment;
+- a synthetic four-sensor demo;
+- Docker/Compose and contract-tested Helm packaging;
+- immutable CI/release references, vulnerability/license/secret gates and deterministic CycloneDX SBOM generation.
+
+## Security invariants
+
+- A canary activation or recommendation is an observation, not proof of an incident.
+- Attacker, model, configuration and extension data cannot select commands, filesystem paths, configuration mutation or production enforcement.
+- Provider and extension output remain untrusted data.
+- Native evidence is authoritative; ECS and recommendations are read-boundary projections.
+- Encrypted segment metadata remains visible, and exported NDJSON is plaintext unless separately protected.
+- Process isolation contains first-party sensor crashes; it is not a sandbox.
+- Derived correlation signals append directly to storage and do not re-enter `Bus.Submit` or fan out externally.
+
+## Product direction after v0.2
+
+Build the provider-independent hosted control-plane kernel before dashboards or billing: durable `Thread`, `Specification`, `Task`, `WorkUnit`, `Run`, `ArtifactSet`, `Review`, `Approval` and `EvidenceBundle` state machines with idempotency, leases, optimistic concurrency, exact artifact binding and Builder/Reviewer separation.
+
+The Apache-2.0 data plane must remain independently operable. A managed SaaS may later add fleet enrollment, tenant isolation, SSO/RBAC, collaborative investigation, managed retention, upgrades and support, but no hosted control plane or remote command channel ships in v0.2.
+
+## Explicitly unexecuted
+
+Tags, releases, images, signatures/provenance publication, repository settings, real-cluster deployment and new runtime egress are all `NOT RUN`. They require separate action-time authorization.
+
+## Verification
+
+See [`releases/v0.2-readiness.md`](releases/v0.2-readiness.md) and [`verification.md`](verification.md). The principal commands are:
+
+```text
+make lint test
+make fuzz-seed
+make helm-contract
+make vuln
+make license-check
+make secrets-scan
+make supply-chain-check
+make sbom sbom-check
+go mod verify
+git diff --check
+```
+''', encoding='utf-8')
+
+          p, text = read('docs/verification.md')
+          text = re.sub(r'\n## ' + re.escape(today) + r' — v0\.2 release-readiness audit\n.*?(?=\n## |\Z)', '', text, flags=re.S)
+          section = f'''\n## {today} — v0.2 release-readiness audit
+
+Audited implementation commit: `{base}`. Evidence encryption: PR #{enc_pr}, merge `{enc_merge}`. Complete retained matrix: [`releases/v0.2-readiness.md`](releases/v0.2-readiness.md).
+
+| Check | Result |
+|---|---|
+| Full lint, build and race suite | PASS |
+| Bounded fuzz suite | PASS |
+| Helm packaging contract | PASS |
+| Vulnerability, license and secret gates | PASS |
+| Immutable references and deterministic CycloneDX | PASS |
+| Module integrity and diff hygiene | PASS |
+| Tag, release, image, signature, settings, cluster and new egress | NOT RUN |
+'''
+          insert = text.find('\n## ', text.find('\n') + 1)
+          if insert == -1:
+              text = text.rstrip() + section + '\n'
+          else:
+              text = text[:insert] + section + text[insert:]
+          p.write_text(text, encoding='utf-8')
+
+          p, text = read('docs/PRODUCT.md')
+          text = text.replace('Does not ship yet: evidence-at-rest encryption, ', 'Does not ship yet: ')
+          text = text.replace('Does not ship yet: evidence-at-rest encryption,', 'Does not ship yet:')
+          p.write_text(text, encoding='utf-8')
+
+          p, text = read('CHANGELOG.md')
+          marker = '## Unreleased' if '## Unreleased' in text else '# Changelog'
+          entry = f'''\n\n### v0.2 readiness audit ({today})\n\n- Merged optional native age/X25519 evidence-at-rest encryption in PR #{enc_pr} (`{enc_short}`).\n- Verified the exact implementation `master` tree `{short}` with the complete race, fuzz, Helm, vulnerability, license, secret, supply-chain, SBOM and module-integrity gates.\n- Kept release publication, tags, images, signatures, real-cluster deployment and new runtime egress explicitly unexecuted.\n'''
+          if f'v0.2 readiness audit ({today})' not in text:
+              idx = text.find(marker) + len(marker)
+              text = text[:idx] + entry + text[idx:]
+          p.write_text(text, encoding='utf-8')
+          PY
+
+          rm .github/workflows/codex-v02-release-audit-v3.yml
+          git diff --check
+          git config user.name 'metaforismo'
+          git config user.email '39646696+metaforismo@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs(release): record post-merge v0.2 audit' -m "Record the complete gate matrix on audited master $BASE_SHA, bind the encryption delivery to PR $ENCRYPTION_PR and merge $ENCRYPTION_MERGE, and retain every unexecuted publication, cluster and egress boundary."
+          git push origin HEAD:codex/v02-release-readiness-v3
