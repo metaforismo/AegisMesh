@@ -29,20 +29,24 @@ jobs:
 
           path = Path("internal/cli/cli_test.go")
           text = path.read_text()
-          old = '''\tcorrupt := append(readFile(t, exe), '\\n')
-\tif err := os.WriteFile(exe, corrupt, 0o755); err != nil {
-\t\tt.Fatal(err)
-\t}
-'''
-          new = '''\tcorrupt := append(readFile(t, exe), '\\n')
-\treplacement := filepath.Join(dir, "corrupt-ext")
-\tif err := os.WriteFile(replacement, corrupt, 0o755); err != nil {
-\t\tt.Fatal(err)
-\t}
-\tif err := os.Rename(replacement, exe); err != nil {
-\t\tt.Fatal(err)
-\t}
-'''
+          tab = chr(9)
+          nl = chr(10)
+          old = (
+              tab + "corrupt := append(readFile(t, exe), '\\n')" + nl
+              + tab + "if err := os.WriteFile(exe, corrupt, 0o755); err != nil {" + nl
+              + tab + tab + "t.Fatal(err)" + nl
+              + tab + "}" + nl
+          )
+          new = (
+              tab + "corrupt := append(readFile(t, exe), '\\n')" + nl
+              + tab + "replacement := filepath.Join(dir, \"corrupt-ext\")" + nl
+              + tab + "if err := os.WriteFile(replacement, corrupt, 0o755); err != nil {" + nl
+              + tab + tab + "t.Fatal(err)" + nl
+              + tab + "}" + nl
+              + tab + "if err := os.Rename(replacement, exe); err != nil {" + nl
+              + tab + tab + "t.Fatal(err)" + nl
+              + tab + "}" + nl
+          )
           if text.count(old) != 1:
               raise SystemExit("expected digest-mutation block exactly once")
           path.write_text(text.replace(old, new))
