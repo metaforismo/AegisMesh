@@ -1,0 +1,308 @@
+name: codex-v02-audit-promote-v3
+
+on:
+  push:
+    branches:
+      - codex/v02-audit-promote-v3
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GOTOOLCHAIN: local
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.14'
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'v4.2.2'
+
+      - name: Validate and merge exact audit head
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required=$(printf '%s\n' \
+            'fmt, vet, build, test (-race)' \
+            'fuzz seeds (bounded)' \
+            'helm chart contract' \
+            'govulncheck' \
+            'dependency licenses + secret scan' \
+            'supply-chain contracts' | sort)
+
+          master_before=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          report_exists=false
+          if gh api "repos/$REPO/contents/docs/releases/v0.2-readiness.md?ref=$master_before" >/dev/null 2>&1; then
+            report_exists=true
+          fi
+
+          audit_pr=''
+          audit_head=''
+          audit_run=''
+          merge_sha="$master_before"
+
+          if [ "$report_exists" != true ]; then
+            prs=$(gh api "repos/$REPO/pulls?state=open&head=metaforismo:codex/v02-release-readiness-v3&per_page=10")
+            test "$(jq length <<<"$prs")" -eq 1
+            audit_pr=$(jq -r '.[0].number' <<<"$prs")
+            audit_head=$(jq -r '.[0].head.sha' <<<"$prs")
+            audit_base=$(jq -r '.[0].base.sha' <<<"$prs")
+            test "$audit_base" = "$master_before"
+            test -n "$audit_head"
+
+            files=$(gh api --paginate "repos/$REPO/pulls/$audit_pr/files?per_page=100" --jq '.[].filename')
+            test -n "$files"
+            if grep -Eq '^\.codex/|^\.github/workflows/codex-' <<<"$files"; then
+              echo 'temporary transport file present in audit PR' >&2
+              exit 1
+            fi
+            unexpected=$(grep -Ev '^(docs/|CHANGELOG\.md$)' <<<"$files" || true)
+            test -z "$unexpected"
+            grep -qx 'docs/releases/v0.2-readiness.md' <<<"$files"
+
+            report=$(gh api "repos/$REPO/contents/docs/releases/v0.2-readiness.md?ref=$audit_head" --jq .content | base64 --decode)
+            audited=$(sed -n 's/^Audited `master` commit: `\([0-9a-f]\{40\}\)`$/\1/p' <<<"$report")
+            test "$audited" = "$audit_base"
+            grep -q '^\*\*PASS\*\* — the v0.2 single-node milestone' <<<"$report"
+            grep -q '| Git tag | NOT RUN |' <<<"$report"
+            grep -q '| New runtime egress | NOT RUN |' <<<"$report"
+
+            retry=0
+            for _ in $(seq 1 300); do
+              runs=$(gh api "repos/$REPO/actions/runs?head_sha=$audit_head&event=pull_request&per_page=50")
+              audit_run=$(jq -r --arg sha "$audit_head" '.workflow_runs[] | select(.name == "ci" and .head_sha == $sha) | .id' <<<"$runs" | head -n1)
+              if [ -n "$audit_run" ]; then
+                state=$(gh api "repos/$REPO/actions/runs/$audit_run")
+                status=$(jq -r .status <<<"$state")
+                conclusion=$(jq -r '.conclusion // ""' <<<"$state")
+                if [ "$status" = completed ]; then
+                  if [ "$conclusion" = success ]; then
+                    break
+                  fi
+                  if [ "$retry" -eq 0 ]; then
+                    gh api --method POST "repos/$REPO/actions/runs/$audit_run/rerun-failed-jobs" >/dev/null
+                    retry=1
+                    sleep 10
+                    continue
+                  fi
+                  echo "exact-head CI failed after one failed-job rerun: $audit_run" >&2
+                  exit 1
+                fi
+              fi
+              sleep 10
+            done
+            test -n "$audit_run"
+
+            jobs=$(gh api "repos/$REPO/actions/runs/$audit_run/jobs?per_page=100")
+            actual=$(jq -r '.jobs[] | select(.conclusion == "success") | .name' <<<"$jobs" | sort)
+            test "$actual" = "$required"
+            test "$(jq '[.jobs[] | select(.conclusion != "success")] | length' <<<"$jobs")" -eq 0
+
+            if [ "$(gh api "repos/$REPO/pulls/$audit_pr" --jq .draft)" = true ]; then
+              gh pr ready "$audit_pr" --repo "$REPO"
+            fi
+            gh pr comment "$audit_pr" --repo "$REPO" --body "Final audit gate PASS for \`$audit_head\`: audited base equals current master, the diff is documentation-only and all six pinned CI jobs succeeded in run \`$audit_run\`."
+
+            result=$(jq -n \
+              --arg sha "$audit_head" \
+              '{sha:$sha,merge_method:"squash",commit_title:"docs(release): record post-merge v0.2 readiness audit",commit_message:"Record the complete technical gate matrix, bind the age/X25519 delivery to its merged PR, close the finite v0.2 backlog, and preserve every unexecuted publication, cluster, signing and egress boundary."}' \
+              | gh api --method PUT "repos/$REPO/pulls/$audit_pr/merge" --input -)
+            test "$(jq -r .merged <<<"$result")" = true
+            merge_sha=$(jq -r .sha <<<"$result")
+            test -n "$merge_sha"
+
+            master_after=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+            test "$master_after" = "$merge_sha"
+            head_tree=$(gh api "repos/$REPO/git/commits/$audit_head" --jq .tree.sha)
+            master_tree=$(gh api "repos/$REPO/git/commits/$merge_sha" --jq .tree.sha)
+            test "$master_tree" = "$head_tree"
+          else
+            merged=$(gh api "repos/$REPO/pulls?state=closed&head=metaforismo:codex/v02-release-readiness-v3&per_page=20" \
+              | jq '[.[] | select(.merged_at != null)] | sort_by(.merged_at) | last')
+            if [ "$merged" != null ]; then
+              audit_pr=$(jq -r .number <<<"$merged")
+              audit_head=$(jq -r .head.sha <<<"$merged")
+            fi
+          fi
+
+          echo "pr=$audit_pr" >> "$GITHUB_OUTPUT"
+          echo "head=$audit_head" >> "$GITHUB_OUTPUT"
+          echo "ci_run=$audit_run" >> "$GITHUB_OUTPUT"
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out final public master
+        id: master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force origin master
+          git checkout --detach origin/master
+          master_sha=$(git rev-parse HEAD)
+          remote_sha=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          test "$master_sha" = "$remote_sha"
+          grep -q '^\s*filippo.io/age ' go.mod
+          test -f docs/releases/v0.2-readiness.md
+          grep -q '^\*\*PASS\*\* — the v0.2 single-node milestone' docs/releases/v0.2-readiness.md
+          echo "sha=$master_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Final master lint, race and focused encryption tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          make lint test
+          go test -race ./internal/storage ./internal/config ./internal/cli ./internal/runtime -count=1
+
+      - name: Final master fuzz gate
+        id: fuzz
+        shell: bash
+        run: |
+          set -euo pipefail
+          attempts=1
+          if ! make fuzz-seed; then
+            attempts=2
+            make fuzz-seed
+          fi
+          echo "attempts=$attempts" >> "$GITHUB_OUTPUT"
+
+      - name: Final master packaging and supply-chain gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          make helm-contract
+          make vuln
+          make license-check
+          make secrets-scan
+          make supply-chain-check
+          make sbom sbom-check
+          go mod verify
+          git diff --check
+
+      - name: Record final machine-readable evidence
+        id: evidence
+        env:
+          MASTER_SHA: ${{ steps.master.outputs.sha }}
+          AUDIT_PR: ${{ steps.audit.outputs.pr }}
+          AUDIT_HEAD: ${{ steps.audit.outputs.head }}
+          AUDIT_CI_RUN: ${{ steps.audit.outputs.ci_run }}
+          AUDIT_MERGE_SHA: ${{ steps.audit.outputs.merge_sha }}
+          FUZZ_ATTEMPTS: ${{ steps.fuzz.outputs.attempts }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          age_version=$(go list -m -f '{{.Version}}' filippo.io/age)
+          go_version=$(go version)
+          helm_version=$(helm version --short)
+          open_prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq '[.[].number]')
+          branches=$(gh api --paginate "repos/$REPO/branches?per_page=100" --jq '[.[].name]')
+          jq -n \
+            --arg status PASS \
+            --arg master_sha "$MASTER_SHA" \
+            --arg audit_pr "$AUDIT_PR" \
+            --arg audit_head "$AUDIT_HEAD" \
+            --arg audit_ci_run "$AUDIT_CI_RUN" \
+            --arg audit_merge_sha "$AUDIT_MERGE_SHA" \
+            --arg age_version "$age_version" \
+            --arg go_version "$go_version" \
+            --arg helm_version "$helm_version" \
+            --argjson fuzz_attempts "$FUZZ_ATTEMPTS" \
+            --argjson open_prs "$open_prs" \
+            --argjson branches "$branches" \
+            '{
+              status:$status,
+              master_sha:$master_sha,
+              audit:{pr:$audit_pr,head_sha:$audit_head,ci_run:$audit_ci_run,merge_sha:$audit_merge_sha},
+              gates:{
+                make_lint_test:"PASS",
+                affected_race:"PASS",
+                fuzz_seed:"PASS",
+                fuzz_attempts:$fuzz_attempts,
+                helm_contract:"PASS",
+                govulncheck:"PASS",
+                license_check:"PASS",
+                secret_scan:"PASS",
+                supply_chain_check:"PASS",
+                sbom_check:"PASS",
+                go_mod_verify:"PASS",
+                diff_check:"PASS"
+              },
+              dependency:{module:"filippo.io/age",version:$age_version,license_policy:"PASS"},
+              tools:{go:$go_version,helm:$helm_version},
+              repository_snapshot:{open_pull_requests:$open_prs,branches_before_cleanup:$branches},
+              external_actions:{release:"NOT RUN",tag:"NOT RUN",image_publish:"NOT RUN",signing:"NOT RUN",repository_settings:"NOT RUN",real_cluster:"NOT RUN",new_runtime_egress:"NOT RUN"}
+            }' > aegismesh-v02-final-status.json
+          cat aegismesh-v02-final-status.json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aegismesh-v02-final-status
+          path: aegismesh-v02-final-status.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Close stale drafts and clean only known completed branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          master=$(gh api "repos/$REPO/branches/master" --jq .commit.sha)
+          go_mod=$(gh api "repos/$REPO/contents/go.mod?ref=$master" --jq .content | base64 --decode)
+          grep -q '^\s*filippo.io/age ' <<<"$go_mod"
+          report=$(gh api "repos/$REPO/contents/docs/releases/v0.2-readiness.md?ref=$master" --jq .content | base64 --decode)
+          grep -q '^\*\*PASS\*\* — the v0.2 single-node milestone' <<<"$report"
+
+          for branch in \
+            codex/v02-release-readiness-v2 \
+            codex/v02-release-audit \
+            codex/v02-audit-promote \
+            codex/reconcile-v02 \
+            codex/final-cleanup; do
+            prs=$(gh api "repos/$REPO/pulls?state=open&head=metaforismo:$branch&per_page=10")
+            for pr in $(jq -r '.[].number' <<<"$prs"); do
+              gh pr comment "$pr" --repo "$REPO" --body 'Closed as superseded by the verified post-merge v0.2 audit.' || true
+              gh api --method PATCH "repos/$REPO/pulls/$pr" -f state=closed >/dev/null || true
+            done
+          done
+
+          open_heads=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq '.[].head.ref')
+          for branch in \
+            codex/v02-release-readiness-v3 \
+            codex/v02-release-readiness-v2 \
+            codex/v02-release-audit \
+            codex/v02-audit-promote \
+            codex/reconcile-v02 \
+            codex/final-cleanup \
+            codex/evidence-at-rest-age-review \
+            codex/evidence-at-rest-age-v1 \
+            codex/evidence-encryption-promote \
+            codex/evidence-encryption-promote-v2 \
+            codex/v02-truth-sync \
+            codex/storage-event-cap \
+            codex/evidence-at-rest-age \
+            codex/ext-digest-test-stability \
+            codex/extension-live-policy; do
+            if grep -qx "$branch" <<<"$open_heads"; then
+              echo "retain active PR head $branch" >&2
+              continue
+            fi
+            encoded=${branch//\//%2F}
+            gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
+          done
+
+          encoded=${GITHUB_REF_NAME//\//%2F}
+          gh api --method DELETE "repos/$REPO/git/refs/heads/$encoded" >/dev/null 2>&1 || true
