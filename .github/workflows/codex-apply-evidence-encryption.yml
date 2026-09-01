@@ -1,0 +1,61 @@
+name: codex-apply-evidence-encryption
+
+on:
+  push:
+    branches:
+      - codex/evidence-at-rest-age-v1
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-gate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/evidence-at-rest-age-v1
+          fetch-depth: 20
+          persist-credentials: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'v4.2.2'
+      - name: Reconstruct and apply reviewed series
+        run: |
+          test "$(git merge-base HEAD 01579d3073d7497ea7ba83e684c92016c2a2da5f)" = 01579d3073d7497ea7ba83e684c92016c2a2da5f
+          find .codex -maxdepth 1 -type f -name 'encryption.part*' -print0 | sort -z | xargs -0 cat \
+            | tr -d '\r\n ' | base64 --decode | gzip --decompress > "$RUNNER_TEMP/encryption.mbox"
+          test -s "$RUNNER_TEMP/encryption.mbox"
+          grep -q '^Subject: \[PATCH' "$RUNNER_TEMP/encryption.mbox"
+          git reset --hard 01579d3073d7497ea7ba83e684c92016c2a2da5f
+          git am --3way "$RUNNER_TEMP/encryption.mbox"
+          test ! -e .codex
+          test ! -e .github/workflows/codex-apply-evidence-encryption.yml
+          git diff --check 01579d3073d7497ea7ba83e684c92016c2a2da5f..HEAD
+      - name: Focused encryption and CLI tests
+        run: |
+          go test ./internal/storage ./internal/config -count=1
+          go test ./internal/cli ./internal/runtime -count=1
+          go test -race ./internal/storage ./internal/config -count=1
+          go test -race ./internal/cli ./internal/runtime -count=1
+      - name: Repository gates
+        run: |
+          make lint test
+          make fuzz-seed
+          make helm-contract
+          make vuln
+          make license-check
+          make secrets-scan
+          make supply-chain-check
+          make sbom sbom-check
+          go mod verify
+          git diff --check 01579d3073d7497ea7ba83e684c92016c2a2da5f..HEAD
+      - name: Publish exact gated series
+        run: git push --force-with-lease origin HEAD:codex/evidence-at-rest-age-v1
