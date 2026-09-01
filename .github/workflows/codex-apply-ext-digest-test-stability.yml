@@ -1,0 +1,61 @@
+name: codex-apply-ext-digest-test-stability
+
+on:
+  push:
+    branches:
+      - codex/ext-digest-test-stability
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/ext-digest-test-stability
+          fetch-depth: 1
+          persist-credentials: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Apply deterministic executable replacement
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("internal/cli/cli_test.go")
+          text = path.read_text()
+          old = '''\tcorrupt := append(readFile(t, exe), '\\n')
+\tif err := os.WriteFile(exe, corrupt, 0o755); err != nil {
+\t\tt.Fatal(err)
+\t}
+'''
+          new = '''\tcorrupt := append(readFile(t, exe), '\\n')
+\treplacement := filepath.Join(dir, "corrupt-ext")
+\tif err := os.WriteFile(replacement, corrupt, 0o755); err != nil {
+\t\tt.Fatal(err)
+\t}
+\tif err := os.Rename(replacement, exe); err != nil {
+\t\tt.Fatal(err)
+\t}
+'''
+          if text.count(old) != 1:
+              raise SystemExit("expected digest-mutation block exactly once")
+          path.write_text(text.replace(old, new))
+          PY
+          rm .github/workflows/codex-apply-ext-digest-test-stability.yml
+          gofmt -w internal/cli/cli_test.go
+          git diff --check
+          for i in $(seq 1 20); do
+            go test ./internal/cli -run '^TestExtVerifyDigestMatchAndMismatch$' -count=1
+          done
+          go test -race ./internal/cli -run '^TestExtVerifyDigestMatchAndMismatch$' -count=5
+          git config user.name 'metaforismo'
+          git config user.email '39646696+metaforismo@users.noreply.github.com'
+          git add -A
+          git commit -m 'test(extensions): make digest mutation deterministic' -m 'Replace the just-executed verifier target atomically and check every filesystem error so ETXTBSY cannot turn the corruption assertion into an intermittent false pass.'
+          git push origin HEAD:codex/ext-digest-test-stability
