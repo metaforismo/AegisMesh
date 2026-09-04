@@ -1,0 +1,279 @@
+ng.T) {
++		target := write(t, identity.String()+"\n", 0o600)
++		link := filepath.Join(t.TempDir(), "identity-link")
++		if err := os.Symlink(target, link); err != nil {
++			t.Skipf("symlink unavailable: %v", err)
++		}
++		got, _, err := LoadIdentityFile(link)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if got.Recipient().String() != identity.Recipient().String() {
++			t.Fatal("symlinked identity does not match")
++		}
++	})
++
++	for _, tc := range []struct {
++		name string
++		body string
++		mode os.FileMode
++	}{
++		{name: "empty", body: "# only a comment\n", mode: 0o600},
++		{name: "multiple", body: identity.String() + "\n" + identity.String() + "\n", mode: 0o600},
++		{name: "recipient not identity", body: identity.Recipient().String(), mode: 0o600},
++		{name: "oversize", body: strings.Repeat("x", MaxIdentityFileBytes+1), mode: 0o600},
++		{name: "group readable", body: identity.String(), mode: 0o640},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			path := write(t, tc.body, tc.mode)
++			if _, _, err := LoadIdentityFile(path); err == nil {
++				t.Fatal("expected failure")
++			}
++		})
++	}
++}
++
++func TestLoadIdentityFileRejectsFIFOWithoutBlocking(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "identity.fifo")
++	if err := syscall.Mkfifo(path, 0o600); err != nil {
++		t.Skipf("FIFO unavailable: %v", err)
++	}
++	if _, _, err := LoadIdentityFile(path); err == nil || !strings.Contains(err.Error(), "regular file") {
++		t.Fatalf("FIFO identity error = %v", err)
++	}
++}
+diff --git a/internal/cli/encryption_cli_test.go b/internal/cli/encryption_cli_test.go
+new file mode 100644
+index 0000000..fbf6527
+--- /dev/null
++++ b/internal/cli/encryption_cli_test.go
+@@ -0,0 +1,450 @@
++package cli
++
++import (
++	"context"
++	"encoding/json"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"filippo.io/age"
++	"github.com/metaforismo/aegismesh/internal/event"
++	"github.com/metaforismo/aegismesh/internal/recommend"
++	"github.com/metaforismo/aegismesh/internal/storage"
++)
++
++func seedEncryptedEvidence(t *testing.T, observation string) (string, event.Envelope, string) {
++	t.Helper()
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	identityPath := filepath.Join(t.TempDir(), "identity.txt")
++	if err := os.WriteFile(identityPath, []byte(identity.String()+"\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++
++	dir := t.TempDir()
++	store, err := storage.New(storage.Options{
++		Dir:           dir,
++		MaxFileBytes:  1 << 20,
++		MaxEventBytes: 256 << 10,
++		Encryption: &storage.EncryptionOptions{
++			Recipient: identity.Recipient().String(),
++		},
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seq := &event.Sequencer{}
++	envelope, err := event.New(seq, "encrypted-cli-test",
++		event.SensorRef{ID: "http-decoy-1", Kind: "http", Listen: "127.0.0.1:8081"},
++		event.ClassificationInteraction, []byte(observation), nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Append(context.Background(), envelope); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++	return dir, envelope, identityPath
++}
++
++func writeIdentityForCLI(t *testing.T, identity *age.X25519Identity) string {
++	t.Helper()
++	path := filepath.Join(t.TempDir(), "identity.txt")
++	if err := os.WriteFile(path, []byte(identity.String()+"\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	return path
++}
++
++func TestEncryptedEvidenceCLIReadPaths(t *testing.T) {
++	dir, envelope, identityPath := seedEncryptedEvidence(t, detectionObservation("PI-001"))
++
++	for _, tc := range []struct {
++		name string
++		args []string
++		want string
++	}{
++		{name: "list", args: []string{"inspect", "list", "--data-dir", dir, "--identity", identityPath}, want: short(envelope.ID)},
++		{name: "show", args: []string{"inspect", "show", "--data-dir", dir, "--id", envelope.ID, "--identity", identityPath}, want: envelope.ID},
++		{name: "recommend", args: []string{"recommend", "--data-dir", dir, "--identity", identityPath}, want: "DRY-RUN RECOMMENDATIONS"},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			code, out, stderr := run(t, tc.args...)
++			if code != 0 || stderr != "" || !strings.Contains(out, tc.want) {
++				t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
++			}
++		})
++	}
++
++	exportPath := filepath.Join(t.TempDir(), "export.ndjson")
++	code, out, stderr := run(t, "inspect", "export", "--data-dir", dir, "--identity", identityPath, "--out", exportPath)
++	if code != 0 || out != "" || !strings.Contains(stderr, "exported 1 event") {
++		t.Fatalf("export: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++	raw, err := os.ReadFile(exportPath)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(string(raw), envelope.ID) {
++		t.Fatal("export omitted decrypted event")
++	}
++}
++
++func TestEncryptedEvidenceCLICombinesIdentityWithFiltersLimitsAndFormats(t *testing.T) {
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	identityPath := writeIdentityForCLI(t, identity)
++	dir := t.TempDir()
++	store, err := storage.New(storage.Options{
++		Dir:           dir,
++		MaxFileBytes:  1 << 20,
++		MaxEventBytes: 256 << 10,
++		Encryption: &storage.EncryptionOptions{
++			Recipient: identity.Recipient().String(),
++		},
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seq := &event.Sequencer{}
++	entries := []recommendationEvent{
++		{sensor: "http-decoy-1", class: event.ClassificationInteraction, observation: detectionObservation("PI-001")},
++		{sensor: "tcp-decoy-1", class: event.ClassificationInteraction, observation: detectionObservation("PI-002")},
++		{sensor: "tcp-decoy-1", class: event.ClassificationInteraction, observation: detectionObservation("PI-001")},
++		{sensor: "tcp-decoy-1", class: event.ClassificationInteraction, observation: detectionObservation("PI-001")},
++	}
++	envelopes := make([]event.Envelope, 0, len(entries))
++	for i, entry := range entries {
++		envelope, err := event.New(seq, "encrypted-filter-test",
++			event.SensorRef{ID: entry.sensor, Kind: sensorKind(entry.sensor), Listen: "127.0.0.1:0"},
++			entry.class, []byte(entry.observation), nil)
++		if err != nil {
++			t.Fatalf("event %d: %v", i, err)
++		}
++		if err := store.Append(context.Background(), envelope); err != nil {
++			t.Fatalf("append event %d: %v", i, err)
++		}
++		envelopes = append(envelopes, envelope)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++
++	code, out, stderr := run(t, "inspect", "list", "--data-dir", dir,
++		"--identity", identityPath,
++		"--sensor", "tcp-decoy-1",
++		"--kind", "tcp",
++		"--finding", "PI-001",
++		"--classification", event.ClassificationInteraction,
++		"--limit", "1",
++		"--verify",
++		"--json")
++	if code != 0 || stderr != "" {
++		t.Fatalf("list: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++	var listResult struct {
++		Events []struct {
++			ID          string `json:"id"`
++			IntegrityOK *bool  `json:"integrity_ok"`
++		} `json:"events"`
++		CorruptLines int `json:"corrupt_lines"`
++	}
++	if err := json.Unmarshal([]byte(out), &listResult); err != nil {
++		t.Fatalf("decode list JSON: %v\n%s", err, out)
++	}
++	if listResult.CorruptLines != 0 || len(listResult.Events) != 1 || listResult.Events[0].ID != envelopes[2].ID ||
++		listResult.Events[0].IntegrityOK == nil || !*listResult.Events[0].IntegrityOK {
++		t.Fatalf("encrypted list filters/limit/verify drifted: %+v", listResult)
++	}
++
++	code, out, stderr = run(t, "recommend", "--data-dir", dir,
++		"--identity", identityPath,
++		"--rule", "PI-001",
++		"--sensor", "tcp-decoy-1",
++		"--classification", event.ClassificationInteraction,
++		"--limit", "1",
++		"--json")
++	if code != 0 || stderr != "" {
++		t.Fatalf("recommend: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++	var report recommend.Report
++	if err := json.Unmarshal([]byte(out), &report); err != nil {
++		t.Fatalf("decode recommendation JSON: %v\n%s", err, out)
++	}
++	if len(report.Recommendations) != 1 || report.Recommendations[0].SensorID != "tcp-decoy-1" ||
++		len(report.Recommendations[0].RuleIDs) != 1 || report.Recommendations[0].RuleIDs[0] != "PI-001" ||
++		len(report.Recommendations[0].Evidence) != 1 || report.Recommendations[0].Evidence[0].EventID != envelopes[2].ID {
++		t.Fatalf("encrypted recommendation filters/limit drifted: %+v", report.Recommendations)
++	}
++
++	exportPath := filepath.Join(t.TempDir(), "ecs.ndjson")
++	code, out, stderr = run(t, "inspect", "export", "--data-dir", dir,
++		"--identity", identityPath, "--profile", "ecs", "--out", exportPath)
++	if code != 0 || out != "" || !strings.Contains(stderr, "exported 4 event") {
++		t.Fatalf("ECS export: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++	exported, err := os.ReadFile(exportPath)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(string(exported), `"aegismesh"`) || !strings.Contains(string(exported), envelopes[2].ID) {
++		t.Fatalf("ECS export omitted native decrypted evidence: %s", exported)
++	}
++}
++
++func TestEncryptedEvidenceCLIRequiresMatchingIdentityWithoutPartialOutput(t *testing.T) {
++	dir, _, identityPath := seedEncryptedEvidence(t, detectionObservation("PI-001"))
++	wrong, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	wrongPath := writeIdentityForCLI(t, wrong)
++
++	for _, tc := range []struct {
++		name string
++		args []string
++	}{
++		{name: "list missing", args: []string{"inspect", "list", "--data-dir", dir}},
++		{name: "list wrong", args: []string{"inspect", "list", "--data-dir", dir, "--identity", wrongPath}},
++		{name: "show wrong", args: []string{"inspect", "show", "--data-dir", dir, "--id", "deadbeef", "--identity", wrongPath}},
++		{name: "recommend wrong", args: []string{"recommend", "--data-dir", dir, "--identity", wrongPath}},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			code, out, stderr := run(t, tc.args...)
++			if code != 1 || out != "" || stderr == "" {
++				t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
++			}
++			identityRaw, readErr := os.ReadFile(identityPath)
++			if readErr != nil {
++				t.Fatal(readErr)
++			}
++			if strings.Contains(stderr, stri
