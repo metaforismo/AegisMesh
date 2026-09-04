@@ -1,0 +1,313 @@
+storage.max_file_bytes or lower max_event_bytes", errStore, len(b), s.opts.MaxFileBytes)
++
++	if s.w == nil || s.f == nil {
++		return fmt.Errorf("%w: append on closed store", errStore)
+ 	}
+-	if s.size > 0 && s.size+int64(len(b)) > s.opts.MaxFileBytes {
++	if s.size+int64(len(record)) > s.opts.MaxFileBytes && s.segmentEvents == 0 {
++		return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
++	}
++	if s.segmentEvents > 0 && s.size+int64(len(record)) > s.opts.MaxFileBytes {
+ 		if err := s.rotateLocked(); err != nil {
+ 			return err
+ 		}
++		if s.size+int64(len(record)) > s.opts.MaxFileBytes {
++			return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
++		}
+ 	}
+-	n, err := s.w.Write(b)
+-	s.size += int64(n)
+-	s.appended++
++
++	n, err := s.w.Write(record)
+ 	if err != nil {
+ 		return fmt.Errorf("%w: write: %v", errStore, err)
+ 	}
++	if n != len(record) {
++		return fmt.Errorf("%w: write: %v", errStore, io.ErrShortWrite)
++	}
++	s.size += int64(n)
++	s.segmentEvents++
++	s.appended++
+ 	return nil
+ }
+ 
+@@ -141,7 +293,10 @@ func (s *Store) Flush() error {
+ 	if s.w == nil {
+ 		return nil
+ 	}
+-	return s.w.Flush()
++	if err := s.w.Flush(); err != nil {
++		return fmt.Errorf("%w: flush: %v", errStore, err)
++	}
++	return nil
+ }
+ 
+ func (s *Store) Close() error {
+@@ -164,38 +319,79 @@ type Segment struct {
+ 	Path      string    `json:"path"`
+ 	SizeBytes int64     `json:"size_bytes"`
+ 	ModTime   time.Time `json:"mod_time"`
++	Encrypted bool      `json:"encrypted,omitempty"`
+ }
+ 
+-// Segments lists evidence files oldest-first.
+-func (s *Store) Segments() ([]Segment, error) {
+-	entries, err := os.ReadDir(s.opts.Dir)
++func segmentEncryption(name string) (encrypted bool, ok bool) {
++	if !strings.HasPrefix(name, segmentPrefix) {
++		return false, false
++	}
++	switch {
++	case strings.HasSuffix(name, encryptedSegmentExt):
++		return true, true
++	case strings.HasSuffix(name, segmentExt):
++		return false, true
++	default:
++		return false, false
++	}
++}
++
++func listSegments(dir string) ([]Segment, error) {
++	entries, err := os.ReadDir(dir)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("%w: list dir: %v", errStore, err)
+ 	}
+-	var out []Segment
+-	for _, e := range entries {
+-		if e.IsDir() || !strings.HasPrefix(e.Name(), segmentPrefix) || !strings.HasSuffix(e.Name(), segmentExt) {
++	out := make([]Segment, 0, len(entries))
++	for _, entry := range entries {
++		encrypted, ok := segmentEncryption(entry.Name())
++		if !ok {
++			continue
++		}
++		if entry.IsDir() {
+ 			continue
+ 		}
+-		info, err := e.Info()
++		info, err := entry.Info()
+ 		if err != nil {
+-			return nil, fmt.Errorf("%w: inspect segment %s: %v", errStore, e.Name(), err)
++			return nil, fmt.Errorf("%w: inspect segment %s: %v", errStore, entry.Name(), err)
++		}
++		if !info.Mode().IsRegular() {
++			return nil, fmt.Errorf("%w: read segment %s: not a regular file", errStore, entry.Name())
+ 		}
+ 		out = append(out, Segment{
+-			Name:      e.Name(),
+-			Path:      filepath.Join(s.opts.Dir, e.Name()),
++			Name:      entry.Name(),
++			Path:      filepath.Join(dir, entry.Name()),
+ 			SizeBytes: info.Size(),
+ 			ModTime:   info.ModTime().UTC(),
++			Encrypted: encrypted,
+ 		})
+ 	}
+-	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.Before(out[j].ModTime) })
++	sort.Slice(out, func(i, j int) bool {
++		if out[i].ModTime.Equal(out[j].ModTime) {
++			return out[i].Name < out[j].Name
++		}
++		return out[i].ModTime.Before(out[j].ModTime)
++	})
+ 	return out, nil
+ }
+ 
+-// ApplyRetention enforces count and age caps by deleting whole oldest segments.
+-// It returns the names of what it removed so callers can log/report it.
++// Segments lists evidence files oldest-first.
++func (s *Store) Segments() ([]Segment, error) { return listSegments(s.opts.Dir) }
++
++// ApplyRetention enforces count and age caps by deleting whole oldest closed
++// segments. The active segment is never removed.
+ func (s *Store) ApplyRetention(ctx context.Context) (removed []string, err error) {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++
++	segs, err := listSegments(s.opts.Dir)
++	if err != nil || len(segs) == 0 {
++		return nil, err
++	}
++	active := s.path
+ 	remove := func(name string) bool {
++		if name == active {
++			return false
++		}
+ 		if rmErr := os.Remove(filepath.Join(s.opts.Dir, name)); rmErr == nil {
+ 			removed = append(removed, name)
+ 			return true
+@@ -203,19 +399,17 @@ func (s *Store) ApplyRetention(ctx context.Context) (removed []string, err error
+ 		return false
+ 	}
+ 
+-	segs, err := s.Segments()
+-	if err != nil || len(segs) == 0 {
+-		return nil, err
+-	}
+-
+ 	if s.opts.MaxAgeDays > 0 {
+-		cutoff := time.Now().UTC().AddDate(0, 0, -s.opts.MaxAgeDays)
++		cutoff := s.now().UTC().AddDate(0, 0, -s.opts.MaxAgeDays)
+ 		for _, sg := range segs {
+ 			select {
+ 			case <-ctx.Done():
+ 				return removed, ctx.Err()
+ 			default:
+ 			}
++			if sg.Name == active {
++				continue
++			}
+ 			start, ok := parseSegmentStart(sg.Name)
+ 			old := sg.ModTime.Before(cutoff)
+ 			if ok {
+@@ -225,135 +419,194 @@ func (s *Store) ApplyRetention(ctx context.Context) (removed []string, err error
+ 				remove(sg.Name)
+ 			}
+ 		}
+-		if segs, err = s.Segments(); err != nil {
++		if segs, err = listSegments(s.opts.Dir); err != nil {
+ 			return removed, err
+ 		}
+ 	}
+ 
+-	if s.opts.MaxEvents > 0 && len(segs) > 1 { // never delete the active segment
++	if s.opts.MaxEvents > 0 && len(segs) > 1 {
+ 		total := 0
+ 		counts := make([]int, len(segs))
+ 		for i, sg := range segs {
+-			n, cErr := CountSegment(sg.Path)
+-			if cErr != nil {
+-				return removed, cErr
++			var n int
++			if sg.Name == active {
++				n = int(s.segmentEvents)
++			} else {
++				n, err = CountSegment(sg.Path)
++				if err != nil {
++					return removed, err
++				}
+ 			}
+ 			counts[i] = n
+ 			total += n
+ 		}
+-		for i := 0; i < len(segs)-1 && total > s.opts.MaxEvents; i++ {
++		for i := 0; i < len(segs) && total > s.opts.MaxEvents; i++ {
+ 			select {
+ 			case <-ctx.Done():
+ 				return removed, ctx.Err()
+ 			default:
+ 			}
+-			if counts[i] == 0 {
++			if segs[i].Name == active {
+ 				continue
+ 			}
+-			before := total
+ 			if remove(segs[i].Name) {
+ 				total -= counts[i]
+ 			}
+-			if total == before {
+-				break // disk removal failed; do not loop forever
+-			}
+ 		}
+ 	}
+ 	return removed, nil
+ }
+ 
+ func parseSegmentStart(name string) (time.Time, bool) {
+-	base := strings.TrimSuffix(strings.TrimPrefix(name, segmentPrefix), segmentExt)
+-	if i := strings.Index(base, "-"); i > 0 && strings.Contains(base[:i], "T") {
+-		base = base[:i] // pid-collision fallback name
++	encrypted, ok := segmentEncryption(name)
++	if !ok {
++		return time.Time{}, false
+ 	}
+-	t, err := time.Parse(timeFormat, base)
++	base := strings.TrimSuffix(strings.TrimPrefix(name, segmentPrefix), segmentExtension(encrypted))
++	stampLen := len(time.Unix(0, 0).UTC().Format(timeFormat))
++	if len(base) < stampLen {
++		return time.Time{}, false
++	}
++	t, err := time.Parse(timeFormat, base[:stampLen])
+ 	if err != nil {
+ 		return time.Time{}, false
+ 	}
+ 	return t, true
+ }
+ 
++func openRegularSegment(path string) (*os.File, error) {
++	before, err := os.Lstat(path)
++	if err != nil {
++		return nil, fmt.Errorf("%w: inspect segment %s: %v", errStore, filepath.Base(path), err)
++	}
++	if !before.Mode().IsRegular() {
++		return nil, fmt.Errorf("%w: read segment %s: not a regular file", errStore, filepath.Base(path))
++	}
++	f, err := os.Open(path) //nolint:gosec // path comes from the bounded evidence directory or an explicit local operator argument
++	if err != nil {
++		return nil, fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
++	}
++	after, err := f.Stat()
++	if err != nil {
++		_ = f.Close()
++		return nil, fmt.Errorf("%w: inspect opened segment %s: %v", errStore, filepath.Base(path), err)
++	}
++	if !after.Mode().IsRegular() || !os.SameFile(before, after) {
++		_ = f.Close()
++		return nil, fmt.Errorf("%w: evidence segment %s changed while opening", errStore, filepath.Base(path))
++	}
++	return f, nil
++}
++
+ // CountSegment counts envelopes in one file without materializing them.
+ func CountSegment(path string) (int, error) {
+-	f, err := os.Open(path) //nolint:gosec // paths come from our own segment listing
++	encrypted := strings.HasSuffix(filepath.Base(path), encryptedSegmentExt)
++	if encrypted {
++		return countEncryptedFrames(path)
++	}
++	if !strings.HasSuffix(filepath.Base(path), segmentExt) {
++		return 0, fmt.Errorf("%w: unsupported evidence segment %s", errStore, filepath.Base(path))
++	}
++	f, err := openRegularSegment(path)
+ 	if err != nil {
+ 		return 0, err
+ 	}
+ 	defer f.Close()
+-	sc := bufio.NewScanner(f)
+-	sc.Buffer(make([]byte, 64<<10), 1<<20)
++	reader := bufio.NewReader(f)
++	if magic, _ := reader.Peek(len(encryptedSegmentMagic)); bytes.Equal(magic, []byte(encryptedSegmentMagic)) {
++		return 0, fmt.Errorf("%w: encrypted evidence has a plaintext filename %s", errStore, filepath.Base(path))
++	}
++	scanner := bufio.NewScanner(reader)
++	scanner.Buffer(make([]byte, 64<<10), event.MaxStoredEnvelopeBytes+1)
+ 	n := 0
+-	for sc.Scan() {
+-		if strings.TrimSpace(sc.Text()) != "" {
++	for scanner.Scan() {
++		if strings.TrimSpace(scanner.Text()) != "" {
+ 			n++
+ 		}
+ 	}
+-	return n, sc.Err()
++	if err := scanner.Err(); err != nil {
++		return 0, fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
++	}
++	return n, nil
+ }
+ 
+ func forEachLine(path string, fn func(string) error) error {
+-	f, err := os.Open(path) //nolint:gosec // see above
++	f, err := openRegularSegment(path)
+ 	if err != nil {
+-		return fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
++		return err
+ 	}
+ 	defer f.Close()
+-	sc := bufio.NewScanner(f)
+-	sc.Buffer(make([]byte, 64<<10), 1<<20)
+-	for sc.Scan() {
+-		if err := fn(sc.Text()); err != nil {
++	reader := bufio.NewReader(f)
++	if magic, _ := reader.Peek(len(encryptedSegmentMagic)); byt
