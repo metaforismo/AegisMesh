@@ -1,0 +1,252 @@
+ismesh -l json -d 'JSON output'
+ complete -c aegismesh -l dry-run -d 'bind and stop immediately'
+ `
+diff --git a/internal/cli/doctor.go b/internal/cli/doctor.go
+index 03f2c29..238a20c 100644
+--- a/internal/cli/doctor.go
++++ b/internal/cli/doctor.go
+@@ -102,6 +102,11 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
+ 			add("ok", "storage", fmt.Sprintf("data dir %s writable", dataDir), "")
+ 		}
+ 	}
++	if cfg.Storage.Encryption != nil && cfg.Storage.Encryption.Enabled {
++		add("ok", "storage-crypto", "age/X25519 evidence encryption enabled (.jsonl.age); runtime holds only the public recipient", "")
++	} else {
++		add("info", "storage-crypto", "off in configuration — new data directories use plaintext JSONL; previously encrypted directories fail closed", "enable storage.encryption only after backing up the private identity")
++	}
+ 
+ 	// Port availability per sensor + admin.
+ 	for i := range cfg.Sensors {
+diff --git a/internal/cli/identity_flags.go b/internal/cli/identity_flags.go
+new file mode 100644
+index 0000000..9d3e4eb
+--- /dev/null
++++ b/internal/cli/identity_flags.go
+@@ -0,0 +1,37 @@
++package cli
++
++import (
++	"fmt"
++	"strings"
++
++	"github.com/metaforismo/aegismesh/internal/agekey"
++	"github.com/metaforismo/aegismesh/internal/storage"
++)
++
++type identityFilesFlag struct {
++	values []string
++}
++
++func (f *identityFilesFlag) String() string {
++	if len(f.values) == 0 {
++		return ""
++	}
++	return f.values[len(f.values)-1]
++}
++
++func (f *identityFilesFlag) Set(value string) error {
++	if len(f.values) >= agekey.MaxIdentityFiles {
++		return fmt.Errorf("may be given at most %d times", agekey.MaxIdentityFiles)
++	}
++	if value == "" || strings.TrimSpace(value) != value || strings.HasPrefix(value, "-") || strings.ContainsAny(value, ",\r\n\x00") {
++		return fmt.Errorf("must be one unpadded file path without commas or a leading '-'")
++	}
++	f.values = append(f.values, value)
++	return nil
++}
++
++func (f identityFilesFlag) openReader(dataDir string) (*storage.Reader, error) {
++	return storage.NewReaderWithOptions(dataDir, storage.ReaderOptions{
++		IdentityFiles: append([]string(nil), f.values...),
++	})
++}
+diff --git a/internal/cli/inspect.go b/internal/cli/inspect.go
+index 4f6bba8..25d0183 100644
+--- a/internal/cli/inspect.go
++++ b/internal/cli/inspect.go
+@@ -3,7 +3,6 @@ package cli
+ import (
+ 	"context"
+ 	"encoding/json"
+-	"flag"
+ 	"fmt"
+ 	"io"
+ 	"os"
+@@ -13,7 +12,6 @@ import (
+ 	"github.com/metaforismo/aegismesh/internal/detect"
+ 	"github.com/metaforismo/aegismesh/internal/ecsexport"
+ 	"github.com/metaforismo/aegismesh/internal/event"
+-	"github.com/metaforismo/aegismesh/internal/storage"
+ )
+ 
+ type inspectCmd struct {
+@@ -28,9 +26,9 @@ func (c *inspectCmd) Usage() string { return "inspect <list|show|export> [flags]
+ func (c *inspectCmd) Help() string {
+ 	return `Read and export recorded evidence.
+ 
+-  inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
+-  inspect show   --data-dir DIR --id EVENT_ID [--verify]
+-  inspect export --data-dir DIR --out FILE.ndjson [--profile ecs] [--verify]
++  inspect list   --data-dir DIR [--identity FILE ...] [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
++  inspect show   --data-dir DIR --id EVENT_ID [--identity FILE ...] [--verify]
++  inspect export --data-dir DIR --out FILE.ndjson [--identity FILE ...] [--profile ecs] [--verify]
+ 
+ Events are observations of decoy interactions — they are not incidents and do
+ not prove compromise. --verify recomputes each event's integrity hash while
+@@ -40,7 +38,9 @@ events where the named detection rule fired (e.g. --finding PI-001).
+ canary_invocation, correlation_signal); it applies before --limit, so
+ --limit N caps matching rows. Export keeps the native envelope by default;
+ --profile ecs emits the documented ECS-compatible mapping while preserving
+-the complete native envelope under the aegismesh field.`
++the complete native envelope under the aegismesh field. Encrypted segments
++require one or more explicit native age/X25519 identity files; repeat
++--identity during key rotation.`
+ }
+ 
+ func (c *inspectCmd) Run(ctx context.Context, args []string) error {
+@@ -59,16 +59,6 @@ func (c *inspectCmd) Run(ctx context.Context, args []string) error {
+ 	}
+ }
+ 
+-func (c *inspectCmd) openReader(fs *flag.FlagSet, dataDir *string) (*storage.Reader, error) {
+-	if err := fs.Parse(nil); err != nil {
+-		return nil, err
+-	}
+-	if strings.TrimSpace(*dataDir) == "" {
+-		return nil, Usagef("--data-dir is required")
+-	}
+-	return storage.NewReader(*dataDir)
+-}
+-
+ func (c *inspectCmd) list(args []string) error {
+ 	fs := newFlagSet("inspect list")
+ 	addGlobalFlags(fs, &c.g)
+@@ -79,6 +69,8 @@ func (c *inspectCmd) list(args []string) error {
+ 	finding := fs.String("finding", "", "only events where this detection rule id fired (e.g. PI-001)")
+ 	var class singleValueFlag
+ 	fs.Var(&class, "classification", "filter to one evidence class (interaction|canary_invocation|correlation_signal)")
++	var identities identityFilesFlag
++	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
+ 	verify := fs.Bool("verify", false, "recompute integrity hashes while reading")
+ 	if err := fs.Parse(args); err != nil {
+ 		return Usagef("%v", err)
+@@ -102,7 +94,7 @@ func (c *inspectCmd) list(args []string) error {
+ 			return Usagef("%v", err)
+ 		}
+ 	}
+-	r, err := storage.NewReader(*dataDir)
++	r, err := identities.openReader(*dataDir)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -182,6 +174,8 @@ func (c *inspectCmd) show(args []string) error {
+ 	addGlobalFlags(fs, &c.g)
+ 	dataDir := fs.String("data-dir", "./data", "evidence directory")
+ 	id := fs.String("id", "", "event id to display")
++	var identities identityFilesFlag
++	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
+ 	verify := fs.Bool("verify", true, "verify this event's integrity hash")
+ 	if err := fs.Parse(args); err != nil {
+ 		return Usagef("%v", err)
+@@ -192,7 +186,7 @@ func (c *inspectCmd) show(args []string) error {
+ 	if strings.TrimSpace(*id) == "" {
+ 		return Usagef("--id is required")
+ 	}
+-	r, err := storage.NewReader(*dataDir)
++	r, err := identities.openReader(*dataDir)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -238,6 +232,8 @@ func (c *inspectCmd) export(args []string) error {
+ 	outPath := fs.String("out", "", "output NDJSON file ('-' for stdout)")
+ 	var profile singleValueFlag
+ 	fs.Var(&profile, "profile", "export mapping profile (ecs)")
++	var identities identityFilesFlag
++	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
+ 	verify := fs.Bool("verify", true, "refuse to export events failing integrity checks")
+ 	if err := fs.Parse(args); err != nil {
+ 		return Usagef("%v", err)
+@@ -258,17 +254,17 @@ func (c *inspectCmd) export(args []string) error {
+ 			return Usagef("unknown export profile %q (want ecs)", profileName)
+ 		}
+ 	}
+-	r, err := storage.NewReader(*dataDir)
++	r, err := identities.openReader(*dataDir)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	if *outPath != "-" {
+-		isSegment, serr := r.IsSegmentPath(*outPath)
++		protected, serr := r.IsProtectedPath(*outPath)
+ 		if serr != nil {
+ 			return serr
+ 		}
+-		if isSegment {
+-			return Usagef("--out must not resolve to an evidence segment in --data-dir")
++		if protected {
++			return Usagef("--out must not resolve to an evidence segment or supplied identity file")
+ 		}
+ 	}
+ 	tempDir := os.TempDir()
+@@ -357,11 +353,6 @@ func short(id string) string {
+ 
+ const timeLayout = "15:04:05.000"
+ 
+-var (
+-	_ = context.Background
+-	_ = os.Exit
+-)
+-
+ // eventClassifications is derived from the owning constants in internal/event
+ // so this filter cannot drift from the classifications envelopes validate.
+ // Order here is the deterministic order used in every error message.
+diff --git a/internal/cli/recommend.go b/internal/cli/recommend.go
+index 96eced9..d715fb4 100644
+--- a/internal/cli/recommend.go
++++ b/internal/cli/recommend.go
+@@ -10,7 +10,6 @@ import (
+ 
+ 	"github.com/metaforismo/aegismesh/internal/event"
+ 	"github.com/metaforismo/aegismesh/internal/recommend"
+-	"github.com/metaforismo/aegismesh/internal/storage"
+ )
+ 
+ type recommendCmd struct {
+@@ -22,13 +21,13 @@ func newRecommendCmd(env *Env) *recommendCmd { return &recommendCmd{env: env} }
+ func (c *recommendCmd) Name() string { return "recommend" }
+ 
+ func (c *recommendCmd) Usage() string {
+-	return "recommend --data-dir DIR [--limit N] [--rule RULE_ID] [--sensor ID] [--classification CLASS] [--json]"
++	return "recommend --data-dir DIR [--identity FILE ...] [--limit N] [--rule RULE_ID] [--sensor ID] [--classification CLASS] [--json]"
+ }
+ 
+ func (c *recommendCmd) Help() string {
+ 	return `Generate deterministic, dry-run operator recommendations from recorded evidence.
+ 
+-  recommend --data-dir DIR
++  recommend --data-dir DIR [--identity FILE ...]
+   recommend --data-dir DIR --rule PI-001 --limit 10
+   recommend --data-dir DIR --classification correlation_signal --json
+ 
+@@ -46,6 +45,7 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
+ 	var sensorID strictValueFlag
+ 	var classification strictValueFlag
+ 	var jsonOut strictBoolFlag
++	var identities identityFilesFlag
+ 
+ 	fs := newFlagSet(c.Name())
+ 	fs.Var(&dataDir, "data-dir", "evidence directory (required)")
+@@ -54,6 +54,7 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
+ 	fs.Var(&sensorID, "sensor", "filter by exact sensor id")
+ 	fs.Var(&classification, "classification", "filter by evidence class")
+ 	fs.Var(&jsonOut, "json", "emit machine-readable JSON output")
++	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
+ 
+ 	if err := fs.Parse(args); err != nil {
+ 		return Usagef("%v", err)
+@@ -98,7 +99,7 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
+ 		return Usagef("%v", err)
+ 	}
+ 
+-	reader, err := storage.NewReader(dataDir.values[0])
++	reader, err := identities.openReader(dataDir.valu
