@@ -1,0 +1,336 @@
+if len(segments) != 1 || !segments[0].Encrypted {
++		t.Fatalf("segments = %+v", segments)
++	}
++	raw, err := os.ReadFile(segments[0].Path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if bytes.Contains(raw, []byte(marker)) || bytes.Contains(raw, []byte(`"schema":"aegismesh.event/v1"`)) {
++		t.Fatal("runtime store wrote plaintext evidence")
++	}
++
++	identityPath := filepath.Join(t.TempDir(), "identity.txt")
++	if err := os.WriteFile(identityPath, []byte(identity.String()+"\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	reader, err := storage.NewReaderWithOptions(cfg.Runtime.DataDir, storage.ReaderOptions{
++		IdentityFiles: []string{identityPath},
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	if err := reader.ForEach(func(got event.Envelope) error {
++		seen++
++		if got.ID != envelope.ID {
++			t.Fatalf("event ID = %s, want %s", got.ID, envelope.ID)
++		}
++		return got.VerifyIntegrity()
++	}, nil); err != nil {
++		t.Fatal(err)
++	}
++	if seen != 1 {
++		t.Fatalf("read %d events", seen)
++	}
++}
++
++func TestBuildRejectsInvalidEncryptionBeforeCreatingDataDir(t *testing.T) {
++	cfg := testConfig(t)
++	cfg.Runtime.DataDir = filepath.Join(t.TempDir(), "must-not-exist")
++	cfg.Storage.Encryption = &config.StorageEncryption{Enabled: true, Recipient: "not-an-age-recipient"}
++
++	_, err := Build(cfg, quietLogger())
++	if err == nil || !strings.Contains(err.Error(), "encryption recipient") {
++		t.Fatalf("Build() error = %v", err)
++	}
++	if _, statErr := os.Stat(cfg.Runtime.DataDir); !errors.Is(statErr, os.ErrNotExist) {
++		t.Fatalf("invalid encryption created data directory: %v", statErr)
++	}
++}
++
+ func TestCloseSensorsStartsAllClosuresBeforeWaiting(t *testing.T) {
+ 	entered := make(chan string, 3)
+ 	release := make(chan struct{})
+diff --git a/internal/storage/encryption_test.go b/internal/storage/encryption_test.go
+new file mode 100644
+index 0000000..93dd3c2
+--- /dev/null
++++ b/internal/storage/encryption_test.go
+@@ -0,0 +1,702 @@
++package storage
++
++import (
++	"bufio"
++	"bytes"
++	"context"
++	"encoding/binary"
++	"encoding/json"
++	"errors"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"filippo.io/age"
++	"github.com/metaforismo/aegismesh/internal/agekey"
++	"github.com/metaforismo/aegismesh/internal/event"
++)
++
++func generateIdentityFile(t *testing.T) (*age.X25519Identity, string) {
++	t.Helper()
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	path := filepath.Join(t.TempDir(), "identity.txt")
++	if err := os.WriteFile(path, []byte(identity.String()+"\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	return identity, path
++}
++
++func encryptedStore(t *testing.T, dir string, identity *age.X25519Identity, mutate func(*Options)) *Store {
++	t.Helper()
++	opts := Options{
++		Dir:           dir,
++		MaxFileBytes:  1 << 20,
++		MaxEventBytes: 256 << 10,
++		Encryption:    &EncryptionOptions{Recipient: identity.Recipient().String()},
++	}
++	if mutate != nil {
++		mutate(&opts)
++	}
++	store, err := New(opts)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return store
++}
++
++func TestEncryptedAppendAndReadBack(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, identity, nil)
++	marker := "secret-marker-must-not-appear"
++	envelope := mkEnv(t, &event.Sequencer{}, `{"marker":"`+marker+`"}`)
++	if err := store.Append(context.Background(), envelope); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Flush(); err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = store.Close() })
++
++	segments, err := store.Segments()
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(segments) != 1 || !segments[0].Encrypted || !strings.HasSuffix(segments[0].Name, encryptedSegmentExt) {
++		t.Fatalf("unexpected segments: %+v", segments)
++	}
++	raw, err := os.ReadFile(segments[0].Path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !bytes.HasPrefix(raw, []byte(encryptedSegmentMagic)) {
++		t.Fatal("missing encrypted segment framing header")
++	}
++	if bytes.Contains(raw, []byte(marker)) || bytes.Contains(raw, []byte(`"schema":"aegismesh.event/v1"`)) {
++		t.Fatal("encrypted segment leaked plaintext evidence")
++	}
++	info, err := os.Stat(segments[0].Path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if info.Mode().Perm() != 0o600 {
++		t.Fatalf("encrypted segment permissions = %v", info.Mode().Perm())
++	}
++
++	withoutIdentity, err := NewReader(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := withoutIdentity.ForEach(func(event.Envelope) error { return nil }, nil); err == nil || !strings.Contains(err.Error(), "requires at least one identity") {
++		t.Fatalf("encrypted read without identity = %v", err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	if err := reader.ForEach(func(got event.Envelope) error {
++		seen++
++		if got.ID != envelope.ID {
++			t.Fatalf("event ID = %s, want %s", got.ID, envelope.ID)
++		}
++		return got.VerifyIntegrity()
++	}, func(string, error) { t.Fatal("authenticated frame contained malformed JSON") }); err != nil {
++		t.Fatal(err)
++	}
++	if seen != 1 {
++		t.Fatalf("read %d events", seen)
++	}
++}
++
++func TestEncryptionDisabledPreservesPlaintextRecord(t *testing.T) {
++	dir := t.TempDir()
++	store := newStore(t, Options{Dir: dir, MaxFileBytes: 1 << 20})
++	envelope := mkEnv(t, &event.Sequencer{}, `{"mode":"plaintext"}`)
++	if err := store.Append(context.Background(), envelope); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++	segments, err := listSegments(dir)
++	if err != nil || len(segments) != 1 || segments[0].Encrypted {
++		t.Fatalf("segments=%+v err=%v", segments, err)
++	}
++	want, err := json.Marshal(envelope)
++	if err != nil {
++		t.Fatal(err)
++	}
++	want = append(want, '\n')
++	got, err := os.ReadFile(segments[0].Path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !bytes.Equal(got, want) {
++		t.Fatalf("plaintext record changed:\n got %q\nwant %q", got, want)
++	}
++}
++
++func TestEncryptedWrongIdentityFailsBeforeCallback(t *testing.T) {
++	writerIdentity, _ := generateIdentityFile(t)
++	_, wrongIdentityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, writerIdentity, nil)
++	if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{wrongIdentityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	err = reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil)
++	if err == nil || !strings.Contains(err.Error(), "did not match any supplied identity") || seen != 0 {
++		t.Fatalf("seen=%d err=%v", seen, err)
++	}
++}
++
++func TestEncryptedCorruptionAndTruncationFailClosed(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, identity, nil)
++	if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{"n":1}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++	segments, err := listSegments(dir)
++	if err != nil || len(segments) != 1 {
++		t.Fatalf("segments=%v err=%v", segments, err)
++	}
++	original, err := os.ReadFile(segments[0].Path)
++	if err != nil {
++		t.Fatal(err)
++	}
++
++	for _, tc := range []struct {
++		name   string
++		mutate func([]byte) []byte
++	}{
++		{
++			name: "ciphertext bit flip",
++			mutate: func(raw []byte) []byte {
++				out := append([]byte(nil), raw...)
++				out[len(out)-1] ^= 0x01
++				return out
++			},
++		},
++		{
++			name: "truncated ciphertext",
++			mutate: func(raw []byte) []byte {
++				return append([]byte(nil), raw[:len(raw)-1]...)
++			},
++		},
++		{
++			name: "truncated prefix",
++			mutate: func(raw []byte) []byte {
++				return append([]byte(nil), raw[:len(encryptedSegmentMagic)+2]...)
++			},
++		},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			if err := os.WriteFile(segments[0].Path, tc.mutate(original), 0o600); err != nil {
++				t.Fatal(err)
++			}
++			reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++			if err != nil {
++				t.Fatal(err)
++			}
++			seen := 0
++			err = reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil)
++			if err == nil || seen != 0 {
++				t.Fatalf("corrupt segment was accepted: seen=%d err=%v", seen, err)
++			}
++			if err := os.WriteFile(segments[0].Path, original, 0o600); err != nil {
++				t.Fatal(err)
++			}
++		})
++	}
++}
++
++func TestEncryptedRestartCreatesIndependentSegments(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	for i := 0; i < 2; i++ {
++		store := encryptedStore(t, dir, identity, nil)
++		if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{"restart":true}`)); err != nil {
++			t.Fatal(err)
++		}
++		if err := store.Close(); err != nil {
++			t.Fatal(err)
++		}
++	}
++	segments, err := listSegments(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(segments) != 2 {
++		t.Fatalf("restart produced %d segments, want 2", len(segments))
++	}
++	for _, segment := range segments {
++		count, err := CountSegment(segment.Path)
++		if err != nil || count != 1 {
++			t.Fatalf("segment %s count=%d err=%v", segment.Name, count, err)
++		}
++	}
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	if err := reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil); err != nil {
++		t.Fatal(err)
++	}
++	if seen != 2 {
++		t.Fatalf("read %d events after restart", seen)
++	}
++}
++
++func TestEncryptedKeyRotationReadsSegmentsWithRepeatedIdentities(t *testing.T) {
++	firstIdentity, firstPath := generateIdentityFile(t)
++	secondIdentity, secondPath := generateIdentityFile(t)
++	dir := t.TempDir()
++
++	first := encryptedStore(t, dir, firstIdentity, nil)
++	if err := first.Append(context.Background(), mkEnv(t, &
