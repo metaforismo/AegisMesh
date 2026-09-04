@@ -83,6 +83,26 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Status:** **IN PROGRESS** — focused and affected-package race tests pass
   locally; hosted CI and merge remain required.
 
+### P0-4 — close reachable x/crypto/ssh channel DoS vulnerabilities — IN PROGRESS
+
+- **Evidence:** hosted `govulncheck` on the encryption pre-merge gate reached
+  `ssh.NewServerConn` and reported GO-2026-6354 and GO-2026-6355 against
+  `golang.org/x/crypto v0.55.0`; both are fixed in v0.56.0.
+- **Affected:** `go.mod`, `go.sum`, Docker builder, Makefile/SBOM/release
+  toolchain selection, SSH dependency documentation and verification.
+- **Security/egress:** availability fix for inbound SSH deception. Build-time
+  dependency/tool acquisition only; no runtime destination or authority change.
+- **Dependencies:** x/crypto v0.56.0 requires Go 1.26+, so this is a coordinated
+  Go 1.26.8 repository-wide upgrade rather than a Docker-only bump.
+- **Acceptance:** Go/toolchain/container references agree; SSH focused/race/fuzz,
+  whole-repository race, Helm, vulnerability, license, secret, supply-chain and
+  deterministic SBOM gates pass on one exact PR head.
+- **Verify:** `make lint test`; `make fuzz-seed`; `make helm-contract`; `make
+  vuln`; `make license-check secrets-scan`; `make supply-chain-check`; `make
+  sbom sbom-check`; release cross-build smoke; exact-head normal CI.
+- **Status:** **IN PROGRESS** — candidate is gated before PR; normal exact-head
+  CI and merge remain required.
+
 ## P1 — v0.2 completion and important architectural gaps
 
 ### P1-1 — optional evidence-at-rest encryption — TODO

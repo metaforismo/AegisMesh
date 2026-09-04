@@ -236,7 +236,7 @@ auditable and less safe. No external egress is added.
 and rejection tests, invalid-proof and input/deadline/concurrency cases,
 redaction assertions, deterministic startup/shutdown race tests, race and fuzz
 coverage, `make lint test`, `go mod verify`, license and secret checks, and a
-pinned vulnerability scan with the current Go 1.25.14 toolchain.
+pinned vulnerability scan with the current Go 1.26.8 toolchain.
 
 ---
 

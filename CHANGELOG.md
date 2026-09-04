@@ -50,11 +50,18 @@ changes bump MINOR).
 - Duplicate sensor ids from same-named import sources collided at emit time;
   deterministic suffixing with an explicit note.
 
+### Security
+
+- Upgrade `golang.org/x/crypto` to v0.56.0 to close reachable SSH channel
+  denial-of-service vulnerabilities GO-2026-6354 / CVE-2026-78662 and
+  GO-2026-6355 / CVE-2026-56855. The minimum repository toolchain moves as one
+  unit to Go 1.26.8 because x/crypto v0.56.0 requires Go 1.26 or newer.
+
 ### Changed
 
-- The minimum Go version is 1.25.14 so reachable standard-library SSH/ASN.1
-  vulnerabilities fixed in 1.25.13 cannot be reintroduced and the latest Go
-  1.25 network-library maintenance fix is included.
+- The minimum Go version is 1.26.8; Makefile and SBOM/release tooling derive the
+  selected toolchain from `go.mod`, and the Docker builder uses the matching
+  digest-pinned multi-platform image.
 - Configuration now accepts port `0` ("OS assigns an ephemeral port");
   privileged-port policy applies only to ports 1..1023. Documented in
   docs/configuration.md.

@@ -7,6 +7,8 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $(MODULE)/internal/version.Commit=$(COMMIT) -X $(MODULE)/internal/version.Date=$(DATE)
+GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
+GO_TOOLCHAIN := go$(GO_VERSION)
 
 .DEFAULT_GOAL := help
 
@@ -50,7 +52,7 @@ fuzz-short: ## short real fuzzing pass (~1m/target); CI runs fuzz-seed instead
 
 .PHONY: vuln
 vuln: ## run the pinned govulncheck release
-	GOTOOLCHAIN=go1.25.14 GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GONOSUMDB= GOFLAGS=-mod=readonly go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GONOSUMDB= GOFLAGS=-mod=readonly go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
 .PHONY: secrets-scan
 secrets-scan: ## heuristic secret scan over tracked files
@@ -68,7 +70,7 @@ sbom: ## emit the application SBOM to dist/
 .PHONY: sbom-check
 sbom-check: ## validate an existing application SBOM without acquisition
 	test -s dist/sbom-aegismesh.cdx.json
-	GOTOOLCHAIN=go1.25.14 GOFLAGS=-mod=readonly go run ./tools/sbomcheck dist/sbom-aegismesh.cdx.json
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOFLAGS=-mod=readonly go run ./tools/sbomcheck dist/sbom-aegismesh.cdx.json
 
 .PHONY: supply-chain-check
 supply-chain-check: ## verify immutable workflow, image, and tool references
@@ -82,21 +84,21 @@ demo: build ## scripted end-to-end demo into a temp dir
 release: ## cross-build release artifacts + checksums + sbom into dist/
 	@set -eu; \
 	mkdir -p dist; \
-	GOTOOLCHAIN=go1.25.14 go mod download; \
-	GOTOOLCHAIN=go1.25.14 go mod verify; \
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) go mod download; \
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) go mod verify; \
 	build() { \
 		os=$$1; arch=$$2; \
 		out="dist/aegismesh-$(VERSION)-$$os-$$arch"; \
-		GOTOOLCHAIN=go1.25.14 GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 GOOS="$$os" GOARCH="$$arch" go build -trimpath -buildvcs=true -ldflags '$(LDFLAGS)' -o "$$out" ./cmd/aegismesh; \
+		GOTOOLCHAIN=$(GO_TOOLCHAIN) GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 GOOS="$$os" GOARCH="$$arch" go build -trimpath -buildvcs=true -ldflags '$(LDFLAGS)' -o "$$out" ./cmd/aegismesh; \
 		test -s "$$out"; \
 	}; \
 	generate_sbom() { \
 		os=$$1; arch=$$2; \
-		GOTOOLCHAIN=go1.25.14 GOOS="$$os" GOARCH="$$arch" CGO_ENABLED=0 ./scripts/sbom.sh "dist/sbom-aegismesh-$$os-$$arch.cdx.json"; \
+		GOTOOLCHAIN=$(GO_TOOLCHAIN) GOOS="$$os" GOARCH="$$arch" CGO_ENABLED=0 ./scripts/sbom.sh "dist/sbom-aegismesh-$$os-$$arch.cdx.json"; \
 	}; \
 	validate_sbom() { \
 		os=$$1; arch=$$2; \
-		GOTOOLCHAIN=go1.25.14 GOFLAGS=-mod=readonly go run ./tools/sbomcheck "dist/sbom-aegismesh-$$os-$$arch.cdx.json"; \
+		GOTOOLCHAIN=$(GO_TOOLCHAIN) GOFLAGS=-mod=readonly go run ./tools/sbomcheck "dist/sbom-aegismesh-$$os-$$arch.cdx.json"; \
 	}; \
 	build linux amd64; \
 	build linux arm64; \

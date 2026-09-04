@@ -20,7 +20,7 @@ product lives in this repository under the same license.
 | Module | Version | License | Why |
 |---|---|---|---|
 | gopkg.in/yaml.v3 | v3.0.1 | MIT (+Apache-2.0 portions) | Config parsing; YAML is a user-facing requirement and stdlib has none |
-| `golang.org/x/crypto` (`ssh` package) | `v0.55.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
+| `golang.org/x/crypto` (`ssh` package) | `v0.56.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
 
 The v0.1.0 release used only the YAML module. The SSH slice adds the pinned
 `x/crypto` module. Metrics exposition, CLI dispatch, JSON-RPC/MCP handling,
@@ -67,7 +67,7 @@ the same PR that changes them.
 |---|---|---|---|
 | CycloneDX GoMod | `v1.10.0` through the Go checksum database | Apache-2.0 | Build-only application dependency inventory; no runtime import |
 | `golang.org/x/vuln/cmd/govulncheck` | `v1.7.0` | BSD-3-Clause | Build-only reachable-vulnerability gate |
-| Go builder image | `golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59` | upstream Go/Alpine notices | Build environment only; multi-platform index resolved from Docker Hub |
+| Go builder image | `golang:1.26.8-alpine@sha256:34efdd6036c92e155c8b0162a5da7626586b612ea636590035602c970eece564` | upstream Go/Alpine notices | Build environment only; multi-platform index resolved from Docker Hub |
 | Distroless runtime image | `gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab` | upstream Distroless/Debian notices | Minimal runtime filesystem; multi-platform index resolved from GCR |
 | GitHub Actions | full 40-character commit SHAs in workflow files | upstream action repositories | CI orchestration; a static gate rejects mutable references |
 

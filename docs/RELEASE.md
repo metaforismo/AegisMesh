@@ -30,7 +30,7 @@ feasible.
    creates GitHub build-provenance attestations for the binary subjects, and
    publishes a GitHub release. None of those tag-triggered writes run for a PR.
 4. Local equivalent: `make release VERSION=vX.Y.Z` acquires the exact Go
-   1.25.14 toolchain and pinned SBOM generator, then produces binaries and
+   1.26.8 toolchain and pinned SBOM generator, then produces binaries and
    inventories under `dist/` (`-trimpath`, version stamped from git describe).
    CI remains the source of attestations and published artifacts.
 
@@ -75,7 +75,7 @@ the same workflow can legitimately attest a different artifact.
 
 `golangci-lint` and cosign may be absent locally. Formatting/vet use the
 documented Makefile fallback; `make release`, `make vuln`, and `make sbom`
-select Go 1.25.14 and acquire exact pinned Go tool versions through the public
+select Go 1.26.8 and acquire exact pinned Go tool versions through the public
 Go proxy and checksum database. They fail closed if acquisition or validation
 fails. A local SBOM PASS does not imply a tag-triggered provenance or
 publication PASS.

@@ -44,8 +44,8 @@ namespace, and the setting adds no egress.
 
 ## Five-minute demo
 
-Requires Go 1.25.14 or newer. The patch-level floor includes all current Go
-1.25 security fixes plus the latest network-library maintenance release.
+Requires Go 1.26.8 or newer. The floor is coordinated with the current
+`golang.org/x/crypto/ssh` security release and the repository's release tooling.
 
 ```bash
 git clone https://github.com/metaforismo/AegisMesh && cd AegisMesh
