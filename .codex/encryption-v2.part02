@@ -1,0 +1,298 @@
+es[0])
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/internal/config/config.go b/internal/config/config.go
+index dd94f6f..7db9bc9 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -162,9 +162,15 @@ type Runtime struct {
+ }
+ 
+ type Storage struct {
+-	Retention     Retention `yaml:"retention"       json:"retention"`
+-	MaxFileBytes  int64     `yaml:"max_file_bytes"  json:"max_file_bytes"`
+-	MaxEventBytes int       `yaml:"max_event_bytes" json:"max_event_bytes"`
++	Retention     Retention          `yaml:"retention"       json:"retention"`
++	MaxFileBytes  int64              `yaml:"max_file_bytes"  json:"max_file_bytes"`
++	MaxEventBytes int                `yaml:"max_event_bytes" json:"max_event_bytes"`
++	Encryption    *StorageEncryption `yaml:"encryption,omitempty" json:"encryption,omitempty"`
++}
++
++type StorageEncryption struct {
++	Enabled   bool   `yaml:"enabled" json:"enabled"`
++	Recipient string `yaml:"recipient,omitempty" json:"recipient,omitempty"`
+ }
+ 
+ type Retention struct {
+diff --git a/internal/config/validate.go b/internal/config/validate.go
+index 2771619..317cfe9 100644
+--- a/internal/config/validate.go
++++ b/internal/config/validate.go
+@@ -14,9 +14,11 @@ import (
+ 	"strconv"
+ 	"strings"
+ 
++	"github.com/metaforismo/aegismesh/internal/agekey"
+ 	"github.com/metaforismo/aegismesh/internal/correlate"
+ 	"github.com/metaforismo/aegismesh/internal/detect"
+ 	"github.com/metaforismo/aegismesh/internal/egress"
++	"github.com/metaforismo/aegismesh/internal/event"
+ )
+ 
+ var (
+@@ -143,6 +145,12 @@ func (c *Config) Validate() error {
+ 	if c.Storage.MaxEventBytes < 1024 {
+ 		return fmt.Errorf("%w: storage.max_event_bytes must be >= 1024", errConfig)
+ 	}
++	if c.Storage.MaxEventBytes > event.MaxStoredEnvelopeBytes {
++		return fmt.Errorf("%w: storage.max_event_bytes must be <= %d", errConfig, event.MaxStoredEnvelopeBytes)
++	}
++	if err := validateStorageEncryption(c.Storage); err != nil {
++		return fmt.Errorf("%w: storage.encryption: %v", errConfig, err)
++	}
+ 	if c.Storage.Retention.MaxEvents <= 0 || c.Storage.Retention.MaxEvents > 10_000_000 {
+ 		return fmt.Errorf("%w: storage.retention.max_events must be within 1..10000000", errConfig)
+ 	}
+@@ -152,6 +160,23 @@ func (c *Config) Validate() error {
+ 	return nil
+ }
+ 
++func validateStorageEncryption(storage Storage) error {
++	if storage.Encryption == nil {
++		return nil
++	}
++	enc := storage.Encryption
++	if !enc.Enabled {
++		if enc.Recipient != "" {
++			return fmt.Errorf("recipient requires enabled: true")
++		}
++		return nil
++	}
++	if _, err := agekey.ParseRecipient(enc.Recipient); err != nil {
++		return err
++	}
++	return nil
++}
++
+ func (c *Config) validateProcessIsolation() error {
+ 	provider := strings.TrimSpace(c.LLM.Provider)
+ 	for i := range c.Sensors {
+diff --git a/internal/event/envelope.go b/internal/event/envelope.go
+index fe5668e..e0bfcda 100644
+--- a/internal/event/envelope.go
++++ b/internal/event/envelope.go
+@@ -20,6 +20,10 @@ const (
+ 	// SchemaV1 identifies the current envelope schema.
+ 	SchemaV1 = "aegismesh.event/v1"
+ 
++	// MaxStoredEnvelopeBytes is the largest encoded envelope the storage and
++	// read paths support. Configuration must never permit writes above it.
++	MaxStoredEnvelopeBytes = 1 << 20
++
+ 	ClassificationInteraction       = "interaction"
+ 	ClassificationCanaryHit         = "canary_invocation"
+ 	ClassificationCorrelationSignal = "correlation_signal"
+diff --git a/internal/runtime/runtime.go b/internal/runtime/runtime.go
+index cf42e1f..25ff151 100644
+--- a/internal/runtime/runtime.go
++++ b/internal/runtime/runtime.go
+@@ -103,6 +103,11 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
+ 		MaxEvents:     cfg.Storage.Retention.MaxEvents,
+ 		MaxAgeDays:    cfg.Storage.Retention.MaxAgeDays,
+ 	}
++	if cfg.Storage.Encryption != nil && cfg.Storage.Encryption.Enabled {
++		storeOpts.Encryption = &storage.EncryptionOptions{
++			Recipient: cfg.Storage.Encryption.Recipient,
++		}
++	}
+ 	store, err := storage.New(storeOpts)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("%w: %v", errRuntime, err)
+diff --git a/internal/storage/encryption.go b/internal/storage/encryption.go
+new file mode 100644
+index 0000000..1d8949a
+--- /dev/null
++++ b/internal/storage/encryption.go
+@@ -0,0 +1,220 @@
++package storage
++
++import (
++	"bufio"
++	"bytes"
++	"encoding/binary"
++	"errors"
++	"fmt"
++	"io"
++	"os"
++	"path/filepath"
++
++	"filippo.io/age"
++	"github.com/metaforismo/aegismesh/internal/agekey"
++)
++
++const (
++	encryptedSegmentExt   = ".jsonl.age"
++	encryptedSegmentMagic = "aegismesh.ageframes/v1\n"
++	frameLengthBytes      = 4
++)
++
++type EncryptionOptions struct {
++	Recipient string
++}
++
++type segmentEncryptor struct {
++	recipient *age.X25519Recipient
++}
++
++func newSegmentEncryptor(options *EncryptionOptions) (*segmentEncryptor, error) {
++	if options == nil {
++		return nil, nil
++	}
++	recipient, err := agekey.ParseRecipient(options.Recipient)
++	if err != nil {
++		return nil, fmt.Errorf("%w: encryption recipient: %v", errStore, err)
++	}
++	return &segmentEncryptor{recipient: recipient}, nil
++}
++
++func (e *segmentEncryptor) frame(plaintext []byte) ([]byte, error) {
++	var ciphertext bytes.Buffer
++	writer, err := age.Encrypt(&ciphertext, e.recipient)
++	if err != nil {
++		return nil, fmt.Errorf("%w: initialize age encryption: %v", errStore, err)
++	}
++	n, err := writer.Write(plaintext)
++	if err != nil {
++		_ = writer.Close()
++		return nil, fmt.Errorf("%w: encrypt event: %v", errStore, err)
++	}
++	if n != len(plaintext) {
++		_ = writer.Close()
++		return nil, fmt.Errorf("%w: encrypt event: %v", errStore, io.ErrShortWrite)
++	}
++	if err := writer.Close(); err != nil {
++		return nil, fmt.Errorf("%w: finalize encrypted event: %v", errStore, err)
++	}
++	if ciphertext.Len() > agekey.MaxEncryptedFrameBytes {
++		return nil, fmt.Errorf("%w: encrypted frame exceeds %d bytes", errStore, agekey.MaxEncryptedFrameBytes)
++	}
++
++	frame := make([]byte, frameLengthBytes+ciphertext.Len())
++	binary.BigEndian.PutUint32(frame[:frameLengthBytes], uint32(ciphertext.Len()))
++	copy(frame[frameLengthBytes:], ciphertext.Bytes())
++	return frame, nil
++}
++
++type identitySet struct {
++	values []age.Identity
++	files  []os.FileInfo
++	paths  []string
++}
++
++func loadIdentitySet(paths []string) (identitySet, error) {
++	if len(paths) > agekey.MaxIdentityFiles {
++		return identitySet{}, fmt.Errorf("%w: at most %d identity files are allowed", errStore, agekey.MaxIdentityFiles)
++	}
++	set := identitySet{
++		values: make([]age.Identity, 0, len(paths)),
++		files:  make([]os.FileInfo, 0, len(paths)),
++		paths:  make([]string, 0, len(paths)),
++	}
++	for _, path := range paths {
++		absolutePath, err := filepath.Abs(path)
++		if err != nil {
++			return identitySet{}, fmt.Errorf("%w: resolve identity file path: %v", errStore, err)
++		}
++		identity, info, err := agekey.LoadIdentityFile(path)
++		if err != nil {
++			return identitySet{}, fmt.Errorf("%w: identity file %s: %v", errStore, filepath.Base(path), err)
++		}
++		for _, existing := range set.files {
++			if os.SameFile(existing, info) {
++				return identitySet{}, fmt.Errorf("%w: identity file supplied more than once", errStore)
++			}
++		}
++		set.values = append(set.values, identity)
++		set.files = append(set.files, info)
++		set.paths = append(set.paths, filepath.Clean(absolutePath))
++	}
++	return set, nil
++}
++
++func writeEncryptedSegmentHeader(dst io.Writer) (int, error) {
++	n, err := io.WriteString(dst, encryptedSegmentMagic)
++	if err != nil {
++		return n, fmt.Errorf("%w: write encrypted segment header: %v", errStore, err)
++	}
++	if n != len(encryptedSegmentMagic) {
++		return n, fmt.Errorf("%w: write encrypted segment header: %v", errStore, io.ErrShortWrite)
++	}
++	return n, nil
++}
++
++func forEachEncryptedFrame(path string, identities identitySet, fn func([]byte) error) error {
++	if len(identities.values) == 0 {
++		return fmt.Errorf("%w: encrypted segment %s requires at least one identity file", errStore, filepath.Base(path))
++	}
++	f, err := openRegularSegment(path)
++	if err != nil {
++		return err
++	}
++	defer f.Close()
++
++	segment := filepath.Base(path)
++	reader := bufio.NewReader(f)
++	if err := readEncryptedSegmentHeader(reader, segment); err != nil {
++		return err
++	}
++	for frameNumber := 1; ; frameNumber++ {
++		length, done, err := readEncryptedFrameLength(reader, segment, frameNumber)
++		if err != nil {
++			return err
++		}
++		if done {
++			return nil
++		}
++
++		frame := &io.LimitedReader{R: reader, N: int64(length)}
++		decrypted, err := age.Decrypt(frame, identities.values...)
++		if err != nil {
++			var noMatch *age.NoIdentityMatchError
++			if errors.As(err, &noMatch) {
++				return fmt.Errorf("%w: encrypted segment %s frame %d did not match any supplied identity", errStore, segment, frameNumber)
++			}
++			return fmt.Errorf("%w: encrypted segment %s frame %d header authentication failed", errStore, segment, frameNumber)
++		}
++		plaintext, err := io.ReadAll(io.LimitReader(decrypted, agekey.MaxEncryptedEventBytes+1))
++		if err != nil {
++			return fmt.Errorf("%w: encrypted segment %s frame %d authentication failed", errStore, segment, frameNumber)
++		}
++		if len(plaintext) > agekey.MaxEncryptedEventBytes {
++			return fmt.Errorf("%w: encrypted segment %s frame %d plaintext exceeds %d bytes", errStore, segment, frameNumber, agekey.MaxEncryptedEventBytes)
++		}
++		if frame.N != 0 {
++			return fmt.Errorf("%w: encrypted segment %s frame %d is truncated or contains trailing data", errStore, segment, frameNumber)
++		}
++		if err := fn(plaintext); err != nil {
++			return err
++		}
++	}
++}
++
++func countEncryptedFrames(path string) (int, error) {
++	f, err := openRegularSegment(path)
++	if err != nil {
++		return 0, err
++	}
++	defer f.Close()
++	return countEncryptedFramesReader(bufio.NewReader(f), filepath.Base(path))
++}
++
++func countEncryptedFramesReader(reader *bufio.Reader, segment string) (int, error) {
++	if err := readEncryptedSegmentHeader(reader, segment); err != nil {
++		return 0, err
++	}
++	count := 0
++	for frameNumber := 1; ; frameNumber++ {
++		length, done, err := read
