@@ -1,0 +1,279 @@
+es.Equal(magic, []byte(encryptedSegmentMagic)) {
++		return fmt.Errorf("%w: encrypted evidence has a plaintext filename %s", errStore, filepath.Base(path))
++	}
++	scanner := bufio.NewScanner(reader)
++	scanner.Buffer(make([]byte, 64<<10), event.MaxStoredEnvelopeBytes+1)
++	for scanner.Scan() {
++		if err := fn(scanner.Text()); err != nil {
+ 			return err
+ 		}
+ 	}
+-	if err := sc.Err(); err != nil {
++	if err := scanner.Err(); err != nil {
+ 		return fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
+ 	}
+ 	return nil
+ }
+ 
++type ReaderOptions struct {
++	IdentityFiles []string
++}
++
+ // Reader iterates envelopes across all segments in a directory without
+ // creating anything (read-only inspection path).
+ type Reader struct {
+-	dir string
++	dir        string
++	identities identitySet
+ }
+ 
+ // NewReader opens a read-only view over an evidence directory.
+-func NewReader(dir string) (*Reader, error) {
++func NewReader(dir string) (*Reader, error) { return NewReaderWithOptions(dir, ReaderOptions{}) }
++
++func NewReaderWithOptions(dir string, opts ReaderOptions) (*Reader, error) {
+ 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+ 		return nil, fmt.Errorf("%w: %s is not a readable evidence directory", errStore, dir)
+ 	}
+-	return &Reader{dir: dir}, nil
++	identities, err := loadIdentitySet(opts.IdentityFiles)
++	if err != nil {
++		return nil, err
++	}
++	return &Reader{dir: dir, identities: identities}, nil
+ }
+ 
+ func (s *Store) Reader() *Reader { return &Reader{dir: s.opts.Dir} }
+ 
+-func (r *Reader) segments() ([]Segment, error) {
+-	entries, err := os.ReadDir(r.dir)
+-	if err != nil {
+-		return nil, fmt.Errorf("%w: list dir: %v", errStore, err)
++func (r *Reader) segments() ([]Segment, error) { return listSegments(r.dir) }
++
++func (r *Reader) rejectIdentitySegmentAliases(segs []Segment) error {
++	if len(r.identities.files) == 0 {
++		return nil
+ 	}
+-	var out []Segment
+-	for _, e := range entries {
+-		if e.IsDir() || !strings.HasPrefix(e.Name(), segmentPrefix) || !strings.HasSuffix(e.Name(), segmentExt) {
+-			continue
++	for _, seg := range segs {
++		f, err := openRegularSegment(seg.Path)
++		if err != nil {
++			return err
+ 		}
+-		info, err := e.Info()
++		info, err := f.Stat()
++		_ = f.Close()
+ 		if err != nil {
+-			return nil, fmt.Errorf("%w: inspect segment %s: %v", errStore, e.Name(), err)
++			return fmt.Errorf("%w: inspect segment %s: %v", errStore, seg.Name, err)
++		}
++		for _, identityInfo := range r.identities.files {
++			if os.SameFile(identityInfo, info) {
++				return fmt.Errorf("%w: identity file resolves to evidence segment %s", errStore, seg.Name)
++			}
+ 		}
+-		out = append(out, Segment{
+-			Name:      e.Name(),
+-			Path:      filepath.Join(r.dir, e.Name()),
+-			SizeBytes: info.Size(),
+-			ModTime:   info.ModTime().UTC(),
+-		})
+ 	}
+-	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.Before(out[j].ModTime) })
+-	return out, nil
++	return nil
+ }
+ 
+ // IsSegmentPath reports whether path currently resolves to an evidence segment
+-// owned by this reader. It follows symlinks and detects hard links.
++// owned by this reader. It follows aliases at the destination and detects hard links.
+ func (r *Reader) IsSegmentPath(path string) (bool, error) {
+ 	target, err := os.Stat(path)
+ 	if errors.Is(err, os.ErrNotExist) {
+@@ -367,7 +620,12 @@ func (r *Reader) IsSegmentPath(path string) (bool, error) {
+ 		return false, err
+ 	}
+ 	for _, seg := range segs {
+-		info, statErr := os.Stat(seg.Path)
++		f, err := openRegularSegment(seg.Path)
++		if err != nil {
++			return false, err
++		}
++		info, statErr := f.Stat()
++		_ = f.Close()
+ 		if statErr != nil {
+ 			return false, fmt.Errorf("%w: inspect segment %s: %v", errStore, seg.Name, statErr)
+ 		}
+@@ -378,28 +636,64 @@ func (r *Reader) IsSegmentPath(path string) (bool, error) {
+ 	return false, nil
+ }
+ 
+-// ForEach calls fn for every valid envelope in order. Corrupt lines are
+-// reported via onCorrupt and skipped — evidence readers must not crash on a
+-// partially written line (e.g., after power loss).
++// IsProtectedPath reports whether an output path aliases evidence or a supplied
++// private identity file. It also remembers the exact identity paths so removal
++// cannot turn a later export into an accidental key overwrite.
++func (r *Reader) IsProtectedPath(path string) (bool, error) {
++	absolute, err := filepath.Abs(path)
++	if err != nil {
++		return false, fmt.Errorf("%w: resolve output path: %v", errStore, err)
++	}
++	clean := filepath.Clean(absolute)
++	for _, identityPath := range r.identities.paths {
++		if clean == identityPath {
++			return true, nil
++		}
++	}
++	if target, statErr := os.Stat(path); statErr == nil {
++		for _, identityInfo := range r.identities.files {
++			if os.SameFile(target, identityInfo) {
++				return true, nil
++			}
++		}
++	} else if !errors.Is(statErr, os.ErrNotExist) {
++		return false, fmt.Errorf("%w: inspect output path: %v", errStore, statErr)
++	}
++	return r.IsSegmentPath(path)
++}
++
++// ForEach calls fn for every valid envelope in order. Corrupt plaintext lines
++// or authenticated frames with malformed JSON are reported via onCorrupt and
++// skipped. Framing, I/O, authentication, or identity failures stop the read.
+ func (r *Reader) ForEach(fn func(event.Envelope) error, onCorrupt func(line string, err error)) error {
+ 	segs, err := r.segments()
+ 	if err != nil {
+ 		return err
+ 	}
+-	for _, sg := range segs {
+-		if err := forEachLine(sg.Path, func(ln string) error {
+-			if strings.TrimSpace(ln) == "" {
++	if err := r.rejectIdentitySegmentAliases(segs); err != nil {
++		return err
++	}
++	for _, segment := range segs {
++		consume := func(raw []byte) error {
++			if len(bytes.TrimSpace(raw)) == 0 {
+ 				return nil
+ 			}
+ 			var env event.Envelope
+-			if err := json.Unmarshal([]byte(ln), &env); err != nil {
++			if err := json.Unmarshal(raw, &env); err != nil {
+ 				if onCorrupt != nil {
+-					onCorrupt(ln, err)
++					onCorrupt(string(raw), err)
+ 				}
+ 				return nil
+ 			}
+ 			return fn(env)
+-		}); err != nil {
++		}
++		if segment.Encrypted {
++			if err := forEachEncryptedFrame(segment.Path, r.identities, consume); err != nil {
++				return err
++			}
++			continue
++		}
++		if err := forEachLine(segment.Path, func(line string) error { return consume([]byte(line)) }); err != nil {
+ 			return err
+ 		}
+ 	}
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 668e78d..ddee17c 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -69,6 +69,7 @@ jobs:
+         run: |
+           go test -run '^$' -fuzz=FuzzParseConfig         ./internal/config            -fuzztime=15s -fuzzminimizetime=0
+           go test -run '^$' -fuzz=FuzzDecodeEventEnvelope ./internal/event             -fuzztime=15s -fuzzminimizetime=0
++          go test -run '^$' -fuzz=FuzzEncryptedFrameStructure ./internal/storage         -fuzztime=15s -fuzzminimizetime=0
+           go test -run '^$' -fuzz=FuzzMatchTCPLine        ./internal/sensor/tcpsensor  -fuzztime=15s -fuzzminimizetime=0
+           go test -run '^$' -fuzz=FuzzSSHMetadataHelpers  ./internal/sensor/sshsensor  -fuzztime=15s -fuzzminimizetime=0
+           go test -run '^$' -fuzz=FuzzGenerateObservation ./internal/recommend         -fuzztime=15s -fuzzminimizetime=0
+diff --git a/Makefile b/Makefile
+index e24c494..e2c8e2a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -37,6 +37,7 @@ helm-contract: ## verify Helm chart contract (guarded test; needs local helm v4)
+ fuzz-seed: ## run bounded real fuzzing without post-discovery minimization
+ 	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=15s -fuzzminimizetime=0
+ 	go test -run '^$$' -fuzz=FuzzDecodeEventEnvelope ./internal/event -fuzztime=15s -fuzzminimizetime=0
++	go test -run '^$$' -fuzz=FuzzEncryptedFrameStructure ./internal/storage -fuzztime=15s -fuzzminimizetime=0
+ 	go test -run '^$$' -fuzz=FuzzMatchTCPLine ./internal/sensor/tcpsensor -fuzztime=15s -fuzzminimizetime=0
+ 	go test -run '^$$' -fuzz=FuzzSSHMetadataHelpers ./internal/sensor/sshsensor -fuzztime=15s -fuzzminimizetime=0
+ 	go test -run '^$$' -fuzz=FuzzGenerateObservation ./internal/recommend -fuzztime=15s -fuzzminimizetime=0
+diff --git a/internal/agekey/agekey_test.go b/internal/agekey/agekey_test.go
+new file mode 100644
+index 0000000..bd967b7
+--- /dev/null
++++ b/internal/agekey/agekey_test.go
+@@ -0,0 +1,108 @@
++package agekey
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"syscall"
++	"testing"
++
++	"filippo.io/age"
++)
++
++func TestParseRecipient(t *testing.T) {
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	valid := identity.Recipient().String()
++	for _, tc := range []struct {
++		name    string
++		value   string
++		wantErr bool
++	}{
++		{name: "valid", value: valid},
++		{name: "empty", value: "", wantErr: true},
++		{name: "whitespace", value: " " + valid, wantErr: true},
++		{name: "multiple", value: valid + "," + valid, wantErr: true},
++		{name: "identity", value: identity.String(), wantErr: true},
++		{name: "ssh", value: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA", wantErr: true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			_, err := ParseRecipient(tc.value)
++			if (err != nil) != tc.wantErr {
++				t.Fatalf("ParseRecipient() error = %v, wantErr %v", err, tc.wantErr)
++			}
++		})
++	}
++}
++
++func TestLoadIdentityFile(t *testing.T) {
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	write := func(t *testing.T, body string, mode os.FileMode) string {
++		t.Helper()
++		path := filepath.Join(t.TempDir(), "identity.txt")
++		if err := os.WriteFile(path, []byte(body), mode); err != nil {
++			t.Fatal(err)
++		}
++		return path
++	}
++
++	t.Run("age-keygen format", func(t *testing.T) {
++		path := write(t, "# created for AegisMesh\n"+identity.String()+"\n", 0o600)
++		got, _, err := LoadIdentityFile(path)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if got.Recipient().String() != identity.Recipient().String() {
++			t.Fatal("loaded identity does not match")
++		}
++	})
++
++	t.Run("secret-manager symlink", func(t *testi
