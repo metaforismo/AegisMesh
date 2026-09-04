@@ -1,0 +1,131 @@
+name: codex-apply-evidence-encryption-v2
+
+on:
+  push:
+    branches:
+      - codex/evidence-at-rest-age-v2
+
+permissions:
+  contents: write
+
+jobs:
+  reconstruct-gate-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/evidence-at-rest-age-v2
+          fetch-depth: 40
+          persist-credentials: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'v4.2.2'
+
+      - name: Reconstruct verified textual patch
+        run: |
+          set -eu
+          base=01579d3073d7497ea7ba83e684c92016c2a2da5f
+          test "$(git merge-base HEAD "$base")" = "$base"
+          test "$(find .codex -maxdepth 1 -type f -name 'encryption-v2.part*' | wc -l | tr -d ' ')" = 15
+          cat .codex/encryption-v2.part{00..14} > "$RUNNER_TEMP/encryption.patch"
+          printf '%s  %s\n' \
+            '4fc51a53fe6e7aa89c3e9d7925d0afdff6fd84f47786861d5474093c753c26c7' "$RUNNER_TEMP/encryption.patch" | sha256sum -c -
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          src = Path("/home/runner/work/_temp/encryption.patch")
+          data = src.read_bytes()
+          expected = [
+              ("01-runtime.patch", 56285, "658a31a84f272994045376572b085f8e4de72e015572d758a3294f3093d5e992"),
+              ("02-tests.patch", 49399, "9455112109ecf3c3b9dd183e629ff91067edde2a8e8e3be79031f15b1d33f7be"),
+              ("03-docs.patch", 42380, "f6cfbc5933271b5e71707678c6f17da44d833b774b8486b8ef9b5d00f802de94"),
+          ]
+          if len(data) != sum(size for _, size, _ in expected):
+              raise SystemExit(f"unexpected patch size: {len(data)}")
+          offset = 0
+          for name, size, digest in expected:
+              part = data[offset:offset+size]
+              offset += size
+              got = hashlib.sha256(part).hexdigest()
+              if got != digest:
+                  raise SystemExit(f"{name} sha256 mismatch: {got}")
+              Path("/home/runner/work/_temp", name).write_bytes(part)
+          PY
+
+      - name: Recreate three product commits from master
+        run: |
+          set -eu
+          base=01579d3073d7497ea7ba83e684c92016c2a2da5f
+          git reset --hard "$base"
+          git config user.name 'metaforismo'
+          git config user.email '39646696+metaforismo@users.noreply.github.com'
+
+          git apply --check "$RUNNER_TEMP/01-runtime.patch"
+          git apply "$RUNNER_TEMP/01-runtime.patch"
+          gofmt -w internal/agekey/agekey.go internal/cli/completion.go internal/cli/doctor.go internal/cli/identity_flags.go internal/cli/inspect.go internal/cli/recommend.go internal/config/config.go internal/config/validate.go internal/event/envelope.go internal/runtime/runtime.go internal/storage/encryption.go internal/storage/store.go
+          git add -A
+          git commit -m 'feat(storage): encrypt evidence at rest with age' -m 'Add opt-in native age/X25519 framed evidence segments, explicit bounded read identities, mixed-history retention, a persistent anti-downgrade guard, and one shared writer/reader envelope cap without adding KMS, plugin, command, enforcement, or runtime egress.'
+
+          git apply --check "$RUNNER_TEMP/02-tests.patch"
+          git apply "$RUNNER_TEMP/02-tests.patch"
+          gofmt -w internal/agekey/agekey_test.go internal/cli/encryption_cli_test.go internal/config/config_test.go internal/runtime/runtime_test.go internal/storage/encryption_test.go internal/storage/store_test.go
+          git add -A
+          git commit -m 'test(storage): prove encrypted evidence boundaries' -m 'Cover wrong and missing identities, corruption, truncation, restart, rotation, mixed retention, aliases and special files, downgrade protection, exact reader limits, CLI failure paths, and bounded encrypted-frame fuzzing.'
+
+          git apply --check "$RUNNER_TEMP/03-docs.patch"
+          git apply "$RUNNER_TEMP/03-docs.patch"
+          git add -A
+          git commit -m 'docs(storage): document evidence encryption lifecycle' -m 'Document opt-in age/X25519 configuration, read identities, rotation, key loss, metadata exposure, downgrade protection, dependency boundaries, threat-model changes, and the remaining exact-head merge gate.'
+
+          test ! -e .codex
+          test ! -e .github/workflows/codex-apply-evidence-encryption-v2.yml
+          git diff --check "$base"..HEAD
+          test "$(git diff --name-only "$base"..HEAD | wc -l | tr -d ' ')" = 37
+
+      - name: Focused functionality and race
+        run: |
+          go test ./internal/event ./internal/agekey ./internal/storage ./internal/config ./internal/cli ./internal/runtime -count=1
+          go test -race ./internal/event ./internal/agekey ./internal/storage ./internal/config ./internal/cli ./internal/runtime -count=1
+
+      - name: Whole repository lint and race
+        run: make lint test
+
+      - name: Build supported targets
+        run: |
+          go build ./cmd/aegismesh
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o "$RUNNER_TEMP/aegismesh-linux-arm64" ./cmd/aegismesh
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o "$RUNNER_TEMP/aegismesh-darwin-arm64" ./cmd/aegismesh
+
+      - name: Fuzz matrix
+        run: make fuzz-seed
+
+      - name: Helm contract
+        run: make helm-contract
+
+      - name: Vulnerability gate
+        run: make vuln
+
+      - name: Dependency and secret gates
+        run: |
+          go mod verify
+          make license-check
+          make secrets-scan
+
+      - name: Supply-chain and SBOM gates
+        run: |
+          make supply-chain-check
+          make sbom
+          make sbom-check
+
+      - name: Publish exact gated product branch
+        run: |
+          git status --short
+          test -z "$(git status --porcelain)"
+          git push --force-with-lease origin HEAD:codex/evidence-at-rest-age-v2
