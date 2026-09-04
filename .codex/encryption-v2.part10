@@ -1,0 +1,238 @@
+r != nil {
++		t.Fatal(err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	err = reader.ForEach(func(event.Envelope) error { return nil }, nil)
++	if err == nil || !strings.Contains(err.Error(), "header authentication failed") {
++		t.Fatalf("malformed ciphertext error = %v", err)
++	}
++	if strings.Contains(err.Error(), marker) {
++		t.Fatalf("error reflected attacker-controlled ciphertext: %v", err)
++	}
++}
++
++func TestEncryptedReaderPropagatesCallbackStopAfterAuthentication(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, identity, nil)
++	if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	stop := errors.New("stop")
++	if err := reader.ForEach(func(event.Envelope) error { return stop }, nil); !errors.Is(err, stop) {
++		t.Fatalf("callback error = %v", err)
++	}
++}
++
++func TestEncryptionGuardPreventsSilentPlaintextDowngrade(t *testing.T) {
++	identity, _ := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, identity, nil)
++	if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++	guard := filepath.Join(dir, encryptionGuardName)
++	info, err := os.Stat(guard)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if info.Mode().Perm() != 0o600 {
++		t.Fatalf("guard permissions = %v", info.Mode().Perm())
++	}
++
++	if _, err := New(Options{Dir: dir, MaxFileBytes: 1 << 20}); err == nil || !strings.Contains(err.Error(), "refusing plaintext") {
++		t.Fatalf("plaintext reopen after encryption = %v", err)
++	}
++	if _, err := New(Options{
++		Dir:          dir,
++		MaxFileBytes: 1 << 20,
++		Encryption:   &EncryptionOptions{Recipient: identity.Recipient().String()},
++	}); err != nil {
++		t.Fatalf("encrypted reopen with guard: %v", err)
++	}
++}
++
++func TestEncryptedHistoryWithoutGuardStillPreventsPlaintextWrites(t *testing.T) {
++	dir := t.TempDir()
++	path := filepath.Join(dir, "events-20260101T000000.000000000Z.jsonl.age")
++	if err := os.WriteFile(path, []byte(encryptedSegmentMagic), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := New(Options{Dir: dir, MaxFileBytes: 1 << 20}); err == nil || !strings.Contains(err.Error(), "encrypted evidence exists") {
++		t.Fatalf("plaintext store accepted encrypted history: %v", err)
++	}
++}
++
++func TestEncryptionGuardRejectsUnsafeReplacement(t *testing.T) {
++	identity, _ := generateIdentityFile(t)
++	dir := t.TempDir()
++	guard := filepath.Join(dir, encryptionGuardName)
++	target := filepath.Join(t.TempDir(), "guard")
++	if err := os.WriteFile(target, []byte(encryptionGuardContent), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.Symlink(target, guard); err != nil {
++		t.Skipf("symlinks unavailable: %v", err)
++	}
++	_, err := New(Options{
++		Dir:          dir,
++		MaxFileBytes: 1 << 20,
++		Encryption:   &EncryptionOptions{Recipient: identity.Recipient().String()},
++	})
++	if err == nil || !strings.Contains(err.Error(), "owner-only regular file") {
++		t.Fatalf("unsafe encryption guard accepted: %v", err)
++	}
++}
++
++func FuzzEncryptedFrameStructure(f *testing.F) {
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		f.Fatal(err)
++	}
++	encryptor, err := newSegmentEncryptor(&EncryptionOptions{Recipient: identity.Recipient().String()})
++	if err != nil {
++		f.Fatal(err)
++	}
++	frame, err := encryptor.frame([]byte(`{"schema":"aegismesh.event/v1"}`))
++	if err != nil {
++		f.Fatal(err)
++	}
++	f.Add([]byte(encryptedSegmentMagic))
++	f.Add(append([]byte(encryptedSegmentMagic), frame...))
++	f.Add(append([]byte(encryptedSegmentMagic), 0, 0, 0, 0))
++
++	f.Fuzz(func(t *testing.T, raw []byte) {
++		if len(raw) > 2*agekey.MaxEncryptedFrameBytes {
++			return
++		}
++		_, _ = countEncryptedFramesReader(bufio.NewReader(bytes.NewReader(raw)), "fuzz.jsonl.age")
++	})
++}
+diff --git a/internal/storage/store_test.go b/internal/storage/store_test.go
+index ca8fe2c..a343d10 100644
+--- a/internal/storage/store_test.go
++++ b/internal/storage/store_test.go
+@@ -227,6 +227,42 @@ func TestMaxEventBytesMinimum(t *testing.T) {
+ 	}
+ }
+ 
++func TestMaxEventBytesCannotExceedReadableEnvelopeLimit(t *testing.T) {
++	_, err := New(Options{
++		Dir:           t.TempDir(),
++		MaxFileBytes:  2 << 20,
++		MaxEventBytes: event.MaxStoredEnvelopeBytes + 1,
++	})
++	if err == nil || !strings.Contains(err.Error(), "max_event_bytes must be <=") {
++		t.Fatalf("expected maximum validation, got %v", err)
++	}
++}
++
++func TestPlaintextScannerAcceptsMaximumStoredEnvelopeToken(t *testing.T) {
++	dir := t.TempDir()
++	path := filepath.Join(dir, "events-20260101T000000.000000000Z.jsonl")
++	record := strings.Repeat("x", event.MaxStoredEnvelopeBytes)
++	if err := os.WriteFile(path, append([]byte(record), '\n'), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	if n, err := CountSegment(path); err != nil || n != 1 {
++		t.Fatalf("CountSegment(max token) = %d, %v", n, err)
++	}
++	seen := 0
++	if err := forEachLine(path, func(line string) error {
++		seen++
++		if len(line) != event.MaxStoredEnvelopeBytes {
++			t.Fatalf("line length = %d", len(line))
++		}
++		return nil
++	}); err != nil {
++		t.Fatal(err)
++	}
++	if seen != 1 {
++		t.Fatalf("seen = %d", seen)
++	}
++}
++
+ func FuzzDecodeEventEnvelope(f *testing.F) {
+ 	f.Add([]byte(`{"schema":"aegismesh.event/v1"}`))
+ 	f.Add([]byte(`{"schema":123}`))
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 3c0fcf3..722a473 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -8,6 +8,12 @@ changes bump MINOR).
+ 
+ ### Added
+ 
++- Optional native age/X25519 evidence-at-rest encryption writes independently
++  authenticated `.jsonl.age` frames, supports explicit read identities during
++  key rotation, preserves mixed-history retention, and fails closed on wrong
++  keys, corruption, truncation, unsafe key/segment aliases, or accidental
++  plaintext downgrade. Plaintext remains the default for data directories that
++  have never enabled encryption.
+ - Authentication-only SSH deception sensor with synthetic password/public-key
+   authentication, per-instance in-memory Ed25519 host keys, bounded
+   sessions/inputs/concurrency, redacted evidence, and unconditional rejection
+@@ -24,6 +30,9 @@ changes bump MINOR).
+ 
+ ### Fixed
+ 
++- Storage now enforces one shared 1 MiB maximum stored-envelope boundary across
++  configuration, plaintext/encrypted writers and readers, preventing accepted
++  writes that the local reader cannot consume at the configured boundary.
+ - `storage.max_event_bytes` is now an actual runtime/store bound rather than a
+   validation-only setting. Oversized encoded envelopes are rejected before
+   segment mutation even when they would fit within `max_file_bytes`.
+diff --git a/README.md b/README.md
+index cda95e4..5639d92 100644
+--- a/README.md
++++ b/README.md
+@@ -5,7 +5,9 @@ human and agentic attackers.**
+ 
+ AegisMesh deploys bounded HTTP, TCP, authentication-only SSH, and MCP decoys and
+ records every interaction as redacted, integrity-checked evidence on your own
+-machine. It runs offline by default and never executes attacker input. Response
++machine. Evidence remains plaintext by default, with optional native age/X25519
++at-rest encryption for operators who explicitly enable it. It runs offline by
++default and never executes attacker input. Response
+ recommendations are deterministic, local, and dry-run only; the shipped runtime
+ never acts on real assets.
+ 
+@@ -111,7 +113,7 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
+ |---|---|
+ | Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST); optional fixed-worker process isolation for all four kinds |
+ | Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
+-| Evidence | Versioned native envelope, integrity checks, rotation/retention, plus opt-in local ECS-compatible export that preserves the native envelope |
++| Evidence | Versioned native envelope, integrity checks, rotation/retention, optional native age/X25519 at-rest encryption, plus opt-in local ECS-compatible export that preserves the native envelope |
+ | Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, with no enforcement or new egress |
+ | Demo | One-command synthetic HTTP/TCP/MCP/SSH scenario on OS-assigned loopback ports with integrity-verified evidence, a dry-run proposal and complete cleanup |
+ | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
+@@ -147,6 +149,7 @@ scripts/                        build/demo/scans helpers
+ | [docs/configuration.md](docs/configuration.md) | full config reference (schema, precedence, env overrides) |
+ | [docs/cli.md](docs/cli.md) | every command and flag |
+ | [docs/ecs-export.md](docs/ecs-export.md) | stable ECS-compatible evidence mapping and limits |
++| [docs/evidence-encryption.md](docs/evidence-encryption.md) | age/X25519 at-rest encryption, identity handling, rotation and recovery limits |
+ | [docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md) | finite v0.2 PR train, acceptance gates and completion predicate |
+ | [docs/canary-model.md](docs/canary-model.md) | MCP canary/operator model |
+ | [docs/migration-beelzebub.md](docs/migration-beelzebub.md) | importer field mappings, exact supported/approximated/unsupported |
+diff --git a/docs/BACKLOG.md b/docs/BACKLOG.md
+index 27d924a..4f34fcc 100644
+--- a/docs/BACKLOG.md
++++ b/docs/BACKLOG.md
+@@ -1,6 +1,6 @@
+ # Engineering backlog
+ 
+-Updated: 2026-08-31. This is the livi
