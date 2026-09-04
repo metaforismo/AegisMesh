@@ -1,0 +1,221 @@
+diff --git a/go.mod b/go.mod
+index b45323b..36a4a6a 100644
+--- a/go.mod
++++ b/go.mod
+@@ -3,8 +3,12 @@ module github.com/metaforismo/aegismesh
+ go 1.25.14
+ 
+ require (
++	filippo.io/age v1.3.2
+ 	golang.org/x/crypto v0.55.0
+ 	gopkg.in/yaml.v3 v3.0.1
+ )
+ 
+-require golang.org/x/sys v0.47.0 // indirect
++require (
++	filippo.io/hpke v0.4.0 // indirect
++	golang.org/x/sys v0.47.0 // indirect
++)
+diff --git a/go.sum b/go.sum
+index ec01301..f87732f 100644
+--- a/go.sum
++++ b/go.sum
+@@ -1,13 +1,15 @@
++c2sp.org/CCTV/age v0.0.0-20260829155415-4448f2097b2d h1:Blprhc2SbChNZtWcU+BLTM4YdoqYAS9V7cJgOwJKyAs=
++c2sp.org/CCTV/age v0.0.0-20260829155415-4448f2097b2d/go.mod h1:SrHC2C7r5GkDk8R+NFVzYy/sdj0Ypg9htaPXQq5Cqeo=
++filippo.io/age v1.3.2 h1:r6RSZLFSMm6rzKepZ7ZAYkKCu14f3/Me8c7uKYh7C8c=
++filippo.io/age v1.3.2/go.mod h1:TH/Yr2sSRhCKbaH4XPxpUV0Us8Gv6txYUpiZQWz8Evk=
++filippo.io/hpke v0.4.0 h1:p575VVQ6ted4pL+it6M00V/f2qTZITO0zgmdKCkd5+A=
++filippo.io/hpke v0.4.0/go.mod h1:EmAN849/P3qdeK+PCMkDpDm83vRHM5cDipBJ8xbQLVY=
+ golang.org/x/crypto v0.55.0 h1:+KWHjbgOaAQ66dh/YlkZKHlz9ZUlq61AFirAR9ntP8M=
+ golang.org/x/crypto v0.55.0/go.mod h1:uq0V9dE/fzQuJtbnL+2EhWOE63vo164FY8xqEnV9xis=
+-golang.org/x/net v0.57.0 h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=
+-golang.org/x/net v0.57.0/go.mod h1:KpXc8iv+r3XplLAG/f7Jsf9RPszJzdR0f58q9vGOuEU=
+ golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
+ golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+ golang.org/x/term v0.45.0 h1:NwWyBmoJCbfTHpxrWoZ9C6/VxOf7ic219I8xZZFdrf0=
+ golang.org/x/term v0.45.0/go.mod h1:9aqxs0blBcrm/n0L9QW0aRVD+ktan8ssZromtqJC43w=
+-golang.org/x/text v0.41.0 h1:vz/seA0lnX87Othu2f/0L24RcgrXD9/YFTSuGjj3rH8=
+-golang.org/x/text v0.41.0/go.mod h1:jvf1O8ajNzZqhSrQBPbutR/EB83Cc0CFrezNQIwbb5M=
+ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
+ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+diff --git a/internal/agekey/agekey.go b/internal/agekey/agekey.go
+new file mode 100644
+index 0000000..5664357
+--- /dev/null
++++ b/internal/agekey/agekey.go
+@@ -0,0 +1,108 @@
++// Package agekey owns the narrow age/X25519 key boundary used by AegisMesh.
++package agekey
++
++import (
++	"bufio"
++	"errors"
++	"fmt"
++	"io"
++	"os"
++	"strings"
++	"syscall"
++
++	"filippo.io/age"
++	"github.com/metaforismo/aegismesh/internal/event"
++)
++
++const (
++	MaxRecipientBytes      = 128
++	MaxIdentityFiles       = 8
++	MaxIdentityFileBytes   = 4 << 10
++	MaxEncryptedEventBytes = event.MaxStoredEnvelopeBytes
++	MaxEncryptedFrameBytes = MaxEncryptedEventBytes + (128 << 10)
++)
++
++// ParseRecipient accepts only the native age X25519 public-key format.
++func ParseRecipient(value string) (*age.X25519Recipient, error) {
++	if value == "" || strings.TrimSpace(value) != value {
++		return nil, errors.New("recipient must be a non-empty age X25519 public key without surrounding whitespace")
++	}
++	if len(value) > MaxRecipientBytes || strings.ContainsAny(value, ",\r\n") {
++		return nil, errors.New("recipient must be one age X25519 public key")
++	}
++	recipient, err := age.ParseX25519Recipient(value)
++	if err != nil {
++		return nil, errors.New("recipient is not a valid age X25519 public key")
++	}
++	return recipient, nil
++}
++
++func validateIdentityFileInfo(info os.FileInfo) error {
++	if !info.Mode().IsRegular() {
++		return errors.New("identity file must be a regular file")
++	}
++	if info.Size() > MaxIdentityFileBytes {
++		return fmt.Errorf("identity file exceeds %d bytes", MaxIdentityFileBytes)
++	}
++	if info.Mode().Perm()&0o077 != 0 {
++		return errors.New("identity file permissions must not grant group or other access")
++	}
++	return nil
++}
++
++// LoadIdentityFile reads exactly one native age X25519 private key from path.
++// Blank lines and comments are ignored so age-keygen output can be used directly.
++func LoadIdentityFile(path string) (*age.X25519Identity, os.FileInfo, error) {
++	if path == "" || strings.TrimSpace(path) != path {
++		return nil, nil, errors.New("identity file path must not be empty or padded")
++	}
++	before, err := os.Stat(path) // follows secret-manager symlinks intentionally
++	if err != nil {
++		return nil, nil, fmt.Errorf("inspect identity file: %w", err)
++	}
++	if err := validateIdentityFileInfo(before); err != nil {
++		return nil, nil, err
++	}
++
++	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // explicit operator path; non-blocking rejects FIFOs safely
++	if err != nil {
++		return nil, nil, fmt.Errorf("open identity file: %w", err)
++	}
++	defer f.Close()
++
++	info, err := f.Stat()
++	if err != nil {
++		return nil, nil, fmt.Errorf("inspect opened identity file: %w", err)
++	}
++	if err := validateIdentityFileInfo(info); err != nil {
++		return nil, nil, err
++	}
++	if !os.SameFile(before, info) {
++		return nil, nil, errors.New("identity file changed while opening")
++	}
++
++	scanner := bufio.NewScanner(io.LimitReader(f, MaxIdentityFileBytes+1))
++	scanner.Buffer(make([]byte, 256), MaxIdentityFileBytes)
++	var encoded string
++	for scanner.Scan() {
++		line := strings.TrimSpace(scanner.Text())
++		if line == "" || strings.HasPrefix(line, "#") {
++			continue
++		}
++		if encoded != "" {
++			return nil, nil, errors.New("identity file must contain exactly one X25519 identity")
++		}
++		encoded = line
++	}
++	if err := scanner.Err(); err != nil {
++		return nil, nil, fmt.Errorf("read identity file: %w", err)
++	}
++	if encoded == "" {
++		return nil, nil, errors.New("identity file contains no X25519 identity")
++	}
++	identity, err := age.ParseX25519Identity(encoded)
++	if err != nil {
++		return nil, nil, errors.New("identity file does not contain a valid age X25519 identity")
++	}
++	return identity, info, nil
++}
+diff --git a/internal/cli/completion.go b/internal/cli/completion.go
+index bac4782..2f9006a 100644
+--- a/internal/cli/completion.go
++++ b/internal/cli/completion.go
+@@ -58,15 +58,19 @@ _aegismesh_completions() {
+       else
+         case "$prev" in
+           --data-dir) COMPREPLY=( $(compgen -d -- "$cur") ) ;;
+-          *) COMPREPLY=( $(compgen -W "--data-dir --limit --sensor --kind --verify --id --out --json" -- "$cur") ) ;;
++          --identity) COMPREPLY=( $(compgen -f -- "$cur") ) ;;
++          --classification) COMPREPLY=( $(compgen -W "interaction canary_invocation correlation_signal" -- "$cur") ) ;;
++          --profile) COMPREPLY=( $(compgen -W "ecs" -- "$cur") ) ;;
++          *) COMPREPLY=( $(compgen -W "--data-dir --identity --limit --sensor --kind --finding --classification --verify --id --out --profile --json" -- "$cur") ) ;;
+         esac
+       fi ;;
+     recommend)
+       case "$prev" in
+         --data-dir) COMPREPLY=( $(compgen -d -- "$cur") ) ;;
++        --identity) COMPREPLY=( $(compgen -f -- "$cur") ) ;;
+         --classification) COMPREPLY=( $(compgen -W "interaction canary_invocation correlation_signal" -- "$cur") ) ;;
+         --rule) COMPREPLY=( $(compgen -W "PI-001 PI-002 EXF-001 ESC-001 OBS-001 RES-001 COR-001 COR-002 COR-003 COR-004" -- "$cur") ) ;;
+-        *) COMPREPLY=( $(compgen -W "--data-dir --limit --rule --sensor --classification --json" -- "$cur") ) ;;
++        *) COMPREPLY=( $(compgen -W "--data-dir --identity --limit --rule --sensor --classification --json" -- "$cur") ) ;;
+       esac ;;
+     migrate)
+       if [ "$COMP_CWORD" -eq 2 ]; then COMPREPLY=( $(compgen -W "beelzebub" -- "$cur") )
+@@ -95,9 +99,23 @@ _aegismesh() {
+     cmds) _describe 'command' commands ;;
+     args)
+       case $words[1] in
+-        inspect) _values 'subcommand' list show export ;;
++        inspect) _arguments \
++          '1:subcommand:(list show export)' \
++          '--data-dir[evidence directory]:directory:_directories' \
++          '*--identity[native age/X25519 identity file]:file:_files' \
++          '--limit[maximum events]:number:' \
++          '--sensor[sensor id]:sensor id:' \
++          '--kind[sensor kind]:kind:(http tcp mcp ssh)' \
++          '--finding[detection rule id]:rule id:' \
++          '--classification[evidence class]:class:(interaction canary_invocation correlation_signal)' \
++          '--verify[verify integrity hashes]' \
++          '--id[event id]:event id:' \
++          '--out[output NDJSON file]:file:_files' \
++          '--profile[export mapping]:profile:(ecs)' \
++          '--json[emit JSON output]' ;;
+         recommend) _arguments \
+           '--data-dir[evidence directory]:directory:_directories' \
++          '*--identity[native age/X25519 identity file]:file:_files' \
+           '--limit[maximum recommendations]:number:' \
+           '--rule[exact rule id]:rule id:' \
+           '--sensor[exact sensor id]:sensor id:' \
+@@ -126,6 +144,7 @@ complete -c aegismesh -n '__fish_seen_subcommand_from inspect; and __fish_is_fir
+ complete -c aegismesh -n '__fish_seen_subcommand_from migrate; and __fish_is_first_arg' -a 'beelzebub'
+ complete -c aegismesh -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
+ complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l data-dir -r -d 'evidence directory'
++complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l identity -r -d 'native age/X25519 identity file'
+ complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l limit -r -d 'maximum recommendations'
+ complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l rule -r -d 'exact rule id'
+ complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l sensor -r -d 'exact sensor id'
+@@ -134,6 +153,7 @@ complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l json -d 'JSO
+ complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l json -d 'JSON output'
+ complete -c aegismesh -l config -r -d 'config file'
+ complete -c aegismesh -l data-dir -r -d 'evidence directory'
++complete -c aegismesh -n '__fish_seen_subcommand_from inspect' -l identity -r -d 'native age/X25519 identity file'
+ complete -c aeg
