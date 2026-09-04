@@ -1,0 +1,303 @@
+event.Sequencer{}, `{"key":1}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := first.Close(); err != nil {
++		t.Fatal(err)
++	}
++	second := encryptedStore(t, dir, secondIdentity, nil)
++	if err := second.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{"key":2}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := second.Close(); err != nil {
++		t.Fatal(err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{firstPath, secondPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	if err := reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil); err != nil {
++		t.Fatal(err)
++	}
++	if seen != 2 {
++		t.Fatalf("read %d rotated-key events", seen)
++	}
++}
++
++func TestEncryptedTruncatedFinalFrameLeavesEarlierFrameAuthenticatable(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, identity, nil)
++	seq := &event.Sequencer{}
++	if err := store.Append(context.Background(), mkEnv(t, seq, `{"n":1}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Append(context.Background(), mkEnv(t, seq, `{"n":2}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++	segments, err := listSegments(dir)
++	if err != nil || len(segments) != 1 {
++		t.Fatalf("segments=%+v err=%v", segments, err)
++	}
++	raw, err := os.ReadFile(segments[0].Path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(segments[0].Path, raw[:len(raw)-1], 0o600); err != nil {
++		t.Fatal(err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	err = reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil)
++	if err == nil || seen != 1 {
++		t.Fatalf("seen=%d err=%v", seen, err)
++	}
++}
++
++func TestEncryptedRotationAndCountRetention(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, identity, func(options *Options) {
++		options.MaxFileBytes = 4096
++		options.MaxEvents = 2
++	})
++	pad := `{"pad":"` + strings.Repeat("x", 1800) + `"}`
++	for i := 0; i < 4; i++ {
++		if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, pad)); err != nil {
++			t.Fatal(err)
++		}
++	}
++	segments, err := store.Segments()
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(segments) < 2 {
++		t.Fatalf("expected rotation, got %d segment(s)", len(segments))
++	}
++	removed, err := store.ApplyRetention(context.Background())
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(removed) == 0 {
++		t.Fatal("retention removed no closed segment")
++	}
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	if err := reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil); err != nil {
++		t.Fatal(err)
++	}
++	if seen > 2 {
++		t.Fatalf("retention left %d events", seen)
++	}
++}
++
++func TestMixedPlaintextAndEncryptedHistory(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	plain, err := New(Options{Dir: dir})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := plain.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{"mode":"plain"}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := plain.Close(); err != nil {
++		t.Fatal(err)
++	}
++	encrypted := encryptedStore(t, dir, identity, nil)
++	if err := encrypted.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{"mode":"encrypted"}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := encrypted.Close(); err != nil {
++		t.Fatal(err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := 0
++	if err := reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil); err != nil {
++		t.Fatal(err)
++	}
++	if seen != 2 {
++		t.Fatalf("mixed history yielded %d events", seen)
++	}
++
++	withoutIdentity, err := NewReader(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen = 0
++	err = withoutIdentity.ForEach(func(event.Envelope) error { seen++; return nil }, nil)
++	if err == nil || seen != 1 {
++		t.Fatalf("mixed read without identity: seen=%d err=%v", seen, err)
++	}
++}
++
++func TestEncryptedSegmentRenamedAsPlaintextFailsClosed(t *testing.T) {
++	identity, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	store := encryptedStore(t, dir, identity, nil)
++	if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{}`)); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Close(); err != nil {
++		t.Fatal(err)
++	}
++	segments, err := listSegments(dir)
++	if err != nil || len(segments) != 1 {
++		t.Fatalf("segments=%+v err=%v", segments, err)
++	}
++	renamed := strings.TrimSuffix(segments[0].Path, ".age")
++	if err := os.Rename(segments[0].Path, renamed); err != nil {
++		t.Fatal(err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := reader.ForEach(func(event.Envelope) error { return nil }, nil); err == nil || !strings.Contains(err.Error(), "plaintext filename") {
++		t.Fatalf("renamed encrypted segment error = %v", err)
++	}
++	if _, err := CountSegment(renamed); err == nil || !strings.Contains(err.Error(), "plaintext filename") {
++		t.Fatalf("renamed encrypted segment count error = %v", err)
++	}
++}
++
++func TestAgeRetentionNeverDeletesActiveSegment(t *testing.T) {
++	current := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
++	store, err := New(Options{
++		Dir:          t.TempDir(),
++		MaxAgeDays:   1,
++		MaxFileBytes: 1 << 20,
++		now:          func() time.Time { return current },
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := store.Append(context.Background(), mkEnv(t, &event.Sequencer{}, `{}`)); err != nil {
++		t.Fatal(err)
++	}
++	active := store.path
++	current = current.AddDate(0, 0, 2)
++	removed, err := store.ApplyRetention(context.Background())
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(removed) != 0 {
++		t.Fatalf("active segment was removed: %v", removed)
++	}
++	if _, err := os.Stat(filepath.Join(store.opts.Dir, active)); err != nil {
++		t.Fatalf("active segment missing: %v", err)
++	}
++}
++
++func TestIdentityAliasesAreProtectedAndDuplicatesRejected(t *testing.T) {
++	_, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	hardlink := filepath.Join(dir, "identity-hardlink")
++	if err := os.Link(identityPath, hardlink); err != nil {
++		t.Skipf("hard links unavailable: %v", err)
++	}
++	if _, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath, hardlink}}); err == nil || !strings.Contains(err.Error(), "more than once") {
++		t.Fatalf("identity alias was not rejected: %v", err)
++	}
++
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	symlink := filepath.Join(dir, "identity-symlink")
++	if err := os.Symlink(identityPath, symlink); err != nil {
++		t.Skipf("symlinks unavailable: %v", err)
++	}
++	for _, path := range []string{identityPath, hardlink, symlink} {
++		protected, err := reader.IsProtectedPath(path)
++		if err != nil || !protected {
++			t.Fatalf("path %s protected=%v err=%v", path, protected, err)
++		}
++	}
++	if err := os.Remove(identityPath); err != nil {
++		t.Fatal(err)
++	}
++	protected, err := reader.IsProtectedPath(identityPath)
++	if err != nil || !protected {
++		t.Fatalf("removed supplied identity path protected=%v err=%v", protected, err)
++	}
++}
++
++func TestSegmentReadersRejectSymlinkEntries(t *testing.T) {
++	dir := t.TempDir()
++	target := filepath.Join(t.TempDir(), "outside.jsonl")
++	if err := os.WriteFile(target, []byte("{}\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	segmentPath := filepath.Join(dir, "events-20260101T000000.000000000Z.jsonl")
++	if err := os.Symlink(target, segmentPath); err != nil {
++		t.Skipf("symlinks unavailable: %v", err)
++	}
++
++	if _, err := listSegments(dir); err == nil || !strings.Contains(err.Error(), "not a regular file") {
++		t.Fatalf("segment listing followed a symlink: %v", err)
++	}
++	if _, err := CountSegment(segmentPath); err == nil || !strings.Contains(err.Error(), "not a regular file") {
++		t.Fatalf("segment counter followed a symlink: %v", err)
++	}
++	reader, err := NewReader(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := reader.ForEach(func(event.Envelope) error { return nil }, nil); err == nil || !strings.Contains(err.Error(), "not a regular file") {
++		t.Fatalf("reader followed a symlink: %v", err)
++	}
++}
++
++func TestIdentityHardLinkCannotBeReadAsEvidence(t *testing.T) {
++	_, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	segmentPath := filepath.Join(dir, "events-20260101T000000.000000000Z.jsonl")
++	if err := os.Link(identityPath, segmentPath); err != nil {
++		t.Skipf("hard links unavailable: %v", err)
++	}
++	reader, err := NewReaderWithOptions(dir, ReaderOptions{IdentityFiles: []string{identityPath}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	called := false
++	err = reader.ForEach(func(event.Envelope) error {
++		called = true
++		return nil
++	}, func(string, error) {
++		called = true
++	})
++	if err == nil || !strings.Contains(err.Error(), "identity file resolves to evidence segment") || called {
++		t.Fatalf("identity alias was exposed as evidence: called=%v err=%v", called, err)
++	}
++}
++
++func TestEncryptedErrorsDoNotEchoCiphertext(t *testing.T) {
++	_, identityPath := generateIdentityFile(t)
++	dir := t.TempDir()
++	const marker = "attacker-controlled-error-marker"
++	payload := []byte("not-an-age-file:" + marker)
++	var segment bytes.Buffer
++	segment.WriteString(encryptedSegmentMagic)
++	var length [frameLengthBytes]byte
++	binary.BigEndian.PutUint32(length[:], uint32(len(payload)))
++	segment.Write(length[:])
++	segment.Write(payload)
++	path := filepath.Join(dir, "events-20260101T000000.000000000Z.jsonl.age")
++	if err := os.WriteFile(path, segment.Bytes(), 0o600); er
