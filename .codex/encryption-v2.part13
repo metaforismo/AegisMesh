@@ -1,0 +1,195 @@
+rchitecture/data-flow.md
++++ b/docs/architecture/data-flow.md
+@@ -21,7 +21,7 @@ internal/detect        prompt-injection/abuse rule engine (PI-*/EXF-*/ESC-*/OBS-
+ internal/llm           Provider interface; deterministic local provider + remote `openai`/`ollama` adapters
+ internal/egress        destination classifier shared by validate, LLM providers, and the webhook sink
+ internal/event         versioned envelope, redaction, integrity hashing, bounded bus
+-internal/storage       JSONL append-only store, rotation, retention, export
++internal/storage       append-only evidence store, optional age/X25519 framing, rotation, retention, export
+ internal/ecsexport     deterministic ECS-compatible read-boundary projection
+ internal/recommend     pure deterministic evidence-to-proposal engine; no I/O or runtime dependency
+ internal/demo          owned synthetic four-sensor scenario; loopback clients and verified summary
+@@ -147,7 +147,8 @@ flowchart TB
+         EV[Event pipeline]
+         COR[Correlation engine]
+         WEB[Webhook sink]
+-        ST[Storage]
++        ST[Storage
++plaintext JSONL or opt-in age/X25519]
+         REC[Recommendation engine]
+     end
+     subgraph WORKER["Optional same-binary worker process"]
+diff --git a/docs/cli.md b/docs/cli.md
+index f423cfa..9c2584d 100644
+--- a/docs/cli.md
++++ b/docs/cli.md
+@@ -102,9 +102,9 @@ extension or webhook, or perform enforcement.
+ 
+ ## aegismesh inspect
+ 
+-    inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
+-    inspect show   --data-dir DIR --id EVENT_ID [--verify]
+-    inspect export --data-dir DIR --out FILE.ndjson [--profile ecs] [--verify]
++    inspect list   --data-dir DIR [--identity FILE ...] [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
++    inspect show   --data-dir DIR --id EVENT_ID [--identity FILE ...] [--verify]
++    inspect export --data-dir DIR --out FILE.ndjson [--identity FILE ...] [--profile ecs] [--verify]
+ 
+ Read-only access to evidence. `show` accepts ID prefixes (shortest unambiguous
+ match). `--verify` recomputes each event's integrity hash; corrupt lines are
+@@ -131,12 +131,15 @@ destination only after every event and line passes validation and integrity
+ checks. An existing output file is unchanged on malformed input, corrupt
+ evidence, or a failed integrity check. `--verify=false` is an explicit recovery
+ mode: invalid records are reported and skipped, so its output is not suitable as
+-a verified evidence set. The destination may not resolve to a source evidence
+-segment, including through a symlink or hard link.
++a verified evidence set. The destination may not resolve to a source evidence segment or supplied
++private identity file, including through a symlink or hard link. Encrypted
++segments require at least one matching `--identity FILE`; repeat the flag during
++key rotation. Identity files are native X25519 only, bounded and owner-only. See
++[evidence-encryption.md](evidence-encryption.md).
+ 
+ ## aegismesh recommend
+ 
+-    recommend --data-dir DIR [--limit N] [--rule RULE_ID]
++    recommend --data-dir DIR [--identity FILE ...] [--limit N] [--rule RULE_ID]
+               [--sensor ID]
+               [--classification interaction|canary_invocation|correlation_signal]
+               [--json]
+@@ -161,7 +164,9 @@ stdout is written. Empty or whitespace values, padded values, comma-separated
+ filters, repeated flags, missing values, invalid enums/IDs, positional
+ arguments, and unknown flags are usage errors. The command is read-only and has
+ no runtime-policy, LLM, webhook, extension, command, filesystem-mutation,
+-configuration-mutation, external-egress, or enforcement path.
++configuration-mutation, external-egress, or enforcement path. Encrypted
++history requires matching `--identity FILE` values under the same rules as
++`inspect`; decryption failure aborts before recommendation output is written.
+ 
+ ## aegismesh rules
+ 
+diff --git a/docs/configuration.md b/docs/configuration.md
+index 029719b..222dd7a 100644
+--- a/docs/configuration.md
++++ b/docs/configuration.md
+@@ -11,7 +11,7 @@ api_version: aegismesh.io/v1alpha1   # required, exact string
+ runtime:    { instance_name, data_dir }
+ admin:      { enabled, listen }       # loopback-only invariant
+ security:   { allow_public_bind, allow_privileged_ports }
+-storage:    { max_file_bytes, retention: { max_events, max_age_days } }
++storage:    { max_file_bytes, max_event_bytes, encryption?, retention: { max_events, max_age_days } }
+ llm:        { provider, system_prompt?, api_key_env?, base_url? }
+ sensors:    [ ... ]                   # 1..64 entries
+ ```
+@@ -51,8 +51,10 @@ for parallel test runs; still subject to host-loopback rules.
+ | field | default | notes |
+ |---|---|---|
+ | `max_file_bytes` | `16777216` (16 MiB) | rotate evidence segment above this size |
+-| `max_event_bytes` | `262144` (256 KiB) | reject an encoded event above this size before it reaches a segment |
+-| `retention.max_events` | `100000` | delete oldest closed segments beyond this |
++| `max_event_bytes` | `262144` (256 KiB) | reject an encoded event above this size before it reaches a segment; hard maximum 1 MiB so every accepted record remains readable |
++| `encryption.enabled` | `false` / omitted | write new evidence as bounded native age/X25519 `.jsonl.age` segments; once an encrypted data directory is initialized it refuses later plaintext writes |
++| `encryption.recipient` | none | one native public `age1...` X25519 recipient; required when encryption is enabled; no passphrase, SSH recipient, plugin, KMS or private identity is accepted here |
++| `retention.max_events` | `100000` | delete oldest closed segments beyond this, across plaintext/encrypted history |
+ | `retention.max_age_days` | `30` | delete segments older than this |
+ 
+ ### llm
+diff --git a/docs/evidence-encryption.md b/docs/evidence-encryption.md
+new file mode 100644
+index 0000000..d13046a
+--- /dev/null
++++ b/docs/evidence-encryption.md
+@@ -0,0 +1,119 @@
++# Evidence-at-rest encryption
++
++AegisMesh can encrypt newly written evidence segments with native age/X25519.
++The feature is opt-in. Omitting `storage.encryption` preserves the existing
++plaintext `.jsonl` format for data directories that have never required
++encryption.
++
++Encryption protects event contents at rest. It does not hide segment names,
++sizes, timestamps, retention activity, exports, logs, or other filesystem
++metadata, and it does not authenticate the host that wrote an event. Event
++integrity hashes remain observation-payload consistency checks rather than
++writer signatures or chain-of-custody proofs.
++
++## Write configuration
++
++Only a public age X25519 recipient belongs in runtime configuration:
++
++```yaml
++storage:
++  max_file_bytes: 16777216
++  max_event_bytes: 262144
++  encryption:
++    enabled: true
++    recipient: age1example...
++  retention:
++    max_events: 100000
++    max_age_days: 30
++```
++
++AegisMesh accepts exactly the native `age1...` X25519 recipient form. It does
++not accept passphrases, SSH recipients, age plugins, KMS identifiers, commands,
++or remote key services. An invalid recipient fails runtime construction before
++listeners become ready.
++
++When encryption is enabled, segments use `.jsonl.age` and a bounded AegisMesh
++frame format. Each frame contains one complete standard age ciphertext for one
++native event envelope. Frames are independently authenticated so a crash while
++writing the last record does not make earlier complete records cryptographically
++undecipherable; the reader still reports the damaged segment and never silently
++accepts a truncated frame.
++
++## Identity files and reads
++
++Private identities are supplied only at local read time:
++
++```bash
++./bin/aegismesh inspect list \
++  --data-dir ./data \
++  --identity /secure/current.agekey
++
++./bin/aegismesh inspect export \
++  --data-dir ./data \
++  --identity /secure/current.agekey \
++  --identity /secure/previous.agekey \
++  --out evidence.ndjson
++```
++
++`inspect list`, `inspect show`, `inspect export`, and `recommend` accept up to
++eight repeated `--identity FILE` values for key rotation. Each file must be a
++small owner-only regular file and contain exactly one native X25519 identity.
++Stable symlinks to an owner-only regular secret file are allowed; FIFOs, device
++files, duplicate hard-link aliases, non-X25519 identities, and oversized files
++are rejected. Private key material is never accepted inline or included in
++errors or logs.
++
++An encrypted segment fails closed when no identity matches, when framing or
++ciphertext is corrupt or truncated, or when the segment changes while it is
++being opened. Output-producing commands keep their existing staging behavior:
++failed decryption cannot produce a partial verified export or overwrite an
++existing output target. Exported NDJSON is plaintext and must be protected
++separately.
++
++## Rotation and mixed history
++
++Key rotation is explicit:
++
++1. Generate and back up a new X25519 identity using an age-compatible tool.
++2. Replace the configured public recipient and restart AegisMesh. Restart always
++   creates a new segment; it never appends to an old encrypted stream.
++3. Keep both the old and new private identity files available to read mixed
++   history during the retention window.
++4. Remove an old identity only after every segment encrypted to it has expired
++   or has been deliberately handled under the operator's retention/archive
++   process.
++
++AegisMesh does not rewrite old plaintext or old-key segments during rotation.
++Count and age retention operate across plaintext and encrypted segments and
++never delete the active segment.
++
++## No silent downgrade
++
++The first successful encrypted-store initialization creates an owner-only mode
++guard in the data directory. Later attempts to open that directory for
++plaintext writes fail. A directory containing encrypted segment history also
++refuses plaintext writes 
