@@ -1,0 +1,151 @@
+ng, evidence-backed queue. The cumulative
++Updated: 2026-09-04. This is the living, evidence-backed queue. The cumulative
+ queue through merge commit `eef2b93` is preserved in
+ [`BACKLOG-history-through-eef2b93.md`](BACKLOG-history-through-eef2b93.md).
+ 
+@@ -11,14 +11,14 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
+ ## Current baseline
+ 
+ - Default branch: `master`.
+-- Current public `master` at the start of this block:
+-  `52b6ead4fc5848d90e29eeb6de6b2c8272485d8d`.
+-- PR #54 and the subsequent product truth-sync PR #55 are merged.
+-- No open product issues were present at the start of this run.
+-- Two automated dependency PRs (#48 and #49) require policy-aware review.
+-- The operator's macOS checkout is not mounted in the current execution
+-  environment, so local Git and test commands here are `BLOCKED`; they are not
+-  relabeled from hosted CI evidence.
++- Public `master` observed at the start of this encryption block:
++  `01579d3073d7497ea7ba83e684c92016c2a2da5f`.
++- PRs #54–#57 are merged; #56 restored the real `max_event_bytes` store bound
++  and #57 removed an intermittent extension digest-test race.
++- A clean isolated checkout and Go 1.25.14 toolchain are available under the
++  current execution environment; current local PASS/BLOCKED evidence is recorded
++  in `docs/verification.md` rather than inferred from earlier environments.
++- Dependency PR state must be re-queried before P1-3 is resolved.
+ 
+ ## P0 — correctness, security, data loss, broken builds, dishonest claims
+ 
+@@ -59,7 +59,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
+   hosted vulnerability gates.
+ - **Status:** **PASS for the current audit snapshot**.
+ 
+-### P0-3 — enforce the configured storage event-size cap — IN PROGRESS
++### P0-3 — enforce the configured storage event-size cap — PASS
+ 
+ - **Evidence:** `storage.max_event_bytes` was strictly decoded, defaulted and
+   documented, but `runtime.Build` did not pass it to `storage.Options` and the
+@@ -80,16 +80,17 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
+   `go test ./internal/runtime -run TestBuildWiresStorageMaxEventBytes -count=1`;
+   `go test -race ./internal/storage ./internal/runtime -count=1`;
+   `make lint test`; hosted CI on the exact PR head.
+-- **Status:** **IN PROGRESS** — focused and affected-package race tests pass
+-  locally; hosted CI and merge remain required.
++- **Status:** **PASS** — PR #56 merged as `8652ef5`; the encryption candidate
++  additionally caps writes at the shared 1 MiB reader boundary.
+ 
+ ## P1 — v0.2 completion and important architectural gaps
+ 
+-### P1-1 — optional evidence-at-rest encryption — TODO
++### P1-1 — optional evidence-at-rest encryption — IN PROGRESS
+ 
+-- **Evidence:** `internal/storage` writes plaintext `.jsonl` segments and the
+-  threat model explicitly accepts plaintext-at-rest risk. No encryption
+-  dependency or key lifecycle is currently wired.
++- **Evidence:** this change adds native age/X25519 `.jsonl.age` segments,
++  explicit read identities, rotation/recovery semantics and a persistent
++  anti-downgrade guard while preserving plaintext as the default for data
++  directories that have never enabled encryption.
+ - **Affected:** `internal/storage`, storage configuration and validation,
+   runtime construction, `inspect`/`recommend` read paths, CLI contracts,
+   examples, threat model, ADRs, release/license policy and verification.
+@@ -118,7 +119,9 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
+   exact CLI omitted/empty/whitespace/padded/repeated/comma/positional matrices;
+   affected-package race tests; `make lint test`; applicable fuzz; `go mod
+   verify`; license, secret, vulnerability and SBOM gates.
+-- **Status:** **TODO**.
++- **Status:** **IN PROGRESS** — implementation, focused tests, whole-module
++  non-race tests and affected-package race tests PASS locally. Exact-head hosted
++  fuzz, Helm, vulnerability, license and SBOM gates plus merge remain required.
+ 
+ ### P1-2 — final v0.2 release-readiness audit — BLOCKED
+ 
+diff --git a/docs/DELIVERY-PLAN.md b/docs/DELIVERY-PLAN.md
+index c8e5462..629519e 100644
+--- a/docs/DELIVERY-PLAN.md
++++ b/docs/DELIVERY-PLAN.md
+@@ -24,7 +24,7 @@ this v0.2 completion claim.
+ | 3 | Supply-chain pinning | 2 | Immutable action/tool/image references; deterministic schema-valid SBOM; separated release authority; no publication credentials | MERGED — PR #47, `7d0e591` |
+ | 4 | Dry-run recommendation engine | 2 | Deterministic proposals linked to verified evidence; malformed input yields no report; no enforcement or external action seam | MERGED — PR #51, `86041b8` |
+ | 5 | Self-contained `aegismesh demo` | 2, 4 | Synthetic loopback HTTP/TCP/MCP/SSH flow, OS-assigned ports, integrity-verified evidence and deterministic cleanup | MERGED — PR #52, `1911678` |
+-| 6 | Optional evidence-at-rest encryption | 1 | Disabled by default; age/X25519 only; fail closed; no plaintext downgrade; restart/wrong-key/corruption/truncation/rotation/retention/recovery evidence; dependency/license proof | TODO |
++| 6 | Optional evidence-at-rest encryption | 1 | Disabled by default; age/X25519 only; fail closed; no plaintext downgrade; restart/wrong-key/corruption/truncation/rotation/retention/recovery evidence; dependency/license proof | IN PROGRESS — implementation candidate locally gated; exact-head CI/merge pending |
+ | 7 | Extension live-policy boundary | 4 | Observe-only strict contract; no output-derived response, evidence, path, config or enforcement authority | MERGED — PR #53, `ee54a63` |
+ | 8 | Per-sensor process isolation | 2, 7 | Fixed same-binary identity, bounded versioned IPC, minimal environment, parent-authoritative evidence, crash/fuzz/race/cross-build proof | MERGED — PR #54, `eef2b93` |
+ | 9 | v0.2 release-readiness audit | 1–8 | Current docs and threat model; clean `master`; complete race/fuzz/Helm/license/secret/vulnerability/SBOM evidence; no unresolved P0/P1/P2 item | TODO — blocked on slice 6 |
+diff --git a/docs/HANDOFF.md b/docs/HANDOFF.md
+index dc3b78b..1a7d37c 100644
+--- a/docs/HANDOFF.md
++++ b/docs/HANDOFF.md
+@@ -1,14 +1,14 @@
+ # HANDOFF — current verified state
+ 
+-Updated: 2026-08-31. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
++Updated: 2026-09-04. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
+ `docs/ROADMAP.md` before changing code.
+ 
+ ## Authoritative baseline
+ 
+ - Repository: `metaforismo/AegisMesh`
+ - Default branch: `master`
+-- Verified baseline before this truth-sync: `eef2b93c5e6bad06c03fe3e400094aedbe0ec9d4`
+-- That commit merged PR #54, optional fixed-worker process isolation.
++- Public `master` observed at the start of the current encryption block: `01579d3073d7497ea7ba83e684c92016c2a2da5f` (PR #57 merged).
++- PR #56 previously merged the `storage.max_event_bytes` runtime bound; PR #57 stabilized extension digest verification tests before encryption work continued.
+ - PR #54 head `6ded0223235fbb383f65accf762aa67fe481e316`
+   passed every hosted CI job: full race/build/cross-build, eight fuzz targets,
+   Helm contract, pinned vulnerability scan, dependency-license/secret checks,
+@@ -53,10 +53,12 @@ container namespaces. v0.2 does not automatically restart them.
+ 
+ ## Exact remaining v0.2 work
+ 
+-1. **Optional evidence-at-rest encryption.** Design and implement age/X25519
+-   segment encryption behind an explicit opt-in. It must fail closed, never
+-   silently write plaintext, preserve the disabled path byte-for-byte, and cover
+-   restart, wrong-key, corruption, truncation, rotation, retention and recovery.
++1. **Finish the evidence-at-rest encryption merge gate.** The current candidate
++   implements native age/X25519 segments, explicit identity reads, bounded
++   framing, restart/rotation/retention recovery and a persistent anti-downgrade
++   guard. Local focused/non-race and affected-package race gates pass; hosted
++   exact-head fuzz/Helm/vulnerability/license/SBOM checks and merge are still
++   required before this item is PASS.
+ 2. **Final release-readiness audit.** Re-run every required gate on the resulting
+    `master`, reconcile all product/security/deployment claims, and leave release
+    publication, tags, signing and real-cluster operation explicitly unexecuted
+@@ -98,16 +100,13 @@ claimed today; they require separate authorization and threat models.
+ 
+ ## Known boundaries
+ 
+-- Evidence is plaintext at rest until the remaining encryption slice lands.
++- Plaintext remains the default for never-encrypted data directories. The current candidate adds optional age/X25519 at-rest encryption; it is not a merged capability until the exact-head CI/merge gate completes.
+ - There is no Telnet/database sensor, decoy-listener TLS, distributed mesh,
+   public control API, multi-tenancy, web console or autonomous response path.
+ - Helm is verified packaging, not verified real-cluster support.
+ - No v0.2 tag, GitHub release, published image, binary signature or executed
+   provenance statement exists.
+-- The local macOS checkout named by the operator is not mounted in every agent
+-  environment. Record local commands as `BLOCKED` rather than inferring them;
+-  hosted CI can provide independent evidence but does not retroactively turn an
+-  unrun local command into `PASS`.
++- The operator's macOS checkout is not mounted in every agent environment. This block uses a clean isolated source/toolchain snapshot instead; record any unavailable command as `BLOCKED` rather than inferring it from hosted CI.
+ 
+ ## Commands that matter
+ 
+diff --git a/docs/PRODUCT.md b/docs/PRODUCT.md
+index 7d2caa7..a318abe 100644
+--- a/docs/PRODUCT.md
++++ b/docs/PRODUCT.md
+@@ -115,12 +115,13 @@ Ships: CLI (`init`, `doctor`, `validate`, `run`, `demo`, `inspect`, `recommend`,
+ `rules`, `migrate beelzebub`, `ext`, `healthcheck`, `version`, `completion`);
+ HTTP/TCP/MCP sensors plus authentication-only SSH; static policies;
+ determin
