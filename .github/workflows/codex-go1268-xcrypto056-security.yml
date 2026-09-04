@@ -1,0 +1,142 @@
+name: codex-go1268-xcrypto056-security
+
+on:
+  push:
+    branches:
+      - codex/go1268-xcrypto056-security
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade-gate-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/go1268-xcrypto056-security
+          fetch-depth: 20
+          persist-credentials: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.8'
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: 'v4.2.2'
+
+      - name: Apply whole-repository security toolchain upgrade
+        run: |
+          set -eu
+          test "$(git merge-base HEAD 01579d3073d7497ea7ba83e684c92016c2a2da5f)" = 01579d3073d7497ea7ba83e684c92016c2a2da5f
+          go mod edit -go=1.26.8
+          go get golang.org/x/crypto@v0.56.0
+          go mod tidy
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, count=None):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if count is not None and actual != count:
+                  raise SystemExit(f"{path}: expected {count} occurrence(s) of {old!r}, found {actual}")
+              if actual == 0:
+                  raise SystemExit(f"{path}: missing {old!r}")
+              p.write_text(text.replace(old, new))
+
+          make = Path("Makefile")
+          text = make.read_text()
+          anchor = "LDFLAGS := -s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $(MODULE)/internal/version.Commit=$(COMMIT) -X $(MODULE)/internal/version.Date=$(DATE)\n"
+          if text.count(anchor) != 1:
+              raise SystemExit("Makefile toolchain anchor drifted")
+          text = text.replace(anchor, anchor + "GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)\nGO_TOOLCHAIN := go$(GO_VERSION)\n", 1)
+          text = text.replace("GOTOOLCHAIN=go1.25.14", "GOTOOLCHAIN=$(GO_TOOLCHAIN)")
+          make.write_text(text)
+
+          sbom = Path("scripts/sbom.sh")
+          text = sbom.read_text()
+          anchor = "trap cleanup EXIT HUP INT TERM\n\n"
+          if text.count(anchor) != 1:
+              raise SystemExit("sbom toolchain anchor drifted")
+          text = text.replace(anchor, anchor + "go_version=$(sed -n 's/^go //p' go.mod)\n[ -n \"$go_version\" ] || { echo \"sbom.sh: go.mod has no go directive\" >&2; exit 2; }\ngo_toolchain=go$go_version\n\n", 1)
+          text = text.replace("GOTOOLCHAIN=go1.25.14", 'GOTOOLCHAIN="$go_toolchain"')
+          sbom.write_text(text)
+
+          replace("deploy/Dockerfile",
+                  "FROM golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS build",
+                  "FROM golang:1.26.8-alpine@sha256:34efdd6036c92e155c8b0162a5da7626586b612ea636590035602c970eece564 AS build", 1)
+          replace("README.md",
+                  "Requires Go 1.25.14 or newer. The patch-level floor includes all current Go\n1.25 security fixes plus the latest network-library maintenance release.",
+                  "Requires Go 1.26.8 or newer. The floor is coordinated with the current\n`golang.org/x/crypto/ssh` security release and the repository's release tooling.", 1)
+          replace("docs/RELEASE.md", "1.25.14", "1.26.8")
+          replace("docs/architecture/adr.md", "current Go 1.25.14 toolchain", "current Go 1.26.8 toolchain", 1)
+          replace("docs/license-policy.md", "`v0.55.0`", "`v0.56.0`", 1)
+          replace("docs/license-policy.md",
+                  "Go builder image | `golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59`",
+                  "Go builder image | `golang:1.26.8-alpine@sha256:34efdd6036c92e155c8b0162a5da7626586b612ea636590035602c970eece564`", 1)
+
+          changelog = Path("CHANGELOG.md")
+          text = changelog.read_text()
+          old = "### Changed\n\n- The minimum Go version is 1.25.14 so reachable standard-library SSH/ASN.1\n  vulnerabilities fixed in 1.25.13 cannot be reintroduced and the latest Go\n  1.25 network-library maintenance fix is included."
+          new = "### Security\n\n- Upgrade `golang.org/x/crypto` to v0.56.0 to close reachable SSH channel\n  denial-of-service vulnerabilities GO-2026-6354 / CVE-2026-78662 and\n  GO-2026-6355 / CVE-2026-56855. The minimum repository toolchain moves as one\n  unit to Go 1.26.8 because x/crypto v0.56.0 requires Go 1.26 or newer.\n\n### Changed\n\n- The minimum Go version is 1.26.8; Makefile and SBOM/release tooling derive the\n  selected toolchain from `go.mod`, and the Docker builder uses the matching\n  digest-pinned multi-platform image."
+          if text.count(old) != 1:
+              raise SystemExit("CHANGELOG Go floor block drifted")
+          changelog.write_text(text.replace(old, new, 1))
+
+          backlog = Path("docs/BACKLOG.md")
+          text = backlog.read_text()
+          marker = "## P1 — v0.2 completion and important architectural gaps\n"
+          if text.count(marker) != 1:
+              raise SystemExit("BACKLOG P1 marker drifted")
+          security = '''### P0-4 — close reachable x/crypto/ssh channel DoS vulnerabilities — IN PROGRESS\n\n- **Evidence:** hosted `govulncheck` on the encryption pre-merge gate reached\n  `ssh.NewServerConn` and reported GO-2026-6354 and GO-2026-6355 against\n  `golang.org/x/crypto v0.55.0`; both are fixed in v0.56.0.\n- **Affected:** `go.mod`, `go.sum`, Docker builder, Makefile/SBOM/release\n  toolchain selection, SSH dependency documentation and verification.\n- **Security/egress:** availability fix for inbound SSH deception. Build-time\n  dependency/tool acquisition only; no runtime destination or authority change.\n- **Dependencies:** x/crypto v0.56.0 requires Go 1.26+, so this is a coordinated\n  Go 1.26.8 repository-wide upgrade rather than a Docker-only bump.\n- **Acceptance:** Go/toolchain/container references agree; SSH focused/race/fuzz,\n  whole-repository race, Helm, vulnerability, license, secret, supply-chain and\n  deterministic SBOM gates pass on one exact PR head.\n- **Verify:** `make lint test`; `make fuzz-seed`; `make helm-contract`; `make\n  vuln`; `make license-check secrets-scan`; `make supply-chain-check`; `make\n  sbom sbom-check`; release cross-build smoke; exact-head normal CI.\n- **Status:** **IN PROGRESS** — candidate is gated before PR; normal exact-head\n  CI and merge remain required.\n\n'''
+          backlog.write_text(text.replace(marker, security + marker, 1))
+          PY
+
+          rm .github/workflows/codex-go1268-xcrypto056-security.yml
+          gofmt -w .
+          git diff --check
+
+      - name: Focused SSH security regression gate
+        run: |
+          go test ./internal/sensor/sshsensor ./internal/runtime ./internal/config ./internal/cli -count=3
+          go test -race ./internal/sensor/sshsensor ./internal/runtime ./internal/config ./internal/cli -count=1
+          go test -run '^$' -fuzz=FuzzSSHMetadataHelpers ./internal/sensor/sshsensor -fuzztime=15s -fuzzminimizetime=0
+
+      - name: Whole repository gates
+        run: |
+          make lint test
+          make fuzz-seed
+          make helm-contract
+          make vuln
+          make license-check
+          make secrets-scan
+          make supply-chain-check
+          make sbom
+          make sbom-check
+          go mod verify
+
+      - name: Release and container contract smoke
+        run: |
+          test "$(awk '/^go / {print $2; exit}' go.mod)" = 1.26.8
+          grep -q 'golang.org/x/crypto v0.56.0' go.mod
+          grep -q 'golang:1.26.8-alpine@sha256:34efdd6036c92e155c8b0162a5da7626586b612ea636590035602c970eece564' deploy/Dockerfile
+          GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath ./cmd/aegismesh
+          GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath ./cmd/aegismesh
+          GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath ./cmd/aegismesh
+          GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath ./cmd/aegismesh
+
+      - name: Commit and publish product-only security fix
+        run: |
+          set -eu
+          test ! -e .github/workflows/codex-go1268-xcrypto056-security.yml
+          git diff --check
+          git config user.name 'metaforismo'
+          git config user.email '39646696+metaforismo@users.noreply.github.com'
+          git add -A
+          git commit -m 'security(ssh): upgrade Go and x/crypto for channel DoS fixes' -m 'Move the repository toolchain coherently to Go 1.26.8 and x/crypto v0.56.0, derive build tooling from go.mod, pin the matching Docker builder image, and close reachable SSH channel deadlock vulnerabilities without changing runtime egress or authority.'
+          git push origin HEAD:codex/go1268-xcrypto056-security
