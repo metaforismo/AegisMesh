@@ -1,0 +1,112 @@
+istic local and opt-in remote providers; optional per-sensor fixed-worker
+-fault containment; JSONL evidence with correlation signals; ECS-compatible local
+-export; deterministic dry-run recommendations; loopback admin endpoints;
++fault containment; JSONL evidence with correlation signals and optional native
++age/X25519 at-rest encryption; ECS-compatible local export; deterministic dry-run
++recommendations; loopback admin endpoints;
+ data-only observer extensions; opt-in webhook delivery; Docker/Compose; Helm
+ packaging; pinned CI/release definitions and documentation.
+ 
+-Does not ship yet: evidence-at-rest encryption, Telnet/database sensors, OTLP or
+-automatic SIEM connectors, autonomous response connectors or enforcement,
++Does not ship yet: Telnet/database sensors, OTLP or automatic SIEM connectors,
++autonomous response connectors or enforcement,
+ distributed deployment, multi-tenancy, hosted SaaS/control plane, web console,
+ or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
+diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md
+index bb5194b..2268c47 100644
+--- a/docs/ROADMAP.md
++++ b/docs/ROADMAP.md
+@@ -43,9 +43,10 @@ implementation and its acceptance gates are complete.
+    that preserves the complete native envelope and adds no connector or egress.
+ 4. [x] **Dry-run recommendations.** Deterministic evidence-linked proposals for
+    operator review with no enforcement, asset mutation or runtime feedback path.
+-5. [ ] **Optional evidence-at-rest encryption.** age/X25519 segment encryption,
+-   disabled by default, with no silent plaintext downgrade and explicit key
+-   rotation, recovery and mixed-history semantics.
++5. [ ] **Optional evidence-at-rest encryption.** Implementation candidate uses
++   native age/X25519, is disabled by default, blocks silent plaintext downgrade,
++   and defines explicit key rotation, recovery and mixed-history semantics.
++   This checkbox remains open until exact-head CI and merge complete.
+ 6. [x] **Observe-only extension boundary.** Strict manifests and exact
+    event-linked acknowledgements; extension output cannot affect evidence,
+    policy, responses, paths, configuration or enforcement.
+diff --git a/docs/THREAT-MODEL.md b/docs/THREAT-MODEL.md
+index e925c4d..a75303e 100644
+--- a/docs/THREAT-MODEL.md
++++ b/docs/THREAT-MODEL.md
+@@ -36,7 +36,7 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
+ | Boundary | Threats | Mitigations in this batch |
+ |---|---|---|
+ | TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, credential probing, SSH decoy escape | No trust of client-supplied identity fields; HTTP/TCP/MCP inputs use server timeouts, byte caps, bounded loops, and redaction; the SSH boundary uses synthetic authentication only, bounded handshake/session/auth attempts and metadata, an in-memory Ed25519 host key, and rejects every channel/global request; sensor behavior has no attacker-controlled filesystem/exec capability |
+-| TB2 | Log/evidence forging after compromise, unbounded disk growth | Envelope carries a SHA-256 consistency check over the observation payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction applied at event construction (single choke point). The hash is not writer authentication and does not cover envelope metadata |
++| TB2 | Log/evidence forging after compromise, unbounded disk growth, plaintext disclosure or encrypted-segment/key loss | Envelope carries a SHA-256 consistency check over the observation payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction is applied at event construction. Optional native age/X25519 framing authenticates event ciphertext at rest, requires explicit bounded owner-only read identities, and uses a persistent mode guard to reject later plaintext writes in an encrypted data directory. The payload hash is not writer authentication; encryption does not hide filesystem metadata or provide key recovery. |
+ | TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body or extension-manifest files, unsafe worker launch | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body and extension-manifest files resolved relative to the config directory with traversal and real symlink containment checks; process isolation accepts only a boolean and launches a fixed same-binary worker with no config-derived command, path, environment, credential, or provider setting |
+ | TB4 | Prompt-injected provider output instructing follow-on actions, jailbreak content stored/replayed, provider SSRF | Provider output treated exactly like attacker input: size-capped, redacted, stored as quoted text; it can only ever become a decoy *response string* — there is no code path from provider output to exec, paths, config mutation, or enforcement; outbound provider URL is fixed by config, allowlisted scheme http(s), timeout-bounded |
+ | TB5 | Malicious extension code, manifest spoofing, output flooding, zombie processes, compromised extension artifact | Explicitly configured observer subprocesses only; strict bounded manifests; required sha256 digest plus optional ed25519 signature; exact `["observe"]` capability; identity-bound canonical handshake and event-linked acknowledgement; request/deadline/output caps; minimal environment; protocol violation revokes the process. Unknown/duplicate fields and untrusted error text are rejected, and no output reaches policy, evidence mutation, filesystem selection or enforcement |
+@@ -184,8 +184,12 @@ reachable. The summary still describes observations, not an incident.
+   attest the host binary or defeat a privileged local writer that replaces it.
+   Host integrity, deployment immutability, and release provenance remain
+   separate controls.
+-- Local JSONL evidence is plaintext at rest; disk encryption is the operator's responsibility. At-rest
+-  encryption is roadmap.
++- Evidence remains plaintext by default. Optional native age/X25519 at-rest
++  encryption protects event contents only; filenames, sizes, timestamps,
++  exports and host metadata remain visible. Losing every identity required by
++  retained encrypted segments is unrecoverable. The per-directory mode guard
++  prevents accidental plaintext downgrade but is not host attestation or a
++  filesystem sandbox.
+ - Build provenance depends on GitHub-hosted runner, OIDC, Sigstore, registry,
+   and source-control integrity. It covers named binary subjects only; current
+   SBOM/checksum files are not attested, and no SLSA level or binary signature is
+diff --git a/docs/architecture/adr.md b/docs/architecture/adr.md
+index 7159260..033a79b 100644
+--- a/docs/architecture/adr.md
++++ b/docs/architecture/adr.md
+@@ -447,3 +447,43 @@ health/metrics, and runtime shutdown semantics rather than silently recovered.
+ Operators requiring stronger resource or namespace isolation must supply it at
+ the container/host layer; enabling this setting alone is not a malware
+ execution boundary. Protocol changes require a new protocol version and ADR.
++
++## ADR-0016: Evidence encryption is optional native age/X25519 with an irreversible per-directory mode guard
++
++**Status:** Accepted for the v0.2 encryption slice; merge verification pending.
++
++**Context.** The native JSONL store is intentionally local-first, but plaintext
++evidence can contain sensitive attacker-controlled context. AegisMesh needs an
++optional confidentiality layer without inventing cryptography, adding a key
++service, changing the default offline posture, or allowing a configuration
++mistake to silently resume plaintext writes after encryption was enabled.
++
++**Decision.** `internal/storage` accepts one public native age X25519 recipient
++for writes. Encrypted segments use `.jsonl.age` and contain a repository-owned,
++bounded framing header followed by length-prefixed independent standard age
++ciphertexts, one per native event envelope. The framing is not a new cipher;
++age owns key wrapping, encryption and authentication. Reads accept only explicit
++local X25519 identity files through `inspect`/`recommend`, with bounded file
++count/size, permission and regular-file checks. Each frame is consumed to EOF
++before its plaintext is released to the caller. Missing/wrong identities,
++authentication failures, corruption and truncation are terminal storage errors.
++
++The existing plaintext path remains unchanged when encryption is omitted in a
++new data directory. Once encrypted mode successfully initializes, an owner-only
++mode guard makes later plaintext store construction fail closed; the existence
++of encrypted history independently enforces the same rule. Old plaintext is not
++rewritten or represented as encrypted. Restart always creates a new segment and
++key rotation is performed by changing the public recipient while supplying old
++and new read identities during the retention window.
++
++The stored-envelope maximum is shared by writer and reader so configuration
++cannot create evidence that the local reader cannot consume. Segment and
++identity opens reject special-file and replacement races at the read boundary.
++
++**Consequences.** AegisMesh gains local at-rest confidentiality without runtime
++egress, KMS, passphrases, plugins or command execution. Operators own identity
++backup and rotation; losing required private identities is unrecoverable.
++Filenames, sizes, times, exports and host metadata remain visible. The mode guard
++prevents accidental sequential downgrade but is not host attestation, a
++filesystem sandbox, or protection from a privileged local writer. A data
++directory remains a single-runtime operational resource.
+diff --git a/docs/architecture/data-flow.md b/docs/architecture/data-flow.md
+index ecb0519..e3a326e 100644
+--- a/docs/a
