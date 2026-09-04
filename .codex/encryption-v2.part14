@@ -1,0 +1,115 @@
+if the guard is missing. This protects against an
++accidental configuration rollback; it is not a migration mechanism and does not
++make pre-existing plaintext confidential.
++
++Back up the private identity before enabling encryption. Losing every identity
++that can decrypt retained segments permanently makes those events unreadable.
++AegisMesh deliberately has no recovery key, escrow service, or network key
++lookup.
++
++## Limits and trust boundary
++
++- `storage.max_event_bytes` defaults to 256 KiB and cannot exceed the shared
++  1 MiB stored-envelope read limit.
++- Ciphertext frames have an additional bounded overhead allowance and malformed
++  length prefixes are rejected before allocation.
++- Evidence and identity segment paths are checked against symlink/special-file
++  substitution and hard-link aliasing at the local read boundary.
++- The data directory remains a single-runtime operational resource; encryption
++  does not provide filesystem or host isolation against a privileged local
++  attacker.
++- Enabling encryption adds no runtime network destination, model call, webhook,
++  extension authority, subprocess, or enforcement path.
++
++See ADR-0016 in [architecture/adr.md](architecture/adr.md) and the remaining
++residual risks in [THREAT-MODEL.md](THREAT-MODEL.md).
+diff --git a/docs/license-policy.md b/docs/license-policy.md
+index 97add00..8febaf0 100644
+--- a/docs/license-policy.md
++++ b/docs/license-policy.md
+@@ -21,26 +21,31 @@ product lives in this repository under the same license.
+ |---|---|---|---|
+ | gopkg.in/yaml.v3 | v3.0.1 | MIT (+Apache-2.0 portions) | Config parsing; YAML is a user-facing requirement and stdlib has none |
+ | `golang.org/x/crypto` (`ssh` package) | `v0.55.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
++| `filippo.io/age` | `v1.3.2` | BSD-3-Clause | Maintained native age/X25519 encryption and authenticated streaming; using the standard format is safer and more interoperable than designing repository-owned cryptography |
+ 
+ The v0.1.0 release used only the YAML module. The SSH slice adds the pinned
+-`x/crypto` module. Metrics exposition, CLI dispatch, JSON-RPC/MCP handling,
+-JSONL storage, and crypto digests/signatures remain standard-library code
++`x/crypto` module; the v0.2 encryption candidate adds pinned `filippo.io/age`
++and the selected `filippo.io/hpke` transitive module. Metrics exposition, CLI
++dispatch, JSON-RPC/MCP handling, plaintext JSONL storage, and crypto
++digests/signatures remain standard-library code
+ deliberately (ADR-0001, ADR-0008).
+ 
+-## Resolved SSH dependency review
+-
+-The resolved graph also contains the transitive modules selected by
+-`x/crypto`: `golang.org/x/net v0.57.0`, `golang.org/x/sys v0.47.0`,
+-`golang.org/x/term v0.45.0`, and `golang.org/x/text v0.41.0`, plus the existing
+-YAML test dependency `gopkg.in/check.v1`. All seven non-main modules passed the
+-repository's allowed-license scan and `go mod verify`.
+-
+-Pinned `govulncheck v1.7.0` reports no reachable symbol or imported-package
+-vulnerability with Go 1.25.14. It reports the module-only advisory
+-`GO-2026-5932` for the unmaintained `x/crypto/openpgp` package; AegisMesh does
+-not import or call that package. A future imported or reachable advisory blocks
+-the dependency; no silent fallback may be substituted without amending
+-ADR-0010.
++## Resolved dependency review
++
++The pre-encryption baseline resolved seven non-main modules and passed the
++repository license gate. The encryption candidate adds `filippo.io/age v1.3.2`
++and its module-graph requirements, including `filippo.io/hpke v0.4.0`; the
++candidate `go.sum` is verified locally with `go mod verify`. Because the current
++isolated environment does not have every transitive module needed by
++`go mod download all`, the complete resolved-graph license scan is **BLOCKED
++locally** and remains a required exact-head CI gate. No candidate dependency is
++promoted to an approved shipped dependency merely from this table.
++
++The pre-encryption baseline's pinned `govulncheck v1.7.0` reported no reachable
++symbol or imported-package vulnerability with Go 1.25.14. The encryption
++candidate requires the same exact-head vulnerability gate after its module graph
++is resolved in CI. Any reachable advisory blocks the merge; no silent fallback
++or dependency substitution is permitted.
+ 
+ ## SBOM and provenance strategy
+ 
+diff --git a/docs/verification.md b/docs/verification.md
+index f01e6f9..e58a59c 100644
+--- a/docs/verification.md
++++ b/docs/verification.md
+@@ -10,6 +10,33 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
+ check or external action was deliberately not executed. Evidence from hosted CI
+ does not turn an unavailable local command into a local PASS.
+ 
++## 2026-09-04 — optional age/X25519 evidence-at-rest encryption candidate
++
++| Check | Command / evidence | Status |
++|---|---|---|
++| Public base | GitHub `master` observed before the local candidate was reconstructed | PASS — `01579d3073d7497ea7ba83e684c92016c2a2da5f` |
++| Focused functionality | `go test ./internal/event ./internal/agekey ./internal/storage ./internal/config ./internal/cli ./internal/runtime -count=1` | PASS |
++| Whole module | `go test ./... -count=1` | PASS |
++| Whole-module race | `go test -race ./... -count=1` | PASS — all packages, including runtime, sensorproc, sensors and storage |
++| Required aggregate local gate | `make lint test` | PASS — `gofmt`, `go vet` and repository-wide race suite passed; `golangci-lint` is not installed and the Makefile documented fallback was used |
++| Host/cross builds | `go build ./cmd/aegismesh`; `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./cmd/aegismesh`; `CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ./cmd/aegismesh` | PASS |
++| Encrypted framing fuzz | `go test -run '^$' -fuzz=FuzzEncryptedFrameStructure ./internal/storage -fuzztime=15s -fuzzminimizetime=0` | PASS — 1,124,269 executions in the recorded run |
++| Full fuzz matrix locally | `make fuzz-seed` | BLOCKED — the execution wrapper terminated the sequential matrix during `FuzzDecodeEventEnvelope` after `FuzzParseConfig` passed; no property failure was reported. Exact-head CI remains required. |
++| Module integrity | `go mod verify` | PASS |
++| Supply-chain static contract | `make supply-chain-check` | PASS |
++| Secret scan | `make secrets-scan` | PASS |
++| Resolved dependency license scan | `make license-check` | BLOCKED — the isolated module cache does not contain every module required by `go mod download all`, and outbound module lookup is disabled/unavailable. Exact-head CI is required. |
++| Helm contract | `make helm-contract` | BLOCKED — Helm is not installed in this environment. Exact-head CI is required. |
++| Vulnerability scan | `make vuln` | BLOCKED — the pinned Go tool/toolchain acquisition cannot resolve `proxy.golang.org` from this environment. Exact-head CI is required. |
++| CycloneDX generation | `make sbom` / `make sbom-check` | BLOCKED — the exact generator/toolchain acquisition cannot resolve the Go proxy here. Exact-head CI is required. |
++| Security review | wrong/missing identity, corruption, truncation, restart, key rotation, mixed history, retention, symlink/special-file substitution, export-target aliases, 1 MiB writer/reader boundary and persistent anti-downgrade guard | PASS in focused and whole-module suites |
++| Runtime egress / enforcement | review of changed packages and configuration | PASS — no KMS, plugin, subprocess, provider, webhook, remote destination or enforcement path was added |
++| Release/tag/signing/image/settings/cluster actions | external-state review | NOT RUN |
++
++The encryption item remains **IN PROGRESS** until the product-only branch is
++published, normal CI passes on one exact head SHA, and the PR is merged. Local
++PASS results do not substitute for the blocked hosted gates.
++
+ ## 2026-08-31 — storage `max_event_bytes` enforcement
+ 
+ | Check | Command / evidence | Status |
