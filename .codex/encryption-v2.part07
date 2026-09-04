@@ -1,0 +1,288 @@
+ngs.TrimSpace(string(identityRaw))) {
++				t.Fatal("error disclosed private identity")
++			}
++		})
++	}
++
++	target := filepath.Join(t.TempDir(), "existing.ndjson")
++	const sentinel = "keep-existing-output"
++	if err := os.WriteFile(target, []byte(sentinel), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	code, out, stderr := run(t, "inspect", "export", "--data-dir", dir, "--identity", wrongPath, "--out", target)
++	if code != 1 || out != "" || stderr == "" {
++		t.Fatalf("export wrong identity: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++	raw, err := os.ReadFile(target)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if string(raw) != sentinel {
++		t.Fatalf("failed export replaced target: %q", raw)
++	}
++}
++
++func TestEncryptedEvidenceCLIAcceptsRotatedIdentities(t *testing.T) {
++	dir, envelope, identityPath := seedEncryptedEvidence(t, `{}`)
++	wrong, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	wrongPath := writeIdentityForCLI(t, wrong)
++
++	code, out, stderr := run(t, "inspect", "list", "--data-dir", dir,
++		"--identity", wrongPath, "--identity", identityPath)
++	if code != 0 || stderr != "" || !strings.Contains(out, short(envelope.ID)) {
++		t.Fatalf("rotated identities: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++}
++
++func TestIdentityFlagUsageMatrix(t *testing.T) {
++	dir, _, identityPath := seedEncryptedEvidence(t, `{}`)
++	cases := []struct {
++		name string
++		args []string
++	}{
++		{name: "equals empty", args: []string{"--identity="}},
++		{name: "separate empty", args: []string{"--identity", ""}},
++		{name: "whitespace", args: []string{"--identity", "   "}},
++		{name: "padded", args: []string{"--identity", " " + identityPath}},
++		{name: "comma", args: []string{"--identity", identityPath + "," + identityPath}},
++		{name: "leading dash", args: []string{"--identity=-identity.txt"}},
++		{name: "missing value", args: []string{"--identity"}},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			args := append([]string{"inspect", "list", "--data-dir", dir}, tc.args...)
++			code, out, stderr := run(t, args...)
++			if code != 2 || out != "" || !strings.Contains(stderr, "usage:") {
++				t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
++			}
++		})
++	}
++
++	args := []string{"inspect", "list", "--data-dir", dir}
++	for i := 0; i < 9; i++ {
++		identity, err := age.GenerateX25519Identity()
++		if err != nil {
++			t.Fatal(err)
++		}
++		args = append(args, "--identity", writeIdentityForCLI(t, identity))
++	}
++	code, out, stderr := run(t, args...)
++	if code != 2 || out != "" || !strings.Contains(stderr, "at most 8") {
++		t.Fatalf("identity cap: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++
++	code, out, stderr = run(t, "inspect", "list", "--data-dir", dir,
++		"--identity", identityPath, "--identity", identityPath)
++	if code != 1 || out != "" || !strings.Contains(stderr, "more than once") {
++		t.Fatalf("duplicate identity: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++}
++
++func TestIdentityFileValidationFailures(t *testing.T) {
++	dir, _, _ := seedEncryptedEvidence(t, `{}`)
++	missing := filepath.Join(t.TempDir(), "missing.txt")
++	invalid := filepath.Join(t.TempDir(), "invalid.txt")
++	if err := os.WriteFile(invalid, []byte("not-an-identity\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	public, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	publicPath := filepath.Join(t.TempDir(), "recipient.txt")
++	if err := os.WriteFile(publicPath, []byte(public.Recipient().String()+"\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	readable := writeIdentityForCLI(t, public)
++	if err := os.Chmod(readable, 0o640); err != nil {
++		t.Fatal(err)
++	}
++
++	for _, path := range []string{missing, invalid, publicPath, readable} {
++		code, out, stderr := run(t, "inspect", "list", "--data-dir", dir, "--identity", path)
++		if code != 1 || out != "" || stderr == "" {
++			t.Fatalf("path=%s code=%d out=%q stderr=%q", filepath.Base(path), code, out, stderr)
++		}
++	}
++}
++
++func TestEncryptedEvidenceCorruptionLeavesCLIOutputsUntouched(t *testing.T) {
++	dir, _, identityPath := seedEncryptedEvidence(t, detectionObservation("PI-001"))
++	segments, err := filepath.Glob(filepath.Join(dir, "*.jsonl.age"))
++	if err != nil || len(segments) != 1 {
++		t.Fatalf("segments=%v err=%v", segments, err)
++	}
++	raw, err := os.ReadFile(segments[0])
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(segments[0], raw[:len(raw)-1], 0o600); err != nil {
++		t.Fatal(err)
++	}
++
++	for _, args := range [][]string{
++		{"inspect", "list", "--data-dir", dir, "--identity", identityPath},
++		{"recommend", "--data-dir", dir, "--identity", identityPath},
++	} {
++		code, out, stderr := run(t, args...)
++		if code != 1 || out != "" || stderr == "" {
++			t.Fatalf("args=%v code=%d out=%q stderr=%q", args, code, out, stderr)
++		}
++	}
++
++	target := filepath.Join(t.TempDir(), "existing.ndjson")
++	const sentinel = "existing-output"
++	if err := os.WriteFile(target, []byte(sentinel), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	code, out, stderr := run(t, "inspect", "export", "--data-dir", dir,
++		"--identity", identityPath, "--out", target)
++	if code != 1 || out != "" || stderr == "" {
++		t.Fatalf("export: code=%d out=%q stderr=%q", code, out, stderr)
++	}
++	got, err := os.ReadFile(target)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if string(got) != sentinel {
++		t.Fatalf("corrupt export replaced target: %q", got)
++	}
++}
++
++func TestInspectExportRefusesIdentityFileAliases(t *testing.T) {
++	dir, _, identityPath := seedEncryptedEvidence(t, `{}`)
++	original, err := os.ReadFile(identityPath)
++	if err != nil {
++		t.Fatal(err)
++	}
++
++	paths := []string{identityPath}
++	hardlink := filepath.Join(t.TempDir(), "identity-hardlink")
++	if err := os.Link(identityPath, hardlink); err == nil {
++		paths = append(paths, hardlink)
++	}
++	symlink := filepath.Join(t.TempDir(), "identity-symlink")
++	if err := os.Symlink(identityPath, symlink); err == nil {
++		paths = append(paths, symlink)
++	}
++
++	for _, target := range paths {
++		code, out, stderr := run(t, "inspect", "export", "--data-dir", dir,
++			"--identity", identityPath, "--out", target)
++		if code != 2 || out != "" || !strings.Contains(stderr, "identity file") {
++			t.Fatalf("target=%s code=%d out=%q stderr=%q", target, code, out, stderr)
++		}
++		got, err := os.ReadFile(identityPath)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if string(got) != string(original) {
++			t.Fatal("identity file changed")
++		}
++	}
++}
++
++func TestDoctorReportsEncryptionWithoutKeyMaterial(t *testing.T) {
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	workspace := scaffoldWorkspace(t)
++	configPath := filepath.Join(workspace, "mesh.yaml")
++	raw, err := os.ReadFile(configPath)
++	if err != nil {
++		t.Fatal(err)
++	}
++	recipient := identity.Recipient().String()
++	encryptionBlock := "storage:\n  encryption:\n    enabled: true\n    recipient: " + recipient + "\n"
++	raw = []byte(strings.Replace(string(raw), "storage:\n", encryptionBlock, 1))
++	if err := os.WriteFile(configPath, raw, 0o600); err != nil {
++		t.Fatal(err)
++	}
++
++	code, out, stderr := run(t, "doctor", "--config", configPath)
++	if code != 0 || stderr != "" || !strings.Contains(out, "storage-crypto") || !strings.Contains(out, "age/X25519") {
++		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
++	}
++	if strings.Contains(out, recipient) || strings.Contains(out, identity.String()) {
++		t.Fatal("doctor disclosed key material")
++	}
++}
++
++func TestCompletionsAdvertiseIdentityFiles(t *testing.T) {
++	for _, shell := range []string{"bash", "zsh", "fish"} {
++		code, out, stderr := run(t, "completion", shell)
++		if code != 0 || stderr != "" || !strings.Contains(out, "--identity") && !strings.Contains(out, "-l identity") {
++			t.Fatalf("%s: code=%d out=%q stderr=%q", shell, code, out, stderr)
++		}
++	}
++}
+diff --git a/internal/config/config_test.go b/internal/config/config_test.go
+index 39d7d08..877b623 100644
+--- a/internal/config/config_test.go
++++ b/internal/config/config_test.go
+@@ -82,6 +82,7 @@ func TestValidateTable(t *testing.T) {
+ 		{"admin privileged", func(c *Config) { c.Admin.Listen = "127.0.0.1:80" }, "privileged"},
+ 		{"bad log level", func(c *Config) { c.Logging.Level = "loud" }, "logging.level"},
+ 		{"zero retention", func(c *Config) { c.Storage.Retention.MaxEvents = 0 }, "max_events"},
++		{"oversize stored event", func(c *Config) { c.Storage.MaxEventBytes = 1<<20 + 1 }, "max_event_bytes must be <="},
+ 	}
+ 	for _, tc := range cases {
+ 		t.Run(tc.name, func(t *testing.T) {
+diff --git a/internal/runtime/runtime_test.go b/internal/runtime/runtime_test.go
+index f6f8815..a2afc5a 100644
+--- a/internal/runtime/runtime_test.go
++++ b/internal/runtime/runtime_test.go
+@@ -18,6 +18,7 @@ import (
+ 	"testing"
+ 	"time"
+ 
++	"filippo.io/age"
+ 	"golang.org/x/crypto/ssh"
+ 
+ 	"github.com/metaforismo/aegismesh/internal/config"
+@@ -167,6 +168,93 @@ func TestBuildWiresStorageMaxEventBytes(t *testing.T) {
+ 	}
+ }
+ 
++func TestBuildEncryptsEvidenceWithConfiguredRecipient(t *testing.T) {
++	identity, err := age.GenerateX25519Identity()
++	if err != nil {
++		t.Fatal(err)
++	}
++	cfg := testConfig(t)
++	cfg.Storage.Encryption = &config.StorageEncryption{
++		Enabled:   true,
++		Recipient: identity.Recipient().String(),
++	}
++	disabled := false
++	cfg.Admin.Enabled = &disabled
++
++	sys, err := Build(cfg, quietLogger())
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(sys.closeAll)
++
++	marker := "runtime-encrypted-marker"
++	envelope, err := event.New(&event.Sequencer{}, cfg.Runtime.InstanceName,
++		event.SensorRef{ID: "http-decoy", Kind: config.SensorKindHTTP, Listen: "127.0.0.1:0"},
++		event.ClassificationInteraction, json.RawMessage(`{"marker":"`+marker+`"}`), nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := sys.store.Append(context.Background(), envelope); err != nil {
++		t.Fatal(err)
++	}
++	if err := sys.store.Flush(); err != nil {
++		t.Fatal(err)
++	}
++
++	segments, err := sys.store.Segments()
++	if err != nil {
++		t.Fatal(err)
++	}
++	
