@@ -5,7 +5,12 @@ human and agentic attackers.**
 
 AegisMesh deploys bounded HTTP, TCP, authentication-only SSH, and MCP decoys and
 records every interaction as redacted, integrity-checked evidence on your own
-machine. It runs offline by default and never executes attacker input. Response
+machine. Evidence remains plaintext by default, with optional native age/X25519
+at-rest encryption for operators who explicitly enable it. Private identities
+are supplied only for local reads; keep backups. Encryption protects the storage
+medium, with visible file metadata, and does not protect a compromised host or
+stolen identity. It runs offline by
+default and never executes attacker input. Response
 recommendations are deterministic, local, and dry-run only; the shipped runtime
 never acts on real assets.
 
@@ -111,7 +116,7 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 |---|---|
 | Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST); optional fixed-worker process isolation for all four kinds |
 | Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
-| Evidence | Versioned native envelope, integrity checks, rotation/retention, plus opt-in local ECS-compatible export that preserves the native envelope |
+| Evidence | Versioned native envelope, integrity checks, rotation/retention, optional native age/X25519 at-rest encryption, plus opt-in local ECS-compatible export that preserves the native envelope |
 | Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, with no enforcement or new egress |
 | Demo | One-command synthetic HTTP/TCP/MCP/SSH scenario on OS-assigned loopback ports with integrity-verified evidence, a dry-run proposal and complete cleanup |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
@@ -147,6 +152,7 @@ scripts/                        build/demo/scans helpers
 | [docs/configuration.md](docs/configuration.md) | full config reference (schema, precedence, env overrides) |
 | [docs/cli.md](docs/cli.md) | every command and flag |
 | [docs/ecs-export.md](docs/ecs-export.md) | stable ECS-compatible evidence mapping and limits |
+| [docs/evidence-encryption.md](docs/evidence-encryption.md) | age/X25519 at-rest encryption, identity handling, rotation and recovery limits |
 | [docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md) | finite v0.2 PR train, acceptance gates and completion predicate |
 | [docs/canary-model.md](docs/canary-model.md) | MCP canary/operator model |
 | [docs/migration-beelzebub.md](docs/migration-beelzebub.md) | importer field mappings, exact supported/approximated/unsupported |

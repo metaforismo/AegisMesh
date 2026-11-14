@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/metaforismo/aegismesh/internal/config"
@@ -164,6 +165,99 @@ func TestBuildWiresStorageMaxEventBytes(t *testing.T) {
 	if err := sys.store.Append(context.Background(), envelope); err == nil ||
 		!strings.Contains(err.Error(), "max_event_bytes 1024") {
 		t.Fatalf("runtime store ignored configured event cap: %v", err)
+	}
+}
+
+func TestBuildEncryptsEvidenceWithConfiguredRecipient(t *testing.T) {
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig(t)
+	cfg.Storage.Encryption = &config.StorageEncryption{
+		Enabled:   true,
+		Recipient: identity.Recipient().String(),
+	}
+	disabled := false
+	cfg.Admin.Enabled = &disabled
+
+	sys, err := Build(cfg, quietLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sys.closeAll)
+
+	marker := "runtime-encrypted-marker"
+	envelope, err := event.New(&event.Sequencer{}, cfg.Runtime.InstanceName,
+		event.SensorRef{ID: "http-decoy", Kind: config.SensorKindHTTP, Listen: "127.0.0.1:0"},
+		event.ClassificationInteraction, json.RawMessage(`{"marker":"`+marker+`"}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sys.store.Append(context.Background(), envelope); err != nil {
+		t.Fatal(err)
+	}
+	if err := sys.store.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	segments, err := sys.store.Segments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(segments) != 1 || !segments[0].Encrypted {
+		t.Fatalf("segments = %+v", segments)
+	}
+	raw, err := os.ReadFile(segments[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte(marker)) || bytes.Contains(raw, []byte(`"schema":"aegismesh.event/v1"`)) {
+		t.Fatal("runtime store wrote plaintext evidence")
+	}
+
+	identityPath := filepath.Join(t.TempDir(), "identity.txt")
+	if err := os.WriteFile(identityPath, []byte(identity.String()+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := storage.NewReaderWithOptions(cfg.Runtime.DataDir, storage.ReaderOptions{
+		IdentityFiles: []string{identityPath},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reader.ForEach(func(event.Envelope) error { return nil }, nil); err == nil || !strings.Contains(err.Error(), "not sealed") {
+		t.Fatalf("runtime flush unexpectedly sealed evidence: %v", err)
+	}
+	if err := sys.store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	if err := reader.ForEach(func(got event.Envelope) error {
+		seen++
+		if got.ID != envelope.ID {
+			t.Fatalf("event ID = %s, want %s", got.ID, envelope.ID)
+		}
+		return got.VerifyIntegrity()
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if seen != 1 {
+		t.Fatalf("read %d events", seen)
+	}
+}
+
+func TestBuildRejectsInvalidEncryptionBeforeCreatingDataDir(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Runtime.DataDir = filepath.Join(t.TempDir(), "must-not-exist")
+	cfg.Storage.Encryption = &config.StorageEncryption{Enabled: true, Recipient: "not-an-age-recipient"}
+
+	_, err := Build(cfg, quietLogger())
+	if err == nil || !strings.Contains(err.Error(), "encryption recipient") {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if _, statErr := os.Stat(cfg.Runtime.DataDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("invalid encryption created data directory: %v", statErr)
 	}
 }
 

@@ -36,7 +36,7 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 | Boundary | Threats | Mitigations in this batch |
 |---|---|---|
 | TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, credential probing, SSH decoy escape | No trust of client-supplied identity fields; HTTP/TCP/MCP inputs use server timeouts, byte caps, bounded loops, and redaction; the SSH boundary uses synthetic authentication only, bounded handshake/session/auth attempts and metadata, an in-memory Ed25519 host key, and rejects every channel/global request; sensor behavior has no attacker-controlled filesystem/exec capability |
-| TB2 | Log/evidence forging after compromise, unbounded disk growth | Envelope carries a SHA-256 consistency check over the observation payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction applied at event construction (single choke point). The hash is not writer authentication and does not cover envelope metadata |
+| TB2 | Log/evidence forging after compromise, unbounded disk growth, plaintext disclosure or encrypted-segment/key loss | Envelope carries a SHA-256 consistency check over the observation payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction is applied at event construction. Optional native age/X25519 framing authenticates event ciphertext at rest, requires explicit bounded owner-only read identities, and uses a persistent mode guard to reject later plaintext writes in an encrypted data directory. The payload hash is not writer authentication; encryption does not hide filesystem metadata or provide key recovery. |
 | TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body or extension-manifest files, unsafe worker launch | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body and extension-manifest files resolved relative to the config directory with traversal and real symlink containment checks; process isolation accepts only a boolean and launches a fixed same-binary worker with no config-derived command, path, environment, credential, or provider setting |
 | TB4 | Prompt-injected provider output instructing follow-on actions, jailbreak content stored/replayed, provider SSRF | Provider output treated exactly like attacker input: size-capped, redacted, stored as quoted text; it can only ever become a decoy *response string* — there is no code path from provider output to exec, paths, config mutation, or enforcement; outbound provider URL is fixed by config, allowlisted scheme http(s), timeout-bounded |
 | TB5 | Malicious extension code, manifest spoofing, output flooding, zombie processes, compromised extension artifact | Explicitly configured observer subprocesses only; strict bounded manifests; required sha256 digest plus optional ed25519 signature; exact `["observe"]` capability; identity-bound canonical handshake and event-linked acknowledgement; request/deadline/output caps; minimal environment; protocol violation revokes the process. Unknown/duplicate fields and untrusted error text are rejected, and no output reaches policy, evidence mutation, filesystem selection or enforcement |
@@ -184,8 +184,28 @@ reachable. The summary still describes observations, not an incident.
   attest the host binary or defeat a privileged local writer that replaces it.
   Host integrity, deployment immutability, and release provenance remain
   separate controls.
-- Local JSONL evidence is plaintext at rest; disk encryption is the operator's responsibility. At-rest
-  encryption is roadmap.
+- Evidence remains plaintext by default. Optional native age/X25519 at-rest
+  encryption protects event contents only; filenames, sizes, timestamps,
+  exports and host metadata remain visible. Losing every identity required by
+  retained encrypted segments is unrecoverable. The per-directory mode guard
+  prevents accidental plaintext downgrade but is not host attestation or a
+  filesystem sandbox. Encryption protects the storage medium, not a
+  compromised runtime host or a stolen private identity. Authenticated v2
+  completion footers detect record-boundary truncation and order changes
+  relative to the footer. Entire-file deletion/replacement and forgery by a
+  public-recipient holder are not writer provenance checks. Crash-unsealed
+  segments fail closed; no automatic salvage is implemented. Normal flushes
+  publish ciphertext without sealing or `fsync`. A fixed five-minute age from
+  the first event, checked at flush, limits age-driven seals to 288/day under
+  steady traffic; size rotation and restarts add files. Empty segments do not
+  age out. Active evidence is unverifiable until sealing, normally within five
+  minutes plus the next five-second flush (longer if maintenance stalls).
+  Full-directory reads still fail when a new unsealed successor is present;
+  stop the runtime or inspect a separate sealed-only snapshot. Ten-minute
+  retention scans are off the append/flush path and open one segment at a time,
+  but hold the store mutex and can delay writes/flushes. Count retention can be
+  blocked by a damaged closed segment. Traffic can still consume disk between
+  retention passes; retention is not a hard disk quota.
 - Build provenance depends on GitHub-hosted runner, OIDC, Sigstore, registry,
   and source-control integrity. It covers named binary subjects only; current
   SBOM/checksum files are not attested, and no SLSA level or binary signature is

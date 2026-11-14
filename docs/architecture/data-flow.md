@@ -21,7 +21,8 @@ internal/detect        prompt-injection/abuse rule engine (PI-*/EXF-*/ESC-*/OBS-
 internal/llm           Provider interface; deterministic local provider + remote `openai`/`ollama` adapters
 internal/egress        destination classifier shared by validate, LLM providers, and the webhook sink
 internal/event         versioned envelope, redaction, integrity hashing, bounded bus
-internal/storage       JSONL append-only store, rotation, retention, export
+internal/agekey        bounded native X25519 public recipient/private identity parsing
+internal/storage       append-only evidence store, optional age/X25519 framing, rotation, retention, export
 internal/ecsexport     deterministic ECS-compatible read-boundary projection
 internal/recommend     pure deterministic evidence-to-proposal engine; no I/O or runtime dependency
 internal/demo          owned synthetic four-sensor scenario; loopback clients and verified summary
@@ -67,7 +68,7 @@ flowchart LR
     SSHD --> J
     J --> L[Bounded event bus\ncapacity 4096, reject new event when full]
     L --> S{Composite sink}
-    S -->|"authoritative raw evidence written first"| M[(JSONL evidence store\nrotation + retention)]
+    S -->|"authoritative raw evidence written first"| M[(Evidence store\nplaintext JSONL or age/X25519 frames\nrotation + retention)]
     S -.->|"optional offers, never blocking,\ndrops counted per consumer"| W[Webhook sink\nHMAC-signed batches]
     S -.-> X[Observer extension hosts\ndata-only]
     S --> R[Correlation engine:\nobserves raw classifications only]
@@ -147,7 +148,8 @@ flowchart TB
         EV[Event pipeline]
         COR[Correlation engine]
         WEB[Webhook sink]
-        ST[Storage]
+        ST[Storage
+plaintext JSONL or opt-in age/X25519]
         REC[Recommendation engine]
     end
     subgraph WORKER["Optional same-binary worker process"]
@@ -247,3 +249,14 @@ they use stdio only and introduce no destination or other external egress.
     the parent owns event identity, time, sequence, integrity, storage, readiness, and shutdown. Worker
     protocol or startup failures fail closed for that sensor and never select a command, path, credential,
     provider destination, or enforcement action.
+
+Encrypted segments use authenticated v2 completion footers. Ordinary flushes
+write buffers to the OS; size rotation, close or a flush at five minutes from
+the first event seals the segment. Empty segments never age out. Only the next
+append after sealing opens a new segment. Active segments fail closed on read;
+full-directory reads require every segment to be sealed. Only public recipients enter the
+runtime writer. Explicit bounded owner-only identity files enter the local read
+boundary; no identity reaches sensors, workers, LLMs, webhooks or logs. Complete
+read success includes the footer before any CLI output is published. Count
+retention reads framing without private keys; it does not authenticate history.
+There is no added network destination or command execution edge.

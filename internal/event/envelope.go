@@ -20,6 +20,10 @@ const (
 	// SchemaV1 identifies the current envelope schema.
 	SchemaV1 = "aegismesh.event/v1"
 
+	// MaxStoredEnvelopeBytes is the largest encoded envelope the storage and
+	// read paths support. Configuration must never permit writes above it.
+	MaxStoredEnvelopeBytes = 1 << 20
+
 	ClassificationInteraction       = "interaction"
 	ClassificationCanaryHit         = "canary_invocation"
 	ClassificationCorrelationSignal = "correlation_signal"

@@ -82,6 +82,7 @@ func TestValidateTable(t *testing.T) {
 		{"admin privileged", func(c *Config) { c.Admin.Listen = "127.0.0.1:80" }, "privileged"},
 		{"bad log level", func(c *Config) { c.Logging.Level = "loud" }, "logging.level"},
 		{"zero retention", func(c *Config) { c.Storage.Retention.MaxEvents = 0 }, "max_events"},
+		{"oversize stored event", func(c *Config) { c.Storage.MaxEventBytes = 1<<20 + 1 }, "max_event_bytes must be <="},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

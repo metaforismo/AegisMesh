@@ -1,6 +1,6 @@
 # Engineering backlog
 
-Updated: 2026-08-31. This is the living, evidence-backed queue. The cumulative
+Updated: 2026-11-14. This is the living, evidence-backed queue. The cumulative
 queue through merge commit `eef2b93` is preserved in
 [`BACKLOG-history-through-eef2b93.md`](BACKLOG-history-through-eef2b93.md).
 
@@ -10,15 +10,16 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## Current baseline
 
-- Default branch: `master`.
-- Current public `master` at the start of this block:
-  `52b6ead4fc5848d90e29eeb6de6b2c8272485d8d`.
-- PR #54 and the subsequent product truth-sync PR #55 are merged.
-- No open product issues were present at the start of this run.
-- Two automated dependency PRs (#48 and #49) require policy-aware review.
-- The operator's macOS checkout is not mounted in the current execution
-  environment, so local Git and test commands here are `BLOCKED`; they are not
-  relabeled from hosted CI evidence.
+- Default branch: `master`; its live remote state was not refreshed in this task.
+- Current worktree: `feat/evidence-at-rest-encryption`, based on
+  `c64b58f29373ac475ec6a44ce692722062c5dfba` (reviewed but unmerged toolchain
+  upgrade). Encryption changes remain uncommitted; PR number is pending.
+- The requested macOS worktree and Go 1.27.4 are available. Current local
+  execution and SBOM fallback receipts are in `docs/verification.md`.
+- PR #58 is closed/unmerged; its recovered draft and historical checks are not
+  human review, exact-head CI or merge evidence for this candidate.
+- Other backlog items retain their prior recorded statuses; no release-readiness
+  completion, repository administration or remote PR-state refresh is implied.
 
 ## P0 — correctness, security, data loss, broken builds, dishonest claims
 
@@ -85,11 +86,12 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## P1 — v0.2 completion and important architectural gaps
 
-### P1-1 — optional evidence-at-rest encryption — TODO
+### P1-1 — optional evidence-at-rest encryption — IMPLEMENTED (review/CI/merge pending)
 
-- **Evidence:** `internal/storage` writes plaintext `.jsonl` segments and the
-  threat model explicitly accepts plaintext-at-rest risk. No encryption
-  dependency or key lifecycle is currently wired.
+- **Evidence:** this change adds native age/X25519 `.jsonl.age` segments,
+  explicit read identities, rotation/recovery semantics and a persistent
+  anti-downgrade guard while preserving plaintext as the default for data
+  directories that have never enabled encryption.
 - **Affected:** `internal/storage`, storage configuration and validation,
   runtime construction, `inspect`/`recommend` read paths, CLI contracts,
   examples, threat model, ADRs, release/license policy and verification.
@@ -118,7 +120,11 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   exact CLI omitted/empty/whitespace/padded/repeated/comma/positional matrices;
   affected-package race tests; `make lint test`; applicable fuzz; `go mod
   verify`; license, secret, vulnerability and SBOM gates.
-- **Status:** **TODO**.
+- **Status:** **IMPLEMENTED — PR pending**. Uncommitted on
+  `feat/evidence-at-rest-encryption`, based on reviewed but unmerged toolchain
+  work. Current local gate results are in `docs/verification.md`; human review,
+  exact-head hosted CI and merge remain required. The closed unmerged PR #58
+  supplies draft material only and is not acceptance evidence.
 
 ### P1-2 — final v0.2 release-readiness audit — BLOCKED
 

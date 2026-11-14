@@ -69,6 +69,7 @@ jobs:
         run: |
           go test -run '^$' -fuzz=FuzzParseConfig         ./internal/config            -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzDecodeEventEnvelope ./internal/event             -fuzztime=15s -fuzzminimizetime=0
+          go test -run '^$' -fuzz=FuzzEncryptedFrameStructure ./internal/storage         -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzMatchTCPLine        ./internal/sensor/tcpsensor  -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzSSHMetadataHelpers  ./internal/sensor/sshsensor  -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzGenerateObservation ./internal/recommend         -fuzztime=15s -fuzzminimizetime=0

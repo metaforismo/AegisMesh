@@ -162,9 +162,15 @@ type Runtime struct {
 }
 
 type Storage struct {
-	Retention     Retention `yaml:"retention"       json:"retention"`
-	MaxFileBytes  int64     `yaml:"max_file_bytes"  json:"max_file_bytes"`
-	MaxEventBytes int       `yaml:"max_event_bytes" json:"max_event_bytes"`
+	Retention     Retention          `yaml:"retention"       json:"retention"`
+	MaxFileBytes  int64              `yaml:"max_file_bytes"  json:"max_file_bytes"`
+	MaxEventBytes int                `yaml:"max_event_bytes" json:"max_event_bytes"`
+	Encryption    *StorageEncryption `yaml:"encryption,omitempty" json:"encryption,omitempty"`
+}
+
+type StorageEncryption struct {
+	Enabled   bool   `yaml:"enabled" json:"enabled"`
+	Recipient string `yaml:"recipient,omitempty" json:"recipient,omitempty"`
 }
 
 type Retention struct {

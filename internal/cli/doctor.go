@@ -102,6 +102,11 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 			add("ok", "storage", fmt.Sprintf("data dir %s writable", dataDir), "")
 		}
 	}
+	if cfg.Storage.Encryption != nil && cfg.Storage.Encryption.Enabled {
+		add("ok", "storage-crypto", "age/X25519 evidence encryption enabled (.jsonl.age); runtime holds only the public recipient", "")
+	} else {
+		add("info", "storage-crypto", "off in configuration — new data directories use plaintext JSONL; previously encrypted directories fail closed", "enable storage.encryption only after backing up the private identity")
+	}
 
 	// Port availability per sensor + admin.
 	for i := range cfg.Sensors {
