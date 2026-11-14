@@ -33,6 +33,7 @@ const EXTERNAL_HREFS = new Set([
   'https://github.com/metaforismo/AegisMesh',
   'https://github.com/metaforismo/AegisMesh/blob/master/docs/cli.md',
   'https://github.com/metaforismo/AegisMesh/blob/master/docs/architecture/console-api.md',
+  'https://github.com/metaforismo/AegisMesh/blob/master/docs/configuration.md',
 ]);
 
 export class UnsafeAttributeError extends Error {

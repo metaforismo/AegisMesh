@@ -19,7 +19,7 @@ import {
   inputField, timeEl, labelFor, errorState,
 } from '../ui/components.js';
 
-export const FLEET_SUBTITLE = 'Experimental inventory of nodes that enrolled with this hub. Everything shown about a node is self-reported by its agent in signed heartbeats; it is not attestation. The hub cannot start, stop or configure nodes, and no evidence is forwarded to it.';
+export const FLEET_SUBTITLE = 'Experimental inventory of nodes enrolled with a fleet hub. Everything shown about a node is self-reported by its agent in signed heartbeats; it is not attestation. The hub cannot start, stop or configure nodes, and no evidence is forwarded to it.';
 
 export function fleetStatusBadge(status) {
   const m = fleetStatusMeta(status);
@@ -62,13 +62,13 @@ function rolePanel(f) {
     title: 'This node',
     meta: 'Fleet roles are set in configuration; see docs/configuration.md.',
     body: h('div', { class: 'grid grid--2' },
-      h('section', { 'aria-labelledby': 'role-hub' },
+      h('section', { class: 'role', 'aria-labelledby': 'role-hub' },
         h('h3', { id: 'role-hub', class: 'btn-row' }, 'Hub', hub.enabled ? badge('ok', 'Enabled') : badge('neutral', 'Off')),
         hub.enabled ? kv([
           ['Machine listener', h('code', null, hub.listen || '—')],
           ['TLS', hub.tls ? 'Enabled' : 'Off (loopback development only)'],
         ]) : h('p', { class: 'muted' }, 'This node does not accept enrollments.')),
-      h('section', { 'aria-labelledby': 'role-agent' },
+      h('section', { class: 'role', 'aria-labelledby': 'role-agent' },
         h('h3', { id: 'role-agent', class: 'btn-row' }, 'Agent', agent.enabled ? badge('ok', 'Enabled') : badge('neutral', 'Off')),
         agent.enabled ? kv([
           ['Hub URL', agent.hub_url ? h('code', null, agent.hub_url) : ''],
@@ -97,14 +97,14 @@ function nodesTable(nodes) {
     caption: 'Fleet nodes',
     columns: [
       { label: 'Status', cell: (n) => fleetStatusBadge(n.status) },
-      { label: 'Name', cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
-      { label: 'Node id', cell: (n) => h('code', { class: 'hash', title: n.id }, shortId(n.id, 12)) },
-      { label: 'Version', cell: (n) => h('code', null, n.version?.version || '—') },
+      { label: 'Name', className: 'nowrap', cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
+      { label: 'Node id', className: 'nowrap', cell: (n) => h('code', { class: 'hash', title: n.id }, shortId(n.id, 12)) },
+      { label: 'Version', className: 'nowrap', cell: (n) => h('code', null, n.version?.version || '—') },
       { label: 'Last seen', className: 'nowrap', cell: (n) => seenCell(n.last_seen_at, 'never (no heartbeat)') },
       { label: 'Sensors', cell: (n) => sensorsCell(n.sensors) },
       { label: 'Counters', cell: (n) => countersCell(n.counters) },
       { label: 'Bus drops', num: true, cell: (n) => formatCount(n.bus_dropped_events ?? 0) },
-      { label: 'Storage', cell: (n) => storageBadge(n.storage_healthy) },
+      { label: 'Storage', className: 'nowrap', cell: (n) => storageBadge(n.storage_healthy) },
     ],
     rows: nodes,
   });
@@ -265,7 +265,7 @@ export default {
   },
 };
 
-function hubUnavailable(err, retry) {
+export function hubUnavailable(err, retry) {
   if (err instanceof ApiError && err.code === 'unavailable') {
     return h('div', { class: 'stack' },
       banner('warn', 'Hub unavailable', h('p', null, err.message || 'The fleet hub is disabled or stopped accepting writes.'),

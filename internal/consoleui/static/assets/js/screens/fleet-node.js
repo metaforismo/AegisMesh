@@ -1,9 +1,10 @@
 import { h, mount } from '../lib/dom.js';
+import { ApiError } from '../lib/api.js';
 import { href } from '../lib/route.js';
 import { formatCount, formatDateTime, formatDuration } from '../lib/format.js';
 import { formatFingerprint, idMatchesFingerprint } from '../lib/fleet.js';
 import { pageHead, panel, kv, badge, table, empty, banner, toast, openDialog, labelFor, chip } from '../ui/components.js';
-import { fleetStatusBadge, seenCell, countersCell, storageBadge, sensorsCell } from './fleet.js';
+import { fleetStatusBadge, seenCell, countersCell, storageBadge, sensorsCell, hubUnavailable } from './fleet.js';
 
 const SENSOR_STATE = { running: 'ok', failed: 'danger', stopped: 'neutral' };
 
@@ -28,7 +29,15 @@ function revokeDialog(ctx, node) {
 export default {
   title: 'Fleet node',
   async render(root, ctx) {
-    const n = await ctx.api.fleetNode(ctx.route.params.id, { signal: ctx.signal });
+    let n;
+    try {
+      n = await ctx.api.fleetNode(ctx.route.params.id, { signal: ctx.signal });
+    } catch (err) {
+      if (!(err instanceof ApiError && err.code === 'unavailable')) throw err;
+      mount(root, pageHead({ eyebrow: h('a', { href: href('fleet') }, '← Fleet'), title: 'Fleet node' }),
+        panel({ body: hubUnavailable(err, () => ctx.rerender()) }));
+      return;
+    }
     const v = n.version || {};
     const sensors = Array.isArray(n.sensors) ? n.sensors : [];
     const fpOk = idMatchesFingerprint(n.id, n.public_key_fingerprint);

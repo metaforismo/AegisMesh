@@ -6,6 +6,7 @@ import {
 } from '../static/assets/js/lib/fleet.js';
 import { parseHash, href } from '../static/assets/js/lib/route.js';
 import { AUDIT_ACTIONS } from '../static/assets/js/lib/taxonomy.js';
+import { isSafeHref } from '../static/assets/js/lib/dom.js';
 
 const FP = 'ab'.repeat(32);
 const ID = FP.slice(0, 32);
@@ -75,4 +76,8 @@ test('fleet audit actions are part of the closed vocabulary', () => {
   for (const a of ['fleet.token.create', 'fleet.token.delete', 'fleet.node.enroll', 'fleet.node.revoke', 'fleet.node.rejected']) {
     assert.ok(AUDIT_ACTIONS.includes(a), a);
   }
+});
+
+test('the configuration reference the teaching state links to is an allowed href', () => {
+  assert.ok(isSafeHref('https://github.com/metaforismo/AegisMesh/blob/master/docs/configuration.md'));
 });
