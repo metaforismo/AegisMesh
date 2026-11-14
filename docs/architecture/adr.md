@@ -524,8 +524,8 @@ The v1 draft was never released; it is intentionally unsupported.
 
 ## ADR-0017 — single-node read-mostly operator console
 
-**Status:** implemented in the uncommitted console API candidate; UI integration,
-orchestrator review, exact-head CI and merge remain separate.
+**Status:** implemented in the uncommitted console candidate, including the
+embedded UI; human review, exact-head CI and merge remain separate.
 
 **Context and alternatives.** Operators need bounded interactive evidence queries
 without changing sensor behavior or granting remote control. Two designs were
@@ -572,8 +572,14 @@ audit a single cross-file transaction. State may already be saved if audit appen
 fails; the response is explicit. Chain verification establishes internal
 consistency only, not writer authenticity. Audit/notes remain plaintext.
 
-**Deliberately omitted.** UI implementation/embedding belongs to the parallel UI
-change; `Options.UI` accepts the integrator's FS and nil serves a notice. No SSO,
+**Embedded UI.** `internal/consoleui` embeds the operator UI with `go:embed`;
+the runtime passes it through `Options.UI` (nil still serves a notice). It is
+plain HTML, CSS and ES modules: no build step, so `go install` keeps working, and
+no third-party code, so the dependency set is unchanged. It runs under the strict
+CSP and renders evidence only as text. It is served only when `console.enabled`
+is true.
+
+**Deliberately omitted.** No SSO,
 fleet, tenant boundary, remote sensor/policy/config control, evidence mutation,
 autonomous enforcement, history decryption, external audit anchoring, exports,
 search engine/database, distributed sessions or new outbound connection ships.

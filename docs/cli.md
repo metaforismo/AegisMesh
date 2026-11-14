@@ -345,7 +345,8 @@ keeps its evidence behind a console on an OS-assigned loopback port, and prints
 the URL plus a fresh `demo-admin` token once. It waits for Ctrl-C/SIGTERM, then
 closes listeners and removes its private temporary directory. It cannot be
 combined with `--json`. The default `demo` output and teardown are unchanged.
-The API works even when the optional UI has not been bundled.
+The operator UI is embedded in the binary and served at that URL; the API
+also works without a browser.
 
 For scripts, send `Authorization: Bearer <token>` to `/api/v1/*`. Browsers exchange
 `{"token":"…"}` at `POST /api/v1/session`; retain the HttpOnly SameSite=Strict

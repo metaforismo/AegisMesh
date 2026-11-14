@@ -32,6 +32,14 @@ lint: ## gofmt check + go vet (+ golangci-lint when available)
 	go vet ./...
 	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run || echo "golangci-lint not installed; skipped (vet+fmt ran)"
 
+.PHONY: ui-test
+ui-test: ## run console UI tests (Node.js >= 20, no npm install)
+	node --test 'internal/consoleui/webtest/*.test.mjs'
+
+.PHONY: ui-dev
+ui-dev: ## serve UI + mock API on 127.0.0.1:9121 (Node.js >= 20, no npm install)
+	node internal/consoleui/devserver/mock-server.mjs --port 9121
+
 .PHONY: helm-contract
 helm-contract: ## verify Helm chart contract (guarded test; needs local helm v4)
 	@command -v helm >/dev/null 2>&1 || { echo "helm-contract: BLOCKED - helm binary not found in PATH"; exit 1; }

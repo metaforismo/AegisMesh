@@ -259,11 +259,12 @@ are capped at 1024. There is no distributed/edge DDoS protection or SSO.
 
 Evidence strings are bounded JSON data and findings use catalog-authored prose.
 Event detail preserves the native envelope and recomputes its observation hash;
-that hash authenticates neither metadata nor writer identity. The UI must render
+that hash authenticates neither metadata nor writer identity. The embedded UI renders
 evidence, investigation titles and note text safely as text. CSP prohibits inline execution, third-party connections and framing.
 Static assets are snapshotted from an injected FS at startup with byte/count
 limits: request paths index memory, never choose filesystem paths. Directory
-listings and index fallbacks are absent. The nil-UI build exposes a notice only.
+listings and index fallbacks are absent. The runtime injects the embedded UI
+(`internal/consoleui`); a server built without a UI FS exposes a notice only.
 
 The runtime tap sees every successful authoritative append, including direct
 correlation signals, and has no edge back to the bus, sensors, policy, extensions

@@ -275,10 +275,10 @@ written to the audit trail.
   ignored. TLS paths and nonempty relative state paths resolve against config.
 - Plaintext backfill skips malformed/invalid-integrity entries and reports
   `unavailable` when any were skipped; terminal reader failures abort startup.
-- Injected UI files are snapshotted in memory at construction (1024 files,
+- The embedded UI (`consoleui.FS()`, wired by the runtime) is snapshotted in memory at construction (1024 files,
   16 MiB/file, 32 MiB total). Requests select no filesystem paths; no directory
   listing, `/index.html` alias or SPA fallback is provided. Only `/` serves the
-  index. The default backend candidate has no UI FS wired.
+  index. A server constructed without a UI FS serves a plain-text notice at `/`.
 
 ## Stated limits (honest boundaries)
 

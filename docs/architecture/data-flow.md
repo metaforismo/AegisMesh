@@ -33,7 +33,7 @@ internal/rulecatalog   read-only catalog of every emit-able rule (detection + co
 internal/ruletest      offline detection evaluator behind read-only `rules test`
 internal/observe       in-process metrics registry served by admin /metrics
 internal/evidenceindex bounded disposable console projection and SSE subscriptions
-internal/console       dedicated authenticated HTTP API and injected static UI host
+internal/console       dedicated authenticated HTTP API and embedded static UI host
   /auth                token digests, bounded ephemeral sessions and login attempts
   /audit               fsynced hash-chained audit with bounded rotation
   /investigations      private atomic operator annotations; no evidence mutations
@@ -281,14 +281,14 @@ flowchart LR
     Operator[Authenticated operator] --> API
     API --> Notes[Fixed-name atomic investigations]
     API --> Audit[Fsynced hash-chain audit]
-    UI[Injected FS snapshotted at startup] --> API
+    UI[Embedded UI FS snapshotted at startup] --> API
 ```
 
 `Runtime.ConsoleNode/ConsoleSensors` supply value snapshots to the console through
 its narrow interface. The API has no sensor, bus-submit, config-write or outbound
 client capability. Cookie mutations require role/CSRF/Origin checks; bearer
 scripts use the same role grants. No API route can mutate authoritative evidence.
-The UI is optional and must render evidence as text. Plaintext backfill occurs
+The embedded UI is served only when the console is enabled and renders evidence as text. Plaintext backfill occurs
 before serving; encrypted mode never backfills or loads identities. Failed
 appends produce neither index entries nor SSE. The tap precedes the existing
 raw-envelope observer/webhook/correlation offers; signal appends use only the tap.

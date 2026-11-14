@@ -17,6 +17,7 @@ import (
 
 	"filippo.io/age"
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/console"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/storage"
@@ -325,6 +326,63 @@ func TestConsoleRuntimeHTTPFlow(t *testing.T) {
 	system.Stop(context.Background())
 	if _, err = http.Get(base + "/api/v1/meta"); err == nil {
 		t.Fatal("listener survived stop")
+	}
+}
+
+func TestConsoleServesEmbeddedUI(t *testing.T) {
+	_, base := consoleSystem(t, consoleConfig(t))
+
+	index := callAPI(t, base, "GET", "/", "", "", nil, "")
+	if index.status != http.StatusOK {
+		t.Fatalf("GET /: status %d: %s", index.status, index.body)
+	}
+
+	if got := index.header.Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+		t.Fatalf("GET / content type = %q", got)
+	}
+
+	if got := index.header.Get("Content-Security-Policy"); got != console.CSP {
+		t.Fatalf("GET / CSP = %q", got)
+	}
+
+	if got := index.header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("GET / Cache-Control = %q, want no-store", got)
+	}
+
+	if !bytes.Contains(index.body, []byte(`<div id="app"`)) {
+		t.Fatalf("GET / does not contain the app root: %s", index.body)
+	}
+
+	// The entry script comes from the page itself, so a rename cannot leave this stale.
+	const marker = `<script type="module" src="`
+	start := bytes.Index(index.body, []byte(marker))
+	if start < 0 {
+		t.Fatalf("index.html references no module script: %s", index.body)
+	}
+
+	rest := index.body[start+len(marker):]
+	end := bytes.IndexByte(rest, '"')
+	if end < 0 {
+		t.Fatalf("unterminated script reference: %s", rest)
+	}
+
+	script := callAPI(t, base, "GET", "/"+string(rest[:end]), "", "", nil, "")
+	if script.status != http.StatusOK {
+		t.Fatalf("GET %s: status %d", rest[:end], script.status)
+	}
+
+	if got := script.header.Get("Content-Type"); !strings.Contains(got, "javascript") {
+		t.Fatalf("script content type = %q", got)
+	}
+
+	if got := script.header.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("script nosniff = %q", got)
+	}
+
+	// Serving the UI must not make the API public.
+	overview := callAPI(t, base, "GET", "/api/v1/overview", "", "", nil, "")
+	if overview.status != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated overview status = %d", overview.status)
 	}
 }
 
