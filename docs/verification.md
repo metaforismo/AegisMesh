@@ -10,6 +10,137 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-11-15 — console backend review fixes
+
+Worktree `feat/console-api`, continuing local draft `4976522` without committing,
+pushing, switching branches, or running `gh`. macOS arm64 / Go 1.27.4. Verification
+suites ran sequentially with `GOFLAGS=-p=1 GOMAXPROCS=2` to constrain build and
+fuzz concurrency. No dependencies or module files changed.
+
+Resource handlers and HTTP tests are separated by responsibility; console state,
+authentication, and listener lifetime retain one owner. Construction helpers use
+one deferred error cleanup. The new packages document their trust boundaries and
+exported API. Multi-field literals, local names, and logical steps are expanded
+for review. The sole Go line over 140 characters is the fixed CSP string constant.
+
+Summaries now project stored HTTP, MCP, SSH, TCP, and correlation fields with a
+160-character cap and control-character sanitization. Fuzzing exercises each
+sensor kind. Cross-endpoint cursors are rejected even with matching filters.
+Literal/encoded traversal returns 404 before ServeMux can normalize a path.
+Investigation startup rejects JSON null and reports the state filename plus
+inspection/recovery guidance for corrupt snapshots.
+
+The HTTP authorization matrix derives from all 23 route registrations and has
+161 exact-status cases: no credentials, malformed Authorization, wrong token,
+expired session, viewer, analyst, admin. Missing success fixtures fail the test
+when a route is added. Expected roles are declared independently in the fixtures,
+so a changed authorization policy also fails the matrix. Loopback tests cover
+CSRF/Origin, bearer mutations,
+Host/port/localhost/IPv6 authority, exact 64 KiB and 64 KiB+1 bodies, strict JSON,
+bodyless routes, cursor tampering/truncation/scope, static files and headers,
+login throttling/Retry-After, session rotation/logout/TTL/eviction, SSE capacity
+and shutdown, investigation field limits and quota status mapping, and TLS login
+and logout Secure cookies. TTL tests use an injected atomic clock, without sleeps.
+
+Auth tests fill the 4096-remote throttle registry directly and prove reclamation
+at its clock boundary. Store tests cover every investigation field/count limit,
+32 MiB encoded-state refusal without mutation, successful restart, failed atomic
+replacement preserving the prior snapshot, and corrupt/stale state failing closed.
+Audit tests modify, remove an interior record, and reorder records, each reporting
+`first_invalid_seq: 2`; rotation/restart keeps the verified chain continuous.
+These file/state tests exercise the owning packages directly; HTTP policy and
+quota mapping tests use real loopback listeners and the actual runtime snapshot
+provider. Runtime tests retain sensor → storage → index → API/SSE, backfill,
+encrypted live-only indexing, correlation provenance, and shutdown wiring.
+
+The user reported the integrated embedded UI browser flow accepted during review;
+that browser run was not repeated here. The one-off smoke script and transcript
+were deleted; the historical manual receipt remains a short entry below. CLI help
+now describes available UI assets without assuming whether this build embeds them.
+
+| Command / check | Result and captured output |
+|---|---|
+| `make lint test` | **PASS**, exit 0: gofmt clean; `go vet ./...`; `go test -race ./...` passed across all 36 tested packages. Optional `golangci-lint` is absent; Make printed `golangci-lint not installed; skipped (vet+fmt ran)`. |
+| `go test -race -count=1 ./internal/console/... ./internal/evidenceindex ./internal/runtime ./internal/cli ./internal/config` | **PASS**, exit 0, all nine packages: console 7.708 s; audit 1.551 s; auth 1.474 s; investigations 6.491 s; stateio 1.383 s; evidenceindex 6.045 s; runtime 14.408 s; CLI 3.637 s; config 1.651 s. |
+| `make fuzz-seed` | **PASS**, exit 0: all eleven bounded real fuzz targets emitted `PASS`; `FuzzObservationProjection` executed 555260 cases in 15 s, and `FuzzCursorFilter` passed. Two fuzz workers, sequential targets. |
+| `make vuln` | **PASS**, exit 0: pinned govulncheck v1.7.0 printed `No vulnerabilities found.` |
+| `git diff --check` | **PASS**, exit 0, no output; supplemental untracked-file whitespace scan found 0 issues. |
+| `awk 'length($0) > 140'` over all 48 new Go files, including draft files and untracked additions | **PASS**, 1 line: `internal/console/server.go:24`, the 189-character fixed CSP string. All other lines are at most 140 characters. |
+| Exported Go documentation audit | **PASS**, 0 missing declaration, field, or interface-method comments in the new production Go files. |
+
+## 2026-11-14 — first operator console backend candidate
+
+Worktree `feat/console-api`, base `e82df977c4119629b3bd87b8496428615ff1b865`,
+macOS arm64 / Go **1.27.4**. All changes remain uncommitted, including the supplied
+console contract. No commit, push, branch switch, `gh`, hosted CI, merge,
+publication or deployment occurred. UI implementation/embedding and browser QA
+belong to the parallel UI work and are **NOT RUN** here; runtime passes nil UI
+and `/` serves a notice.
+
+**Architecture.** `runtime.indexedSink` serializes successful storage append →
+`evidenceindex.Index` for both bus observations and direct correlation signals.
+The existing observer/webhook fan-out receives no new signal path. The index
+owns envelope copies, bounded defensive summaries, signed pagination, aggregates,
+provenance lookup and non-blocking bounded SSE subscriptions. `console.Server`
+receives runtime node/sensor snapshots through a read-only interface; auth,
+audit, investigations and private rooted state I/O are separate packages.
+`storage.SnapshotMetadata` bounds node directory reads without reading payloads.
+All new implementation dependencies are standard library; module files unchanged.
+
+**Contract safety clarifications.** The contract now records the additional
+64 MiB accounted-envelope budget, latest-4096 recommendation input, 65536-entry
+node metadata bound (503 beyond), 1000 investigations / 100 notes per case /
+32 MiB encoded state, 4 MiB audit rotation / 128-file quota, bearer session empty
+CSRF/zero expiry, strict bodyless routes, and separate investigation/audit
+transactions. Encrypted evidence is live-only with `history: "unavailable"`;
+no evidence read identity enters the runtime. Audit and notes remain plaintext.
+The audit chain proves internal consistency, not writer identity or external
+anchoring. A successful investigation snapshot can precede a failed final audit
+append; the API explicitly reports that state may already be saved.
+
+**Behavioral evidence.** Real loopback HTTP tests cover 21 authenticated routes ×
+six states (anonymous, invalid token, a genuinely expired 60-second cookie, viewer,
+analyst, admin), public meta/session behavior, cookie/CSRF/Origin/Host checks,
+strict/oversized bodies and queries, cursor tampering, a real sensor event through
+storage/index/API/SSE, actual correlation-engine signals with three provenance
+links, plaintext backfill, encrypted live-only indexing, failed-store exclusion,
+TLS Secure cookies, session rotation/revocation, login rate/audit records,
+investigation persistence and limits, and chain verification. Sixteen real SSE
+streams are accepted, the seventeenth is 503, and shutdown closes the sixteen.
+Static tests inject an FS through a real server and verify CSP, types, caching,
+index-only-root behavior and traversal/listing refusal. Bounded metadata is
+compared with real segment files and rejects excessive entry counts.
+
+**Fixed regression.** `go test ./internal/console/audit -run
+'^TestIncompleteJSONLRecordRejected$' -count=1` first reproduced **FAIL**, exit 1:
+"unterminated JSONL record accepted; a later append would concatenate two records".
+The scanner now rejects a missing final newline before accepting or extending a
+chain. The regression and full audit race suite subsequently passed. No repair,
+truncation or deletion of existing audit data is performed.
+
+| Command | Final result and captured output |
+|---|---|
+| `make lint test` | **PASS**, exit 0: gofmt clean, `go vet ./...`, complete `go test -race ./...`; runtime `ok` (78.382 s), audit `ok` (1.969 s). |
+| `GOTOOLCHAIN=go1.27.4 go test -race -count=1 ./internal/console/... ./internal/evidenceindex ./internal/storage` | **PASS**, exit 0, all seven packages; console 7.920 s, audit 1.929 s, auth 1.672 s, investigations 3.061 s, stateio 3.395 s, evidenceindex 11.765 s, storage 5.377 s. |
+| `make fuzz-seed` | **PASS**, exit 0, eleven bounded real fuzz targets; each emitted `PASS`, including `FuzzObservationProjection` and `FuzzCursorFilter`. Makefile and CI lists both include them. |
+| `make vuln` | **PASS**, exit 0, pinned govulncheck v1.7.0: `No vulnerabilities found.` |
+| `make license-check secrets-scan` | **PASS**, exit 0: `14 module(s) within policy`; `secrets-scan: ok`. The script scans tracked files; supplemental scan below covers untracked additions. |
+| `make supply-chain-check` | **PASS**, exit 0: `supply-chain-check: ok`. |
+| `go mod verify` | **PASS**, exit 0: `all modules verified`. |
+| `make build` | **PASS**, exit 0; built `bin/aegismesh` with the project toolchain and metadata. |
+| `GOTOOLCHAIN=go1.27.4 go test -race ./internal/console/audit -count=1` | **PASS**, exit 0 (1.607 s), including the reproduced/fixed incomplete-JSONL regression. |
+| `git diff --check` | **PASS**, exit 0, no output. |
+| Optional `golangci-lint` | **BLOCKED**, not installed; the Make target explicitly reported its skip. Gofmt/vet and the race suite did run and pass. |
+
+Complete successful command output and the built binary checksum are preserved in
+[console-verification.log](console-verification.log). Supplemental fixed-pattern secret scan: 33 untracked files, 0 findings. Untracked whitespace scan: 0 findings.
+
+
+Historical manual run (2026-11-14): the built binary was exercised with curl
+through login, reads, operator mutations, audit, and live SSE; both processes
+exited on SIGINT. The one-off script and transcript were removed during review;
+the Go integration tests are the maintained reproduction path.
+
 ## 2026-11-14 — steady-traffic encryption segment review
 
 Candidate remains uncommitted on `feat/evidence-at-rest-encryption`, based on

@@ -1,0 +1,222 @@
+Console verification, 2026-11-14; macOS arm64; Go 1.27.4.
+Base HEAD: e82df977c4119629b3bd87b8496428615ff1b865; uncommitted candidate.
+Built binary SHA-256: 42fbdf2077720936d430b3ca58ac1738ff52f962ceb2c7facf093d731081c7e9
+
+> make lint test
+Result: PASS (exit 0)
+go vet ./...
+golangci-lint not installed; skipped (vet+fmt ran)
+go test -race ./...
+?   	github.com/metaforismo/aegismesh/cmd/aegismesh	[no test files]
+ok  	github.com/metaforismo/aegismesh/deploy/helm/aegismesh	(cached)
+?   	github.com/metaforismo/aegismesh/examples/extensions/echo-responder	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/admin	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/agekey	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/cli	6.010s
+ok  	github.com/metaforismo/aegismesh/internal/config	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console	2.561s
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	1.969s
+ok  	github.com/metaforismo/aegismesh/internal/console/auth	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/investigations	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/stateio	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/correlate	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/demo	3.109s
+ok  	github.com/metaforismo/aegismesh/internal/detect	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ecsexport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/egress	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/event	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ext	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/extmanager	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/llm	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/migrate/beelzebub	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/observe	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/policy	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/recommend	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/redact	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulecatalog	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulesinput	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ruletest	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/runtime	78.382s
+?   	github.com/metaforismo/aegismesh/internal/sensor	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensor/httpsensor	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/sensor/sshsensor	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/sensor/tcpsensor	(cached)
+?   	github.com/metaforismo/aegismesh/internal/sensorfactory	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensorproc	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/storage	(cached)
+?   	github.com/metaforismo/aegismesh/internal/version	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/webhook	(cached)
+ok  	github.com/metaforismo/aegismesh/tools/sbomcheck	(cached)
+
+> GOTOOLCHAIN=go1.27.4 go test -race -count=1 ./internal/console/... ./internal/evidenceindex ./internal/storage
+Result: PASS (exit 0)
+ok  	github.com/metaforismo/aegismesh/internal/console	7.920s
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	1.929s
+ok  	github.com/metaforismo/aegismesh/internal/console/auth	1.672s
+ok  	github.com/metaforismo/aegismesh/internal/console/investigations	3.061s
+ok  	github.com/metaforismo/aegismesh/internal/console/stateio	3.395s
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	11.765s
+ok  	github.com/metaforismo/aegismesh/internal/storage	5.377s
+
+> make fuzz-seed
+Result: PASS (exit 0)
+go test -run '^$' -fuzz=FuzzObservationProjection ./internal/evidenceindex -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/447 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 447/447 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 76291 (25427/sec), new interesting: 17 (total: 464)
+fuzz: elapsed: 6s, execs: 159914 (27871/sec), new interesting: 27 (total: 474)
+fuzz: elapsed: 9s, execs: 248260 (29456/sec), new interesting: 49 (total: 496)
+fuzz: elapsed: 12s, execs: 355607 (35770/sec), new interesting: 55 (total: 502)
+fuzz: elapsed: 15s, execs: 460811 (35080/sec), new interesting: 86 (total: 533)
+fuzz: elapsed: 15s, execs: 460811 (0/sec), new interesting: 86 (total: 533)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	15.802s
+go test -run '^$' -fuzz=FuzzCursorFilter ./internal/evidenceindex -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/158 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 158/158 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 119899 (39954/sec), new interesting: 27 (total: 185)
+fuzz: elapsed: 6s, execs: 261003 (47036/sec), new interesting: 30 (total: 188)
+fuzz: elapsed: 9s, execs: 381371 (40051/sec), new interesting: 34 (total: 192)
+fuzz: elapsed: 12s, execs: 522567 (47147/sec), new interesting: 35 (total: 193)
+fuzz: elapsed: 15s, execs: 722713 (66733/sec), new interesting: 41 (total: 199)
+fuzz: elapsed: 15s, execs: 722713 (0/sec), new interesting: 41 (total: 199)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	15.520s
+go test -run '^$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/1121 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 1121/1121 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 70865 (23615/sec), new interesting: 12 (total: 1133)
+fuzz: elapsed: 6s, execs: 180709 (36575/sec), new interesting: 17 (total: 1138)
+fuzz: elapsed: 9s, execs: 276796 (32063/sec), new interesting: 31 (total: 1152)
+fuzz: elapsed: 12s, execs: 319621 (14274/sec), new interesting: 43 (total: 1164)
+fuzz: elapsed: 15s, execs: 391045 (23814/sec), new interesting: 54 (total: 1175)
+fuzz: elapsed: 15s, execs: 391045 (0/sec), new interesting: 54 (total: 1175)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/config	15.960s
+go test -run '^$' -fuzz=FuzzDecodeEventEnvelope ./internal/event -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/699 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 699/699 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 167904 (55930/sec), new interesting: 4 (total: 703)
+fuzz: elapsed: 6s, execs: 330624 (54253/sec), new interesting: 10 (total: 709)
+fuzz: elapsed: 9s, execs: 527669 (65700/sec), new interesting: 18 (total: 717)
+fuzz: elapsed: 12s, execs: 744796 (72378/sec), new interesting: 29 (total: 728)
+fuzz: elapsed: 15s, execs: 855957 (37057/sec), new interesting: 29 (total: 728)
+fuzz: elapsed: 15s, execs: 855957 (0/sec), new interesting: 29 (total: 728)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/event	15.821s
+go test -run '^$' -fuzz=FuzzEncryptedFrameStructure ./internal/storage -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/254 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 254/254 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 70944 (23629/sec), new interesting: 1 (total: 255)
+fuzz: elapsed: 6s, execs: 167589 (32231/sec), new interesting: 4 (total: 258)
+fuzz: elapsed: 9s, execs: 283223 (38555/sec), new interesting: 5 (total: 259)
+fuzz: elapsed: 12s, execs: 405629 (40792/sec), new interesting: 8 (total: 262)
+fuzz: elapsed: 15s, execs: 540498 (44963/sec), new interesting: 9 (total: 263)
+fuzz: elapsed: 15s, execs: 540498 (0/sec), new interesting: 9 (total: 263)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/storage	15.742s
+go test -run '^$' -fuzz=FuzzMatchTCPLine ./internal/sensor/tcpsensor -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/16 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 16/16 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 93525 (31168/sec), new interesting: 0 (total: 16)
+fuzz: elapsed: 6s, execs: 186338 (30939/sec), new interesting: 0 (total: 16)
+fuzz: elapsed: 9s, execs: 301398 (38347/sec), new interesting: 0 (total: 16)
+fuzz: elapsed: 12s, execs: 428674 (42405/sec), new interesting: 0 (total: 16)
+fuzz: elapsed: 15s, execs: 547970 (39774/sec), new interesting: 0 (total: 16)
+fuzz: elapsed: 15s, execs: 547970 (0/sec), new interesting: 0 (total: 16)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/sensor/tcpsensor	15.636s
+go test -run '^$' -fuzz=FuzzSSHMetadataHelpers ./internal/sensor/sshsensor -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/221 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 221/221 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 50735 (16907/sec), new interesting: 2 (total: 223)
+fuzz: elapsed: 6s, execs: 90759 (13344/sec), new interesting: 2 (total: 223)
+fuzz: elapsed: 9s, execs: 131839 (13693/sec), new interesting: 2 (total: 223)
+fuzz: elapsed: 12s, execs: 178871 (15674/sec), new interesting: 4 (total: 225)
+fuzz: elapsed: 15s, execs: 220102 (13716/sec), new interesting: 4 (total: 225)
+fuzz: elapsed: 15s, execs: 220102 (0/sec), new interesting: 4 (total: 225)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/sensor/sshsensor	15.672s
+go test -run '^$' -fuzz=FuzzGenerateObservation ./internal/recommend -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/705 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 705/705 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 60036 (20006/sec), new interesting: 6 (total: 711)
+fuzz: elapsed: 6s, execs: 143867 (27942/sec), new interesting: 14 (total: 719)
+fuzz: elapsed: 9s, execs: 230292 (28810/sec), new interesting: 16 (total: 721)
+fuzz: elapsed: 12s, execs: 299851 (23188/sec), new interesting: 23 (total: 728)
+fuzz: elapsed: 15s, execs: 384746 (28303/sec), new interesting: 27 (total: 732)
+fuzz: elapsed: 15s, execs: 384746 (0/sec), new interesting: 27 (total: 732)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/recommend	15.870s
+go test -run '^$' -fuzz=FuzzImportBeelzebubDoc ./internal/migrate/beelzebub -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/1234 completed
+fuzz: elapsed: 2s, gathering baseline coverage: 1234/1234 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 38281 (12756/sec), new interesting: 2 (total: 1236)
+fuzz: elapsed: 6s, execs: 123085 (28265/sec), new interesting: 11 (total: 1245)
+fuzz: elapsed: 9s, execs: 184983 (20639/sec), new interesting: 25 (total: 1259)
+fuzz: elapsed: 12s, execs: 261579 (25526/sec), new interesting: 36 (total: 1270)
+fuzz: elapsed: 15s, execs: 358114 (32187/sec), new interesting: 47 (total: 1281)
+fuzz: elapsed: 15s, execs: 358114 (0/sec), new interesting: 47 (total: 1281)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/migrate/beelzebub	16.247s
+go test -run '^$' -fuzz=FuzzRejectDuplicateJSONKeys ./internal/ext -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/866 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 866/866 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 150705 (50219/sec), new interesting: 9 (total: 875)
+fuzz: elapsed: 6s, execs: 288100 (45797/sec), new interesting: 13 (total: 879)
+fuzz: elapsed: 9s, execs: 412584 (41489/sec), new interesting: 18 (total: 884)
+fuzz: elapsed: 12s, execs: 524587 (37348/sec), new interesting: 22 (total: 888)
+fuzz: elapsed: 15s, execs: 607759 (27726/sec), new interesting: 31 (total: 897)
+fuzz: elapsed: 15s, execs: 607759 (0/sec), new interesting: 31 (total: 897)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/ext	15.899s
+go test -run '^$' -fuzz=FuzzDecodeSensorProcessFrame ./internal/sensorproc -fuzztime=15s -fuzzminimizetime=0
+fuzz: elapsed: 0s, gathering baseline coverage: 0/734 completed
+fuzz: elapsed: 2s, gathering baseline coverage: 734/734 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 16211 (5403/sec), new interesting: 6 (total: 740)
+fuzz: elapsed: 6s, execs: 50071 (11286/sec), new interesting: 8 (total: 742)
+fuzz: elapsed: 9s, execs: 87698 (12545/sec), new interesting: 11 (total: 745)
+fuzz: elapsed: 12s, execs: 123840 (12043/sec), new interesting: 15 (total: 749)
+fuzz: elapsed: 15s, execs: 154621 (10264/sec), new interesting: 18 (total: 752)
+fuzz: elapsed: 15s, execs: 154621 (0/sec), new interesting: 18 (total: 752)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/sensorproc	15.934s
+
+> make vuln
+Result: PASS (exit 0)
+GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GONOSUMDB= GOFLAGS=-mod=readonly go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+No vulnerabilities found.
+
+> make license-check secrets-scan
+Result: PASS (exit 0)
+./scripts/license-check.sh
+license-check: policy = docs/license-policy.md
+license-check: ok — 14 module(s) within policy
+./scripts/secrets-scan.sh
+secrets-scan: ok
+
+> make supply-chain-check
+Result: PASS (exit 0)
+./scripts/check-supply-chain.sh
+supply-chain-check: ok
+
+> go mod verify
+Result: PASS (exit 0)
+all modules verified
+
+> make build
+Result: PASS (exit 0)
+go build -trimpath -ldflags '-s -w -X github.com/metaforismo/aegismesh/internal/version.Version=e82df97-dirty -X github.com/metaforismo/aegismesh/internal/version.Commit=e82df97 -X github.com/metaforismo/aegismesh/internal/version.Date=2026-11-14T22:43:16Z' -o bin/aegismesh ./cmd/aegismesh
+
+> GOTOOLCHAIN=go1.27.4 go test -race ./internal/console/audit -count=1 (audit recovery regression)
+Result: PASS (exit 0)
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	1.607s
+
+Supplemental checks
+Supplemental fixed-pattern secret scan: 33 untracked files, 0 findings. Untracked whitespace scan: 0 findings.
+
+> git diff --check
+Result: PASS (exit 0; no output)
+Optional golangci-lint: absent from PATH; Make reported its skip.

@@ -122,6 +122,7 @@ type Config struct {
 	APIVersion  string      `yaml:"api_version" json:"api_version"`
 	Runtime     Runtime     `yaml:"runtime"     json:"runtime"`
 	Storage     Storage     `yaml:"storage"     json:"storage"`
+	Console     Console     `yaml:"console,omitempty" json:"console,omitempty"`
 	Admin       Admin       `yaml:"admin"       json:"admin"`
 	Logging     Logging     `yaml:"logging"     json:"logging"`
 	Security    Security    `yaml:"security"    json:"security"`

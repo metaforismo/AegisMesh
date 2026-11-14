@@ -21,6 +21,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/recommend"
 	"github.com/metaforismo/aegismesh/internal/runtime"
@@ -61,7 +62,14 @@ type Summary struct {
 // Run owns every listener, client, file and cleanup path used by the demo.
 // It accepts no external destination or config, and all network traffic is
 // validated as loopback before a client connects.
-func Run(parent context.Context) (summary Summary, err error) {
+func Run(parent context.Context) (Summary, error) { return run(parent, nil) }
+
+// RunConsole holds the same synthetic scenario until cancellation. The callback
+// receives the one-time secret directly; it is never logged or persisted.
+func RunConsole(parent context.Context, ready func(string, string) error) (Summary, error) {
+	return run(parent, ready)
+}
+func run(parent context.Context, ready func(string, string) error) (summary Summary, err error) {
 	if err := parent.Err(); err != nil {
 		return Summary{}, err
 	}
@@ -85,6 +93,17 @@ func Run(parent context.Context) (summary Summary, err error) {
 	cfg, err := loadConfig(workDir)
 	if err != nil {
 		return Summary{}, err
+	}
+	token := ""
+	if ready != nil {
+		token, err = auth.Token()
+		if err != nil {
+			return Summary{}, err
+		}
+		cfg.Console = config.Console{Enabled: true, Listen: "127.0.0.1:0", SessionTTLSeconds: 3600, IndexMaxEvents: 50000, Operators: []config.Operator{{Name: "demo-admin", Role: "admin", TokenSHA256: auth.Digest(token)}}}
+		if err = cfg.Validate(); err != nil {
+			return Summary{}, err
+		}
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	sys, err := runtime.Build(cfg, log)
@@ -133,6 +152,17 @@ func Run(parent context.Context) (summary Summary, err error) {
 		return Summary{}, err
 	}
 
+	if ready != nil {
+		addr, e := sys.ConsoleAddr()
+		if e != nil {
+			return Summary{}, e
+		}
+		if e = ready(addr, token); e != nil {
+			return Summary{}, e
+		}
+		token = ""
+		<-parent.Done()
+	}
 	sys.Stop(context.Background())
 	stopped = true
 	if err := verifyListenersReleased(addresses, adminAddr); err != nil {

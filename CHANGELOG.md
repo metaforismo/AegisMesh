@@ -8,6 +8,14 @@ changes bump MINOR).
 
 ### Added
 
+- Uncommitted first operator console backend candidate: disabled-by-default,
+  authenticated single-node HTTP API, token operator roles, ephemeral sessions/
+  CSRF, bounded evidence index/live SSE, atomic operator investigations and
+  hash-chained private audit. A separate listener hosts optional injected UI
+  assets; no UI is wired by this backend change. CLI adds `console token`,
+  `console hash` and opt-in `demo --console`. Encrypted evidence remains live-only;
+  no SSO, fleet, tenant isolation or sensor control is included.
+
 - Optional native age/X25519 evidence-at-rest encryption writes independently
   authenticated `.jsonl.age` frames, supports explicit read identities during
   key rotation, preserves mixed-history retention, and fails closed on wrong

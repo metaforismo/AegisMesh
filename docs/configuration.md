@@ -384,3 +384,71 @@ Applied after file parsing, before validation:
 
 Secrets live in environment variables, never in `mesh.yaml` files that get
 committed, exported, or shared in incident reviews.
+
+## Operator console (optional)
+
+The console is disabled by default and owns a separate listener and mux. It is
+single-node, single-tenant and read-mostly. The only writes are console sessions,
+operator investigations and the console audit trail; no sensor or policy control
+is exposed. The API contract is [architecture/console-api.md](architecture/console-api.md).
+
+```yaml
+console:
+  enabled: false
+  listen: 127.0.0.1:9120
+  state_dir: ""                 # <runtime.data_dir>/console
+  session_ttl_seconds: 3600      # 60..86400
+  index_max_events: 50000        # 1000..500000
+  tls_cert_file: ""              # certificate and key together
+  tls_key_file: ""
+  operators: []                  # 1..32 required when enabled
+```
+
+Generate a token with `aegismesh console token` and paste its `operators:` snippet
+inside `console:`. Names use the existing 3..64 character lowercase slug grammar;
+roles are `viewer`, `analyst`, `admin`. Only a 64-hex SHA-256 digest is stored in
+configuration; names and digests must both be unique. `viewer` reads evidence,
+`analyst` also writes investigations, and `admin` also reads/verifies audit.
+There is no built-in/default password. Tokens do not expire automatically;
+rotate configuration and restart to replace/revoke them. Sessions expire and are
+lost on restart. They are bounded to 1024, with oldest-expiring eviction.
+
+`AEGISMESH_CONSOLE_ENABLED` and `AEGISMESH_CONSOLE_LISTEN` override the matching
+fields. Credentials, TLS and limits stay in the file. Relative `state_dir` and
+TLS file paths resolve against the config directory. Empty `state_dir` follows
+the resolved data directory, including `AEGISMESH_DATA_DIR` overrides. State
+must reside in a real private directory (0700) with regular private files (0600).
+Unusable state, invalid TLS files or a bind failure abort startup.
+
+Plain HTTP is accepted only on loopback. Public/wildcard binds require both
+`security.allow_public_bind: true` and TLS files, including empty-host addresses
+such as `:9120`. Privileged ports retain the
+existing explicit opt-in requirement; port 0 supports OS assignment. `doctor`
+checks the port and reports exposure; `validate --effective --json` includes a
+non-secret console exposure summary. Reverse proxies must preserve an allowed
+Host and the original HTTPS Origin; forwarded headers are deliberately ignored.
+
+The disposable in-memory index retains at most `index_max_events`, with an
+additional 64 MiB accounted envelope budget (encoded envelope size plus bounded
+projection overhead). Oldest indexed entries are evicted at either limit and
+`/node` reports `truncated`. This bounds retained data, not total process RSS.
+Readable plaintext history is backfilled before serving. Corrupt skipped history
+reports `unavailable`; a terminal reader error aborts startup. Encrypted storage
+never receives a private identity in the runtime: its console history is always
+`unavailable`, and only successfully appended live envelopes are indexed.
+Storage append success is the existing acceptance boundary, not per-event fsync.
+The node endpoint bounds physical storage metadata reads to 65536 directory
+entries and reports 503 when this query bound is exceeded.
+
+Investigation limits are 1000 cases, 100 notes/case, 200 event IDs/case,
+200 Unicode characters/title, 4000 characters/note and 32 MiB total encoded state.
+Audit rotates at 4 MiB to at most 128 segments, preserving the hash chain and
+failing closed at quota; archive/export and restart with a deliberately managed
+state directory when full. There is no automatic deletion or audit repair.
+Audit and investigations are plaintext even when evidence encryption is enabled;
+use an encrypted local volume when their confidentiality is required.
+
+UI assets are injected by the build integrator using `console.Options.UI fs.FS`.
+Without them `/` is a plain-text notice; the API remains available. Asset loading
+is capped at 1024 files, 16 MiB/file and 32 MiB total, snapshotted at startup.
+Only `/` serves `index.html`; deep links do not fall back to the index.

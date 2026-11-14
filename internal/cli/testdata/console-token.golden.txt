@@ -1,0 +1,6 @@
+token (save now): synthetic-console-token-for-tests
+
+operators:
+  - name: alice
+    role: admin
+    token_sha256: "2af1296b8abc99d595e1358b105f75649801fa54e5dcce23ee1d087e6e2d178c"

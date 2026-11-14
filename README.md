@@ -166,3 +166,19 @@ scripts/                        build/demo/scans helpers
 Apache-2.0 licensed (see [LICENSE](LICENSE), [NOTICE](NOTICE)). Start with
 [CONTRIBUTING.md](CONTRIBUTING.md), the [release process](docs/RELEASE.md), and the
 [license/supply-chain policy](docs/license-policy.md). Agents: read [AGENTS.md](AGENTS.md) first.
+
+## Console
+
+An optional single-node, single-tenant operator API runs inside the binary on
+its own authenticated listener, disabled by default. `aegismesh console token`
+generates an operator credential and digest snippet; `aegismesh demo --console`
+keeps the synthetic scenario available on an OS-assigned loopback console until
+Ctrl-C. Without bundled UI assets, `/` explains that the API is available.
+
+The console reads a bounded in-memory evidence index and supports operator
+investigations plus an audited viewer/analyst/admin token model. It cannot
+control sensors or change evidence/configuration. Encrypted storage stays
+live-only: no private identity is loaded into the runtime. SSO, fleet and
+multi-tenancy are absent. See [configuration](docs/configuration.md#operator-console-optional)
+and the [API contract](docs/architecture/console-api.md). This candidate is
+uncommitted and requires orchestrator review and UI integration.

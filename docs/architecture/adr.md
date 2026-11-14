@@ -521,3 +521,61 @@ No new primitive is designed; age supplies ciphertext authentication. Frame or
 whole-segment forgery by a public-recipient holder, file deletion, compromised
 runtime memory, and stolen identities remain outside the confidentiality claim.
 The v1 draft was never released; it is intentionally unsupported.
+
+## ADR-0017 — single-node read-mostly operator console
+
+**Status:** implemented in the uncommitted console API candidate; UI integration,
+orchestrator review, exact-head CI and merge remain separate.
+
+**Context and alternatives.** Operators need bounded interactive evidence queries
+without changing sensor behavior or granting remote control. Two designs were
+considered: a callback inside storage coupled to console projection, or a runtime
+`indexedSink` wrapping the existing storage seam. The wrapper is selected because
+it leaves storage independent and shares one serialized append/index ordering
+between bus input and direct correlation persistence. The original fan-out still
+receives raw successful appends only. No new signal egress is introduced.
+
+**Decision.** `evidenceindex.Index` owns immutable envelope copies, deterministic
+bounded projections, filtering with HMAC cursors, overview/source aggregation,
+related-event lookup and bounded subscriber channels. `console.Server` takes
+`Options{Config, Security, StateDir, Index, Runtime, Rules, Meter, UI}`. The narrow
+`Runtime` interface returns `Node` and `Sensor` value snapshots only, reporting
+node storage metadata errors as unavailable. Physical directory metadata reads
+are capped at 65536 entries, without reading evidence payloads. It exposes
+no control operation. `console/auth.Manager`, `console/audit.Log` and
+`console/investigations.Store` independently own authentication/session state,
+append-only hash chaining, and atomic operator annotation snapshots. Shared
+`console/stateio` confines fixed state names to an `os.Root`.
+
+The runtime constructs and backfills the index, builds a dedicated listener,
+starts it next to admin/sensors, then closes HTTP/SSE before tearing down sensors
+and draining the bus. Plaintext history uses the existing on-disk reader.
+Encryption supplies only the public recipient, so history is `unavailable` and
+the console indexes live successful appends. Corrupt skipped plaintext history
+also reports `unavailable`; terminal backfill errors abort startup.
+
+In-memory indexing avoids a second database, migration protocol and dependency;
+it is intentionally disposable, capped by event count and a 64 MiB accounted
+envelope budget. The latter safety extension can evict before the configured
+count. API lists use bounded HMAC cursors; recommendations pass at most the latest
+4096 indexed envelopes to the unchanged recommendation engine. The operator token
+registry stores SHA-256 digests, sessions/CSRF secrets use 32 random bytes, and
+all comparisons scan the complete registry. These are high-entropy tokens, not
+human password hashes. Named viewer/analyst/admin roles avoid an unreviewed
+identity provider. All new implementation uses the standard library; no module
+or license surface was added.
+
+**Consequences.** Login, authorization failures, investigation changes and audit
+access are recorded without secrets or note bodies. Audit rotations preserve
+continuity; quotas fail closed. Per-file fsync does not make investigation and
+audit a single cross-file transaction. State may already be saved if audit append
+fails; the response is explicit. Chain verification establishes internal
+consistency only, not writer authenticity. Audit/notes remain plaintext.
+
+**Deliberately omitted.** UI implementation/embedding belongs to the parallel UI
+change; `Options.UI` accepts the integrator's FS and nil serves a notice. No SSO,
+fleet, tenant boundary, remote sensor/policy/config control, evidence mutation,
+autonomous enforcement, history decryption, external audit anchoring, exports,
+search engine/database, distributed sessions or new outbound connection ships.
+Last-write-wins investigation edits have no optimistic version check, as fixed
+by the v1 contract. This decision does not claim production readiness.
