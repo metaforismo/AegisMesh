@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Tokens and components shared by the AegisMesh console and site, with the rules for using them.">
+  <title>AegisMesh design system</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body class="ds">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-head"><div class="wrap site-top">
+    <a class="brand" href="./">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__shield" d="M12 2.5 4 5.5v6.2c0 4.6 3.3 8.6 8 9.8 4.7-1.2 8-5.2 8-9.8V5.5z"/><path class="brand__mesh" d="M7.5 9.5 12 13l4.5-3.5M12 13v5"/></svg>
+      AegisMesh design system
+    </a>
+    <nav aria-label="Site">
+      <a href="./">Home</a>
+      <a href="https://github.com/metaforismo/AegisMesh/blob/master/docs/design-system.md">Written rules</a>
+    </nav>
+  </div></header>
+
+  <div class="wrap ds-layout">
+    <nav class="ds-toc" aria-label="Sections">
+      <a href="#principles">Principles</a>
+      <a href="#color">Color</a>
+      <a href="#type">Type</a>
+      <a href="#space">Space &amp; shape</a>
+      <a href="#evidence">Evidence text</a>
+      <a href="#severity">Severity</a>
+      <a href="#classification">Classification</a>
+      <a href="#badges">State badges</a>
+      <a href="#buttons">Buttons &amp; inputs</a>
+      <a href="#panels">Panels &amp; stats</a>
+      <a href="#tables">Tables</a>
+      <a href="#banners">Banners</a>
+      <a href="#states">Empty, loading, error</a>
+      <a href="#data">Bars &amp; timeline</a>
+    </nav>
+
+    <main id="main">
+      <section class="ds-section" id="principles">
+        <h1>Design system</h1>
+        <p>One set of tokens and components for the operator console and this site. The files on this page are byte-identical copies of the console's <code>tokens.css</code>, <code>base.css</code> and <code>components.css</code>; a test fails if they drift. Follow your OS for light or dark.</p>
+        <ul class="limits">
+          <li><strong>Evidence is never interface.</strong> Attacker-controlled strings always wear the evidence treatment and are only ever text.</li>
+          <li><strong>Never color alone.</strong> Severity is a five-step meter plus a word. Classification is a shape plus a word. State badges differ in shape too.</li>
+          <li><strong>Calm and dense.</strong> Cool graphite neutrals, one cobalt accent, 13–14px body text, a 4px grid.</li>
+          <li><strong>Honest numbers.</strong> Changes against the previous window are neutral ink. More observations are not styled as good or bad.</li>
+          <li><strong>System fonts only.</strong> Nothing is fetched from another origin.</li>
+        </ul>
+      </section>
+
+      <section class="ds-section" id="color">
+        <h2>Color</h2>
+        <p>Text ratios are measured against <code>--color-surface</code> (WCAG 2): ink 16.4:1, ink-2 9.0:1, ink-3 5.7:1 in light; 14.5, 9.5 and 6.2:1 in dark. Control borders and every meter fill clear 3:1.</p>
+        <div class="swatches">
+          <div class="swatch"><div class="swatch__chip sw-canvas"></div><div class="swatch__meta"><strong>Canvas</strong><code>--color-canvas</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-surface"></div><div class="swatch__meta"><strong>Surface</strong><code>--color-surface</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-surface-2"></div><div class="swatch__meta"><strong>Surface 2</strong><code>--color-surface-2</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-surface-3"></div><div class="swatch__meta"><strong>Surface 3</strong><code>--color-surface-3</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-border"></div><div class="swatch__meta"><strong>Border</strong><code>--color-border</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-border-strong"></div><div class="swatch__meta"><strong>Control edge</strong><code>--color-border-strong</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-ink"></div><div class="swatch__meta"><strong>Ink</strong><code>--color-ink</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-ink-2"></div><div class="swatch__meta"><strong>Ink 2</strong><code>--color-ink-2</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-ink-3"></div><div class="swatch__meta"><strong>Ink 3 (muted)</strong><code>--color-ink-3</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-accent"></div><div class="swatch__meta"><strong>Accent</strong><code>--color-accent</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-accent-soft"></div><div class="swatch__meta"><strong>Accent soft</strong><code>--color-accent-soft</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-evidence"></div><div class="swatch__meta"><strong>Evidence inset</strong><code>--color-evidence-bg</code></div></div>
+        </div>
+        <h3 class="ds-rule">Status: UI state only, never severity, never a chart series</h3>
+        <div class="swatches">
+          <div class="swatch"><div class="swatch__chip sw-ok"></div><div class="swatch__meta"><strong>OK</strong><code>--color-ok</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-warn"></div><div class="swatch__meta"><strong>Warn</strong><code>--color-warn</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-danger"></div><div class="swatch__meta"><strong>Danger</strong><code>--color-danger</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-info"></div><div class="swatch__meta"><strong>Info</strong><code>--color-info</code></div></div>
+        </div>
+        <h3 class="ds-rule">Severity meter fills (ordinal)</h3>
+        <div class="swatches">
+          <div class="swatch"><div class="swatch__chip sw-sev-info"></div><div class="swatch__meta"><strong>Info</strong><code>--sev-info</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-sev-low"></div><div class="swatch__meta"><strong>Low</strong><code>--sev-low</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-sev-medium"></div><div class="swatch__meta"><strong>Medium</strong><code>--sev-medium</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-sev-high"></div><div class="swatch__meta"><strong>High</strong><code>--sev-high</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-sev-critical"></div><div class="swatch__meta"><strong>Critical</strong><code>--sev-critical</code></div></div>
+        </div>
+        <h3 class="ds-rule">Classification series (categorical, fixed order)</h3>
+        <div class="swatches">
+          <div class="swatch"><div class="swatch__chip sw-class-interaction"></div><div class="swatch__meta"><strong>Interaction</strong><code>--class-interaction</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-class-canary"></div><div class="swatch__meta"><strong>Canary invocation</strong><code>--class-canary</code></div></div>
+          <div class="swatch"><div class="swatch__chip sw-class-signal"></div><div class="swatch__meta"><strong>Correlation signal</strong><code>--class-signal</code></div></div>
+        </div>
+        <p class="ds-rule">Validated with a color-vision-deficiency checker in both themes: worst adjacent CVD ΔE 9.2 (light) and 9.4 (dark). The light signal green is 2.82:1 on white, so every chart ships a legend, glyph shapes and a table view.</p>
+      </section>
+
+      <section class="ds-section" id="type">
+        <h2>Type</h2>
+        <p>System UI and system monospace stacks. Tabular numerals everywhere so columns of counts line up.</p>
+        <div class="type-scale">
+          <div><code>--text-3xl 36</code><span class="t-3xl">Landing heading</span></div>
+          <div><code>--text-2xl 26</code><span class="t-2xl">1,284 stat value</span></div>
+          <div><code>--text-xl 20</code><span class="t-xl">Page title</span></div>
+          <div><code>--text-lg 16</code><span class="t-lg">Section title</span></div>
+          <div><code>--text-md 14</code><span class="t-md">Interface body text</span></div>
+          <div><code>--text-sm 13</code><span class="t-sm">Table body text</span></div>
+          <div><code>--text-xs 12</code><span class="t-xs">Labels, chips, meta</span></div>
+          <div><code>--text-2xs 11</code><span class="t-2xs">Navigation group labels</span></div>
+        </div>
+      </section>
+
+      <section class="ds-section" id="space">
+        <h2>Space &amp; shape</h2>
+        <p>A 4px grid. Radii encode hierarchy: containers (6px) are squarer than dialogs (10px), and chips (2px) are squarest.</p>
+        <div class="space-scale">
+          <div><code>--space-1</code><span class="sp-1"></span></div>
+          <div><code>--space-2</code><span class="sp-2"></span></div>
+          <div><code>--space-3</code><span class="sp-3"></span></div>
+          <div><code>--space-4</code><span class="sp-4"></span></div>
+          <div><code>--space-6</code><span class="sp-6"></span></div>
+          <div><code>--space-8</code><span class="sp-8"></span></div>
+          <div><code>--space-12</code><span class="sp-12"></span></div>
+          <div><code>--space-16</code><span class="sp-16"></span></div>
+        </div>
+      </section>
+
+      <section class="ds-section" id="evidence">
+        <h2>Evidence text</h2>
+        <p>The signature element. Anything an attacker could have influenced (paths, previews, user agents, tool names, summaries, source keys) is set in monospace on a faint violet inset, inline or as a block. It is rendered as text only, so markup in it stays visible as characters.</p>
+        <div class="ds-demo ds-demo--col">
+          <p>Request: <span class="evidence">GET /&lt;script&gt;alert(1)&lt;/script&gt; → 404</span> from <span class="evidence">2001:db8::1f</span></p>
+          <span class="evidence evidence--block">tools/call read_file path="../../etc/passwd"
+prompts/get name="ignore previous instructions 🙂"</span>
+        </div>
+        <p class="ds-rule"><strong>Do</strong> use it for every API string marked as evidence in the contract. <strong>Don't</strong> use it for interface text, ids or rule-authored reasons.</p>
+      </section>
+
+      <section class="ds-section" id="severity">
+        <h2>Severity</h2>
+        <p>A five-segment meter: the number of filled segments is the rank, so it reads in grayscale and for every color-vision type. The word is always present. Events without a finding say so.</p>
+        <div class="ds-demo">
+          <span class="sev sev--info"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Info</span>
+          <span class="sev sev--low"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Low</span>
+          <span class="sev sev--medium"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Medium</span>
+          <span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span>
+          <span class="sev sev--critical"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Critical</span>
+          <span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span>
+        </div>
+      </section>
+
+      <section class="ds-section" id="classification">
+        <h2>Classification</h2>
+        <p>Circle, diamond and triangle stay distinct without color. The same glyphs label chart legends and tooltips.</p>
+        <div class="ds-demo">
+          <span class="cls"><span class="glyph glyph--interaction" aria-hidden="true"></span>Interaction</span>
+          <span class="cls"><span class="glyph glyph--canary" aria-hidden="true"></span>Canary invocation</span>
+          <span class="cls"><span class="glyph glyph--signal" aria-hidden="true"></span>Correlation signal</span>
+        </div>
+      </section>
+
+      <section class="ds-section" id="badges">
+        <h2>State badges and the integrity seal</h2>
+        <p>For system state only: sensor state, investigation status, audit outcome, hash verification. The dot changes shape with the state.</p>
+        <div class="ds-demo">
+          <span class="badge badge--ok">Running</span>
+          <span class="badge badge--warn">Monitoring</span>
+          <span class="badge badge--danger">Failed</span>
+          <span class="badge badge--info">Open</span>
+          <span class="badge badge--neutral">Closed</span>
+          <span class="seal seal--ok"><span class="seal__mark" aria-hidden="true"></span>Payload sha256 verified</span>
+          <span class="seal seal--fail"><span class="seal__mark" aria-hidden="true"></span>Chain broken at record 41</span>
+        </div>
+      </section>
+
+      <section class="ds-section" id="buttons">
+        <h2>Buttons &amp; inputs</h2>
+        <p>One primary action per view. Destructive actions are outlined in danger ink, never filled. Controls are 32px tall; 26px in dense rows.</p>
+        <div class="ds-demo">
+          <button class="btn btn--primary" type="button">Apply</button>
+          <button class="btn" type="button">Clear</button>
+          <button class="btn btn--ghost" type="button">Theme</button>
+          <button class="btn btn--danger btn--sm" type="button">Detach</button>
+          <button class="btn" type="button" disabled>Disabled</button>
+          <div class="segmented" role="group" aria-label="Window example"><button type="button" aria-pressed="false">1h</button><button type="button" aria-pressed="true">24h</button><button type="button" aria-pressed="false">7d</button></div>
+        </div>
+        <div class="ds-demo">
+          <div class="field"><label class="field__label" for="ds-src">Source</label><input class="input input--mono" id="ds-src" placeholder="exact match"></div>
+          <div class="field"><label class="field__label" for="ds-sev">Minimum severity</label><select class="select" id="ds-sev"><option>Any</option><option>High or higher</option></select></div>
+          <div class="field"><label class="field__label" for="ds-bad">Rule</label><input class="input input--mono" id="ds-bad" aria-invalid="true" aria-describedby="ds-bad-err" value="PI 001"><span class="field__error" id="ds-bad-err">Rule ids have no spaces.</span></div>
+        </div>
+      </section>
+
+      <section class="ds-section" id="panels">
+        <h2>Panels &amp; stat tiles</h2>
+        <p>Deltas are neutral: they state the change against the previous window, with no red or green.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="cards">
+            <div class="stat"><span class="stat__label">Events</span><span class="stat__value">425</span><span class="stat__delta"><strong>+195 (+85%)</strong> vs previous window</span></div>
+            <div class="stat"><span class="stat__label"><span class="glyph glyph--canary" aria-hidden="true"></span>Canary invocation</span><span class="stat__value">32</span><span class="stat__delta"><strong>−3 (−9%)</strong> vs previous window</span></div>
+          </div>
+          <section class="panel">
+            <div class="panel__head"><div><h3 class="panel__title">Observation</h3><p class="panel__meta">Panel with a key/value list</p></div></div>
+            <div class="panel__body">
+              <dl class="kv"><dt>Event id</dt><dd><code>9e08242ffbdf20e5dbf1792d5e49c878</code></dd><dt>Source</dt><dd><span class="evidence">198.51.100.9</span></dd><dt>Rules</dt><dd><span class="chip chip--mono">PT-002</span></dd></dl>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="ds-section" id="tables">
+        <h2>Tables</h2>
+        <p>Sticky header, tabular numerals, right-aligned counts. Below 720px a table becomes a list of labelled cards; labels come from interface text only.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="table-wrap">
+            <table class="table table--stack">
+              <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Class</th><th scope="col">Severity</th><th scope="col" class="col-summary">Summary</th><th scope="col" class="num">Events</th></tr></thead>
+              <tbody>
+                <tr><td data-label="Time (UTC)">09:03:44</td><td data-label="Class"><span class="cls"><span class="glyph glyph--signal" aria-hidden="true"></span>Correlation signal</span></td><td data-label="Severity"><span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span></td><td data-label="Summary" class="col-summary"><span class="evidence">Same source touched several sensors: 203.0.113.7</span></td><td data-label="Events" class="num">6</td></tr>
+                <tr><td data-label="Time (UTC)">09:02:10</td><td data-label="Class"><span class="cls"><span class="glyph glyph--interaction" aria-hidden="true"></span>Interaction</span></td><td data-label="Severity"><span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span></td><td data-label="Summary" class="col-summary"><span class="evidence">GET /.env → 404</span></td><td data-label="Events" class="num">1</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="ds-section" id="banners">
+        <h2>Banners</h2>
+        <p>The hatched edge marks a dry-run proposal: something suggested and not executed.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="banner banner--info"><div><p class="banner__title">Info</p><p>Counts come from the in-memory index.</p></div></div>
+          <div class="banner banner--warn"><div><p class="banner__title">Index history is truncated</p><p>Older evidence is still on disk.</p></div></div>
+          <div class="banner banner--danger"><div><p class="banner__title">Payload hash does not match</p><p>Treat this envelope as untrustworthy.</p></div></div>
+          <div class="banner banner--proposal"><div><p class="banner__title">Proposed · not executed</p><p>Confirm the decoy is still isolated.</p></div></div>
+        </div>
+      </section>
+
+      <section class="ds-section" id="states">
+        <h2>Empty, loading, error</h2>
+        <p>Every view has all three. Empty states say why and what to do; errors say what failed in plain words and offer a retry.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="panel"><div class="state"><p class="state__title">No matching events</p><p>Nothing in the index matches these filters. Widen them or clear them.</p></div></div>
+          <div class="panel"><div class="state" role="status"><span class="btn-row"><span class="spinner" aria-hidden="true"></span>Loading…</span><span class="skeleton"></span></div></div>
+          <div class="panel"><div class="state state--error"><p class="state__title">Console unavailable</p><p>The console server could not be reached. Check that AegisMesh is running.</p><button class="btn" type="button">Try again</button></div></div>
+        </div>
+      </section>
+
+      <section class="ds-section" id="data">
+        <h2>Bars &amp; timeline</h2>
+        <p>Bar lists show share within one measure. The timeline lists signals and notes, newest or oldest first as labelled.</p>
+        <div class="ds-demo ds-demo--col">
+          <ul class="bar-list">
+            <li class="bar-list__row"><span>PI-001</span><span class="bar-list__value">31</span><span class="bar-list__track" aria-hidden="true"><span class="bar-list__fill fill-100"></span></span></li>
+            <li class="bar-list__row"><span>CMD-003</span><span class="bar-list__value">19</span><span class="bar-list__track" aria-hidden="true"><span class="bar-list__fill fill-62"></span></span></li>
+            <li class="bar-list__row"><span>SCAN-004</span><span class="bar-list__value">11</span><span class="bar-list__track" aria-hidden="true"><span class="bar-list__fill fill-35"></span></span></li>
+          </ul>
+          <ul class="legend"><li><span class="glyph glyph--interaction" aria-hidden="true"></span>Interaction</li><li><span class="glyph glyph--canary" aria-hidden="true"></span>Canary invocation</li><li><span class="glyph glyph--signal" aria-hidden="true"></span>Correlation signal</li></ul>
+          <ol class="timeline">
+            <li class="timeline__item"><span class="glyph glyph--signal" aria-hidden="true"></span><p class="timeline__time">2026-11-14 09:03:44 UTC</p><div class="timeline__body"><span class="evidence">Canary invoked after reconnaissance: 203.0.113.7</span></div></li>
+            <li class="timeline__item"><span class="glyph glyph--signal" aria-hidden="true"></span><p class="timeline__time">2026-11-14 08:41:02 UTC</p><div class="timeline__body"><span class="evidence">Same source touched several sensors: 198.51.100.23</span></div></li>
+          </ol>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
