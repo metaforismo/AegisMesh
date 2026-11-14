@@ -68,6 +68,9 @@ const ROUTES = [
   { name: 'investigations', pattern: ['investigations'] },
   { name: 'investigation', pattern: ['investigations', ':id'], valid: (p) => isOpaqueId(p.id) },
   { name: 'audit', pattern: ['audit'] },
+  { name: 'fleet', pattern: ['fleet'] },
+  { name: 'fleet', pattern: ['fleet', 'nodes'] },
+  { name: 'fleet_node', pattern: ['fleet', 'nodes', ':id'], valid: (p) => /^[0-9a-f]{32}$/.test(p.id) },
   { name: 'login', pattern: ['login'] },
 ];
 
