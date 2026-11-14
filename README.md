@@ -44,8 +44,8 @@ namespace, and the setting adds no egress.
 
 ## Five-minute demo
 
-Requires Go 1.25.14 or newer. The patch-level floor includes all current Go
-1.25 security fixes plus the latest network-library maintenance release.
+Requires Go 1.27.4. Local gates, CI, releases, and the container builder use
+the same security-patched toolchain; local tools derive it from `go.mod`.
 
 ```bash
 git clone https://github.com/metaforismo/AegisMesh && cd AegisMesh

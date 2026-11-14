@@ -28,11 +28,14 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-goos=${GOOS:-$(GOTOOLCHAIN=go1.25.14 go env GOOS)}
-goarch=${GOARCH:-$(GOTOOLCHAIN=go1.25.14 go env GOARCH)}
-cgo_enabled=${CGO_ENABLED:-$(GOTOOLCHAIN=go1.25.14 go env CGO_ENABLED)}
+go_version=$(awk '/^go / {print $2; exit}' go.mod)
+[ -n "$go_version" ] || { echo "sbom.sh: go.mod has no go directive" >&2; exit 2; }
+export GOTOOLCHAIN="go$go_version"
 
-GOTOOLCHAIN=go1.25.14 \
+goos=${GOOS:-$(go env GOOS)}
+goarch=${GOARCH:-$(go env GOARCH)}
+cgo_enabled=${CGO_ENABLED:-$(go env CGO_ENABLED)}
+
 GOPROXY=https://proxy.golang.org \
 GOSUMDB=sum.golang.org \
 GONOSUMDB= \

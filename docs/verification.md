@@ -10,6 +10,48 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-11-14 — whole-repository Go security refresh
+
+Baseline: clean `security/go-toolchain-vuln-fixes` at `01579d3`. Local host:
+macOS arm64. Selected Go **1.27.4**, `golang.org/x/crypto` **v0.59.0** and
+`golang.org/x/sys` **v0.50.0**. The public Go proxy returned these latest
+module releases; x/crypto selects x/net v0.62.0, x/term v0.48.0 and x/text
+v0.44.0. Both upgraded modules retain BSD-3-Clause licenses. No runtime
+module was added. The SSH advisories
+[GO-2026-6354](https://pkg.go.dev/vuln/GO-2026-6354) and
+[GO-2026-6355](https://pkg.go.dev/vuln/GO-2026-6355) were fixed in v0.56.0.
+[Go release history](https://go.dev/doc/devel/release#go1.27.4) identifies
+the selected security patch. No fallback to Go 1.26 was made.
+
+Make and the standalone SBOM script derive their exact toolchain from the
+module's `go` directive. Formatting uses that toolchain's gofmt. Every CI and
+release `setup-go` step already uses `go-version-file: go.mod`; those workflows
+need no duplicate version edit. Extension fixture modules use the same version.
+Govulncheck v1.7.0 and CycloneDX GoMod v1.10.0 remain pinned.
+
+| Command / check | Result and captured output |
+|---|---|
+| Baseline `make vuln` before edits | **FAIL**, make exit 2 (scanner exit 3): `Your code is affected by 14 vulnerabilities from 1 module and the Go standard library.` Also reported 1 imported-package and 3 module-only findings. |
+| Docker Hub registry index resolution | **PASS**: authenticated GET of `https://registry-1.docker.io/v2/library/golang/manifests/1.27.4-alpine` returned an OCI multi-platform index; `Docker-Content-Digest` matched SHA-256 of the response bytes: `sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf`. Index includes Linux amd64 and arm64. |
+| `GOTOOLCHAIN=go1.27.4 go version` | **PASS**, exit 0: `go version go1.27.4 darwin/arm64`. |
+| `GOTOOLCHAIN=go1.27.4 go get golang.org/x/crypto@v0.59.0 golang.org/x/sys@v0.50.0` | **PASS**, exit 0: upgraded x/crypto v0.55.0 to v0.59.0 and x/sys v0.47.0 to v0.50.0. |
+| `go mod tidy` | **PASS**, exit 0; module graph and checksums refreshed under Go 1.27.4. |
+| `go mod verify` | **PASS**, exit 0: `all modules verified`. |
+| `make lint test` | **PASS**, exit 0: gofmt, `go vet ./...` and `go test -race ./...` across all packages; `golangci-lint` is not installed locally (documented fallback). One earlier run under heavy concurrent host load failed `TestHostHandshakeFailures/echoes_wrong_frame_type` on its fixed 2 s handshake timeout; the test passed 6/6 in isolation (`-race -count=6`) and in the clean full rerun. Recorded as a pre-existing load-sensitive test, not changed here. |
+| `make vuln` | **PASS**, exit 0: `No vulnerabilities found.` (govulncheck v1.7.0 under Go 1.27.4). |
+| `make fuzz-seed` | **PASS**, exit 0: all eight bounded targets. |
+| `make supply-chain-check` | **PASS**, exit 0: `supply-chain-check: ok`. |
+| `./scripts/check-supply-chain_test.sh` | **PASS**, exit 0. Checker and fixtures needed no version-specific change. |
+| `make license-check secrets-scan` | **PASS**, exit 0: `license-check: ok — 7 module(s) within policy` / `secrets-scan: ok`. |
+| `make helm-contract` | **PASS**, exit 0 with Helm `v4.2.2`. |
+| `make sbom sbom-check` | **BLOCKED** locally: the pinned CycloneDX generator fails with `failed to determine version of main module: git: reference not found` inside a linked `git worktree`, which is where this change was prepared. Hosted CI on the pull-request head is the acceptance evidence for this gate. |
+| `sh -n scripts/sbom.sh` / `git diff --check` | **PASS**, exit 0. |
+
+An earlier attempt in the same session was interrupted by a full disk; every
+gate above was rerun afterwards. No tests or gates were weakened. Historical
+ledgers were left intact. No tag, release publication, container
+build/publication or deployment was performed.
+
 ## 2026-08-31 — storage `max_event_bytes` enforcement
 
 | Check | Command / evidence | Status |

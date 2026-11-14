@@ -52,9 +52,10 @@ changes bump MINOR).
 
 ### Changed
 
-- The minimum Go version is 1.25.14 so reachable standard-library SSH/ASN.1
-  vulnerabilities fixed in 1.25.13 cannot be reintroduced and the latest Go
-  1.25 network-library maintenance fix is included.
+- Pin Go 1.27.4 across local gates, CI, releases, and the container builder.
+  Derive local toolchain selection from `go.mod` to prevent version drift.
+- Upgrade `golang.org/x/crypto` to v0.59.0 (including the SSH fixes for
+  GO-2026-6354 and GO-2026-6355) and `golang.org/x/sys` to v0.50.0.
 - Configuration now accepts port `0` ("OS assigns an ephemeral port");
   privileged-port policy applies only to ports 1..1023. Documented in
   docs/configuration.md.
