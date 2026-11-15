@@ -13,16 +13,21 @@ const TTL_DEFAULT = 3600;
 // acceptEvidence: whether the hub accepts forwarded evidence (only with a hub).
 // forwardedCount(id): events the mock index holds from that node, added to
 // the node's synthetic forwarded total so the two stay plausible together.
-export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '127.0.0.1:9130', acceptEvidence = true, forwardedCount = () => 0 } = {}) {
+// tenant: the tenant whose registry this is (FleetNode, token metadata and
+// mint responses carry it). namePrefix: prepended to node names, so another
+// tenant's inventory is visibly different. localAgent: this process's agent
+// status belongs to the local tenant only; other tenants see it disabled.
+export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '127.0.0.1:9130', acceptEvidence = true, forwardedCount = () => 0, tenant = 'default', namePrefix = '', localAgent = true } = {}) {
   const hubOn = mode === 'hub' || mode === 'both';
-  const agentOn = mode === 'agent' || mode === 'both';
+  const agentOn = (mode === 'agent' || mode === 'both') && localAgent;
   const accepting = hubOn && acceptEvidence;
   const t0 = now();
 
   const nodes = new Map();
   // fwd: synthetic forwarding self-report, or null for an agent that never
   // reported one (older build). `queued`/`error` are optional fields.
-  const add = (name, { interval = 30, lastSeenAgo = 10, revoked = false, sensors, storage = true, drops = 0, enrolledAgo = 86400, version = '0.3.0', fwd = null }) => {
+  const add = (baseName, { interval = 30, lastSeenAgo = 10, revoked = false, sensors, storage = true, drops = 0, enrolledAgo = 86400, version = '0.3.0', fwd = null }) => {
+    const name = namePrefix ? `${namePrefix}-${baseName}` : baseName;
     const fp = sha(`synthetic-public-key:${name}`);
     const id = fp.slice(0, 32);
     nodes.set(id, {
@@ -39,6 +44,12 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
       fwd,
     });
   };
+  if (namePrefix) {
+    // Another tenant's registry: a smaller, differently named inventory.
+    add('edge-lisbon-01', { lastSeenAgo: 8, fwd: { enabled: true, base: 920, sentAgo: 9 } });
+    add('edge-lisbon-02', { lastSeenAgo: 15, sensors: [{ id: 'ssh-decoy', kind: 'ssh', state: 'running' }], fwd: { enabled: true, base: 300, sentAgo: 16 } });
+    add('lab-tcp-lure', { interval: 60, lastSeenAgo: 900, sensors: [{ id: 'redis-lure', kind: 'tcp', state: 'running' }], fwd: { enabled: false, base: 0 } });
+  } else {
   add('edge-berlin-01', { lastSeenAgo: 12, fwd: { enabled: true, base: 2400, sentAgo: 14 } });
   add('edge-berlin-02', { lastSeenAgo: 25, sensors: [{ id: 'web', kind: 'http', state: 'running' }, { id: 'ssh-decoy', kind: 'ssh', state: 'failed' }, { id: 'redis-lure', kind: 'tcp', state: 'stopped' }], fwd: { enabled: true, base: 610, sentAgo: 30, queued: [12, 48213] } });
   // The one node with counted loss: queue evictions on the agent and
@@ -48,6 +59,7 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
   add('retired-dmz-07', { lastSeenAgo: 7200, revoked: true });
   add('new-node-pending', { lastSeenAgo: null, sensors: [], enrolledAgo: 60 });
   add('hub-only-node', { lastSeenAgo: 8, sensors: [], fwd: { enabled: false, base: 0 } });
+  }
 
   // FleetNode.forwarding. Counters, queue and error are the agent's report;
   // last receive time and gaps are the hub's. A hub that refuses evidence
@@ -82,13 +94,14 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
     version: n.version, uptime_seconds: n.uptime_seconds, sensors: n.sensors, counters: n.counters,
     bus_dropped_events: n.bus_dropped_events, storage_healthy: n.storage_healthy,
     public_key_fingerprint: n.public_key_fingerprint,
+    tenant,
     ...(n.fwd ? { forwarding: forwardingView(n) } : {}),
   });
 
   const tokens = new Map(); // id → { digest, expires_ms, note }
   const outstanding = () => [...tokens.entries()].filter(([, t]) => now() < t.expires_ms);
-  tokens.set('tok_0001', { digest: sha('seed-a'), expires_ms: t0 + 40 * 60e3, note: 'edge-berlin-03 rollout' });
-  tokens.set('tok_0002', { digest: sha('seed-b'), expires_ms: t0 + 20 * 3600e3, note: '' });
+  tokens.set('tok_0001', { digest: sha(`seed-a:${tenant}`), expires_ms: t0 + 40 * 60e3, note: namePrefix ? `${namePrefix}-edge-lisbon-03 rollout` : 'edge-berlin-03 rollout' });
+  tokens.set('tok_0002', { digest: sha(`seed-b:${tenant}`), expires_ms: t0 + 20 * 3600e3, note: '' });
   let tokenSeq = 2;
 
   // agent.forwarding is always present, even when forwarding is off.
@@ -151,7 +164,7 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
       return true;
     }
     if (p === '/fleet/enrollment-tokens' && m === 'GET') {
-      send(res, 200, { tokens: outstanding().map(([id, t]) => ({ id, expires_at: iso(t.expires_ms), note: t.note })).sort((a, b) => a.id.localeCompare(b.id)) });
+      send(res, 200, { tokens: outstanding().map(([id, t]) => ({ id, expires_at: iso(t.expires_ms), note: t.note, tenant })).sort((a, b) => a.id.localeCompare(b.id)) });
       return true;
     }
     if (p === '/fleet/enrollment-tokens' && m === 'POST') {
@@ -167,7 +180,7 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
       const expires_ms = now() + ttl * 1000;
       tokens.set(id, { digest: sha(raw), expires_ms, note });
       record(who.name, who.role, 'fleet.token.create', id, 'ok', remote);
-      send(res, 201, { id, token: raw, expires_at: iso(expires_ms) });
+      send(res, 201, { id, token: raw, expires_at: iso(expires_ms), tenant });
       return true;
     }
     if ((mm = /^\/fleet\/enrollment-tokens\/([A-Za-z0-9_.-]{1,128})$/.exec(p)) && m === 'DELETE') {

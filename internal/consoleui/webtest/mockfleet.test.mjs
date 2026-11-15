@@ -45,7 +45,7 @@ test('fleet status reports roles; node list covers every status and filters', as
   assert.deepEqual(all.map((n) => n.id), [...all.map((n) => n.id)].sort());
   for (const n of all) {
     // `forwarding` is optional: absent for agents that never reported it.
-    assert.deepEqual(Object.keys(n).filter((k) => k !== 'forwarding').sort(), ['bus_dropped_events', 'counters', 'enrolled_at', 'id', 'last_seen_at', 'name', 'public_key_fingerprint', 'sensors', 'status', 'storage_healthy', 'uptime_seconds', 'version']);
+    assert.deepEqual(Object.keys(n).filter((k) => k !== 'forwarding').sort(), ['bus_dropped_events', 'counters', 'enrolled_at', 'id', 'last_seen_at', 'name', 'public_key_fingerprint', 'sensors', 'status', 'storage_healthy', 'tenant', 'uptime_seconds', 'version']);
     assert.ok(n.public_key_fingerprint.startsWith(n.id));
   }
   const stale = (await (await viewer('GET', '/fleet/nodes?status=stale')).json()).nodes;
@@ -79,7 +79,7 @@ test('token lifecycle: create shows the raw token once, list hides it, delete re
   assert.ok(!Number.isNaN(Date.parse(minted.expires_at)));
   const list = await (await admin('GET', '/fleet/enrollment-tokens')).json();
   const row = list.tokens.find((t) => t.id === minted.id);
-  assert.deepEqual(Object.keys(row).sort(), ['expires_at', 'id', 'note']);
+  assert.deepEqual(Object.keys(row).sort(), ['expires_at', 'id', 'note', 'tenant']);
   assert.ok(!JSON.stringify(list).includes(minted.token));
   assert.equal((await admin('DELETE', `/fleet/enrollment-tokens/${minted.id}`)).status, 204);
   assert.equal((await admin('DELETE', `/fleet/enrollment-tokens/${minted.id}`)).status, 404);

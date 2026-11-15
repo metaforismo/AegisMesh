@@ -6,17 +6,21 @@
 // be built and reviewed without a running AegisMesh node.
 //
 //   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
-//     [--accept-evidence on|off] [--burst N]
+//     [--accept-evidence on|off] [--burst N] [--auth token|oidc|both] [--tenants a,b]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
 //   dev-viewer, dev-analyst, dev-admin
+// With --auth oidc|both a fake identity provider at /__mock/idp stands in for
+// a real one: it lists synthetic identities and every failure the console's
+// callback can report. It performs no real OpenID Connect.
 // This is a test fixture, not the product server: it is not embedded and
 // never ships in the binary.
 
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFleet } from './mock-fleet.mjs';
@@ -39,6 +43,23 @@ if (!['hub', 'agent', 'both', 'none'].includes(FLEET_MODE)) throw new Error('--f
 const argAccept = process.argv.indexOf('--accept-evidence');
 const ACCEPT_ARG = argAccept > 0 ? process.argv[argAccept + 1] : (process.env.AEGISMESH_MOCK_ACCEPT_EVIDENCE || 'on');
 if (!['on', 'off'].includes(ACCEPT_ARG)) throw new Error('--accept-evidence must be on or off');
+// --auth token|oidc|both: which sign-in methods GET /meta advertises (default
+// token, like a server without OIDC configured).
+const argAuth = process.argv.indexOf('--auth');
+const AUTH_MODE = argAuth > 0 ? process.argv[argAuth + 1] : (process.env.AEGISMESH_MOCK_AUTH || 'token');
+if (!['token', 'oidc', 'both'].includes(AUTH_MODE)) throw new Error('--auth must be token, oidc or both');
+const TOKEN_AUTH = AUTH_MODE !== 'oidc';
+const OIDC_AUTH = AUTH_MODE !== 'token';
+// --tenants a,b: declared tenants (default one tenant, "default"). The first
+// is console.local_tenant: it owns this node's sensors, rules, node metadata
+// and agent status. Every other tenant holds only what its own fleet
+// registry forwarded, so its data is visibly different.
+const argTenants = process.argv.indexOf('--tenants');
+const TENANTS = (argTenants > 0 ? process.argv[argTenants + 1] : (process.env.AEGISMESH_MOCK_TENANTS || 'default')).split(',').map((t) => t.trim()).filter(Boolean);
+if (!TENANTS.length || TENANTS.length > 32 || TENANTS.some((t) => !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(t)) || new Set(TENANTS).size !== TENANTS.length) {
+  throw new Error('--tenants takes 1..32 distinct names matching [a-z0-9][a-z0-9_-]{0,31}');
+}
+const LOCAL_TENANT = TENANTS[0];
 
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -87,7 +108,6 @@ const CORRELATION_RULES = [
 ];
 
 const now = Date.now();
-const events = [];
 let seq = 0;
 
 function makeEvent(t, overrides = {}) {
@@ -109,99 +129,151 @@ function makeEvent(t, overrides = {}) {
   return ev;
 }
 
-// Fleet first: on an accepting hub the index also holds evidence forwarded
-// by some synthetic nodes.
-const fleet = createFleet({
-  mode: FLEET_MODE, acceptEvidence: ACCEPT_ARG === 'on',
-  forwardedCount: (id) => events.filter((e) => e.node?.id === id).length,
-});
-
-for (let i = 0; i < 1400; i++) {
-  const age = Math.floor(rand() ** 1.6 * 7 * 24 * 3600 * 1000);
-  events.push(makeEvent(now - age));
-}
-events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
-// A handful of correlation signals citing earlier interactions.
-for (let i = 0; i < 18; i++) {
-  const base = events[20 + i * 37];
-  const rule = pick(CORRELATION_RULES);
-  const sig = makeEvent(Date.parse(base.time) + 2000, {
-    classification: 'correlation_signal', source: base.source, sensor: SENSORS[0],
-    summary: `${rule.title}: ${base.source}`, rule_ids: [rule.id], severity: pick(['medium', 'high']),
-  });
-  sig.sensor = { id: 'correlator', kind: '', listen: '' };
-  sig._cites = [base.id, events[21 + i * 37].id];
-  events.push(sig);
-}
-// Forwarded copies. Forwarding is live, so they cover only the time since
-// this (synthetic) hub started: the last 20 hours. One copy deliberately
-// reuses a local event id: ids are unique only within an origin.
-const FORWARD_SPAN = 20 * 3600e3;
-fleet.evidenceNodes.forEach((n, k) => {
-  const count = [140, 70, 45][k] ?? 30;
-  for (let i = 0; i < count; i++) {
-    const e = makeEvent(now - Math.floor(rand() ** 1.3 * FORWARD_SPAN));
-    e.node = { id: n.id, name: n.name };
-    events.push(e);
-  }
-});
-if (fleet.evidenceNodes.length) {
-  const twin = events.find((e) => !e.node && Date.parse(e.time) > now - FORWARD_SPAN);
-  const copy = events.find((e) => e.node?.id === fleet.evidenceNodes[fleet.evidenceNodes.length - 1].id);
-  if (twin && copy) copy.id = twin.id;
-}
-events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
-events.forEach((e) => { e.time = e.time.replace(/\.\d+Z$/, 'Z'); });
-
-// Events are found by id within an origin ("local" or a node id).
 const keyOf = (id, origin) => `${id}|${origin}`;
-const byKey = new Map(events.map((e) => [keyOf(e.id, originOf(e)), e]));
-const localById = (id) => byKey.get(keyOf(id, LOCAL));
-const localEvents = () => events.filter((e) => !e.node);
+const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+
+// ---- Tenants ------------------------------------------------------------------
+//
+// Each tenant has its own index, investigations, audit chain and fleet
+// registry. The local tenant is built first with the original seed order, so
+// the default single-tenant data set is unchanged.
+
+function buildTenant(name, local) {
+  const t = { name, local, events: [], investigations: new Map(), audit: [], prevHash: '0'.repeat(64) };
+  // Fleet first: on an accepting hub the index also holds evidence forwarded
+  // by some synthetic nodes.
+  t.fleet = createFleet({
+    mode: FLEET_MODE, acceptEvidence: ACCEPT_ARG === 'on', tenant: name,
+    namePrefix: local ? '' : name, localAgent: local,
+    forwardedCount: (id) => t.events.filter((e) => e.node?.id === id).length,
+  });
+  const events = t.events;
+  if (local) {
+    for (let i = 0; i < 1400; i++) {
+      const age = Math.floor(rand() ** 1.6 * 7 * 24 * 3600 * 1000);
+      events.push(makeEvent(now - age));
+    }
+    events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    // A handful of correlation signals citing earlier interactions.
+    for (let i = 0; i < 18; i++) {
+      const base = events[20 + i * 37];
+      const rule = pick(CORRELATION_RULES);
+      const sig = makeEvent(Date.parse(base.time) + 2000, {
+        classification: 'correlation_signal', source: base.source, sensor: SENSORS[0],
+        summary: `${rule.title}: ${base.source}`, rule_ids: [rule.id], severity: pick(['medium', 'high']),
+      });
+      sig.sensor = { id: 'correlator', kind: '', listen: '' };
+      sig._cites = [base.id, events[21 + i * 37].id];
+      events.push(sig);
+    }
+  }
+  // Forwarded copies. Forwarding is live, so they cover only the time since
+  // this (synthetic) hub started: the last 20 hours. One copy deliberately
+  // reuses a local event id: ids are unique only within an origin.
+  const counts = local ? [140, 70, 45] : [210, 60];
+  t.fleet.evidenceNodes.forEach((n, k) => {
+    const count = counts[k] ?? 30;
+    for (let i = 0; i < count; i++) {
+      const e = makeEvent(now - Math.floor(rand() ** 1.3 * FORWARD_SPAN));
+      e.node = { id: n.id, name: n.name };
+      events.push(e);
+    }
+  });
+  if (local && t.fleet.evidenceNodes.length) {
+    const twin = events.find((e) => !e.node && Date.parse(e.time) > now - FORWARD_SPAN);
+    const copy = events.find((e) => e.node?.id === t.fleet.evidenceNodes[t.fleet.evidenceNodes.length - 1].id);
+    if (twin && copy) copy.id = twin.id;
+  }
+  events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+  events.forEach((e) => { e.time = e.time.replace(/\.\d+Z$/, 'Z'); });
+  // Events are found by id within an origin ("local" or a node id).
+  t.byKey = new Map(events.map((e) => [keyOf(e.id, originOf(e)), e]));
+  t.localById = (id) => t.byKey.get(keyOf(id, LOCAL));
+  t.localEvents = () => events.filter((e) => !e.node);
+  if (local) {
+    const a = newInv(t, 'MCP tool abuse from 203.0.113.7', 'high', t.localEvents().filter((e) => e.source === '203.0.113.7').slice(0, 6).map((e) => e.id), 'ana');
+    a.event_ids.push('f'.repeat(32)); // aged out of the index on purpose
+    a.notes.push({ id: hex(8), time: a.created_at, author: 'ana', text: 'Read_file attempts against ../../etc/passwd, then a canary hit.\nNo outbound activity observed.' });
+    newInv(t, 'Scanner noise baseline', 'low', t.localEvents().slice(100, 103).map((e) => e.id), 'ada', 'monitoring');
+    newInv(t, 'Closed: SSH credential spray', 'medium', [], 'ana', 'closed');
+  } else {
+    // Investigations annotate local observations only; this tenant has none,
+    // so its cases hold notes but no attached evidence.
+    const a = newInv(t, `Lisbon edge sweep (${name})`, 'medium', [], 'ana');
+    a.notes.push({ id: hex(8), time: a.created_at, author: 'ana', text: `Forwarded copies only in tenant ${name}; each node's own store is authoritative.` });
+  }
+  return t;
+}
+
+function newInv(t, title, priority, eventIds, by, status = 'open') {
+  const id = `inv_${hex(12)}`;
+  const ts = stamp();
+  const inv = { id, title, status, priority, created_at: ts, updated_at: ts, created_by: by, event_ids: [...eventIds], notes: [] };
+  t.investigations.set(id, inv);
+  return inv;
+}
+
+// Audit records chain per tenant. OIDC records add `issuer` and `subject`
+// (both external claims); other records omit them.
+function record(t, actor, role, action, target, outcome, remote, detail = '', extra = {}) {
+  const rec = { seq: t.audit.length + 1, time: stamp(), actor, role, action, target, outcome, remote, detail, ...extra, prev_hash: t.prevHash };
+  rec.hash = createHash('sha256').update(JSON.stringify(rec)).digest('hex');
+  t.prevHash = rec.hash;
+  t.audit.push(rec);
+}
+
+const FORWARD_SPAN = 20 * 3600e3;
+const tenants = new Map(TENANTS.map((name, i) => [name, buildTenant(name, i === 0)]));
+const localTenant = tenants.get(LOCAL_TENANT);
 
 const summaryOf = (e) => {
   const { _integrity, _cites, ...pub } = e;
   return pub;
 };
 
-// ---- Sessions, audit, investigations --------------------------------------
+// ---- Principals, sessions -------------------------------------------------------
 
+// Membership: admin and analyst belong to every tenant (in declared order);
+// the viewer only to the local tenant, so one principal sees tenant UI
+// without a switcher.
+const ALL = [...TENANTS];
 const TOKENS = new Map([
-  ['dev-viewer', { name: 'vera', role: 'viewer' }],
-  ['dev-analyst', { name: 'ana', role: 'analyst' }],
-  ['dev-admin', { name: 'ada', role: 'admin' }],
+  ['dev-viewer', { name: 'vera', role: 'viewer', tenants: [LOCAL_TENANT] }],
+  ['dev-analyst', { name: 'ana', role: 'analyst', tenants: ALL }],
+  ['dev-admin', { name: 'ada', role: 'admin', tenants: ALL }],
 ]);
-const sessions = new Map();
-const audit = [];
-let prevHash = '0'.repeat(64);
+// Synthetic identities at the fake provider. Subjects are external claims
+// and deliberately awkward (markup, a right-to-left override) to exercise
+// evidence rendering in the audit trail. "nobody" has no operator mapping.
+const OIDC_ISSUER = `http://${HOST}:${PORT}/__mock/idp`;
+const OIDC_DISPLAY_NAME = 'Example IdP (mock)';
+const IDENTITIES = new Map([
+  ['ada', { sub: '00u1ada-synthetic-7f3c', name: 'ada@example.test', role: 'admin', tenants: [...ALL].reverse() }],
+  ['ana', { sub: 'auth0|ana‮txt.exe', name: 'ana@example.test', role: 'analyst', tenants: ALL }],
+  ['vera', { sub: '<b>vera</b>@example.test', name: 'vera@example.test', role: 'viewer', tenants: [LOCAL_TENANT] }],
+  ['nobody', { sub: 'unmapped-synthetic-0000', name: '', role: '', tenants: [] }],
+]);
 
-function record(actor, role, action, target, outcome, remote, detail = '') {
-  const rec = { seq: audit.length + 1, time: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), actor, role, action, target, outcome, remote, detail, prev_hash: prevHash };
-  rec.hash = createHash('sha256').update(JSON.stringify(rec)).digest('hex');
-  prevHash = rec.hash;
-  audit.push(rec);
+const sessions = new Map(); // sid → { name, role, auth_method, tenant, tenants, csrf_token, expires_at }
+
+const sessionView = (s) => ({
+  principal: { name: s.name, role: s.role, auth_method: s.auth_method, tenant: s.tenant, tenants: s.tenants },
+  tenant: s.tenant, tenants: s.tenants, csrf_token: s.csrf_token, expires_at: s.expires_at,
+});
+
+function newSession(fields) {
+  const sid = randomBytes(24).toString('base64url');
+  const s = { csrf_token: randomBytes(24).toString('base64url'), expires_at: new Date(Date.now() + SESSION_TTL * 1000).toISOString().replace(/\.\d+Z$/, 'Z'), ...fields };
+  sessions.set(sid, s);
+  return { sid, s };
 }
 
-const investigations = new Map();
-function newInv(title, priority, eventIds, by, status = 'open') {
-  const id = `inv_${hex(12)}`;
-  const t = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-  const inv = { id, title, status, priority, created_at: t, updated_at: t, created_by: by, event_ids: [...eventIds], notes: [] };
-  investigations.set(id, inv);
-  return inv;
-}
-{
-  const a = newInv('MCP tool abuse from 203.0.113.7', 'high', localEvents().filter((e) => e.source === '203.0.113.7').slice(0, 6).map((e) => e.id), 'ana');
-  a.event_ids.push('f'.repeat(32)); // aged out of the index on purpose
-  a.notes.push({ id: hex(8), time: a.created_at, author: 'ana', text: 'Read_file attempts against ../../etc/passwd, then a canary hit.\nNo outbound activity observed.' });
-  newInv('Scanner noise baseline', 'low', localEvents().slice(100, 103).map((e) => e.id), 'ada', 'monitoring');
-  newInv('Closed: SSH credential spray', 'medium', [], 'ana', 'closed');
-}
+const sessionCookie = (sid) => `aegismesh_session=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL}`;
 
-const invView = (inv, detail) => {
+const invView = (t, inv, detail) => {
   const out = { ...inv };
   if (detail) {
-    out.events = inv.event_ids.map(localById).filter(Boolean).map(summaryOf).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    out.events = inv.event_ids.map(t.localById).filter(Boolean).map(summaryOf).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
   } else {
     delete out.notes;
   }
@@ -227,7 +299,7 @@ function send(res, status, body, headers = {}) {
 }
 
 const ERR_STATUS = { invalid_argument: 400, unauthenticated: 401, forbidden: 403, not_found: 404, conflict: 409, rate_limited: 429, unavailable: 503, internal: 500 };
-const fail = (res, code, message, headers) => send(res, ERR_STATUS[code], { error: { code, message } }, headers);
+const fail = (res, code, message, headers, status) => send(res, status || ERR_STATUS[code], { error: { code, message } }, headers);
 
 function readBody(req, allowed) {
   return new Promise((resolve, reject) => {
@@ -303,9 +375,10 @@ function sourceSummaries(list) {
   return [...map.values()].map((s) => ({ ...s, sensors: [...s.sensors], kinds: [...s.kinds] })).sort((a, b) => b.events - a.events);
 }
 
-function overview(w) {
+function overview(t, w) {
   const end = Date.now();
   const span = WINDOW_MS[w];
+  const events = t.events;
   const inWin = events.filter((e) => Date.parse(e.time) > end - span);
   const prev = events.filter((e) => Date.parse(e.time) > end - 2 * span && Date.parse(e.time) <= end - span);
   const totals = (list) => ({
@@ -317,32 +390,43 @@ function overview(w) {
   const n = BUCKETS[w];
   const size = span / n;
   const start0 = end - span;
-  const buckets = Array.from({ length: n }, (_, i) => ({ start: new Date(start0 + i * size).toISOString().replace(/\.\d+Z$/, 'Z'), interaction: 0, canary_invocation: 0, correlation_signal: 0 }));
+  const emptyBuckets = () => Array.from({ length: n }, (_, i) => ({ start: new Date(start0 + i * size).toISOString().replace(/\.\d+Z$/, 'Z'), interaction: 0, canary_invocation: 0, correlation_signal: 0 }));
+  const indexOf = (e) => Math.min(n - 1, Math.floor((Date.parse(e.time) - start0) / size));
+  const buckets = emptyBuckets();
   for (const e of inWin) {
-    const i = Math.min(n - 1, Math.floor((Date.parse(e.time) - start0) / size));
+    const i = indexOf(e);
     if (i >= 0) buckets[i][e.classification]++;
   }
+  // by_sensor: at most 64 sensor ids, the first ones met in newest-first
+  // evidence; each with buckets on exactly the main series' starts (zeros
+  // included). Grouped by sensor id across origins.
   const bySensor = new Map();
   for (const e of inWin) {
-    const s = bySensor.get(e.sensor.id) || { sensor_id: e.sensor.id, kind: e.sensor.kind, events: 0 };
+    let s = bySensor.get(e.sensor.id);
+    if (!s) {
+      if (bySensor.size >= 64) continue;
+      s = { sensor_id: e.sensor.id, kind: e.sensor.kind, events: 0, buckets: emptyBuckets() };
+      bySensor.set(e.sensor.id, s);
+    }
     s.events++;
-    bySensor.set(e.sensor.id, s);
+    const i = indexOf(e);
+    if (i >= 0) s.buckets[i][e.classification]++;
   }
-  const bySev = Object.fromEntries([...SEV, 'none'].map((s) => [s, 0]));
+  const bySev = Object.fromEntries([...SEV, 'none'].map((x) => [x, 0]));
   for (const e of inWin) bySev[e.severity || 'none']++;
   const ruleCounts = new Map();
   for (const e of inWin) for (const r of e.rule_ids) ruleCounts.set(r, (ruleCounts.get(r) || 0) + 1);
   const ruleSev = new Map(DETECTION_RULES.map((r) => [r.id, r.severity]));
   return {
-    window: w, generated_at: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
+    window: w, generated_at: new Date(end).toISOString().replace(/\.\d+Z$/, 'Z'),
     totals: totals(inWin), previous_totals: totals(prev), buckets,
     by_sensor: [...bySensor.values()].sort((a, b) => b.events - a.events),
     by_severity: bySev,
     top_rules: [...ruleCounts].map(([rule_id, n2]) => ({ rule_id, events: n2, severity: ruleSev.get(rule_id) || '' })).sort((a, b) => b.events - a.events).slice(0, 8),
     top_sources: sourceSummaries(inWin).slice(0, 10),
     recent_signals: inWin.filter((e) => e.classification === 'correlation_signal').slice(0, 10).map(summaryOf),
-    open_investigations: [...investigations.values()].filter((i) => i.status === 'open').length,
-    ...(fleet.accepting ? { by_node: byNode(inWin) } : {}),
+    open_investigations: [...t.investigations.values()].filter((i) => i.status === 'open').length,
+    ...(t.fleet.accepting ? { by_node: byNode(inWin) } : {}),
   };
 }
 
@@ -371,24 +455,38 @@ function envelope(e) {
 
 // ---- SSE -------------------------------------------------------------------
 
+// streams: Map of response → { tenant, sid, node } (node '' = all origins).
+// A stream belongs to one session in one tenant; a tenant switch or a
+// sign-out ends it, like the server.
 const streams = new Map();
-// streams: Map of response → node filter ('' = all origins).
-function emitLive() {
+function emitLive(t) {
+  // The local tenant observes locally and (on an accepting hub) receives
+  // forwarded copies; another tenant only receives forwarded copies.
+  const nodes = t.fleet.evidenceNodes;
+  if (!t.local && !nodes.length) return;
   const e = makeEvent(Date.now());
-  e.time = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-  // On an accepting hub about a third of live observations are forwarded.
-  if (fleet.evidenceNodes.length && rand() < 0.35) {
-    const n = pick(fleet.evidenceNodes);
+  e.time = stamp();
+  if (nodes.length && (!t.local || rand() < 0.35)) {
+    const n = pick(nodes);
     e.node = { id: n.id, name: n.name };
   }
-  events.unshift(e);
-  byKey.set(keyOf(e.id, originOf(e)), e);
-  for (const [res, node] of streams) {
-    if (node && originOf(e) !== node) continue;
+  t.events.unshift(e);
+  t.byKey.set(keyOf(e.id, originOf(e)), e);
+  for (const [res, st] of streams) {
+    if (st.tenant !== t.name) continue;
+    if (st.node && originOf(e) !== st.node) continue;
     res.write(`event: observation\ndata: ${JSON.stringify(summaryOf(e))}\n\n`);
   }
 }
-setInterval(emitLive, 4000).unref();
+setInterval(() => { for (const t of tenants.values()) emitLive(t); }, 4000).unref();
+
+function endStreams(sid) {
+  for (const [res, st] of streams) {
+    if (st.sid !== sid) continue;
+    streams.delete(res);
+    res.end();
+  }
+}
 
 // Burst: GET /__mock/burst?n=200 pushes n observations to every open stream
 // in one tight loop, to measure how the UI copes with a live spike. It is a
@@ -398,7 +496,7 @@ const argBurst = process.argv.indexOf('--burst');
 const AUTO_BURST = argBurst > 0 ? Math.min(1000, Math.max(1, Number(process.argv[argBurst + 1]) || 200)) : 0;
 function burst(n) {
   const count = Math.min(1000, Math.max(1, Math.floor(Number(n) || 0)));
-  for (let i = 0; i < count; i++) emitLive();
+  for (let i = 0; i < count; i++) for (const t of tenants.values()) emitLive(t);
   return count;
 }
 setInterval(() => {
@@ -412,49 +510,82 @@ async function api(req, res, url) {
   const remote = req.socket.remoteAddress || '';
   const m = req.method;
 
-  if (m === 'GET' && p === '/meta') return send(res, 200, { product: 'AegisMesh', api_version: 'v1', version: '0.3.0-dev (mock)' });
+  if (m === 'GET' && p === '/meta') {
+    return send(res, 200, {
+      product: 'AegisMesh', api_version: 'v1', version: '0.3.0-dev (mock)',
+      auth: { token: TOKEN_AUTH, oidc: { enabled: OIDC_AUTH, display_name: OIDC_DISPLAY_NAME } },
+    });
+  }
+
+  if (p.startsWith('/auth/oidc/')) return oidcRoute(req, res, url, p, m, remote);
 
   if (m === 'POST' && p === '/session') {
     let body;
     try { body = await readBody(req, ['token']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
+    if (!TOKEN_AUTH) return fail(res, 'unauthenticated', 'token sign-in is disabled');
     const principal = TOKENS.get(body.token);
     if (!principal) {
-      record('', '', 'session.login_failed', '', 'denied', remote);
+      // No tenant resolved: multi-tenant servers keep this in a chain the
+      // console API cannot read; single-tenant servers in the only chain.
+      if (TENANTS.length === 1) record(localTenant, '', '', 'session.login_failed', '', 'denied', remote);
       return fail(res, 'unauthenticated', 'invalid token');
     }
-    const sid = randomBytes(24).toString('base64url');
-    const s = { principal, csrf_token: randomBytes(24).toString('base64url'), expires_at: new Date(Date.now() + SESSION_TTL * 1000).toISOString().replace(/\.\d+Z$/, 'Z') };
-    sessions.set(sid, s);
-    record(principal.name, principal.role, 'session.login', '', 'ok', remote);
-    return send(res, 200, s, { 'Set-Cookie': `aegismesh_session=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL}` });
+    // Token sign-in starts in the first configured membership.
+    const { sid, s: sess } = newSession({ name: principal.name, role: principal.role, auth_method: 'token', tenant: principal.tenants[0], tenants: [...principal.tenants] });
+    const old = cookieSession(req);
+    if (old) { sessions.delete(old.id); endStreams(old.id); }
+    record(tenants.get(sess.tenant), principal.name, principal.role, 'session.login', '', 'ok', remote);
+    return send(res, 200, sessionView(sess), { 'Set-Cookie': sessionCookie(sid) });
   }
 
   const s = cookieSession(req);
   if (!s) return fail(res, 'unauthenticated', 'sign in required');
-  const who = s.principal;
+  const who = { name: s.name, role: s.role };
+  const T = tenants.get(s.tenant);
+  const events = T.events;
   if (m !== 'GET') {
     if (req.headers['x-aegismesh-csrf'] !== s.csrf_token) return fail(res, 'forbidden', 'missing or invalid CSRF header');
     if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return fail(res, 'forbidden', 'origin mismatch');
   }
+  const audit = (...args) => record(T, ...args);
   const need = (role, action, target = '') => {
     if (atLeast(who.role, role)) return true;
-    record(who.name, who.role, 'authz.denied', target, 'denied', remote, action);
+    audit(who.name, who.role, 'authz.denied', target, 'denied', remote, action);
     fail(res, 'forbidden', `requires ${role}`);
     return false;
   };
 
   if (p === '/session') {
-    if (m === 'GET') return send(res, 200, { principal: who, csrf_token: s.csrf_token, expires_at: s.expires_at });
+    if (m === 'GET') return send(res, 200, sessionView(s));
     if (m === 'DELETE') {
       sessions.delete(s.id);
-      record(who.name, who.role, 'session.logout', '', 'ok', remote);
+      endStreams(s.id);
+      audit(who.name, who.role, 'session.logout', '', 'ok', remote);
       return send(res, 204, null, { 'Set-Cookie': 'aegismesh_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' });
     }
   }
 
+  // Move this session to another member tenant: a new session id and CSRF
+  // token, the original expiry, the old session and its streams ended. The
+  // departing chain records the switch without naming the target.
+  if (p === '/session/tenant' && m === 'POST') {
+    let b;
+    try { b = await readBody(req, ['tenant']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
+    if (typeof b.tenant !== 'string' || !b.tenant) return fail(res, 'invalid_argument', 'tenant is required');
+    if (!s.tenants.includes(b.tenant) || !tenants.has(b.tenant)) return fail(res, 'not_found', 'tenant not found');
+    audit(who.name, who.role, 'session.tenant_switch', '', 'ok', remote);
+    sessions.delete(s.id);
+    endStreams(s.id);
+    const { id: _old, ...rest } = s;
+    const sid = randomBytes(24).toString('base64url');
+    const next = { ...rest, tenant: b.tenant, csrf_token: randomBytes(24).toString('base64url') };
+    sessions.set(sid, next);
+    return send(res, 200, sessionView(next), { 'Set-Cookie': sessionCookie(sid) });
+  }
+
   if (m === 'GET' && p === '/overview') {
     const w = windowParam(url, res);
-    return w && send(res, 200, overview(w));
+    return w && send(res, 200, overview(T, w));
   }
 
   if (m === 'GET' && p === '/events') {
@@ -476,7 +607,7 @@ async function api(req, res, url) {
     if (streams.size >= 16) return fail(res, 'unavailable', 'too many streams');
     res.writeHead(200, securityHeaders({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' }));
     res.write(': connected\n\n');
-    streams.set(res, node);
+    streams.set(res, { tenant: T.name, sid: s.id, node });
     req.on('close', () => streams.delete(res));
     if (AUTO_BURST) setTimeout(() => { if (streams.has(res)) burst(AUTO_BURST); }, 3000).unref();
     return;
@@ -491,9 +622,9 @@ async function api(req, res, url) {
     // Contract: an explicit origin wins; without one, local is preferred,
     // a unique remote match resolves, and several remote matches are 404.
     let e;
-    if (node) e = byKey.get(keyOf(mm[1], node));
+    if (node) e = T.byKey.get(keyOf(mm[1], node));
     else {
-      e = localById(mm[1]);
+      e = T.localById(mm[1]);
       if (!e) {
         const remote = events.filter((x) => x.node && x.id === mm[1]);
         e = remote.length === 1 ? remote[0] : undefined;
@@ -502,7 +633,7 @@ async function api(req, res, url) {
     if (!e) return fail(res, 'not_found', 'event not in index');
     const origin = originOf(e);
     const related = (e._cites
-      ? e._cites.map((id) => byKey.get(keyOf(id, origin))).filter(Boolean)
+      ? e._cites.map((id) => T.byKey.get(keyOf(id, origin))).filter(Boolean)
       : events.filter((x) => originOf(x) === origin && x._cites?.includes(e.id))).map(summaryOf);
     const findings = e.rule_ids.filter((r) => r.startsWith('CR-') === false).map((r) => {
       const rule = DETECTION_RULES.find((x) => x.id === r);
@@ -514,7 +645,7 @@ async function api(req, res, url) {
       ...(e.node ? { node: e.node } : {}),
       summary: summaryOf(e), envelope: envelope(e), integrity, findings, related,
       // Investigations annotate bare ids that resolve to local observations only.
-      investigations: e.node ? [] : [...investigations.values()].filter((i) => i.event_ids.includes(e.id)).map((i) => ({ id: i.id, title: i.title, status: i.status })),
+      investigations: e.node ? [] : [...T.investigations.values()].filter((i) => i.event_ids.includes(e.id)).map((i) => ({ id: i.id, title: i.title, status: i.status })),
     });
   }
 
@@ -538,15 +669,17 @@ async function api(req, res, url) {
   }
 
   if (m === 'GET' && p === '/sensors') {
+    // Local sensors belong to the local tenant; others get an empty list.
     return send(res, 200, {
-      sensors: SENSORS.map((s) => {
-        const mine = localEvents().filter((e) => e.sensor.id === s.id);
-        return { ...s, events_total: mine.length, last_event_at: mine[0]?.time || '', by_classification: Object.fromEntries(CLASSES.slice(0, 2).map((c) => [c, mine.filter((e) => e.classification === c).length])) };
+      sensors: !T.local ? [] : SENSORS.map((x) => {
+        const mine = T.localEvents().filter((e) => e.sensor.id === x.id);
+        return { ...x, events_total: mine.length, last_event_at: mine[0]?.time || '', by_classification: Object.fromEntries(CLASSES.slice(0, 2).map((c) => [c, mine.filter((e) => e.classification === c).length])) };
       }),
     });
   }
 
   if (m === 'GET' && p === '/rules') {
+    if (!T.local) return send(res, 200, { rules: [] });
     return send(res, 200, {
       rules: [
         ...DETECTION_RULES.map((r) => ({ id: r.id, family: 'detection', title: r.title, description: `Flags ${r.title.toLowerCase()}.`, severity: r.severity, enabled: true })),
@@ -559,7 +692,7 @@ async function api(req, res, url) {
     const limit = Number(url.searchParams.get('limit') || 20);
     if (!Number.isInteger(limit) || limit < 0 || limit > 1000) return fail(res, 'invalid_argument', 'limit must be within 0..1000');
     // Recommendations use local evidence only (contract).
-    const sigs = localEvents().filter((e) => e.classification !== 'interaction').slice(0, limit);
+    const sigs = T.localEvents().filter((e) => e.classification !== 'interaction').slice(0, limit);
     return send(res, 200, {
       schema: 'aegismesh.recommendation/v1', mode: 'dry_run', interpretation: 'signal_not_incident', kind: 'recommendation', status: 'proposed',
       recommendations: sigs.map((e) => ({
@@ -577,13 +710,15 @@ async function api(req, res, url) {
   }
 
   if (m === 'GET' && p === '/node') {
+    // Node metadata belongs to the local tenant; others get 404.
+    if (!T.local) return fail(res, 'not_found', 'no local node in this tenant');
     return send(res, 200, {
       instance: 'node-dev-01', version: { version: '0.3.0-dev', commit: 'mock', go: 'go1.25' },
       started_at: new Date(now - 26 * 3600e3).toISOString().replace(/\.\d+Z$/, 'Z'), uptime_seconds: Math.floor((Date.now() - now) / 1000) + 26 * 3600,
       healthy: true, sensors: { wanted: 4, started: 3 }, bus: { dropped_events: 0 },
       storage: { segments: 3, bytes: 18_874_368, encrypted: false, retention: { max_events: 100000, max_age_days: 30 } },
       // Accepting hubs report history "unavailable": forwarded copies are live-only.
-      index: { events: events.length, capacity: 50000, oldest: events[events.length - 1].time, history: fleet.accepting ? 'unavailable' : 'complete' },
+      index: { events: events.length, capacity: 50000, oldest: events[events.length - 1].time, history: T.fleet.accepting ? 'unavailable' : 'complete' },
       console: { listen: `${HOST}:${PORT}`, tls: false, session_ttl_seconds: SESSION_TTL },
     });
   }
@@ -591,8 +726,8 @@ async function api(req, res, url) {
   if (p === '/investigations' && m === 'GET') {
     const status = url.searchParams.get('status') || '';
     if (status && !['open', 'monitoring', 'closed'].includes(status)) return fail(res, 'invalid_argument', 'bad status');
-    const list = [...investigations.values()].filter((i) => !status || i.status === status).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    return send(res, 200, { investigations: list.map((i) => invView(i, false)) });
+    const list = [...T.investigations.values()].filter((i) => !status || i.status === status).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    return send(res, 200, { investigations: list.map((i) => invView(T, i, false)) });
   }
   if (p === '/investigations' && m === 'POST') {
     if (!need('analyst', 'investigation.create')) return;
@@ -601,15 +736,16 @@ async function api(req, res, url) {
     if (typeof b.title !== 'string' || !b.title.trim() || b.title.length > 200) return fail(res, 'invalid_argument', 'title is required (≤200 chars)');
     const ids = Array.isArray(b.event_ids) ? b.event_ids : [];
     if (ids.length > 200 || ids.some((x) => !/^[0-9a-f]{32}$/.test(x))) return fail(res, 'invalid_argument', 'bad event_ids');
-    const inv = newInv(b.title.trim(), b.priority || 'medium', ids, who.name);
-    record(who.name, who.role, 'investigation.create', inv.id, 'ok', remote);
-    return send(res, 201, invView(inv, true));
+    if (ids.some((x) => !T.localById(x))) return fail(res, 'not_found', 'event not in index');
+    const inv = newInv(T, b.title.trim(), b.priority || 'medium', ids, who.name);
+    audit(who.name, who.role, 'investigation.create', inv.id, 'ok', remote);
+    return send(res, 201, invView(T, inv, true));
   }
   if ((mm = /^\/investigations\/([A-Za-z0-9_.-]+)(\/notes|\/events\/([0-9a-f]{32}))?$/.exec(p))) {
-    const inv = investigations.get(mm[1]);
+    const inv = T.investigations.get(mm[1]);
     if (!inv) return fail(res, 'not_found', 'no such investigation');
     const touch = () => { inv.updated_at = new Date().toISOString().replace(/\.\d+Z$/, 'Z'); };
-    if (!mm[2] && m === 'GET') return send(res, 200, invView(inv, true));
+    if (!mm[2] && m === 'GET') return send(res, 200, invView(T, inv, true));
     if (!mm[2] && m === 'PATCH') {
       if (!need('analyst', 'investigation.update', inv.id)) return;
       let b;
@@ -618,8 +754,8 @@ async function api(req, res, url) {
       if (b.priority && !['low', 'medium', 'high'].includes(b.priority)) return fail(res, 'invalid_argument', 'bad priority');
       Object.assign(inv, b);
       touch();
-      record(who.name, who.role, 'investigation.update', inv.id, 'ok', remote, Object.keys(b).join(','));
-      return send(res, 200, invView(inv, true));
+      audit(who.name, who.role, 'investigation.update', inv.id, 'ok', remote, Object.keys(b).join(','));
+      return send(res, 200, invView(T, inv, true));
     }
     if (mm[2] === '/notes' && m === 'POST') {
       if (!need('analyst', 'investigation.note', inv.id)) return;
@@ -628,14 +764,14 @@ async function api(req, res, url) {
       if (typeof b.text !== 'string' || !b.text.trim() || [...b.text].length > 4000) return fail(res, 'invalid_argument', 'text is required (≤4000 chars)');
       inv.notes.push({ id: hex(8), time: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), author: who.name, text: b.text });
       touch();
-      record(who.name, who.role, 'investigation.note', inv.id, 'ok', remote);
-      return send(res, 201, invView(inv, true));
+      audit(who.name, who.role, 'investigation.note', inv.id, 'ok', remote);
+      return send(res, 201, invView(T, inv, true));
     }
     if (mm[3] && (m === 'PUT' || m === 'DELETE')) {
       const action = m === 'PUT' ? 'investigation.attach' : 'investigation.detach';
       if (!need('analyst', action, inv.id)) return;
       if (m === 'PUT') {
-        if (!localById(mm[3])) return fail(res, 'not_found', 'event not in index');
+        if (!T.localById(mm[3])) return fail(res, 'not_found', 'event not in index');
         if (!inv.event_ids.includes(mm[3])) {
           if (inv.event_ids.length >= 200) return fail(res, 'conflict', 'investigation already holds 200 events');
           inv.event_ids.push(mm[3]);
@@ -644,8 +780,8 @@ async function api(req, res, url) {
         inv.event_ids = inv.event_ids.filter((x) => x !== mm[3]);
       }
       touch();
-      record(who.name, who.role, action, inv.id, 'ok', remote, mm[3]);
-      return send(res, 200, invView(inv, true));
+      audit(who.name, who.role, action, inv.id, 'ok', remote, mm[3]);
+      return send(res, 200, invView(T, inv, true));
     }
   }
 
@@ -653,45 +789,207 @@ async function api(req, res, url) {
     if (!need('admin', 'audit.read')) return;
     const action = url.searchParams.get('action') || '';
     const actor = url.searchParams.get('actor') || '';
-    record(who.name, who.role, 'audit.read', '', 'ok', remote);
-    const list = audit.slice().reverse().filter((r) => (!action || r.action === action) && (!actor || r.actor === actor));
+    audit(who.name, who.role, 'audit.read', '', 'ok', remote);
+    const list = T.audit.slice().reverse().filter((r) => (!action || r.action === action) && (!actor || r.actor === actor));
     const pg = paginate(list, url);
     if (pg.error) return fail(res, 'invalid_argument', pg.error);
     return send(res, 200, { records: pg.page, next_cursor: pg.next });
   }
   if (m === 'GET' && p === '/audit/verify') {
     if (!need('admin', 'audit.verify')) return;
-    record(who.name, who.role, 'audit.verify', '', 'ok', remote);
+    audit(who.name, who.role, 'audit.verify', '', 'ok', remote);
     let prev = '0'.repeat(64);
-    for (const r of audit) {
+    for (const r of T.audit) {
       const { hash, ...rest } = r;
       if (r.prev_hash !== prev || createHash('sha256').update(JSON.stringify(rest)).digest('hex') !== hash) {
-        return send(res, 200, { verified: false, records: audit.length, first_invalid_seq: r.seq, error: `hash mismatch at seq ${r.seq}` });
+        return send(res, 200, { verified: false, records: T.audit.length, first_invalid_seq: r.seq, error: `hash mismatch at seq ${r.seq}` });
       }
       prev = hash;
     }
-    return send(res, 200, { verified: true, records: audit.length, first_invalid_seq: 0, error: '' });
+    return send(res, 200, { verified: true, records: T.audit.length, first_invalid_seq: 0, error: '' });
   }
 
-  if (await fleet({ req, res, url, p, m, need, record, who, remote, send, fail, readBody })) return;
+  if (await T.fleet({ req, res, url, p, m, need, record: audit, who, remote, send, fail, readBody })) return;
 
   return fail(res, 'not_found', 'no such endpoint');
 }
 
+// ---- OIDC (fake provider hop) ----------------------------------------------
+//
+// Mirrors the contract's browser-visible behavior only: login sets a short
+// pre-login cookie bound to a single-use state and redirects to the
+// provider; the callback accepts a fixed parameter set, discards provider
+// text, and redirects to "/" (session cookie set) or to
+// "/#/login?error=<code>". The provider is a page on this mock.
+
+const OIDC_ERRORS = ['unavailable', 'rate_limited', 'invalid_request', 'invalid_state', 'invalid_identity', 'access_denied'];
+const pending = new Map(); // state → { binding, expires }
+const OIDC_COOKIE = 'aegismesh_oidc';
+
+function redirect(res, location, cookies = []) {
+  res.writeHead(302, securityHeaders({ Location: location, 'Cache-Control': 'no-store', ...(cookies.length ? { 'Set-Cookie': cookies } : {}) }));
+  res.end();
+}
+
+const clearOidcCookie = `${OIDC_COOKIE}=; Path=/api/v1/auth/oidc; HttpOnly; SameSite=Lax; Max-Age=0`;
+const loginError = (res, code) => redirect(res, `/#/login?error=${code}`, [clearOidcCookie]);
+
+function oidcRoute(req, res, url, p, m, remote) {
+  if (!OIDC_AUTH) return fail(res, 'not_found', 'OIDC is not configured');
+  if (m !== 'GET') return fail(res, 'not_found', 'no such endpoint');
+  const now2 = Date.now();
+  for (const [k, v] of pending) if (v.expires < now2) pending.delete(k);
+
+  if (p === '/auth/oidc/login') {
+    if (pending.size >= 128) return loginError(res, 'rate_limited');
+    const state = randomBytes(16).toString('base64url');
+    const binding = randomBytes(16).toString('base64url');
+    pending.set(state, { binding, expires: now2 + 120e3 });
+    return redirect(res, `/__mock/idp/authorize?state=${state}`, [`${OIDC_COOKIE}=${binding}; Path=/api/v1/auth/oidc; HttpOnly; SameSite=Lax; Max-Age=120`]);
+  }
+
+  if (p === '/auth/oidc/callback') {
+    const allowed = ['state', 'code', 'error', 'error_description', 'iss', 'session_state'];
+    const keys = [...url.searchParams.keys()];
+    if (keys.some((k) => !allowed.includes(k)) || keys.length !== new Set(keys).size) return loginError(res, 'invalid_request');
+    const state = url.searchParams.get('state') || '';
+    const entry = pending.get(state);
+    pending.delete(state); // single use, whatever happens next
+    const m2 = new RegExp(`(?:^|;\\s*)${OIDC_COOKIE}=([A-Za-z0-9_-]+)`).exec(req.headers.cookie || '');
+    if (!entry || !m2 || m2[1] !== entry.binding) return loginError(res, 'invalid_state');
+    // The provider's error and error_description are discarded.
+    if (url.searchParams.has('error')) return loginError(res, 'access_denied');
+    const code = url.searchParams.get('code');
+    if (!code) return loginError(res, 'invalid_request');
+    if (code === 'outage') return loginError(res, 'unavailable');
+    if (code === 'busy') return loginError(res, 'rate_limited');
+    const id = IDENTITIES.get(code);
+    if (!id) return loginError(res, 'invalid_request');
+    const claims = { issuer: OIDC_ISSUER, subject: id.sub };
+    if (!id.role || !id.tenants.length) {
+      if (TENANTS.length === 1) record(localTenant, '', '', 'session.oidc_denied', '', 'denied', remote, '', claims);
+      return loginError(res, 'invalid_identity');
+    }
+    // Initial tenant: the first mapped membership in sorted order.
+    const sorted = [...id.tenants].sort();
+    const old = cookieSession(req);
+    if (old) { sessions.delete(old.id); endStreams(old.id); }
+    const { sid, s: sess } = newSession({ name: id.name, role: id.role, auth_method: 'oidc', tenant: sorted[0], tenants: [...id.tenants] });
+    record(tenants.get(sess.tenant), id.name, id.role, 'session.oidc_login', '', 'ok', remote, '', claims);
+    return redirect(res, '/', [sessionCookie(sid), clearOidcCookie]);
+  }
+  return fail(res, 'not_found', 'no such endpoint');
+}
+
+// The fake identity provider's page: plain links back to the callback, one
+// per synthetic identity and per failure. Development only.
+function idpPage(res, url) {
+  const state = url.searchParams.get('state') || '';
+  const safe = /^[A-Za-z0-9_-]{1,64}$/.test(state) ? state : '';
+  const cb = (q) => `/api/v1/auth/oidc/callback?${q}`;
+  const rows = [
+    ['Sign in as ada (admin, every tenant)', cb(`state=${safe}&code=ada&iss=${encodeURIComponent(OIDC_ISSUER)}`)],
+    ['Sign in as ana (analyst, every tenant)', cb(`state=${safe}&code=ana`)],
+    ['Sign in as vera (viewer, local tenant only)', cb(`state=${safe}&code=vera`)],
+  ];
+  const failures = [
+    ['Deny consent (access_denied, with provider text)', cb(`state=${safe}&error=access_denied&error_description=${encodeURIComponent('<b>Provider says:</b> call 555-0100')}`)],
+    ['Identity with no operator mapping (invalid_identity)', cb(`state=${safe}&code=nobody`)],
+    ['Wrong state (invalid_state)', cb('state=forged-state&code=ada')],
+    ['Missing code (invalid_request)', cb(`state=${safe}`)],
+    ['Provider outage (unavailable)', cb(`state=${safe}&code=outage`)],
+    ['Too many attempts (rate_limited)', cb(`state=${safe}&code=busy`)],
+  ];
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const list = (items) => `<ul class="menu__list stack">${items.map(([t, h]) => `<li><a class="btn btn--block" href="${esc(h)}">${esc(t)}</a></li>`).join('')}</ul>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock identity provider</title>
+<link rel="stylesheet" href="/assets/css/tokens.css"><link rel="stylesheet" href="/assets/css/base.css"><link rel="stylesheet" href="/assets/css/components.css"><link rel="stylesheet" href="/assets/css/app.css">
+</head><body><main class="login"><div class="login__card">
+<h1>${esc(OIDC_DISPLAY_NAME)}</h1>
+<p class="muted">Development mock of an OpenID Connect provider. Nothing here is real: choose who to be, or which failure to send back.</p>
+${safe ? '' : '<p class="banner banner--warn">No valid state in this request: every choice below will fail as invalid_state.</p>'}
+<h2 class="field__label">Identities</h2>${list(rows)}
+<h2 class="field__label">Failures</h2>${list(failures)}
+</div></main></body></html>`;
+  res.writeHead(200, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }));
+  res.end(html);
+}
+
+// ---- Static files ------------------------------------------------------------
+//
+// Mirrors the server: non-index assets negotiate gzip (text, JS, JSON, SVG
+// above 256 bytes, when smaller), carry a representation-specific strong
+// SHA-256 ETag, Cache-Control: no-cache and Vary: Accept-Encoding, and answer
+// a matching If-None-Match with 304. index.html stays no-store, uncompressed,
+// without an ETag. Ranges are ignored.
+
+const staticCache = new Map(); // file → { raw, gz, etagRaw, etagGz }
+const etagOf = (buf) => `"${createHash('sha256').update(buf).digest('hex')}"`;
+
+// q-values for gzip and identity from Accept-Encoding.
+function acceptEncoding(header) {
+  const q = { gzip: 0, identity: 1, star: null };
+  if (header === undefined) return q;
+  for (const part of String(header).split(',')) {
+    const [name, ...params] = part.trim().toLowerCase().split(';');
+    if (!name) continue;
+    const qp = params.map((x) => x.trim()).find((x) => x.startsWith('q='));
+    const v = qp ? Number(qp.slice(2)) : 1;
+    const val = Number.isFinite(v) ? v : 0;
+    if (name === 'gzip' || name === 'x-gzip') q.gzip = val;
+    else if (name === 'identity') q.identity = val;
+    else if (name === '*') q.star = val;
+  }
+  if (q.star !== null) {
+    if (!/gzip/.test(header)) q.gzip = q.star;
+    if (!/identity/.test(header)) q.identity = q.star;
+  }
+  return q;
+}
+
+function ifNoneMatch(header, etag) {
+  if (!header) return false;
+  return header.split(',').map((x) => x.trim().replace(/^W\//, '')).some((x) => x === '*' || x === etag);
+}
+
 async function serveStatic(req, res, url) {
-  let rel = decodeURIComponent(url.pathname);
+  let rel;
+  try { rel = decodeURIComponent(url.pathname); } catch { return fail(res, 'not_found', 'not found'); }
   if (rel === '/') rel = '/index.html';
   const file = path.resolve(STATIC, `.${rel}`);
   if (!file.startsWith(STATIC + path.sep)) return fail(res, 'not_found', 'not found');
   const type = TYPES[path.extname(file)];
   if (!type) return fail(res, 'not_found', 'not found');
+  let entry = staticCache.get(file);
   try {
-    const body = await readFile(file);
-    res.writeHead(200, securityHeaders({ 'Content-Type': type, 'Cache-Control': 'no-cache' }));
-    res.end(body);
+    const raw = await readFile(file);
+    if (!entry || !entry.raw.equals(raw)) {
+      const gz = raw.length > 256 ? gzipSync(raw, { level: 9 }) : null;
+      entry = { raw, gz: gz && gz.length < raw.length ? gz : null };
+      entry.etagRaw = etagOf(raw);
+      entry.etagGz = entry.gz ? etagOf(entry.gz) : '';
+      staticCache.set(file, entry);
+    }
   } catch {
-    fail(res, 'not_found', 'not found');
+    return fail(res, 'not_found', 'not found');
   }
+  if (rel === '/index.html') {
+    res.writeHead(200, securityHeaders({ 'Content-Type': type, 'Cache-Control': 'no-store' }));
+    return res.end(entry.raw);
+  }
+  const acc = acceptEncoding(req.headers['accept-encoding']);
+  const useGz = Boolean(entry.gz) && acc.gzip > 0;
+  if (!useGz && acc.identity <= 0) return fail(res, 'invalid_argument', 'no acceptable encoding', {}, 406);
+  const body = useGz ? entry.gz : entry.raw;
+  const etag = useGz ? entry.etagGz : entry.etagRaw;
+  const headers = { 'Content-Type': type, 'Cache-Control': 'no-cache', ETag: etag, Vary: 'Accept-Encoding', ...(useGz ? { 'Content-Encoding': 'gzip' } : {}) };
+  if (ifNoneMatch(req.headers['if-none-match'], etag)) {
+    res.writeHead(304, securityHeaders(headers));
+    return res.end();
+  }
+  res.writeHead(200, securityHeaders({ ...headers, 'Content-Length': body.length }));
+  res.end(req.method === 'HEAD' ? undefined : body);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -701,6 +999,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith('/api/v1/')) return await api(req, res, url);
     if (url.pathname === '/__mock/burst' && req.method === 'GET') return send(res, 200, { sent: burst(url.searchParams.get('n') || 200), streams: streams.size });
+    if (url.pathname === '/__mock/idp/authorize' && req.method === 'GET' && OIDC_AUTH) return idpPage(res, url);
     if (req.method !== 'GET') return fail(res, 'not_found', 'not found');
     return await serveStatic(req, res, url);
   } catch (err) {
@@ -709,5 +1008,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${fleet.accepting ? 'on' : 'off'})`);
+  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${localTenant.fleet.accepting ? 'on' : 'off'}; auth: ${AUTH_MODE}; tenants: ${TENANTS.join(',')})`);
 });
