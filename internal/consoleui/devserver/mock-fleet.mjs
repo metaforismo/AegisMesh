@@ -10,13 +10,19 @@ const STATUSES = ['online', 'stale', 'offline', 'revoked'];
 const TTL_DEFAULT = 3600;
 
 // mode: 'hub' | 'agent' | 'both' | 'none'
-export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '127.0.0.1:9130' } = {}) {
+// acceptEvidence: whether the hub accepts forwarded evidence (only with a hub).
+// forwardedCount(id): events the mock index holds from that node, added to
+// the node's synthetic forwarded total so the two stay plausible together.
+export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '127.0.0.1:9130', acceptEvidence = true, forwardedCount = () => 0 } = {}) {
   const hubOn = mode === 'hub' || mode === 'both';
   const agentOn = mode === 'agent' || mode === 'both';
+  const accepting = hubOn && acceptEvidence;
   const t0 = now();
 
   const nodes = new Map();
-  const add = (name, { interval = 30, lastSeenAgo = 10, revoked = false, sensors, storage = true, drops = 0, enrolledAgo = 86400, version = '0.3.0' }) => {
+  // fwd: synthetic forwarding self-report, or null for an agent that never
+  // reported one (older build). `queued`/`error` are optional fields.
+  const add = (name, { interval = 30, lastSeenAgo = 10, revoked = false, sensors, storage = true, drops = 0, enrolledAgo = 86400, version = '0.3.0', fwd = null }) => {
     const fp = sha(`synthetic-public-key:${name}`);
     const id = fp.slice(0, 32);
     nodes.set(id, {
@@ -30,15 +36,37 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
       bus_dropped_events: drops,
       storage_healthy: storage,
       public_key_fingerprint: fp,
+      fwd,
     });
   };
-  add('edge-berlin-01', { lastSeenAgo: 12 });
-  add('edge-berlin-02', { lastSeenAgo: 25, sensors: [{ id: 'web', kind: 'http', state: 'running' }, { id: 'ssh-decoy', kind: 'ssh', state: 'failed' }, { id: 'redis-lure', kind: 'tcp', state: 'stopped' }] });
-  add('ci-runner-lure', { interval: 30, lastSeenAgo: 120, drops: 14 });
-  add('lab-mcp-canary', { interval: 60, lastSeenAgo: 3600, storage: false, version: '0.2.9' });
+  add('edge-berlin-01', { lastSeenAgo: 12, fwd: { enabled: true, base: 2400, sentAgo: 14 } });
+  add('edge-berlin-02', { lastSeenAgo: 25, sensors: [{ id: 'web', kind: 'http', state: 'running' }, { id: 'ssh-decoy', kind: 'ssh', state: 'failed' }, { id: 'redis-lure', kind: 'tcp', state: 'stopped' }], fwd: { enabled: true, base: 610, sentAgo: 30, queued: [12, 48213] } });
+  // The one node with counted loss: queue evictions on the agent and
+  // sequence gaps the hub noticed.
+  add('ci-runner-lure', { interval: 30, lastSeenAgo: 120, drops: 14, fwd: { enabled: true, base: 980, sentAgo: 125, dropped: 37, gaps: 2, queued: [500, 1048576], error: 'queue_full' } });
+  add('lab-mcp-canary', { interval: 60, lastSeenAgo: 3600, storage: false, version: '0.2.9', fwd: { enabled: false, base: 0 } });
   add('retired-dmz-07', { lastSeenAgo: 7200, revoked: true });
   add('new-node-pending', { lastSeenAgo: null, sensors: [], enrolledAgo: 60 });
-  add('hub-only-node', { lastSeenAgo: 8, sensors: [] });
+  add('hub-only-node', { lastSeenAgo: 8, sensors: [], fwd: { enabled: false, base: 0 } });
+
+  // FleetNode.forwarding. Counters, queue and error are the agent's report;
+  // last receive time and gaps are the hub's. A hub that refuses evidence
+  // receives nothing, and forwarding agents report evidence_disabled.
+  const forwardingView = (n) => {
+    const f = n.fwd;
+    if (!f) return undefined;
+    const out = {
+      enabled: f.enabled,
+      forwarded_total: f.enabled && accepting ? f.base + forwardedCount(n.id) : f.base,
+      dropped_total: f.dropped || 0,
+      last_forwarded_at: f.enabled && accepting ? iso(t0 - f.sentAgo * 1000) : '',
+      gaps_total: accepting ? f.gaps || 0 : 0,
+    };
+    if (f.queued) { out.queued_events = f.queued[0]; out.queued_bytes = f.queued[1]; }
+    const error = f.enabled && !accepting ? 'evidence_disabled' : f.error;
+    if (error) out.last_error = error;
+    return out;
+  };
 
   const statusOf = (n) => {
     if (n.revoked) return 'revoked';
@@ -54,6 +82,7 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
     version: n.version, uptime_seconds: n.uptime_seconds, sensors: n.sensors, counters: n.counters,
     bus_dropped_events: n.bus_dropped_events, storage_healthy: n.storage_healthy,
     public_key_fingerprint: n.public_key_fingerprint,
+    ...(n.fwd ? { forwarding: forwardingView(n) } : {}),
   });
 
   const tokens = new Map(); // id → { digest, expires_ms, note }
@@ -62,12 +91,24 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
   tokens.set('tok_0002', { digest: sha('seed-b'), expires_ms: t0 + 20 * 3600e3, note: '' });
   let tokenSeq = 2;
 
+  // agent.forwarding is always present, even when forwarding is off.
   const agent = agentOn
-    ? { enabled: true, hub_url: 'https://hub.example.test:9130', node_id: sha('synthetic-public-key:this-node').slice(0, 32), enrolled: true, last_heartbeat_at: iso(t0 - 9000), last_error: mode === 'both' ? '' : 'hub_unreachable' }
-    : { enabled: false, hub_url: '', node_id: '', enrolled: false, last_heartbeat_at: '', last_error: '' };
+    ? {
+      enabled: true, hub_url: 'https://hub.example.test:9130', node_id: sha('synthetic-public-key:this-node').slice(0, 32), enrolled: true, last_heartbeat_at: iso(t0 - 9000), last_error: mode === 'both' ? '' : 'hub_unreachable',
+      forwarding: mode === 'both'
+        ? { enabled: true, forwarded_total: 1820, dropped_total: 0, last_forwarded_at: iso(t0 - 9000), gaps_total: 0 }
+        : { enabled: true, forwarded_total: 1204, dropped_total: 5, last_forwarded_at: iso(t0 - 3600e3), gaps_total: 0, queued_events: 64, queued_bytes: 262144, last_error: 'hub_unreachable' },
+    }
+    : { enabled: false, hub_url: '', node_id: '', enrolled: false, last_heartbeat_at: '', last_error: '', forwarding: { enabled: false, forwarded_total: 0, dropped_total: 0, last_forwarded_at: '', gaps_total: 0 } };
+
+  // Nodes whose forwarded evidence the mock index holds: enabled, not revoked,
+  // and only when this hub accepts evidence.
+  const evidenceNodes = accepting
+    ? [...nodes.values()].filter((n) => n.fwd?.enabled && !n.revoked).map((n) => ({ id: n.id, name: n.name }))
+    : [];
 
   // Returns true when it handled the request.
-  return async function handle({ req, res, url, p, m, need, record, who, remote, send, fail, readBody }) {
+  async function handle({ req, res, url, p, m, need, record, who, remote, send, fail, readBody }) {
     if (p !== '/fleet' && !p.startsWith('/fleet/')) return false;
     const keys = [...url.searchParams.keys()];
     const dup = keys.length !== new Set(keys).size;
@@ -75,7 +116,7 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
     if (dup || keys.some((k) => !allowedKeys.includes(k))) { fail(res, 'invalid_argument', 'unknown or duplicate query parameter'); return true; }
 
     if (p === '/fleet' && m === 'GET') {
-      send(res, 200, { hub: { enabled: hubOn, listen: hubOn ? listen : '', tls: false }, agent });
+      send(res, 200, { hub: { enabled: hubOn, listen: hubOn ? listen : '', tls: false, accept_evidence: accepting }, agent });
       return true;
     }
 
@@ -139,5 +180,8 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
     }
     fail(res, 'not_found', 'no such endpoint');
     return true;
-  };
+  }
+  handle.accepting = accepting;
+  handle.evidenceNodes = evidenceNodes;
+  return handle;
 }

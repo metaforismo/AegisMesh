@@ -5,7 +5,8 @@
 // and answers every endpoint from deterministic synthetic data, so the UI can
 // be built and reviewed without a running AegisMesh node.
 //
-//   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none] [--burst N]
+//   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
+//     [--accept-evidence on|off] [--burst N]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
@@ -20,6 +21,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFleet } from './mock-fleet.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
+import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATIC = path.resolve(HERE, '../static');
@@ -31,6 +33,12 @@ const HOST = '127.0.0.1';
 const argFleet = process.argv.indexOf('--fleet');
 const FLEET_MODE = argFleet > 0 ? process.argv[argFleet + 1] : (process.env.AEGISMESH_MOCK_FLEET || 'hub');
 if (!['hub', 'agent', 'both', 'none'].includes(FLEET_MODE)) throw new Error('--fleet must be hub, agent, both or none');
+// --accept-evidence on|off: whether the mock hub accepts forwarded evidence
+// (default on; meaningful only with a hub). Off: no forwarded events, no
+// by_node, and forwarding agents report evidence_disabled.
+const argAccept = process.argv.indexOf('--accept-evidence');
+const ACCEPT_ARG = argAccept > 0 ? process.argv[argAccept + 1] : (process.env.AEGISMESH_MOCK_ACCEPT_EVIDENCE || 'on');
+if (!['on', 'off'].includes(ACCEPT_ARG)) throw new Error('--accept-evidence must be on or off');
 
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -101,6 +109,13 @@ function makeEvent(t, overrides = {}) {
   return ev;
 }
 
+// Fleet first: on an accepting hub the index also holds evidence forwarded
+// by some synthetic nodes.
+const fleet = createFleet({
+  mode: FLEET_MODE, acceptEvidence: ACCEPT_ARG === 'on',
+  forwardedCount: (id) => events.filter((e) => e.node?.id === id).length,
+});
+
 for (let i = 0; i < 1400; i++) {
   const age = Math.floor(rand() ** 1.6 * 7 * 24 * 3600 * 1000);
   events.push(makeEvent(now - age));
@@ -118,9 +133,31 @@ for (let i = 0; i < 18; i++) {
   sig._cites = [base.id, events[21 + i * 37].id];
   events.push(sig);
 }
+// Forwarded copies. Forwarding is live, so they cover only the time since
+// this (synthetic) hub started: the last 20 hours. One copy deliberately
+// reuses a local event id: ids are unique only within an origin.
+const FORWARD_SPAN = 20 * 3600e3;
+fleet.evidenceNodes.forEach((n, k) => {
+  const count = [140, 70, 45][k] ?? 30;
+  for (let i = 0; i < count; i++) {
+    const e = makeEvent(now - Math.floor(rand() ** 1.3 * FORWARD_SPAN));
+    e.node = { id: n.id, name: n.name };
+    events.push(e);
+  }
+});
+if (fleet.evidenceNodes.length) {
+  const twin = events.find((e) => !e.node && Date.parse(e.time) > now - FORWARD_SPAN);
+  const copy = events.find((e) => e.node?.id === fleet.evidenceNodes[fleet.evidenceNodes.length - 1].id);
+  if (twin && copy) copy.id = twin.id;
+}
 events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
 events.forEach((e) => { e.time = e.time.replace(/\.\d+Z$/, 'Z'); });
-const byId = new Map(events.map((e) => [e.id, e]));
+
+// Events are found by id within an origin ("local" or a node id).
+const keyOf = (id, origin) => `${id}|${origin}`;
+const byKey = new Map(events.map((e) => [keyOf(e.id, originOf(e)), e]));
+const localById = (id) => byKey.get(keyOf(id, LOCAL));
+const localEvents = () => events.filter((e) => !e.node);
 
 const summaryOf = (e) => {
   const { _integrity, _cites, ...pub } = e;
@@ -135,7 +172,6 @@ const TOKENS = new Map([
   ['dev-admin', { name: 'ada', role: 'admin' }],
 ]);
 const sessions = new Map();
-const fleet = createFleet({ mode: FLEET_MODE });
 const audit = [];
 let prevHash = '0'.repeat(64);
 
@@ -155,17 +191,17 @@ function newInv(title, priority, eventIds, by, status = 'open') {
   return inv;
 }
 {
-  const a = newInv('MCP tool abuse from 203.0.113.7', 'high', events.filter((e) => e.source === '203.0.113.7').slice(0, 6).map((e) => e.id), 'ana');
+  const a = newInv('MCP tool abuse from 203.0.113.7', 'high', localEvents().filter((e) => e.source === '203.0.113.7').slice(0, 6).map((e) => e.id), 'ana');
   a.event_ids.push('f'.repeat(32)); // aged out of the index on purpose
   a.notes.push({ id: hex(8), time: a.created_at, author: 'ana', text: 'Read_file attempts against ../../etc/passwd, then a canary hit.\nNo outbound activity observed.' });
-  newInv('Scanner noise baseline', 'low', events.slice(100, 103).map((e) => e.id), 'ada', 'monitoring');
+  newInv('Scanner noise baseline', 'low', localEvents().slice(100, 103).map((e) => e.id), 'ada', 'monitoring');
   newInv('Closed: SSH credential spray', 'medium', [], 'ana', 'closed');
 }
 
 const invView = (inv, detail) => {
   const out = { ...inv };
   if (detail) {
-    out.events = inv.event_ids.map((id) => byId.get(id)).filter(Boolean).map(summaryOf).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    out.events = inv.event_ids.map(localById).filter(Boolean).map(summaryOf).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
   } else {
     delete out.notes;
   }
@@ -306,7 +342,21 @@ function overview(w) {
     top_sources: sourceSummaries(inWin).slice(0, 10),
     recent_signals: inWin.filter((e) => e.classification === 'correlation_signal').slice(0, 10).map(summaryOf),
     open_investigations: [...investigations.values()].filter((i) => i.status === 'open').length,
+    ...(fleet.accepting ? { by_node: byNode(inWin) } : {}),
   };
+}
+
+// Accepting hubs only: events per origin in the window, sorted by id, with
+// "local" (name "") for this node's own observations.
+function byNode(list) {
+  const map = new Map();
+  for (const e of list) {
+    const id = originOf(e);
+    const row = map.get(id) || { id, name: id === LOCAL ? '' : e.node.name, events: 0 };
+    row.events++;
+    map.set(id, row);
+  }
+  return [...map.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function envelope(e) {
@@ -321,13 +371,22 @@ function envelope(e) {
 
 // ---- SSE -------------------------------------------------------------------
 
-const streams = new Set();
+const streams = new Map();
+// streams: Map of response → node filter ('' = all origins).
 function emitLive() {
   const e = makeEvent(Date.now());
   e.time = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  // On an accepting hub about a third of live observations are forwarded.
+  if (fleet.evidenceNodes.length && rand() < 0.35) {
+    const n = pick(fleet.evidenceNodes);
+    e.node = { id: n.id, name: n.name };
+  }
   events.unshift(e);
-  byId.set(e.id, e);
-  for (const res of streams) res.write(`event: observation\ndata: ${JSON.stringify(summaryOf(e))}\n\n`);
+  byKey.set(keyOf(e.id, originOf(e)), e);
+  for (const [res, node] of streams) {
+    if (node && originOf(e) !== node) continue;
+    res.write(`event: observation\ndata: ${JSON.stringify(summaryOf(e))}\n\n`);
+  }
 }
 setInterval(emitLive, 4000).unref();
 
@@ -343,7 +402,7 @@ function burst(n) {
   return count;
 }
 setInterval(() => {
-  for (const res of streams) res.write(`event: heartbeat\ndata: {"time":"${new Date().toISOString()}"}\n\n`);
+  for (const res of streams.keys()) res.write(`event: heartbeat\ndata: {"time":"${new Date().toISOString()}"}\n\n`);
 }, 15000).unref();
 
 // ---- Router ----------------------------------------------------------------
@@ -410,10 +469,14 @@ async function api(req, res, url) {
   }
 
   if (m === 'GET' && p === '/events/stream') {
+    for (const k of url.searchParams.keys()) if (k !== 'node') return fail(res, 'invalid_argument', `unknown parameter "${k}"`);
+    const nodeRaw = url.searchParams.get('node');
+    const node = nodeRaw === null ? '' : normalizeNodeFilter(nodeRaw);
+    if (nodeRaw !== null && !node) return fail(res, 'invalid_argument', 'node must be "local" or a 32-hex node id');
     if (streams.size >= 16) return fail(res, 'unavailable', 'too many streams');
     res.writeHead(200, securityHeaders({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' }));
     res.write(': connected\n\n');
-    streams.add(res);
+    streams.set(res, node);
     req.on('close', () => streams.delete(res));
     if (AUTO_BURST) setTimeout(() => { if (streams.has(res)) burst(AUTO_BURST); }, 3000).unref();
     return;
@@ -421,20 +484,37 @@ async function api(req, res, url) {
 
   let mm;
   if (m === 'GET' && (mm = /^\/events\/([0-9a-f]{32})$/.exec(p))) {
-    const e = byId.get(mm[1]);
+    for (const k of url.searchParams.keys()) if (k !== 'node') return fail(res, 'invalid_argument', `unknown parameter "${k}"`);
+    const nodeRaw = url.searchParams.get('node');
+    const node = nodeRaw === null ? '' : normalizeNodeFilter(nodeRaw);
+    if (nodeRaw !== null && !node) return fail(res, 'invalid_argument', 'node must be "local" or a 32-hex node id');
+    // Contract: an explicit origin wins; without one, local is preferred,
+    // a unique remote match resolves, and several remote matches are 404.
+    let e;
+    if (node) e = byKey.get(keyOf(mm[1], node));
+    else {
+      e = localById(mm[1]);
+      if (!e) {
+        const remote = events.filter((x) => x.node && x.id === mm[1]);
+        e = remote.length === 1 ? remote[0] : undefined;
+      }
+    }
     if (!e) return fail(res, 'not_found', 'event not in index');
-    const related = e._cites
-      ? e._cites.map((id) => byId.get(id)).filter(Boolean).map(summaryOf)
-      : events.filter((x) => x._cites?.includes(e.id)).map(summaryOf);
+    const origin = originOf(e);
+    const related = (e._cites
+      ? e._cites.map((id) => byKey.get(keyOf(id, origin))).filter(Boolean)
+      : events.filter((x) => originOf(x) === origin && x._cites?.includes(e.id))).map(summaryOf);
     const findings = e.rule_ids.filter((r) => r.startsWith('CR-') === false).map((r) => {
       const rule = DETECTION_RULES.find((x) => x.id === r);
       return { rule_id: r, severity: rule?.severity || e.severity, confidence: pick(['low', 'medium', 'high']), reason: `${rule?.title || r} matched (static rule text).` };
     });
+    const integrity = e._integrity ? { verified: true, algorithm: 'sha256', error: '' } : { verified: false, algorithm: 'sha256', error: 'payload hash mismatch' };
+    if (e.node) Object.assign(integrity, { scope: 'hub_payload_hash_consistency', description: 'Verified on the hub against the envelope payload hash; consistency, not provenance.' });
     return send(res, 200, {
-      summary: summaryOf(e), envelope: envelope(e),
-      integrity: e._integrity ? { verified: true, algorithm: 'sha256', error: '' } : { verified: false, algorithm: 'sha256', error: 'payload hash mismatch' },
-      findings, related,
-      investigations: [...investigations.values()].filter((i) => i.event_ids.includes(e.id)).map((i) => ({ id: i.id, title: i.title, status: i.status })),
+      ...(e.node ? { node: e.node } : {}),
+      summary: summaryOf(e), envelope: envelope(e), integrity, findings, related,
+      // Investigations annotate bare ids that resolve to local observations only.
+      investigations: e.node ? [] : [...investigations.values()].filter((i) => i.event_ids.includes(e.id)).map((i) => ({ id: i.id, title: i.title, status: i.status })),
     });
   }
 
@@ -460,7 +540,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/sensors') {
     return send(res, 200, {
       sensors: SENSORS.map((s) => {
-        const mine = events.filter((e) => e.sensor.id === s.id);
+        const mine = localEvents().filter((e) => e.sensor.id === s.id);
         return { ...s, events_total: mine.length, last_event_at: mine[0]?.time || '', by_classification: Object.fromEntries(CLASSES.slice(0, 2).map((c) => [c, mine.filter((e) => e.classification === c).length])) };
       }),
     });
@@ -478,7 +558,8 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/recommendations') {
     const limit = Number(url.searchParams.get('limit') || 20);
     if (!Number.isInteger(limit) || limit < 0 || limit > 1000) return fail(res, 'invalid_argument', 'limit must be within 0..1000');
-    const sigs = events.filter((e) => e.classification !== 'interaction').slice(0, limit);
+    // Recommendations use local evidence only (contract).
+    const sigs = localEvents().filter((e) => e.classification !== 'interaction').slice(0, limit);
     return send(res, 200, {
       schema: 'aegismesh.recommendation/v1', mode: 'dry_run', interpretation: 'signal_not_incident', kind: 'recommendation', status: 'proposed',
       recommendations: sigs.map((e) => ({
@@ -501,7 +582,8 @@ async function api(req, res, url) {
       started_at: new Date(now - 26 * 3600e3).toISOString().replace(/\.\d+Z$/, 'Z'), uptime_seconds: Math.floor((Date.now() - now) / 1000) + 26 * 3600,
       healthy: true, sensors: { wanted: 4, started: 3 }, bus: { dropped_events: 0 },
       storage: { segments: 3, bytes: 18_874_368, encrypted: false, retention: { max_events: 100000, max_age_days: 30 } },
-      index: { events: events.length, capacity: 50000, oldest: events[events.length - 1].time, history: 'complete' },
+      // Accepting hubs report history "unavailable": forwarded copies are live-only.
+      index: { events: events.length, capacity: 50000, oldest: events[events.length - 1].time, history: fleet.accepting ? 'unavailable' : 'complete' },
       console: { listen: `${HOST}:${PORT}`, tls: false, session_ttl_seconds: SESSION_TTL },
     });
   }
@@ -553,7 +635,7 @@ async function api(req, res, url) {
       const action = m === 'PUT' ? 'investigation.attach' : 'investigation.detach';
       if (!need('analyst', action, inv.id)) return;
       if (m === 'PUT') {
-        if (!byId.has(mm[3])) return fail(res, 'not_found', 'event not in index');
+        if (!localById(mm[3])) return fail(res, 'not_found', 'event not in index');
         if (!inv.event_ids.includes(mm[3])) {
           if (inv.event_ids.length >= 200) return fail(res, 'conflict', 'investigation already holds 200 events');
           inv.event_ids.push(mm[3]);
@@ -627,5 +709,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE})`);
+  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${fleet.accepting ? 'on' : 'off'})`);
 });

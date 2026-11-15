@@ -44,7 +44,8 @@ test('fleet status reports roles; node list covers every status and filters', as
   for (const s of ['online', 'stale', 'offline', 'revoked']) assert.ok(all.some((n) => n.status === s), s);
   assert.deepEqual(all.map((n) => n.id), [...all.map((n) => n.id)].sort());
   for (const n of all) {
-    assert.deepEqual(Object.keys(n).sort(), ['bus_dropped_events', 'counters', 'enrolled_at', 'id', 'last_seen_at', 'name', 'public_key_fingerprint', 'sensors', 'status', 'storage_healthy', 'uptime_seconds', 'version']);
+    // `forwarding` is optional: absent for agents that never reported it.
+    assert.deepEqual(Object.keys(n).filter((k) => k !== 'forwarding').sort(), ['bus_dropped_events', 'counters', 'enrolled_at', 'id', 'last_seen_at', 'name', 'public_key_fingerprint', 'sensors', 'status', 'storage_healthy', 'uptime_seconds', 'version']);
     assert.ok(n.public_key_fingerprint.startsWith(n.id));
   }
   const stale = (await (await viewer('GET', '/fleet/nodes?status=stale')).json()).nodes;
