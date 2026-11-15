@@ -228,8 +228,9 @@ The console server sends
   (`lib/route.js`).
 - The CSRF token lives only in the API client's closure; the session is an
   HttpOnly cookie. Nothing sensitive goes into `localStorage`.
-- The live stream is unfiltered by contract, so filters are re-applied in the
-  browser with the same semantics as the server (`matchesEventFilters`). When
+- The live stream is filtered by the server only by origin (`node`), so every
+  other filter is re-applied in the browser with the same semantics as the
+  server (`matchesEventFilters`, which also re-checks the origin). When
   the stream drops, the UI calls `GET /api/v1/session` to tell an expired
   session (stop and sign in) from an outage (reconnect with jittered
   exponential backoff, 1s to 30s). While paused, up to 500 new events are held;
@@ -268,7 +269,20 @@ same rules.
 The Fleet screen shows this node's hub and agent roles, and on a hub the
 inventory of enrolled nodes. Its copy must keep three facts visible: node data
 is self-reported in signed heartbeats (not attestation), the hub cannot
-command or configure nodes, and no evidence is forwarded.
+command or configure nodes, and evidence forwarding is a separate opt-in
+experiment (best effort, loss counted, each node's own store authoritative).
+
+Forwarding state appears in the inventory (a Forwarding column, placed right
+after Last seen, and a "View events" link when the hub accepts evidence), in
+node detail (forwarded, dropped, gaps, last receive time, queue when reported,
+last error as its fixed category code with words for known categories) and
+in the role panel (hub "Evidence reception", agent "Evidence forwarding").
+Dropped or gap counts above zero are a `badge--warn` labelled "Not forwarded:
+N dropped, M gaps" plus one line saying the evidence still exists in the
+node's own store; never `badge--danger`, because counted loss is expected of
+best effort. The inventory table is wider than a 1440px column, so it scrolls
+inside its panel at every width (`.table-wrap--scroll`) instead of widening
+the page.
 
 | Node status | Badge | Dot shape |
 |---|---|---|
@@ -283,6 +297,37 @@ created token is shown once in a dialog; its text node is emptied and the
 dialog removed on close, and it is never written to storage, the URL or logs.
 With the hub disabled, node and token routes answer `unavailable`, which the
 screen shows as a hub-unavailable notice rather than a console error.
+
+### Evidence origin (experimental forwarded evidence)
+
+On a hub that accepts forwarded evidence, an event summary may carry `node:
+{id, name}`; without it the event was observed on this node. The console:
+
+- shows an Origin column (node name over its 8-character short id, linking to
+  the fleet node; "This node" for local rows) in the events list, source
+  detail and related events when `/fleet` says the hub accepts evidence, when
+  a node filter is set, or when any loaded row was forwarded
+  (`originVisible`). A node that never receives evidence keeps its tables
+  unchanged. In tables the name truncates at 8rem and source keys cap at 9rem,
+  so the extra column still fits a 1440px page;
+- keys rows by id plus origin (`eventKey`): ids are unique only within an
+  origin. Links to a forwarded event carry `?node=<id>` (full page) or
+  `event_node=<id>` (side panel), so the detail request is pinned to it;
+- offers a Node filter (any, this node, each enrolled node) that goes through
+  the URL, the server query, the live stream (`node=` on the stream URL) and
+  the browser-side matcher; the palette lists the same targets under "Nodes";
+- states the limits in one compact line wherever lists or counts mix in
+  forwarded evidence (`forwardedNote`): best effort, losses counted on Fleet,
+  forwarded history only since the hub last started, each node's store
+  authoritative;
+- on event detail, names the origin, words the hub integrity scope itself
+  ("consistent on this hub"; consistency, not provenance) and never shows the
+  server's `description` as interface text, and hides "Add to investigation"
+  for forwarded copies: investigations annotate bare ids that resolve to
+  local observations only;
+- on Overview, adds a "By node" bar list when `by_node` is present, ranked by
+  events in the browser (the API sorts by id); each row opens Events filtered
+  to that origin and to the overview window.
 
 ## Interaction
 
@@ -335,6 +380,9 @@ paint. The burst figure comes from `GET /__mock/burst?n=200` on the mock.
 # mock API + UI on http://127.0.0.1:9121 (tokens: dev-viewer, dev-analyst, dev-admin)
 # (equivalent to: node internal/consoleui/devserver/mock-server.mjs --port 9121)
 # add --fleet hub|agent|both|none to choose the mock node's fleet roles (default hub)
+# add --accept-evidence on|off to choose whether the mock hub accepts forwarded
+# evidence (default on: forwarded events, by_node, forwarding counters with one
+# node reporting drops and gaps, a local/forwarded id collision)
 # add --burst N to push N observations 3s after each stream connects, or call
 # GET /__mock/burst?n=200 while a live list is open
 make ui-dev
@@ -393,3 +441,18 @@ and does not ship.
 | Firefox and Safari | NOT RUN: only Chromium is available to the test harness. View Transitions, `@starting-style` and scroll-driven animations are progressive enhancement; without them the swap, dialogs and reveals are instant |
 | Against the real Go console server | NOT RUN: verified against the mock only |
 | `make lint test` for the whole module | NOT RUN: disk space is limited; only this package's Go tests were run |
+
+### Verification: forwarded evidence UI (2026-11-15, macOS, Node 25.8.2, Go 1.27.4, Chromium in the Claude browser pane)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (132 tests: the 108 before plus node filter normalization and live matching, origin formatting, row identity, by-node ranking, palette targets, forwarding summaries, mock routes as an accepting hub, a refusing hub and an agent, Fleet and event detail rendering with forwarded data) | PASS |
+| `GOTOOLCHAIN=go1.27.4 go test ./internal/consoleui` | PASS |
+| Browser, accepting hub, admin, light 1440px: Overview note and By node panel, drill-down to Events with `node` and `since`; Events Node filter applied from the form (URL updated, list filtered, live kept); live with `node=<id>` and `node=local` (only matching origins inserted during a 60-event burst); side panel on a forwarded row (URL carries `event_node`, origin, hub scope wording, no attach); full-page detail for a local/forwarded id collision with and without `node`; Source detail origin column and pinned links; palette "Nodes" results open the filtered list; Fleet table, loss line and node detail | PASS |
+| Browser, viewer: Events with mixed origins, Fleet without token controls | PASS |
+| Browser, `--accept-evidence off`: no By node, no origin column or Node filter, Fleet shows reception off and `evidence_disabled`, no View events links | PASS |
+| No horizontal page scroll: Events and Overview at 1440px; Events, Overview, Fleet, Fleet node and Source at 375px (light and dark). Found and fixed: the origin column widened the events table past 1440px, the forwarding columns widened Fleet, and the loss badge overflowed at 375px | PASS |
+| Dark mode at 1440px: Fleet and Fleet node | PASS |
+| Live insertion and route changes in the browser | PASS with a caveat: the browser pane was hidden, so `requestAnimationFrame` and View Transitions never completed; the check replaced `requestAnimationFrame` with a timer and removed `startViewTransition` in the page. Batching and transitions themselves were not re-verified |
+| Reduced motion | NOT RUN in the browser: the pane cannot emulate it. The change adds no animation or transition (static CSS only) |
+| Against the real Go console server | NOT RUN: verified against the mock and the contract only |

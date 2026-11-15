@@ -239,6 +239,7 @@ body { font-size: var(--text-md); }
 /* ---- Direction ------------------------------------------------------- */
 .shipped { display: flex; flex-direction: column; gap: var(--space-2); max-width: var(--prose-max); padding: var(--space-5); border: var(--border-width) solid var(--color-border); border-left: 3px solid var(--color-ok); border-radius: var(--radius-md); background: var(--color-canvas); }
 .shipped h3 { font-size: var(--text-lg); }
+.shipped p + h3 { margin-top: var(--space-3); }
 .shipped p { color: var(--color-ink-2); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 .direction__label { margin-top: var(--space-8); margin-bottom: var(--space-3); color: var(--color-ink-2); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .direction { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: var(--space-3); list-style: none; }
