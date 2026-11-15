@@ -646,13 +646,14 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 /* ---- Tables ----------------------------------------------------------- */
 
 .table-wrap {
+  position: relative; /* contains the visually hidden caption, so it cannot widen the page */
   width: 100%;
   overflow-x: auto;
 }
 
 /* Wide screens: let the page scroll the table so headers can stick under the
    top bar. (A horizontal scroll container would capture position: sticky.) */
-@media (min-width: 75rem) {
+@media (min-width: 90rem) {
   .table-wrap { overflow: visible; }
 }
 
@@ -712,9 +713,14 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 .table a.row-link:hover { color: var(--color-accent); text-decoration: underline; }
 
-.table .col-summary { width: 100%; min-width: 14rem; max-width: 0; }
+.table .col-summary { width: 100%; min-width: 12rem; max-width: 0; }
 
 .table .nowrap .evidence {
+  display: inline-block;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: normal;
@@ -1334,6 +1340,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
    link from the server's single answer; state is also a shape and a word. */
 
 .chain {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0;

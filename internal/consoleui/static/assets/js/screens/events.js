@@ -167,7 +167,8 @@ export default {
       paintPill();
     };
     pillBtn.addEventListener('click', () => {
-      tableSlot.scrollIntoView({ block: 'start', behavior: globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      const y = window.scrollY + listTop() - topbar() - 8;
+      window.scrollTo({ top: Math.max(0, y), behavior: globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       clearUnread();
     });
 

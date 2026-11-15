@@ -38,7 +38,8 @@ function chainView(records) {
         li.setAttribute('aria-label', `Record ${seq}: ${STATE_WORD[st]}`);
       });
       // Scroll the break into view, if it is drawn.
-      links.find((l) => l.seq === bad)?.li.scrollIntoView({ block: 'nearest', inline: 'center' });
+      const hit = links.find((l) => l.seq === bad)?.li;
+      if (hit) el.scrollLeft = Math.max(0, hit.offsetLeft - el.clientWidth / 2);
     },
     reset() {
       for (const { seq, li } of links) {

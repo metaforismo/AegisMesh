@@ -189,7 +189,7 @@ cycles System → Light → Dark and remembers the choice in `localStorage`
 | `.panel` (`__head`, `__title`, `__meta`, `__body`, `__foot`) | Content container | |
 | `.stat` | Stat tile | Delta in neutral ink |
 | `.kv` | Key/value list | Empty values render "—" |
-| `.table`, `.table--stack`, `.col-summary`, `.num` | Data table | Below 720px rows become labelled cards; `data-label` holds interface text only |
+| `.table`, `.table--stack`, `.col-summary`, `.num` | Data table | Below 720px rows become labelled cards; `data-label` holds interface text only. From 1440px the header sticks under the top bar while the page scrolls; narrower, the table scrolls sideways in its own wrapper and the header sticks within it |
 | `.tabs`, `.tab` | Tabs | |
 | `.banner--{info,warn,danger,proposal}` | Callout | `--proposal` has the hatched "not executed" edge |
 | `.state`, `--error`, `.spinner`, `.skeleton` | Empty, loading, error | Every view has all three |
@@ -380,7 +380,9 @@ and does not ship.
 | `make ui-test` (108 tests: the 81 before plus palette ranking, keyboard helpers, frame batching, the read cache, sparkline and binning math, bucket ranges, drawer routing) | PASS |
 | `GOTOOLCHAIN=go1.27.4 go test ./internal/consoleui` (embed safety, including the literal-only `import()` rule and its detector cases) | PASS |
 | Browser, light at 1440px: Overview (sparklines, chart hover, crosshair, click to filtered events), Events (side panel by click and Enter, j/k, Esc back with focus returned), Sources, Source (activity strip), Sensors (traces, dashed unloaded hours), Rules, Recommendations, Node, Fleet, Investigations, Investigation, Audit trail. Dark at 1440px: Overview, Events in live mode, Node, Sources | PASS |
-| Dark mode for the side panel, palette, audit chain and sensor cards; keyboard focus on chart buckets with arrow keys | NOT RUN in the browser (the chart's arrow-key handling is code-reviewed only) |
+| Dark at 1440px: side panel (and j stepping), palette, sensor cards; chart bucket focus with arrow keys and Enter opening the bucket's events | PASS |
+| No horizontal page scroll: 11 screens at 1440, 1280, 1024, 768 and 375px (found and fixed two causes: a table wider than its column with page-level sticky headers, and a visually hidden caption escaping its table wrapper) | PASS |
+| Audit chain in dark mode | NOT RUN in the browser |
 | Audit chain with a forced broken result (`first_invalid_seq: 4`, injected by the test): records 1–3 consistent, 4 broken, later records after the break | PASS |
 | Investigation edits with forced server failures: priority rolled back with a toast; failed note text restored | PASS |
 | Palette (Cmd/Ctrl+K, search, arrows, Enter), shortcut sheet (`?`), `g i` | PASS |

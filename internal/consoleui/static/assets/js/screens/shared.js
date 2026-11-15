@@ -31,7 +31,7 @@ function eventColumns({ showDate = true, extra = [], rowHref }) {
     { label: 'Class', cell: (ev) => clsChip(ev.classification) },
     { label: 'Severity', cell: (ev) => sevChip(ev.severity) },
     { label: 'Sensor', cell: (ev) => h('span', { class: 'nowrap' }, h('code', null, ev.sensor?.id ?? '—'), ' ', ev.sensor?.kind ? chip(ev.sensor.kind) : null) },
-    { label: 'Source', className: 'nowrap', cell: (ev) => (ev.source ? link(href('sources', ev.source), evidence(ev.source, { max: 32 })) : h('span', { class: 'muted' }, 'unknown')) },
+    { label: 'Source', className: 'nowrap', cell: (ev) => (ev.source ? link(href('sources', ev.source), evidence(ev.source, { max: 24 })) : h('span', { class: 'muted' }, 'unknown')) },
     {
       label: 'Summary', className: 'col-summary',
       cell: (ev) => (isEventId(ev.id)
@@ -41,6 +41,16 @@ function eventColumns({ showDate = true, extra = [], rowHref }) {
     { label: 'Rules', cell: (ev) => ruleChips(ev.rule_ids) },
     ...extra,
   ];
+}
+
+// Bring a row into view vertically only. (scrollIntoView would also scroll
+// the page sideways when the table is wider than the viewport.)
+function revealRow(tr) {
+  if (!tr?.getBoundingClientRect) return;
+  const r = tr.getBoundingClientRect();
+  const top = (document.querySelector('.shell__top')?.offsetHeight || 0) + (tr.closest('table')?.tHead?.offsetHeight || 0);
+  if (r.top < top) window.scrollBy(0, r.top - top - 8);
+  else if (r.bottom > window.innerHeight) window.scrollBy(0, r.bottom - window.innerHeight + 8);
 }
 
 // The event table as a live view: rows can be prepended (live mode),
@@ -107,7 +117,7 @@ export function eventTableView(events, { caption = 'Events', newIds, ...opts } =
       const tr = rowAt(i);
       if (!tr) return;
       tr.classList.add('is-cursor');
-      tr.scrollIntoView({ block: 'nearest' });
+      revealRow(tr);
       if (focus) tr.querySelector('[data-row-link]')?.focus({ preventScroll: true });
     },
     setOpen(id) {
@@ -115,7 +125,7 @@ export function eventTableView(events, { caption = 'Events', newIds, ...opts } =
       openId = id || '';
       const tr = openId ? byId.get(openId) : null;
       tr?.classList.add('is-open');
-      tr?.scrollIntoView({ block: 'nearest' });
+      revealRow(tr);
       const i = ids.indexOf(openId);
       if (i >= 0) {
         rowAt(cursor)?.classList.remove('is-cursor');
