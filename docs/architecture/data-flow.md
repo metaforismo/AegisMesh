@@ -286,7 +286,7 @@ flowchart LR
 
 `Runtime.ConsoleNode/ConsoleSensors` supply value snapshots to the console through
 its narrow interface. The API has no sensor, bus-submit, config-write or outbound
-client capability. Cookie mutations require role/CSRF/Origin checks; bearer
+client capability. Optional fleet routes administer inventory state only. Cookie mutations require role/CSRF/Origin checks; bearer
 scripts use the same role grants. No API route can mutate authoritative evidence.
 The embedded UI is served only when the console is enabled and renders evidence as text. Plaintext backfill occurs
 before serving; encrypted mode never backfills or loads identities. Failed
@@ -295,3 +295,30 @@ raw-envelope observer/webhook/correlation offers; signal appends use only the ta
 Shutdown closes SSE/HTTP, then sensors, bus and storage. The opt-in demo retains
 its synthetic runtime until interruption, then performs its original cleanup.
 ``aegismesh demo`` without the flag retains its original finite behavior.
+
+
+## Fleet inventory path (ADR-0018)
+
+```mermaid
+flowchart LR
+    Append[Successful local evidence append] --> Counts[Process classification counters]
+    Runtime[Runtime sensor and health snapshots] --> Snapshot[Bounded inventory projection]
+    Counts --> Snapshot
+    Seed[Local private Ed25519 seed] --> Sign[Request signing]
+    Snapshot --> Sign
+    Sign --> Egress[Fixed egress-validated destination]
+    Egress -->|agent initiated TLS or dev loopback HTTP| Hub[Dedicated inventory hub listener]
+    Hub --> Registry[Atomic registry, token hashes, replay cache]
+    Registry --> FleetAPI[Existing authenticated console inventory API]
+    Operator[Admin operator] -->|mint, delete token, revoke identity| FleetAPI
+    Hub --> Audit[Hub audit and optional console audit]
+```
+
+The only hub response is a typed matching-node acknowledgement. There is no
+hub-to-agent command/configuration/file/code channel. Counter taps see successful
+appends, including direct correlation persistence, and never forward envelopes.
+Snapshots exclude sensor addresses and evidence. Agent scheduling is independent
+of sensors, storage, extensions and webhook delivery; failure updates safe local
+status/metrics/logs and backs off. Hub state and replay entries persist together;
+liveness is derived at query time. Shutdown cancels/joins agent delivery, drains
+the hub listener, closes hub state, then closes console/sensors/bus/store.

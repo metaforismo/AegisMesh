@@ -17,6 +17,8 @@ import (
 	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/console/investigations"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
+	"github.com/metaforismo/aegismesh/internal/fleet/hub"
+	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
 	"github.com/metaforismo/aegismesh/internal/observe"
 )
 
@@ -28,6 +30,10 @@ const CookieName = "aegismesh_session"
 
 // Options supplies trusted configuration, value snapshots, and bounded UI assets.
 type Options struct {
+	// FleetHub provides inventory administration only, without agent control.
+	FleetHub *hub.Hub
+	// FleetStatus snapshots local role and delivery state.
+	FleetStatus func() protocol.Status
 	// Security supplies the validated exposure policy for this listener.
 	Security config.Security
 	// Config supplies console addresses, session bounds, and operator digests.
@@ -56,28 +62,30 @@ type asset struct {
 
 // Server owns the console listener, ephemeral authentication, and operator state.
 type Server struct {
-	assets     map[string]asset
-	cfg        config.Console
-	index      *evidenceindex.Index
-	runtime    Runtime
-	rules      []Rule
-	ui         fs.FS
-	auth       *auth.Manager
-	audit      *audit.Log
-	cases      *investigations.Store
-	httpServer *http.Server
-	listener   net.Listener
-	mux        *http.ServeMux
-	done       chan struct{}
-	wg         sync.WaitGroup
-	once       sync.Once
-	startOnce  sync.Once
-	requests   observe.LabeledCounter
-	failures   observe.Counter
-	clients    observe.Gauge
-	slots      chan struct{}
-	streams    chan struct{}
-	key        [32]byte
+	fleetHub    *hub.Hub
+	fleetStatus func() protocol.Status
+	assets      map[string]asset
+	cfg         config.Console
+	index       *evidenceindex.Index
+	runtime     Runtime
+	rules       []Rule
+	ui          fs.FS
+	auth        *auth.Manager
+	audit       *audit.Log
+	cases       *investigations.Store
+	httpServer  *http.Server
+	listener    net.Listener
+	mux         *http.ServeMux
+	done        chan struct{}
+	wg          sync.WaitGroup
+	once        sync.Once
+	startOnce   sync.Once
+	requests    observe.LabeledCounter
+	failures    observe.Counter
+	clients     observe.Gauge
+	slots       chan struct{}
+	streams     chan struct{}
+	key         [32]byte
 }
 
 // New validates dependencies and opens the dedicated console listener without starting it.
@@ -103,16 +111,18 @@ func New(opts Options) (_ *Server, err error) {
 	}
 
 	server := &Server{
-		cfg:     opts.Config,
-		index:   opts.Index,
-		runtime: opts.Runtime,
-		rules:   append([]Rule{}, opts.Rules...),
-		ui:      opts.UI,
-		auth:    sessions,
-		done:    make(chan struct{}),
-		mux:     http.NewServeMux(),
-		slots:   make(chan struct{}, 8),
-		streams: make(chan struct{}, 16),
+		cfg:         opts.Config,
+		fleetHub:    opts.FleetHub,
+		fleetStatus: opts.FleetStatus,
+		index:       opts.Index,
+		runtime:     opts.Runtime,
+		rules:       append([]Rule{}, opts.Rules...),
+		ui:          opts.UI,
+		auth:        sessions,
+		done:        make(chan struct{}),
+		mux:         http.NewServeMux(),
+		slots:       make(chan struct{}, 8),
+		streams:     make(chan struct{}, 16),
 		requests: opts.Meter.CounterVec(
 			"aegismesh_console_requests_total", "Console requests by fixed endpoint group", 32,
 		),

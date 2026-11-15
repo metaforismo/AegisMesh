@@ -74,9 +74,9 @@ live queue is in [BACKLOG.md](BACKLOG.md), and current evidence is in
 - A managed AegisMesh SaaS/control plane around the Apache-2.0 core: fleet
   inventory, authenticated enrollment, tenant isolation, searchable retention,
   SSO/RBAC, audit administration, usage metering and managed upgrades.
-- Distributed sensor fleets with explicit control-channel authorization,
-  per-sensor identity and attestation, offline buffering and deterministic
-  reconciliation.
+- Distributed evidence aggregation with per-node quotas, attestation, offline
+  buffering and deterministic reconciliation. The inventory hub permanently has
+  no command/configuration/file/code channel to nodes.
 - First operator console: **backend implemented, uncommitted candidate** for
   P3-2. Fixed v1 API, token roles, bounded index, audited investigations and an
   embedded zero-dependency UI (no build step) are present. Human review and
@@ -109,3 +109,16 @@ billing, public APIs or hosted operation ship today.
 - Treating a decoy activation or recommendation as proof of an incident.
 - Production-readiness, false-positive or compliance-certification claims
   without explicit independent evidence.
+
+
+## Fleet foundation — local uncommitted candidate, 2026-11-15
+
+P3-1 now has experimental fleet inventory with authenticated enrollment and
+heartbeats; ADR-0018 settles data/control-plane ownership for this bounded slice.
+It is not multi-tenant, not a managed service, and forwards no evidence. The hub
+cannot command nodes. Local verification is in `verification.md`; review,
+hosted CI and merge remain open. P2-3 hosted tenancy/residency/billing design
+remains incomplete. Evidence spool/batches, key rotation, attestation, SSO and
+upgrades are proposed, not implemented, and require separate review. Any future
+configuration workflow must preserve the permanent no hub-to-agent control
+channel invariant. No arbitrary remote-runner stub is reserved.

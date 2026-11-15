@@ -201,11 +201,11 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   against AegisMesh code.
 - **Status:** **TODO**.
 
-### P2-3 — SaaS/control-plane architecture brief — TODO
+### P2-3 — SaaS/control-plane architecture brief — PARTIAL DESIGN
 
 - **Evidence:** the operator intends AegisMesh to remain open source and become a
-  commercial SaaS, but no control-plane, tenant, authorization, billing or data
-  residency design exists.
+  commercial SaaS. ADR-0018 defines an inventory-only trust foundation; tenant,
+  hosted authorization, billing and residency design remains proposed.
 - **Affected:** future product/architecture/threat-model documents only; no
   runtime implementation is implied.
 - **Security/egress:** a hosted control plane introduces major identity,
@@ -219,7 +219,8 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   threat boundaries. Mark every capability as proposed until implemented.
 - **Verify:** architecture review and threat-model traceability; no code or egress
   change in the documentation slice.
-- **Status:** **TODO — schedule after v0.2**.
+- **Status:** **PARTIAL DESIGN** — ADR-0018 inventory foundation implemented
+  locally; managed-service acceptance remains open.
 
 ### P2-4 — real-cluster Kubernetes evidence — TODO (later support claim)
 
@@ -239,17 +240,22 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## P3 — later research and optional improvements
 
-### P3-1 — distributed mesh and managed fleet — TODO
+### P3-1 — distributed mesh and managed fleet — INVENTORY CANDIDATE
 
-- **Evidence:** current runtime is single-node and owns no remote control channel.
-- **Affected:** future sensor identity, enrollment, transport, buffering,
-  reconciliation, authorization, upgrade and control-plane packages.
-- **Security/egress:** substantial new outbound and multi-tenant surfaces.
-- **Dependencies:** P2-3 architecture and stable evidence contracts.
-- **Acceptance:** separate ADR/threat model and one bounded vertical slice; no
-  generic remote command execution.
-- **Verify:** defined with the future slice.
-- **Status:** **TODO**.
+- **Evidence:** experimental fleet inventory with authenticated enrollment and
+  heartbeats in the current uncommitted candidate; see ADR-0018 and
+  `architecture/fleet-protocol.md`, with local receipts in `verification.md`.
+- **Affected:** fleet identity/protocol/hub/agent packages, strict config,
+  runtime status/counters/lifecycle and console inventory administration.
+- **Security/egress:** explicit fixed outbound agent destination, TLS beyond
+  loopback, shared egress classification, one-use tokens, per-request Ed25519,
+  persistent replay cache, private atomic state, role/CSRF/audit and revocation.
+  Hub never dials agents and cannot command nodes; this invariant is permanent.
+- **Scope:** not multi-tenant, not a managed service; forwards no evidence.
+- **Remaining:** review/hosted CI/merge; evidence batches and bounded spool,
+  key rotation, attestation, hosted tenancy/SSO and upgrades are proposed,
+  not implemented. P2-3 managed-service design remains partial.
+- **Status:** **IMPLEMENTED LOCALLY, UNCOMMITTED**. No publication or deployment.
 
 ### P3-2 — read-mostly operator console — BACKEND CANDIDATE
 
@@ -260,7 +266,8 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Security/egress:** token roles, Host/Origin/CSRF, bounded requests/index/SSE,
   private atomic investigations and hash-chained audit; no new egress/control.
 - **Scope:** single-node, single-tenant. Encrypted storage is live-only; console
-  notes/audit remain plaintext. SSO/fleet/multi-tenancy are absent.
+  notes/audit remain plaintext. SSO/multi-tenancy remain absent; optional fleet
+  inventory administration is the separate P3-1 item.
 - **Remaining:** human review, exact-head hosted CI and merge.
 - **Status:** **IMPLEMENTED (API + embedded UI), UNMERGED**. Complete product
   acceptance is not claimed; use the verification ledger for exact command receipts.

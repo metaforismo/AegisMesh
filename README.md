@@ -180,8 +180,19 @@ modules: no build step, no third-party code) and is served at `/` only when
 The console reads a bounded in-memory evidence index and supports operator
 investigations plus an audited viewer/analyst/admin token model. It cannot
 control sensors or change evidence/configuration. Encrypted storage stays
-live-only: no private identity is loaded into the runtime. SSO, fleet and
-multi-tenancy are absent. See [configuration](docs/configuration.md#operator-console-optional)
+live-only: no private identity is loaded into the runtime. SSO and multi-tenancy
+are absent. Optional fleet inventory is described below. See
+[configuration](docs/configuration.md#operator-console-optional),
 the [API contract](docs/architecture/console-api.md) and the
-[design system](docs/design-system.md). This candidate is uncommitted and awaits
-human review and exact-head CI.
+[design system](docs/design-system.md).
+
+## Fleet (experimental)
+
+The same binary can run an opt-in inventory hub or outbound reporting agent.
+Local Ed25519 identities, one-time enrollment and signed heartbeats provide
+experimental fleet inventory with authenticated enrollment and heartbeats. The
+hub cannot command nodes. This is not multi-tenant, not a managed service, and
+forwards no evidence. Both roles default off and the machine listener is separate
+from console/admin/sensors. Start with [fleet configuration](docs/configuration.md#experimental-fleet-inventory-adr-0018),
+the [operator API](docs/architecture/console-api.md#experimental-fleet-inventory-additions-adr-0018)
+and [wire protocol](docs/architecture/fleet-protocol.md).

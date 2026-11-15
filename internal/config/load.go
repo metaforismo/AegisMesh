@@ -51,7 +51,13 @@ func Load(path string) (*Config, error) {
 		base := filepath.Dir(absClean(path))
 		c.Runtime.DataDir = filepath.Join(base, c.Runtime.DataDir)
 	}
-	for _, p := range []*string{&c.Console.TLSCertFile, &c.Console.TLSKeyFile} {
+	for _, p := range []*string{
+		&c.Console.TLSCertFile,
+		&c.Console.TLSKeyFile,
+		&c.Fleet.Hub.TLSCertFile,
+		&c.Fleet.Hub.TLSKeyFile,
+		&c.Fleet.Agent.HubCAFile,
+	} {
 		if *p != "" && !filepath.IsAbs(*p) {
 			*p = filepath.Join(filepath.Dir(absClean(path)), *p)
 		}
@@ -181,6 +187,7 @@ func translateDecodeError(err error) error {
 
 func (c *Config) applyDefaults() {
 	c.Console.defaults()
+	c.fleetDefaults()
 	if c.Runtime.DataDir == "" {
 		c.Runtime.DataDir = defaultDataDir
 	}
@@ -328,6 +335,9 @@ func (c *Config) applyDefaults() {
 // Only a deliberately small surface is overridable; everything else must be
 // edited in the file so configs stay reviewable.
 func (c *Config) applyEnvOverrides() error {
+	if err := c.fleetEnv(); err != nil {
+		return err
+	}
 	setString := func(dst *string, key string) error {
 		if v, ok := os.LookupEnv(key); ok && strings.TrimSpace(v) != "" {
 			*dst = strings.TrimSpace(v)

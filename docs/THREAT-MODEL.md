@@ -14,6 +14,7 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - A8 Release binaries, SBOMs, checksums, provenance statements, and build definitions
 - A9 Recommendation reports and operator interpretation of their evidence links
 - A10 Sensor-worker lifecycle, IPC projections, readiness state, and sibling availability
+- A11 Node private identity and hub node/token/replay registry
 
 ## Trust boundaries
 
@@ -30,6 +31,8 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
   be attacker-influenced or modified by a local writer; recommendation output must remain non-behavioral.
 - TB10: Parent runtime ↔ optional same-binary sensor worker. The worker is a fault-containment process, not
   an untrusted extension or a general host sandbox.
+- TB11: Outbound inventory agent → dedicated machine hub listener; all status is untrusted self-report.
+- TB12: Console operator → hub inventory administration; existing role/CSRF/audit boundary.
 
 ## STRIDE summary per boundary
 
@@ -287,5 +290,33 @@ closed; there is no automatic history deletion, repair or external anchoring.
 Audit never stores credentials, CSRF/session values or note bodies. It records
 failed logins, denied role/CSRF calls, investigations, audit reads/verifications;
 ordinary evidence reads are deliberately not audited. Console state is plaintext
-regardless of evidence encryption. Single tenant/node only; no remote sensor
-control, fleet enrollment, tenant isolation or enforcement endpoint exists.
+regardless of evidence encryption. Single operator trust domain; no remote sensor control, tenant isolation or
+enforcement endpoint exists. Optional fleet enrollment has its own boundary below.
+
+
+## Fleet inventory trust boundaries (ADR-0018)
+
+A11 is the node private identity and hub node/token/replay registry. TB11 is the
+outbound agent → dedicated hub machine listener. TB12 is the console operator →
+hub inventory administration seam. The agent never opens a fleet inbound
+listener. Configuration and all received status/response bytes remain data;
+there is no path to configuration mutation, filesystem selection or execution.
+
+| Threat | Implemented control and residual risk |
+| --- | --- |
+| Rogue agent | Per-node heartbeat spacing from the registered interval and isolated 64-entry nonce windows prevent one key from consuming another node's replay budget. Revoked/early heartbeats do constant work and no request-driven disk IO; signed enrollment retries are also spaced and unchanged intervals do not rewrite the registry. Heartbeats coalesce on a five-second flush cadence. Possession of an enrolled Ed25519 key is required for every heartbeat. Enrollment needs a one-use high-entropy expiring token plus request-bound proof of possession. Inventory is still self-reported: an enrolled rogue agent can lie about versions, sensors, counters or health. No evidence/incident provenance is inferred. |
+| Unauthenticated network client | Method/path/content-type/header/body/skew validation runs before the hub mutex; signature verification holds no hub mutex (stored key lookup alone needs state). Rejections always increment bounded-code metrics. Only five anonymous rejection audit samples per minute plus one suppression-count summary reach disk from maintenance, outside the hub mutex. Source-IP throttling is capped at 4096 buckets, 8192 requests/minute each, with 429/Retry-After; ports/forwarded headers cannot bypass it. A full table fails closed for new remotes until expiry/pruning; shared NAT collateral throttling and distributed CPU/connection pressure remain possible. |
+| Stolen enrollment token | Tokens have 256 bits of entropy, default one-hour/max 24-hour TTL, SHA-256-only persistence and atomic one-use consumption. References only, TLS beyond loopback, no secret/signature logging. A thief with an unused token can enroll their own key first; proof of possession does not prevent token theft. Delete outstanding tokens and inspect inventory. |
+| Stolen node key | Owner-only seed/state, exact canonical request signatures, ±120-second clock window and bounded persistent replay cache prevent unauthenticated forgery and ordinary captured-request replay. A key thief can impersonate that node until admin revocation. Permanent key tombstones refuse heartbeat and re-enrollment. Rotation/attestation are proposed, not implemented. |
+| Compromised hub | A hub can deny service, forge its own inventory/audit, disclose received metadata, or provide false acknowledgements. It cannot command nodes: no response field, dialer, config/file/code distribution, execution or enforcement channel exists. The agent accepts only a bounded matching-ID acknowledgement and never applies server-authored data. A compromised hub cannot recover private node keys from public keys/signatures. |
+| SSRF/rebinding | Fixed validated origin; shared egress classifier at config, resolved-address and socket time; metadata/link-local denied permanently, private networks need fleet-specific opt-in, HTTP stays loopback even after DNS resolution. No redirects, proxies or insecure TLS option. System roots may be augmented by an explicit bounded CA bundle. DNS destination identity between independent connections is not pinned. |
+| Replay/rollback | Each node retains at most 64 nonces until signed timestamp plus skew, without evicting live entries or sharing capacity. Replay windows and liveness coalesce at five-second intervals and orderly shutdown. Restart retains flushed entries; a crash may lose the most recent interval (longer under scheduler/IO stalls), reopening unflushed nonces within the remaining timestamp window, up to 240 seconds after receipt for future-dated requests. Inventory shows last flushed data until the next heartbeat. Durable token consumption/revocation remain synchronous. Same-UID/privileged disk rollback or valid whole-state rewriting remains outside the claim; no external state/audit anchor exists. Clock synchronization is operationally required. |
+| Availability/resource pressure | Separate listeners, eight concurrent hub handlers, deadlines/header/body limits, finite registry/tokens/per-node nonces, source-IP rate limits, sampled rejection audits, five-second heartbeat snapshot coalescing and independent jittered agent loop. Hub outage leaves sensors/evidence operating. Snapshot fsync and audit can still contend for host disk/CPU; this is not a DDoS or host resource sandbox. Saturated replay/audit/state fails closed. |
+
+Only inventory metadata crosses TB11. No evidence is forwarded. Node names,
+versions, uptime and activity counters can themselves be sensitive. Hub registry,
+public keys, token hashes, replay state and audit are plaintext independently of
+evidence encryption. A separate single-writer private state dir is required per
+role. Audit and registry updates are separate transactions, so a 503 after save
+requires state inspection before retry. Inventory authentication establishes key
+possession, not trustworthy telemetry, tenant isolation or managed-service safety.

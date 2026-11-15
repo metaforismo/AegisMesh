@@ -1,7 +1,35 @@
 # HANDOFF — current verified state
 
-Updated: 2026-11-14. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
+Updated: 2026-11-15. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 `docs/ROADMAP.md` before changing code.
+
+## 2026-11-15 fleet inventory candidate
+
+Worktree `feat/fleet-enrollment` stacks the operator console. Changes remain
+uncommitted; no commit, push, branch switch, `gh`, merge, publish or deploy.
+Read ADR-0018, `architecture/fleet-protocol.md`, the extended console contract
+and current `verification.md` before integration. Required local gates and the
+two-process binary walkthrough passed; hosted CI and review remain open.
+
+`identity` owns a private fixed seed; `protocol` owns exact signed envelopes;
+`hub` owns atomic registry/token/replay state plus a separate listener; `agent`
+owns a fixed egress-checked transport and independent jittered loop. Runtime
+preflights fleet state/credentials/CA before binding listeners, snapshots sensor
+metadata without addresses and counts successful evidence appends. Console
+routes administer inventory under existing role/CSRF/audit protections. Hub
+state/audit are plaintext. Permanent key revocation and bounded replay state
+survive restart. Registry and audit remain separate durability transactions.
+
+This is experimental fleet inventory with authenticated enrollment and
+heartbeats. It is not multi-tenant, not a managed service, and forwards no
+evidence. The hub cannot command nodes, now or through a reserved stub. Status
+is self-reported, not attested. `fleet status` and `demo --fleet` were omitted;
+the existing console status API supplies live delivery state. Separate processes
+and state dirs are required by operator config; package tests compose roles.
+
+Review/hosted CI/merge and broader product acceptance remain separate. The
+proposed evidence-spool, rotation, mTLS/attestation, local configuration workflow,
+upgrade, tenancy and SSO designs in the ADR are not implementation claims.
 
 ## 2026-11-14 console API backend candidate
 
@@ -125,8 +153,9 @@ The intended commercial model is an Apache-2.0, self-hostable defensive core
 plus a future managed SaaS/control plane. Plausible hosted value includes fleet
 management, authenticated enrollment, tenant isolation, SSO/RBAC, collaborative
 investigation, searchable retention, audit administration, managed upgrades and
-support. None of those control-plane or multi-tenant capabilities is shipped or
-claimed today; they require separate authorization and threat models.
+support. The local inventory foundation is implemented in this candidate;
+managed-service and multi-tenant capabilities remain proposed and require
+separate authorization and threat models.
 
 ## Non-obvious invariants
 

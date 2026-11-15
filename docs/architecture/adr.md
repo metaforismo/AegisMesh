@@ -585,3 +585,129 @@ autonomous enforcement, history decryption, external audit anchoring, exports,
 search engine/database, distributed sessions or new outbound connection ships.
 Last-write-wins investigation edits have no optimistic version check, as fixed
 by the v1 contract. This decision does not claim production readiness.
+
+## ADR-0018 — outbound-only experimental fleet identity and inventory
+
+Date: 2026-11-15. Status: implemented locally on `feat/fleet-enrollment`;
+uncommitted, pending review and hosted CI. See the current verification ledger.
+
+**Context and ownership.** The console's `Runtime` seam exposes value snapshots;
+its evidence index is disposable and must not become an agent transport. The
+runtime already owns authoritative store/bus ordering. A separate fleet service
+with a second executable/database was considered, alongside same-binary role
+composition with standard-library private snapshots. The latter keeps the
+existing deployment model, dependency set and credential handling while making
+machine and operator listeners independent. `fleet.hub.enabled` and
+`fleet.agent.enabled` default off. Operator configs reject simultaneous roles;
+tests may compose both packages in one process. A hub-only runtime may have
+zero sensors, keeping the control plane separate from decoys. This is experimental fleet
+inventory with authenticated enrollment and heartbeats. It is not multi-tenant,
+is not a managed service, and forwards no evidence.
+
+**Permanent invariant.** Agents dial the hub. The hub never dials agents and has
+no channel to send commands, configuration, files or code to a node. This is a
+permanent trust invariant, not an unimplemented command stub. A compromised hub
+can falsify its inventory, deny enrollment/acknowledgements and expose received
+metadata; it cannot command nodes. Responses are strictly typed acknowledgements
+and never enter sensors, paths, configuration mutation or execution.
+
+**Shape and alternatives.** `identity.Load` owns the fixed private seed;
+`protocol.Sign/Parse/Decode` own the wire schema and domain-separated canonical
+bytes; `hub.Hub` owns atomic token consumption, registry, revocation and replay
+state; `hub.Server` owns the dedicated bounded listener; `agent.Agent` owns its
+fixed destination and asynchronous delivery loop. `runtime` injects trusted
+state directories, status snapshots, metrics and audit; console handlers only
+administer inventory. A storage callback coupled to the fleet transport would
+make evidence latency depend on networking and is rejected. A runtime append
+wrapper instead counts successful local appends, including direct correlation
+signals, without serializing evidence into heartbeat data.
+
+**Authentication and transport.** Each node generates Ed25519 locally; no shared
+post-enrollment bearer secret exists. Enrollment signs the exact request-bound
+challenge including token, name, key and reporting interval. Node ID is a
+128-bit SHA-256 prefix; the full SHA-256 key fingerprint is displayed. Tokens
+are one-use 256-bit random values, hash-only at rest, expire within 24 hours,
+and are exposed once. Known keys retry idempotently; revoked keys retain a
+permanent tombstone. Authentication includes exact body hash, method/path,
+node ID, timestamp and nonce, with 120-second skew and isolated 64-entry
+replay windows per node. Heartbeats and enrollment retries each enforce minimum
+spacing from the registered interval before any replay mutation. Unchanged
+re-enrollment retries cannot force a durable rewrite. Revoked or throttled nodes
+perform constant work and no request-driven disk IO. Stateless validation and
+signature verification occur outside the registry mutex; heartbeat verification
+briefly copies the stored immutable public key under the mutex.
+
+**Abuse resistance and persistence revision.** A fleet-wide nonce cap and
+synchronous full snapshot per heartbeat allowed one enrolled rogue to deny
+service to other nodes. Per-node replay budgets isolate that pressure. Durable
+node/key/interval/revocation and token changes remain synchronous. Liveness,
+reported counters/sensors/health and replay windows coalesce into a dirty snapshot
+on a five-second background cadence using the injected clock, plus orderly
+shutdown. This deliberately trades crash durability of the latest interval for
+bounded write frequency. After restart inventory reflects the last flushed
+snapshot until the next heartbeat. A crash may reopen unflushed nonces within
+the remaining ±120-second signed-timestamp window (up to 240 seconds from
+receipt for a future-dated request); flushed replay entries, consumed tokens and
+revocation survive. Scheduler/IO stalls can extend the nominal five-second crash
+loss interval. This is explicitly not crash-proof replay prevention.
+
+Unauthenticated clients cannot trigger synchronous rejection audits: all rejects
+increment fixed-label metrics, but at most five anonymous samples and one
+suppression summary per minute are written by maintenance outside the hub mutex.
+Shutdown drains pending audit counts; abrupt crashes can lose them. A separate
+bounded 4096-entry source-IP limiter allows 8192 requests per minute per address
+and returns 429 with `Retry-After`; it ignores ports and forwarding headers.
+Fixed limits avoid new configuration and accommodate 1000 ten-second nodes on a
+shared NAT. A full table fails closed for new addresses until periodic pruning.
+These controls pace disk/CPU pressure, with no DDoS isolation promise.
+
+TLS is mandatory outside loopback, with system roots or an additional PEM CA;
+there is no insecure verification option. Agent traffic uses the webhook's
+shared egress classification at config and socket time. A dedicated
+`allow_private_egress` avoids widening LLM/webhook permissions. Metadata and
+link-local remain denied, redirects/proxies are refused and time/bytes are
+bounded. Sensor addresses and evidence content are omitted. Hub failures affect
+inventory freshness, never sensor/store availability. Audit/state have separate
+fsync transactions; disk/audit failures may leave a saved state with a failed
+response and require inspection. Limits and exact encoding are in
+[fleet-protocol.md](fleet-protocol.md).
+
+**Residual risks.** Node status is a signed self-report, not attestation. A stolen
+unused token can enroll an attacker's key first. A stolen node private key can
+impersonate that node until revocation; TLS protects payload confidentiality,
+not a compromised endpoint. A compromised host/hub writer can roll back or
+rewrite local plaintext state and audit. A fully reconstructed valid snapshot
+cannot be detected without external anchoring. Fleet inventory reveals host
+names, versions, activity and topology hints. A shared NAT can be throttled and
+a full remote table can temporarily deny new addresses. Bounded work and audit quotas
+limit allocation but do not provide DDoS or host resource isolation. Permanent
+tombstones count toward the node cap; there is no deletion/rotation escape hatch.
+
+**Proposed, not implemented — evidence forwarding.** Signed batches, at-least-once
+from a bounded local spool, idempotent by event ID, hub-side per-node quotas and
+explicit backpressure/drop accounting. Encryption design must decide whether
+nodes forward ciphertext (hub cannot query without read identities) or explicitly
+redacted plaintext under transport protection (a new confidentiality boundary).
+Never silently reuse webhook delivery as a fleet evidence promise.
+
+**Proposed, not implemented — key rotation.** A separately reviewed protocol must
+bind old/new possession and preserve revocation/audit lineage, with offline
+recovery policy. **Proposed, not implemented — mTLS/attestation.** Certificates
+or platform measurements would require issuer, expiry and recovery ownership;
+Ed25519 request authentication currently proves key possession only.
+
+**Proposed, not implemented — remote configuration.** Any future configuration
+workflow must be a separately operated, human-reviewed local import boundary.
+It cannot use the hub-to-agent response channel, which is permanently forbidden.
+**Proposed, not implemented — upgrades.** Local operator acquisition and signature
+verification remain a separate supply-chain process; this hub cannot distribute
+or initiate upgrades.
+
+**Proposed, not implemented — multi-tenancy.** Tenant-scoped identities, storage,
+quotas, authorization, residency and retention need separate isolation design;
+current state has one operator trust domain. **Proposed, not implemented — SSO.**
+OIDC/session and role binding need independent review; current console token
+roles remain authoritative. Hosted service ownership, billing metering, regional
+placement and service-level/offline guarantees are also proposed, not implemented.
+The Apache-2.0 core and this self-hosted inventory slice do not establish any of
+those managed-service properties.

@@ -354,3 +354,26 @@ cookie and send the returned `csrf_token` in `X-AegisMesh-CSRF` for mutations.
 `GET /api/v1/meta` is public and `GET /api/v1/session` returns JSON 401 when
 unauthenticated. API responses are not cacheable. See the complete
 [console contract](architecture/console-api.md) for queries and endpoints.
+
+
+## Experimental fleet inventory
+
+Use `validate --config hub.yaml --effective --json` or the corresponding agent
+config to inspect resolved fleet fields and credential reference names.
+`doctor --config agent.yaml --json` reports static enrollment-reference and
+egress readiness without hub probes or identity creation. `run --config
+hub.yaml` and a separate `run --config agent.yaml` use the existing binary and
+lifecycle; agents must keep their private state directory across restarts.
+`run --dry-run` validates/binds the roles but does not start agent egress or
+consume enrollment tokens. The console's existing `console token` / `console hash` commands provision hub
+operator authentication. Admins mint one-time agent enrollment tokens through
+`POST /api/v1/fleet/enrollment-tokens`; keep the response secret and supply it
+through a private file or environment reference. No token command-line argument
+or inline config field exists. See [configuration](configuration.md#experimental-fleet-inventory-adr-0018)
+and [operator API](architecture/console-api.md#experimental-fleet-inventory-additions-adr-0018).
+
+`fleet status` and `demo --fleet` are deliberately omitted. The live read-only
+status seam is `GET /api/v1/fleet`; reading on-disk state in a second CLI process
+would not describe the running agent's delivery status. `demo --console` retains
+its existing scenario. Fleet integration/manual verification uses separate
+synthetic processes rather than adding another demo lifecycle.

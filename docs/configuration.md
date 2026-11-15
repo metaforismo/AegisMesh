@@ -388,8 +388,8 @@ committed, exported, or shared in incident reviews.
 ## Operator console (optional)
 
 The console is disabled by default and owns a separate listener and mux. It is
-single-node, single-tenant and read-mostly. The only writes are console sessions,
-operator investigations and the console audit trail; no sensor or policy control
+single-node, single-tenant and read-mostly. Writes include console sessions,
+operator investigations, audit and optional fleet registry administration; no sensor or policy control
 is exposed. The API contract is [architecture/console-api.md](architecture/console-api.md).
 
 ```yaml
@@ -454,3 +454,83 @@ It is served only when `console.enabled` is true. A server constructed without a
 UI FS serves a plain-text notice at `/`; the API is unaffected. Asset loading
 is capped at 1024 files, 16 MiB/file and 32 MiB total, snapshotted at startup.
 Only `/` serves `index.html`; deep links do not fall back to the index.
+
+## Experimental fleet inventory (ADR-0018)
+
+Both roles are off by default. This is experimental fleet inventory with
+authenticated enrollment and heartbeats; it is not multi-tenant, not a managed
+service, and forwards no evidence. Configure separate processes/data directories
+for hub and agent. Operator configs reject simultaneous roles; package-level
+synthetic integration tests can compose them. The hub cannot command nodes.
+
+A hub may have `sensors: []` and run inventory only. Ordinary nodes and agents
+still require at least one sensor. Hub example (configure console operator
+authentication separately):
+
+```yaml
+fleet:
+  hub:
+    enabled: true
+    listen: 127.0.0.1:9130
+    state_dir: fleet-hub-state
+```
+
+Agent example, with the enrollment token placed in a **0600 regular file** next
+to the config, never inline or in an argument:
+
+```yaml
+fleet:
+  agent:
+    enabled: true
+    hub_url: http://127.0.0.1:9130
+    state_dir: fleet-agent-state
+    node_name: edge-node
+    enrollment_token_file: enrollment.token
+    heartbeat_interval_seconds: 30
+```
+
+| Field | Default / validation |
+| --- | --- |
+| `fleet.hub.enabled` | false; explicit inbound machine API opt-in |
+| `fleet.hub.listen` | `127.0.0.1:9130`; unprivileged/loopback by default; non-loopback requires TLS and `security.allow_public_bind` |
+| `fleet.hub.state_dir` | `<runtime.data_dir>/fleet-hub`; configured relative paths resolve from config directory |
+| `fleet.hub.tls_cert_file`, `tls_key_file` | empty; paired PEM paths, relative to config directory; certificate/key loaded before listeners bind |
+| `fleet.agent.enabled` | false; explicit outbound metadata disclosure opt-in |
+| `fleet.agent.hub_url` | empty; required when enabled, origin-only http(s); HTTP loopback only; no credentials, query, fragment or path prefix |
+| `fleet.agent.state_dir` | `<runtime.data_dir>/fleet-agent`; same resolution as hub; role directories must differ |
+| `fleet.agent.node_name` | `runtime.instance_name`; immutable enrolled name, 3..64 character lowercase slug |
+| `fleet.agent.enrollment_token_file` | empty; config-relative path confined by `os.Root`, no traversal or final symlink, mode 0600 regular file, at most 4096 bytes |
+| `fleet.agent.enrollment_token_env` | empty; environment variable **name**, mutually exclusive with file; contents are never serialized |
+| `fleet.agent.hub_ca_file` | empty; system roots otherwise; optional additional PEM bundle up to 1 MiB, checked before listeners bind |
+| `fleet.agent.allow_private_egress` | false; explicit RFC1918/ULA allowance independent of LLM/webhook settings; metadata/link-local always denied |
+| `fleet.agent.heartbeat_interval_seconds` | 30; 10..300; omitted/zero in the config file receives the default; an environment override of zero fails validation |
+
+Every field supports `AEGISMESH_FLEET_` plus its uppercase nested path, such as
+`AEGISMESH_FLEET_HUB_ENABLED`, `AEGISMESH_FLEET_HUB_TLS_CERT_FILE`,
+`AEGISMESH_FLEET_AGENT_HUB_URL`, `AEGISMESH_FLEET_AGENT_ENROLLMENT_TOKEN_ENV`,
+`AEGISMESH_FLEET_AGENT_ALLOW_PRIVATE_EGRESS` and
+`AEGISMESH_FLEET_AGENT_HEARTBEAT_INTERVAL_SECONDS`. Overrides are applied before
+validation. There is no inline token or insecure TLS override. `validate
+--effective --json` reports every fleet setting and reference name, never the
+referenced token. `doctor` checks static readiness without contacting the hub or
+creating a node identity. Startup validates credential/CA material before binds.
+
+Remove the enrollment reference after successful enrollment if desired: the
+same key can restart and prove possession without a token. Keep its state dir
+and node name stable. A missing/malformed configured reference still fails
+preflight, even for a previously enrolled identity. No enrollment reference
+means an unknown key cannot enroll. Back up the private identity; losing it
+creates a new node identity requiring a new enrollment token. Revoked keys
+cannot re-enroll, even with another token.
+
+State directories must be real 0700 directories, state files regular 0600 files.
+One runtime owns each data/state directory. Hub registry, token hashes, replay
+state and audit are plaintext metadata even when evidence encryption is enabled.
+No additional knobs control abuse limits: heartbeat spacing follows each node's
+registered interval; replay windows hold 64 nonces per node; remote throttling
+uses 4096 source-IP buckets and 8192 requests/minute each; rejection audit is
+sampled globally (five/minute plus a suppression summary). Soft liveness/replay
+state flushes every five seconds and on shutdown; durable changes save immediately.
+A crash can lose the latest unflushed interval and reopen its nonces within the
+signed timestamp window. See [fleet protocol](architecture/fleet-protocol.md) for
+precise crash/replay, scheduler/IO, shared-NAT and audit-failure limitations.

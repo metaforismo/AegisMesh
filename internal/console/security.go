@@ -183,7 +183,7 @@ func (s *Server) route(pattern, role, group string, handler func(http.ResponseWr
 		}
 		acceptsBody := r.Method == "POST" &&
 			(group == "session" ||
-				group == "investigations") ||
+				group == "investigations" || group == "fleet-tokens") ||
 			r.Method == "PATCH" &&
 				group == "investigations"
 		if !acceptsBody && (r.ContentLength != 0 || len(r.TransferEncoding) > 0) {
@@ -201,7 +201,7 @@ func (s *Server) route(pattern, role, group string, handler func(http.ResponseWr
 				return
 			}
 		}
-		if role == "analyst" && !s.audit.Ready() {
+		if (role == "analyst" || role == "admin") && !s.audit.Ready() {
 			fail(w, 503, "unavailable", "audit trail requires inspection and restart")
 			return
 		}

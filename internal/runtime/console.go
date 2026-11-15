@@ -88,14 +88,16 @@ func (s *System) buildConsole() error {
 	}
 
 	server, err := console.New(console.Options{
-		Config:   s.cfg.Console,
-		Security: s.cfg.Security,
-		StateDir: s.cfg.ConsoleStateDir(),
-		Index:    index,
-		Runtime:  s,
-		Rules:    rules,
-		Meter:    s.meter,
-		UI:       consoleui.FS(),
+		Config:      s.cfg.Console,
+		FleetHub:    s.fleetHub,
+		FleetStatus: s.FleetStatus,
+		Security:    s.cfg.Security,
+		StateDir:    s.cfg.ConsoleStateDir(),
+		Index:       index,
+		Runtime:     s,
+		Rules:       rules,
+		Meter:       s.meter,
+		UI:          consoleui.FS(),
 	})
 	if err != nil {
 		return err
