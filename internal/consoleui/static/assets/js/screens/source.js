@@ -5,7 +5,8 @@ import { binTimes } from '../lib/chart.js';
 import { pageHead, panel, kv, sevChip, evidence, chip, timeEl, empty, pager, link } from '../ui/components.js';
 import { activityTrace } from '../ui/charts.js';
 import { icon } from '../ui/icons.js';
-import { eventTable } from './shared.js';
+import { eventKey } from '../lib/origin.js';
+import { eventTable, originContext } from './shared.js';
 
 const STRIP_BINS = 48;
 const FIRST_PAGE = 200;
@@ -37,22 +38,25 @@ export default {
     const key = ctx.route.params.source;
     // The first page uses the contract maximum so the activity strip has as
     // much of the history as one request can carry.
-    const res = await ctx.api.source(key, '', FIRST_PAGE, { signal: ctx.signal });
+    const [res, origin] = await Promise.all([
+      ctx.api.source(key, '', FIRST_PAGE, { signal: ctx.signal }),
+      originContext(ctx),
+    ]);
     const s = res.source || {};
     const rows = Array.isArray(res.events) ? res.events : [];
     let cursor = res.next_cursor || '';
-    const seen = new Set(rows.map((e) => e.id));
+    const seen = new Set(rows.map(eventKey));
     const tableSlot = h('div');
     const pagerSlot = h('div');
     const stripSlot = h('div');
     const paint = () => {
       mount(stripSlot, activityStrip(s, rows));
-      mount(tableSlot, rows.length ? eventTable(rows, { caption: 'Events from this source' }) : empty('No indexed events', 'Events from this source may have aged out of the index.'));
+      mount(tableSlot, rows.length ? eventTable(rows, { caption: 'Events from this source', origin: origin.accepting || 'auto' }) : empty('No indexed events', 'Events from this source may have aged out of the index.'));
       mount(pagerSlot, pager({
         shown: rows.length, total: s.events, hasMore: Boolean(cursor),
         onMore: async () => {
           const next = await ctx.api.source(key, cursor, PAGE, { signal: ctx.signal });
-          for (const ev of next.events || []) if (!seen.has(ev.id)) { seen.add(ev.id); rows.push(ev); }
+          for (const ev of next.events || []) if (!seen.has(eventKey(ev))) { seen.add(eventKey(ev)); rows.push(ev); }
           cursor = next.next_cursor || '';
           paint();
         },

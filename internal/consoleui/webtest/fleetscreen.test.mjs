@@ -82,3 +82,40 @@ test('agent-only node explains where the inventory lives', async () => {
   assert.match(root.textContent, /hub_unreachable/);
   assert.deepEqual(c.calls, ['fleet']);
 });
+
+// ---- Evidence forwarding ------------------------------------------------------
+
+const ACCEPTING = { ...HUB, hub: { ...HUB.hub, accept_evidence: true } };
+const LOSSY = { ...NODE, forwarding: { enabled: true, forwarded_total: 980, dropped_total: 37, last_forwarded_at: '2026-11-15T09:00:00Z', gaps_total: 2, queued_events: 500, queued_bytes: 1048576, last_error: 'queue_full' } };
+const OFF = { ...NODE, id: 'cd'.repeat(16), name: 'quiet-01', forwarding: { enabled: false, forwarded_total: 0, dropped_total: 0, last_forwarded_at: '', gaps_total: 0 } };
+const links = (root) => root.querySelectorAll((el) => el.tagName === 'a').map((a) => a.getAttribute('href'));
+
+test('accepting hub: reception state, forwarding per node, labelled loss and view-events links', async () => {
+  const root = await render(ctx('viewer', ACCEPTING, { nodes: { nodes: [LOSSY, OFF, NODE] } }));
+  const text = root.textContent;
+  assert.match(text, /Accepts forwarded evidence/);
+  assert.match(text, /980 forwarded/);
+  assert.match(text, /Not forwarded: 37 dropped, 2 gaps/);
+  assert.match(text, /still exists in the node’s own store/);
+  assert.match(text, /queue_full/);
+  assert.match(text, /not reported/, 'a node without a forwarding block');
+  assert.ok(links(root).includes(`#/events?node=${LOSSY.id}`));
+  // Loss is a warning, never the danger color.
+  const lossBadge = root.querySelectorAll((el) => /Not forwarded/.test(el.textContent) && String(el.getAttribute('class')).includes('badge'));
+  assert.ok(lossBadge.length && lossBadge.every((b) => b.getAttribute('class').includes('badge--warn')));
+});
+
+test('hub refusing evidence: reception off, no view-events links', async () => {
+  const root = await render(ctx('viewer', { ...HUB, hub: { ...HUB.hub, accept_evidence: false } }, { nodes: { nodes: [LOSSY] } }));
+  assert.match(root.textContent, /Inventory only: this hub refuses forwarded evidence/);
+  assert.ok(!links(root).some((h) => h.startsWith('#/events?node=')));
+});
+
+test('agent role shows its own forwarding state and error category', async () => {
+  const agent = { ...NONE, agent: { enabled: true, hub_url: 'https://hub.example.test:9130', node_id: NODE.id, enrolled: true, last_heartbeat_at: '', last_error: '', forwarding: { enabled: true, forwarded_total: 12, dropped_total: 5, last_forwarded_at: '', gaps_total: 0, last_error: 'evidence_disabled' } } };
+  const root = await render(ctx('viewer', agent));
+  assert.match(root.textContent, /Evidence forwarding/);
+  assert.match(root.textContent, /evidence_disabled/);
+  assert.match(root.textContent, /The hub does not accept evidence/);
+  assert.match(root.textContent, /Not forwarded: 5 dropped/);
+});

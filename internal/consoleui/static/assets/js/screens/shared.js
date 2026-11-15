@@ -4,10 +4,17 @@ import { h } from '../lib/dom.js';
 import { href, isEventId } from '../lib/route.js';
 import { PRIORITIES } from '../lib/taxonomy.js';
 import { formatClock, formatDateTime } from '../lib/format.js';
+import { describeOrigin, eventKey, originQuery, originVisible } from '../lib/origin.js';
+import { icon } from '../ui/icons.js';
 import { banner, table, sevChip, clsChip, evidence, link, chip, openDialog, inputField, selectField, labelFor, badge } from '../ui/components.js';
 
-export function historyBanner(node) {
+// `accepting`: this node is a hub that accepts forwarded evidence. Such a hub
+// reports history "unavailable" because forwarded copies are indexed live
+// only; the forwarded-evidence note on the same screen already says so, so
+// the encryption explanation is shown only when storage is encrypted.
+export function historyBanner(node, { accepting = false } = {}) {
   const history = node?.index?.history;
+  if (history === 'unavailable' && accepting && node?.storage?.encrypted !== true) return null;
   if (history === 'truncated') {
     return banner('warn', 'Index history is truncated',
       h('p', null, 'The in-memory index holds the newest events only. Older evidence is still on disk; use ', h('code', null, 'aegismesh inspect'), ' to read it.'));
@@ -19,15 +26,57 @@ export function historyBanner(node) {
   return null;
 }
 
+// ---- Origin (forwarded evidence on a hub) -----------------------------------
+
+// Full-page link to one event, pinned to its origin.
+export function eventHref(ev) {
+  const q = originQuery(ev);
+  return q.node ? href('events', ev.id, q) : href('events', ev.id);
+}
+
+// Whether this node's lists should carry an origin column, and the fleet
+// status that decided it. /fleet is cheap and cached; a failure only means
+// the column is decided by the rows themselves.
+export async function originContext(ctx, signal = ctx.signal) {
+  const fleet = ctx.api.fleet ? await ctx.api.fleet({ signal }).catch(() => null) : null;
+  return { fleet, accepting: fleet?.hub?.accept_evidence === true };
+}
+
+// "This node", or the forwarding node's name with its short id. Node names
+// come from the hub's registry and are shown as identifiers, never markup.
+// `stack` puts the short id under the name, for dense tables.
+export function originLabel(node, { link: withLink = true, stack = false } = {}) {
+  const o = describeOrigin(node);
+  const cls = ['origin', stack ? 'origin--stack' : ''];
+  if (o.local) return h('span', { class: [...cls, 'origin--local'] }, 'This node');
+  const parts = [h('code', { class: 'origin__name' }, o.name), o.short ? h('span', { class: ['muted', 'origin__id'] }, o.short) : null];
+  return withLink && o.linkable
+    ? h('a', { class: cls, href: href('fleet', 'nodes', o.id), title: `${o.name} · fleet node ${o.id}` }, ...parts)
+    : h('span', { class: cls, title: o.id || null }, ...parts);
+}
+
+// One compact line wherever a hub's lists or counts mix in forwarded
+// evidence. It states the limits rather than hiding them in docs.
+export function forwardedNote(where = 'list') {
+  const lead = where === 'counts'
+    ? 'Counts on this hub include evidence forwarded by enrolled nodes.'
+    : 'This hub also lists evidence forwarded by enrolled nodes.';
+  return h('p', { class: 'origin-note' }, icon('info', { size: 'sm' }),
+    h('span', null, `${lead} Forwarding is experimental and best effort: losses are counted per node on the Fleet page, forwarded history starts at the hub’s last restart, and each node’s own store remains the authoritative record.`));
+}
+
 // Event table used by the events list, source detail, related events and
-// investigations. `extra` appends columns (e.g. a detach button).
+// investigations. `extra` appends columns (e.g. a detach button). `origin`:
+// true or false forces the origin column; 'auto' (default) shows it when any
+// row was forwarded from another node.
 export function eventTable(events, opts = {}) {
   return eventTableView(events, opts).el;
 }
 
-function eventColumns({ showDate = true, extra = [], rowHref }) {
+function eventColumns({ showDate = true, extra = [], rowHref, origin = false }) {
   return [
     { label: 'Time (UTC)', className: 'nowrap', cell: (ev) => h('time', { datetime: ev.time, title: formatDateTime(ev.time) }, showDate ? formatDateTime(ev.time).replace(' UTC', '') : formatClock(ev.time)) },
+    ...(origin ? [{ label: 'Origin', className: 'nowrap', cell: (ev) => originLabel(ev.node, { stack: true }) }] : []),
     { label: 'Class', cell: (ev) => clsChip(ev.classification) },
     { label: 'Severity', cell: (ev) => sevChip(ev.severity) },
     { label: 'Sensor', cell: (ev) => h('span', { class: 'nowrap' }, h('code', null, ev.sensor?.id ?? '—'), ' ', ev.sensor?.kind ? chip(ev.sensor.kind) : null) },
@@ -35,7 +84,7 @@ function eventColumns({ showDate = true, extra = [], rowHref }) {
     {
       label: 'Summary', className: 'col-summary',
       cell: (ev) => (isEventId(ev.id)
-        ? h('a', { href: rowHref ? rowHref(ev) : href('events', ev.id), class: 'row-open', 'data-row-link': '' }, evidence(ev.summary, { max: 160 }))
+        ? h('a', { href: rowHref ? rowHref(ev) : eventHref(ev), class: 'row-open', 'data-row-link': '' }, evidence(ev.summary, { max: 160 }))
         : evidence(ev.summary, { max: 160 })),
     },
     { label: 'Rules', cell: (ev) => ruleChips(ev.rule_ids) },
@@ -55,23 +104,26 @@ function revealRow(tr) {
 
 // The event table as a live view: rows can be prepended (live mode),
 // appended (load more) and trimmed from the bottom without rebuilding the
-// table, and a keyboard cursor / open-row marker can be moved.
-export function eventTableView(events, { caption = 'Events', newIds, ...opts } = {}) {
-  const columns = eventColumns(opts);
+// table, and a keyboard cursor / open-row marker can be moved. Rows are
+// keyed by eventKey (id plus origin): ids are unique only within an origin.
+export function eventTableView(events, { caption = 'Events', newIds, origin = 'auto', ...opts } = {}) {
+  const withOrigin = origin === 'auto' ? originVisible({ events }) : Boolean(origin);
+  const columns = eventColumns({ ...opts, origin: withOrigin });
   const ids = [];
   const byId = new Map();
   const buildRow = (ev, isNew) => {
-    const tr = h('tr', { class: isNew ? 'is-new' : null, 'data-id': isEventId(ev.id) ? ev.id : null },
+    const key = eventKey(ev);
+    const tr = h('tr', { class: isNew ? 'is-new' : null, 'data-id': isEventId(ev.id) ? key : null },
       columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || ''], 'data-label': c.label }, c.cell(ev))));
-    if (isEventId(ev.id)) byId.set(ev.id, tr);
+    if (isEventId(ev.id)) byId.set(key, tr);
     return tr;
   };
   const tbody = h('tbody', null, events.map((ev) => {
-    ids.push(ev.id);
-    return buildRow(ev, newIds?.has(ev.id));
+    ids.push(eventKey(ev));
+    return buildRow(ev, newIds?.has(eventKey(ev)));
   }));
   const el = h('div', { class: 'table-wrap' },
-    h('table', { class: ['table', 'table--stack'] },
+    h('table', { class: ['table', 'table--stack', withOrigin ? 'table--origin' : ''] },
       h('caption', { class: 'visually-hidden' }, caption),
       h('thead', null, h('tr', null, columns.map((c) => h('th', { scope: 'col', class: [c.num ? 'num' : '', c.className || ''] }, c.label)))),
       tbody));
@@ -88,13 +140,13 @@ export function eventTableView(events, { caption = 'Events', newIds, ...opts } =
       const frag = document.createDocumentFragment();
       list.forEach((ev, i) => frag.appendChild(buildRow(ev, i < highlight)));
       tbody.insertBefore(frag, tbody.firstChild);
-      ids.unshift(...list.map((ev) => ev.id));
+      ids.unshift(...list.map((ev) => eventKey(ev)));
       if (cursor >= 0) cursor += list.length;
     },
     append(list) {
       for (const ev of list) {
         tbody.appendChild(buildRow(ev, false));
-        ids.push(ev.id);
+        ids.push(eventKey(ev));
       }
     },
     // Drop rows beyond `max` from the bottom; returns how many were dropped.

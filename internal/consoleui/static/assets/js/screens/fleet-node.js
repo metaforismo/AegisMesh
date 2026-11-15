@@ -3,8 +3,9 @@ import { ApiError } from '../lib/api.js';
 import { href } from '../lib/route.js';
 import { formatCount, formatDateTime, formatDuration } from '../lib/format.js';
 import { formatFingerprint, idMatchesFingerprint } from '../lib/fleet.js';
-import { pageHead, panel, kv, badge, table, empty, banner, toast, openDialog, labelFor, chip } from '../ui/components.js';
-import { fleetStatusBadge, seenCell, countersCell, storageBadge, sensorsCell, hubUnavailable } from './fleet.js';
+import { pageHead, panel, kv, badge, table, empty, banner, toast, openDialog, labelFor, chip, link } from '../ui/components.js';
+import { forwardingSummary } from '../lib/fleet.js';
+import { fleetStatusBadge, seenCell, countersCell, storageBadge, sensorsCell, hubUnavailable, forwardingRows } from './fleet.js';
 
 const SENSOR_STATE = { running: 'ok', failed: 'danger', stopped: 'neutral' };
 
@@ -30,8 +31,12 @@ export default {
   title: 'Fleet node',
   async render(root, ctx) {
     let n;
+    let fleet = null;
     try {
-      n = await ctx.api.fleetNode(ctx.route.params.id, { signal: ctx.signal });
+      [n, fleet] = await Promise.all([
+        ctx.api.fleetNode(ctx.route.params.id, { signal: ctx.signal }),
+        ctx.api.fleet ? ctx.api.fleet({ signal: ctx.signal }).catch(() => null) : null,
+      ]);
     } catch (err) {
       if (!(err instanceof ApiError && err.code === 'unavailable')) throw err;
       mount(root, pageHead({ eyebrow: h('a', { href: href('fleet') }, '← Fleet'), title: 'Fleet node' }),
@@ -42,6 +47,10 @@ export default {
     const sensors = Array.isArray(n.sensors) ? n.sensors : [];
     const fpOk = idMatchesFingerprint(n.id, n.public_key_fingerprint);
     const revoked = n.status === 'revoked';
+    const accepting = fleet?.hub?.accept_evidence === true;
+    const fwd = forwardingSummary(n.forwarding);
+    const receives = accepting && fwd?.enabled;
+    const viewEvents = accepting ? h('a', { class: 'btn', href: href('events', { node: n.id }) }, 'View events') : null;
 
     const copy = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, 'Copy fingerprint');
     copy.addEventListener('click', async () => {
@@ -66,8 +75,11 @@ export default {
       pageHead({
         eyebrow: h('a', { href: href('fleet') }, '← Fleet'),
         title: h('code', null, n.name || '(unnamed)'),
-        subtitle: h('span', { class: 'btn-row' }, fleetStatusBadge(n.status), chip('Self-reported'), h('span', { class: 'muted' }, 'Figures come from the agent’s signed heartbeats. The hub cannot command this node, and it receives no evidence from it.')),
-        actions: revoke,
+        subtitle: h('span', { class: 'btn-row' }, fleetStatusBadge(n.status), chip('Self-reported'), h('span', { class: 'muted' },
+          receives
+            ? 'Figures come from the agent’s signed heartbeats. The hub cannot command this node. It receives best-effort copies of this node’s evidence; the node’s own store stays authoritative.'
+            : 'Figures come from the agent’s signed heartbeats. The hub cannot command this node, and it is not receiving evidence from it.')),
+        actions: viewEvents || revoke ? [viewEvents, revoke] : null,
       }),
       revoked ? banner('danger', 'This node is revoked', 'The hub refuses its heartbeats, and its key can never enroll again. The figures below are the last report accepted before revocation.') : null,
       h('div', { class: 'grid grid--2' },
@@ -92,6 +104,14 @@ export default {
             ['Storage', storageBadge(n.storage_healthy)],
           ]),
         })),
+      panel({
+        title: 'Evidence forwarding', meta: 'Counters, queue and error are self-reported; last receive time and gaps are recorded by the hub',
+        actions: accepting ? link(href('events', { node: n.id }), 'Events from this node') : null,
+        body: [
+          accepting ? null : h('p', { class: 'muted' }, 'This hub does not accept forwarded evidence, so nothing this node forwards is stored here.'),
+          kv(forwardingRows(n.forwarding, { lastLabel: 'Last received by the hub' })),
+        ],
+      }),
       panel({
         title: 'Public key fingerprint', meta: 'Full SHA-256 of the node’s Ed25519 public key. Compare it with the agent’s own record before trusting a match.',
         actions: copy,

@@ -81,3 +81,24 @@ test('fleet audit actions are part of the closed vocabulary', () => {
 test('the configuration reference the teaching state links to is an allowed href', () => {
   assert.ok(isSafeHref('https://github.com/metaforismo/AegisMesh/blob/master/docs/configuration.md'));
 });
+
+test('forwarding summary normalizes counters, optional queue and error category', async () => {
+  const { forwardingSummary, lossText, forwardingErrorText } = await import('../static/assets/js/lib/fleet.js');
+  assert.equal(forwardingSummary(undefined), null);
+  assert.equal(forwardingSummary([]), null);
+  const off = forwardingSummary({ enabled: false, forwarded_total: 0, dropped_total: 0, last_forwarded_at: '', gaps_total: 0 });
+  assert.deepEqual({ enabled: off.enabled, loss: off.loss, q: off.queuedEvents, err: off.lastError }, { enabled: false, loss: false, q: null, err: '' });
+  const lossy = forwardingSummary({ enabled: true, forwarded_total: 980, dropped_total: 37, last_forwarded_at: '2026-11-15T09:00:00.123456789Z', gaps_total: 2, queued_events: 500, queued_bytes: 1048576, last_error: 'queue_full' });
+  assert.equal(lossy.loss, true);
+  assert.equal(lossText(lossy), '37 dropped, 2 gaps');
+  assert.equal(lossy.queuedEvents, 500);
+  assert.equal(lossy.lastForwardedAt, '2026-11-15T09:00:00.123456789Z');
+  assert.equal(lossy.lastError, 'queue_full');
+  assert.equal(lossText(forwardingSummary({ enabled: true, gaps_total: 1 })), '1 gap');
+  // Garbage never becomes a number or free text.
+  const odd = forwardingSummary({ enabled: 'yes', forwarded_total: -4, dropped_total: 'x', last_forwarded_at: 'yesterday', gaps_total: null, last_error: '<b>boom</b>' });
+  assert.deepEqual([odd.enabled, odd.forwarded, odd.dropped, odd.gaps, odd.lastForwardedAt, odd.lastError], [false, 0, 0, 0, '', 'unrecognized']);
+  assert.equal(forwardingErrorText('evidence_disabled'), 'The hub does not accept evidence');
+  assert.equal(forwardingErrorText('queue_full'), '');
+  assert.equal(forwardingErrorText('Bad Category!'), 'Unrecognized error category');
+});

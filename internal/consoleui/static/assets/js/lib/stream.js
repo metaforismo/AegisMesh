@@ -1,6 +1,7 @@
 // Live observation stream over Server-Sent Events.
 //
-// The stream is unfiltered (contract); callers filter locally. A browser
+// The server filters the stream by origin only (`node=` on the URL, per the
+// contract); callers re-apply every other filter locally. A browser
 // EventSource cannot report the HTTP status of a failed connection, so on
 // every drop we close it ourselves and ask GET /session whether the session
 // expired (stop) or the server is merely unreachable (retry with backoff).

@@ -56,7 +56,7 @@ const rawApi = createApi({ onUnauthenticated: () => endSession('Your session end
 // (arguments before the options object). The audit trail is deliberately
 // absent: reading it is an audited action and must only happen on request.
 const CACHEABLE = {
-  overview: 1, events: 3, event: 1, sources: 2, source: 3, sensors: 0, rules: 0, recommendations: 1,
+  overview: 1, events: 3, event: 2, sources: 2, source: 3, sensors: 0, rules: 0, recommendations: 1,
   node: 0, investigations: 1, investigation: 1, fleet: 0, fleetNodes: 1, fleetNode: 1,
 };
 const CURSOR_ARG = { events: 1, source: 1 }; // later pages are never cached

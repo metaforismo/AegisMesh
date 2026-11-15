@@ -31,8 +31,9 @@ export const SCREENS = Object.freeze({
   }),
   events: lazy('Events', () => import('./events.js'), {
     skeleton: 'table',
-    // The drawer's `event` parameter updates the open screen in place.
-    viewIgnore: ['event'],
+    // The drawer's `event` (and its origin, `event_node`) update the open
+    // screen in place.
+    viewIgnore: ['event', 'event_node'],
     prefetch: (api, r) => { api.events(normalizeEventFilters(r.query).filters, '', 50); api.sensors(); api.node(); },
   }),
   event: lazy('Event', () => import('./event.js')),

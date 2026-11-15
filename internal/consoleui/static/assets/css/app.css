@@ -355,6 +355,33 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 .token-value,
 .fingerprint { font-size: var(--text-sm); letter-spacing: 0.02em; user-select: all; }
 
+/* ---- Evidence origin and forwarding (experimental) ---------------------- */
+
+.origin { display: inline-flex; align-items: baseline; gap: var(--space-2); white-space: nowrap; }
+.origin--local { color: var(--color-ink-2); }
+a.origin { text-decoration: none; }
+a.origin .origin__name { color: var(--color-accent); }
+@media (hover: hover) {
+  a.origin:hover .origin__name { text-decoration: underline; }
+}
+.origin__id { font-family: var(--font-mono); font-size: var(--text-2xs); }
+/* Dense tables: the short id sits under the name, long names truncate (the
+   full name and id are in the title), and source keys give up a little
+   width, so the extra column still fits a 1440px page without sideways
+   scrolling. */
+.origin--stack { flex-direction: column; align-items: flex-start; gap: 0; }
+.origin--stack .origin__name { display: block; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+.table--origin .nowrap .evidence { max-width: 9rem; }
+.origin-note { display: flex; align-items: flex-start; gap: var(--space-2); max-width: 96ch; color: var(--color-ink-2); font-size: var(--text-xs); }
+.origin-note .icon { flex: none; margin-top: 1px; color: var(--color-ink-3); }
+.kv-note { color: var(--color-ink-2); font-size: var(--text-sm); }
+.fwd { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); max-width: 100%; min-width: 0; }
+.fwd .badge { max-width: 100%; white-space: normal; }
+.table-wrap.table-wrap--scroll { overflow-x: auto; }
+.fleet-loss { padding: var(--space-3) var(--space-4) 0; }
+.fleet-loss .icon { color: var(--color-warn); }
+.fwd__loss { color: var(--color-ink-2); font-size: var(--text-2xs); max-width: 32ch; white-space: normal; }
+
 @media (max-width: 45rem) {
   /* Stacked table cards: keep badges and chips at their natural width. */
   .table--stack td > * { justify-self: start; }

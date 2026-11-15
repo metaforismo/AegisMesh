@@ -118,7 +118,9 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
 
     overview: (window, opts) => get('/overview', { window }, opts),
     events: (filters, cursor, limit, opts) => get('/events', { ...filters, cursor, limit }, opts),
-    event: (id, opts) => get(`/events/${seg(id)}`, undefined, opts),
+    // `node` ("local" or a node id) pins the detail to one origin; ids are
+    // unique only within an origin. Empty lets the server choose (local first).
+    event: (id, node, opts) => get(`/events/${seg(id)}`, node ? { node } : undefined, opts),
     sources: (window, limit, opts) => get('/sources', { window, limit }, opts),
     source: (source, cursor, limit, opts) => get(`/sources/${seg(source)}`, { cursor, limit }, opts),
     sensors: (opts) => get('/sensors', undefined, opts),

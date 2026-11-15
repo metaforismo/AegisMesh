@@ -101,3 +101,59 @@ export function formatExpiresIn(value, now = Date.now()) {
   const h = Math.floor(m / 60);
   return m % 60 ? `in ${h}h ${m % 60}m` : `in ${h}h`;
 }
+
+// ---- Evidence forwarding (experimental) -----------------------------------
+//
+// FleetNode.forwarding is a heartbeat self-report (counters, queue, error)
+// plus hub-authored receive time and gaps; /fleet agent.forwarding is this
+// process's own view. Forwarding is best effort with counted loss: what was
+// not forwarded still exists in the node's own store.
+
+const ERROR_CATEGORY = /^[a-z][a-z0-9_]{0,63}$/;
+
+// Known categories get words; any other well-formed category is shown as
+// its code. The value is a fixed local category, never free text.
+const FORWARDING_ERRORS = Object.freeze({
+  evidence_disabled: 'The hub does not accept evidence',
+});
+
+export function forwardingErrorText(code) {
+  if (typeof code !== 'string' || code === '') return '';
+  if (!ERROR_CATEGORY.test(code)) return 'Unrecognized error category';
+  return FORWARDING_ERRORS[code] || '';
+}
+
+const count = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+const optionalCount = (v) => (v === undefined || v === null ? null : count(v));
+
+// Normalized view of a forwarding block, or null when absent (an old agent,
+// or no report yet).
+export function forwardingSummary(fw) {
+  if (!fw || typeof fw !== 'object' || Array.isArray(fw)) return null;
+  const code = typeof fw.last_error === 'string' ? fw.last_error : '';
+  const s = {
+    enabled: fw.enabled === true,
+    forwarded: count(fw.forwarded_total),
+    dropped: count(fw.dropped_total),
+    gaps: count(fw.gaps_total),
+    lastForwardedAt: parseTime(fw.last_forwarded_at) ? fw.last_forwarded_at : '',
+    queuedEvents: optionalCount(fw.queued_events),
+    queuedBytes: optionalCount(fw.queued_bytes),
+    lastError: code && ERROR_CATEGORY.test(code) ? code : (code ? 'unrecognized' : ''),
+  };
+  s.loss = s.dropped > 0 || s.gaps > 0;
+  return s;
+}
+
+const plural = (n, one, many) => `${new Intl.NumberFormat('en-US').format(n)} ${n === 1 ? one : many}`;
+
+// "37 dropped, 2 gaps" — only the parts that are non-zero.
+export function lossText(s) {
+  if (!s?.loss) return '';
+  return [s.dropped ? `${plural(s.dropped, 'dropped', 'dropped')}` : '', s.gaps ? plural(s.gaps, 'gap', 'gaps') : ''].filter(Boolean).join(', ');
+}
+
+export const LOSS_EXPLANATION = 'Some evidence did not reach the hub. It still exists in the node’s own store, which stays authoritative.';
