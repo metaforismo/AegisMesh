@@ -524,8 +524,8 @@ The v1 draft was never released; it is intentionally unsupported.
 
 ## ADR-0017 — single-node read-mostly operator console
 
-**Status:** implemented in the uncommitted console candidate, including the
-embedded UI; human review, exact-head CI and merge remain separate.
+**Status:** implemented in open PRs #74 (API) and #75 (embedded UI), unmerged;
+hosted CI passes on both heads; human review and merge remain separate.
 
 **Context and alternatives.** Operators need bounded interactive evidence queries
 without changing sensor behavior or granting remote control. Two designs were
@@ -588,8 +588,9 @@ by the v1 contract. This decision does not claim production readiness.
 
 ## ADR-0018 — outbound-only experimental fleet identity and inventory
 
-Date: 2026-11-15. Status: implemented locally on `feat/fleet-enrollment`;
-uncommitted, pending review and hosted CI. See the current verification ledger.
+Date: 2026-11-15. Status: implemented on `feat/fleet-enrollment` (PR pending,
+unmerged); hosted CI not yet run, review pending. See the current verification
+ledger.
 
 **Context and ownership.** The console's `Runtime` seam exposes value snapshots;
 its evidence index is disposable and must not become an agent transport. The

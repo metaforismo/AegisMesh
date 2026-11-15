@@ -10,11 +10,43 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-11-15 — stack status
+
+**Status record, not a new test run.** The work of 2026-11-14/15 is committed and
+pushed as a stack of open, unmerged pull requests against `master` (`01579d3`).
+Each PR is stacked on the previous one. Older entries below that say "uncommitted"
+or name a candidate describe the state when they were written.
+
+| PR | Branch | Content | Hosted CI on PR head | Merged? |
+|---|---|---|---|---|
+| #72 | `security/go-toolchain-vuln-fixes` | Go 1.27.4, x/crypto v0.59.0 | **PASS**, all 6 jobs | no |
+| #73 | `feat/evidence-at-rest-encryption` (on #72) | opt-in age/X25519 evidence encryption | **PASS**, all 6 jobs | no |
+| #74 | `feat/console-api` (on #73) | operator console API | **PASS**, all 6 jobs | no |
+| #75 | `feat/console-ui-embed` (on #74) | embedded console UI, design system, landing page | **PASS**, all 6 jobs, including the Node UI tests step | no |
+| pending | `feat/fleet-enrollment` (on #75) | experimental fleet inventory | **NOT RUN** | no |
+
+No release, tag, image, signature, deployment or repository-setting change
+happened. Dependabot PRs #68 and #70 are superseded by #72 but still open; #71
+(pinned Action bumps) is untriaged.
+
+**Manual browser verification, 2026-11-15.**
+
+- Console against the real server started by `aegismesh demo --console`: login,
+  overview, events, recommendations, node, audit and investigation creation.
+- Fleet with two real processes on loopback: a token minted through the operator
+  API; an agent enrolled and appeared `online`; interaction counters propagated;
+  after the agent stopped it became `stale` once three 10 s heartbeats were
+  missed; a token created from the Fleet screen was recorded in the audit trail.
+- Fleet token revocation was **not** re-run in the browser. It was verified by
+  the backend two-process run and automated tests.
+
 ## 2026-11-15 — fleet review: abuse resistance and heartbeat write coalescing
 
 **PASS — local fixes and requested gates.** Base is the local draft `ad53dc7`
-(`wip(fleet): draft before review`), branch `feat/fleet-enrollment`. New changes
-remain uncommitted. No commit, push, branch switch or `gh` command was run.
+(`wip(fleet): draft before review`), branch `feat/fleet-enrollment`. These changes
+were uncommitted when the entry was written; they are now committed on
+`feat/fleet-enrollment` (PR pending). No commit, push, branch switch or `gh`
+command was run during the recorded checks.
 `docs/architecture/console-api.md` and the operator-facing response shapes are
 unchanged. No module files, dependencies or configuration knobs were added.
 This entry supersedes the earlier candidate's rejection-audit, replay-budget and
@@ -118,8 +150,9 @@ coalesced cadence, plus synchronous durable changes.
 
 **PASS — local implementation and required verification.** Branch
 `feat/fleet-enrollment`, base HEAD `20a2dbb`, stacking the operator console.
-All changes remain uncommitted. No commit, push, branch switch, `gh`, merge,
-publication or deployment occurred. macOS arm64, `go version go1.27.4 darwin/arm64`.
+All changes were uncommitted when this entry was written; they are now committed
+on `feat/fleet-enrollment` (PR pending, unmerged). No commit, push, branch
+switch, `gh`, merge, publication or deployment occurred during the recorded checks. macOS arm64, `go version go1.27.4 darwin/arm64`.
 No module files or dependencies changed. All suites ran sequentially with
 `GOTOOLCHAIN=go1.27.4 GOFLAGS=-p=1 GOMAXPROCS=2`; Makefile pins that toolchain.
 
@@ -236,10 +269,10 @@ CI step were added; the CI step has not run on hosted CI.
 | `make supply-chain-check` and `./scripts/check-supply-chain_test.sh` | **PASS**: no new action was added; the CI step uses the runner's Node.js. |
 | `make license-check secrets-scan` | **PASS**: 14 modules within policy; no secrets found. |
 | `git diff --check` | **PASS** after stripping trailing whitespace from the staged UI scripts. |
-| Full `make test`, fuzzing, `make vuln` | **NOT RUN** in this change; left to the orchestrator. |
-| Hosted CI for the new Node.js step | **NOT RUN**: nothing was pushed. |
+| Full `make test`, fuzzing, `make vuln` | **NOT RUN** in this change; covered by hosted CI on PR #75. |
+| Hosted CI for the new Node.js step | **NOT RUN** when this entry was written; later **PASS** on PR #75 (see the stack status entry). |
 
-**Manual browser evidence (orchestrator, not repeated by the implementer).** Run in
+**Manual browser evidence (recorded separately from the implementer's checks).** Run in
 a browser against the real server started by `aegismesh demo --console`: login,
 overview, events, recommendations, node, audit trail, and creating an
 investigation (cookie session plus CSRF) all worked, with no CSP violations. The
@@ -307,11 +340,12 @@ now describes available UI assets without assuming whether this build embeds the
 ## 2026-11-14 — first operator console backend candidate
 
 Worktree `feat/console-api`, base `e82df977c4119629b3bd87b8496428615ff1b865`,
-macOS arm64 / Go **1.27.4**. All changes remain uncommitted, including the supplied
-console contract. No commit, push, branch switch, `gh`, hosted CI, merge,
-publication or deployment occurred. UI implementation/embedding and browser QA
-belong to the parallel UI work and are **NOT RUN** here; runtime passes nil UI
-and `/` serves a notice.
+macOS arm64 / Go **1.27.4**. All changes were uncommitted when this entry was written, including the supplied
+console contract; they are now committed in PR #74 (open, unmerged). No commit,
+push, branch switch, `gh`, hosted CI, merge, publication or deployment occurred
+during the recorded checks. UI embedding and browser QA were **NOT RUN** in this
+entry (later done in PR #75); at this point the runtime passed a nil UI and `/`
+served a notice.
 
 **Architecture.** `runtime.indexedSink` serializes successful storage append →
 `evidenceindex.Index` for both bus observations and direct correlation signals.
@@ -379,7 +413,7 @@ the Go integration tests are the maintained reproduction path.
 
 ## 2026-11-14 — steady-traffic encryption segment review
 
-Candidate remains uncommitted on `feat/evidence-at-rest-encryption`, based on
+Candidate was uncommitted when written (now committed in PR #73), on `feat/evidence-at-rest-encryption`, based on
 `c64b58f29373ac475ec6a44ce692722062c5dfba`, macOS arm64 / Go **1.27.4**.
 This entry supersedes the unconditional flush/seal policy in the earlier recovery
 receipt below. No commit, push, branch switch, `gh`, staging, hosted CI, merge,
@@ -437,11 +471,11 @@ model, CLI/data-flow guidance, roadmap and handoff now describe these boundaries
 
 ## 2026-11-14 — evidence-at-rest encryption recovery and review
 
-Candidate: uncommitted `feat/evidence-at-rest-encryption` on
+Candidate: `feat/evidence-at-rest-encryption` (uncommitted when written; now PR #73) on
 `c64b58f29373ac475ec6a44ce692722062c5dfba` (reviewed but unmerged toolchain
 upgrade). Host: macOS arm64, Go **1.27.4**. No commit, push, reset, branch
 checkout, `gh`, hosted workflow, publication or deployment was performed.
-The index is unchanged. PR number: **pending**. PR #58 is closed/unmerged and
+The index is unchanged. PR number at the time: pending; now #73 (open, unmerged). PR #58 is closed/unmerged and
 its patch is draft provenance, not review or exact-head CI evidence.
 
 ### Recovery and defects corrected
@@ -513,7 +547,7 @@ were reconciled manually without importing historical PASS claims. Neither
 | `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o "$TMPDIR/.../aegismesh-linux-arm64" ./cmd/aegismesh` | **PASS**, exit 0. |
 | `CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o "$TMPDIR/.../aegismesh-darwin-arm64" ./cmd/aegismesh` | **PASS**, exit 0. |
 | `sh -n scripts/license-check.sh`; `./scripts/check-supply-chain_test.sh` | **PASS**, exits 0; `check-supply-chain_test: ok`. |
-| Human review, exact-head hosted CI and merge | **NOT RUN**; changes remain uncommitted for the orchestrator. |
+| Human review, exact-head hosted CI and merge | **NOT RUN** when written; hosted CI later **PASS** on the PR #73 head, human review and merge pending. |
 | Explicit `make helm-contract` | **NOT RUN** in this encryption slice; chart behavior did not change. The normal guarded package tests ran under `make test`; they are not a live Helm receipt. |
 
 Final focused race stdout:

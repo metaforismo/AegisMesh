@@ -167,6 +167,15 @@ Apache-2.0 licensed (see [LICENSE](LICENSE), [NOTICE](NOTICE)). Start with
 [CONTRIBUTING.md](CONTRIBUTING.md), the [release process](docs/RELEASE.md), and the
 [license/supply-chain policy](docs/license-policy.md). Agents: read [AGENTS.md](AGENTS.md) first.
 
+## Status of unreleased work
+
+The at-rest encryption, console and fleet sections of this README describe work
+in open, unmerged pull requests: #73 (encryption), #74 (console API), #75
+(embedded console UI) and the fleet branch (PR pending), stacked in that order on
+#72 (Go 1.27.4 toolchain fixes). Hosted CI passes on #72-#75; the fleet branch
+has not run hosted CI. None of it is in `master` or in a release yet. See
+[docs/HANDOFF.md](docs/HANDOFF.md).
+
 ## Console
 
 An optional single-node, single-tenant operator API runs inside the binary on

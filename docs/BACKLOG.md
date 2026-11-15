@@ -1,6 +1,6 @@
 # Engineering backlog
 
-Updated: 2026-11-14. This is the living, evidence-backed queue. The cumulative
+Updated: 2026-11-15. This is the living, evidence-backed queue. The cumulative
 queue through merge commit `eef2b93` is preserved in
 [`BACKLOG-history-through-eef2b93.md`](BACKLOG-history-through-eef2b93.md).
 
@@ -10,14 +10,23 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## Current baseline
 
-- Default branch: `master`; its live remote state was not refreshed in this task.
-- Current worktree: `feat/evidence-at-rest-encryption`, based on
-  `c64b58f29373ac475ec6a44ce692722062c5dfba` (reviewed but unmerged toolchain
-  upgrade). Encryption changes remain uncommitted; PR number is pending.
-- The requested macOS worktree and Go 1.27.4 are available. Current local
-  execution and SBOM fallback receipts are in `docs/verification.md`.
+- Default branch: `master`, last recorded head `01579d3`. None of the work
+  below is merged.
+- The 2026-11-14/15 work is a stack of open, unmerged PRs against `master`, in
+  merge order: #72 `security/go-toolchain-vuln-fixes` (Go 1.27.4, x/crypto
+  v0.59.0); #73 `feat/evidence-at-rest-encryption`; #74 `feat/console-api`;
+  #75 `feat/console-ui-embed` (embedded UI, design system, landing page). Each
+  is stacked on the previous one and has hosted CI PASS (6 of 6 jobs) on its
+  head. Human review and merge are pending.
+- Current worktree: `feat/fleet-enrollment`, stacked on #75 (experimental fleet
+  inventory). PR pending; hosted CI NOT RUN.
+- No release, tag, image, signature, deployment or repository-setting change
+  happened. Dependabot PRs #68 and #70 are superseded by #72 but still open;
+  #71 (pinned Action bumps) is untriaged.
+- Manual browser checks of the console and of two-process fleet enrollment on
+  loopback are recorded in `docs/verification.md`.
 - PR #58 is closed/unmerged; its recovered draft and historical checks are not
-  human review, exact-head CI or merge evidence for this candidate.
+  review, CI or merge evidence for #73.
 - Other backlog items retain their prior recorded statuses; no release-readiness
   completion, repository administration or remote PR-state refresh is implied.
 
@@ -81,12 +90,13 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   `go test ./internal/runtime -run TestBuildWiresStorageMaxEventBytes -count=1`;
   `go test -race ./internal/storage ./internal/runtime -count=1`;
   `make lint test`; hosted CI on the exact PR head.
-- **Status:** **IN PROGRESS** — focused and affected-package race tests pass
-  locally; hosted CI and merge remain required.
+- **Status:** **IN PROGRESS** — focused and affected-package race tests passed
+  locally. The enforcement shipped in the stacked work (#72 and later); hosted
+  CI PASS on those heads, merge pending human review.
 
 ## P1 — v0.2 completion and important architectural gaps
 
-### P1-1 — optional evidence-at-rest encryption — IMPLEMENTED (review/CI/merge pending)
+### P1-1 — optional evidence-at-rest encryption — IMPLEMENTED (PR #73, unmerged)
 
 - **Evidence:** this change adds native age/X25519 `.jsonl.age` segments,
   explicit read identities, rotation/recovery semantics and a persistent
@@ -120,34 +130,37 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   exact CLI omitted/empty/whitespace/padded/repeated/comma/positional matrices;
   affected-package race tests; `make lint test`; applicable fuzz; `go mod
   verify`; license, secret, vulnerability and SBOM gates.
-- **Status:** **IMPLEMENTED — PR pending**. Uncommitted on
-  `feat/evidence-at-rest-encryption`, based on reviewed but unmerged toolchain
-  work. Current local gate results are in `docs/verification.md`; human review,
-  exact-head hosted CI and merge remain required. The closed unmerged PR #58
-  supplies draft material only and is not acceptance evidence.
+- **Status:** **IMPLEMENTED — PR #73, unmerged**. Branch
+  `feat/evidence-at-rest-encryption`, stacked on #72. Hosted CI PASS on the PR
+  head (6 of 6 jobs); human review and merge pending. Local gate results are in
+  `docs/verification.md`. The closed unmerged PR #58 supplies draft material
+  only and is not acceptance evidence.
 
-### P1-2 — final v0.2 release-readiness audit — BLOCKED
+### P1-2 — final v0.2 release-readiness audit — TODO (blocked)
 
 - **Evidence:** the finite delivery plan requires every v0.2 slice plus a final
-  audit. Process isolation is merged, but P1-1 remains unfinished.
+  audit. Process isolation is merged; the encryption slice is implemented in
+  open PR #73 but not merged.
 - **Affected:** entire repository, docs, release workflow and deployment claims.
 - **Security/egress:** audit only. It must not publish a release, push an image,
   create a tag, sign artifacts, alter repository settings or deploy a cluster.
-- **Dependencies:** P1-1 merged; dependency PR decisions recorded.
+- **Dependencies:** PR stack #72-#75 and the fleet PR merged in order; dependency
+  PR decisions recorded.
 - **Acceptance:** clean `master`; no unresolved P0/P1/P2 milestone item; full
   race/fuzz/Helm/license/secret/vulnerability/SBOM gates on the exact commit;
   documentation and threat model match runtime; release and cluster actions are
   explicitly `NOT RUN` unless separately authorized.
 - **Verify:** commands in `docs/DELIVERY-PLAN.md` and `docs/verification.md`.
-- **Status:** **BLOCKED — depends on P1-1**.
+- **Status:** **BLOCKED — not done; waiting for the PR stack to merge**.
 
 ### P1-3 — automated dependency PR triage — TODO
 
 - **Evidence:** PR #48 proposed a Docker-only Go major upgrade. The
-  2026-11-14 toolchain security refresh aligns the module, CI, releases,
-  container builder and local tools on Go 1.27.4; local verification is in
-  `docs/verification.md`. Dependency PR triage remains unfinished; no PR
-  closure or merge is implied. PR #49 changes pinned GitHub Action commits.
+  2026-11-14 toolchain security refresh (open PR #72, hosted CI PASS) aligns the
+  module, CI, releases, container builder and local tools on Go 1.27.4; local
+  verification is in `docs/verification.md`. Dependabot PRs #68 and #70 are
+  superseded by #72 but still open; #71 (pinned Action bumps) is untriaged.
+  No PR closure or merge has happened.
 - **Affected:** Dockerfile, CI/release workflows, immutable-reference fixtures,
   Go toolchain policy and verification.
 - **Security/egress:** build-time supply chain. No credentials or runtime egress.
@@ -162,7 +175,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
     it is desirable after v0.2.
 - **Verify:** PR diff, upstream official release/tag evidence, `make
   supply-chain-check`, full CI and exact head status.
-- **Status:** **TODO**.
+- **Status:** **TODO** — triage #71; close #68 and #70 after #72 merges.
 
 ## P2 — operational quality, maintainability and product definition
 
@@ -219,8 +232,9 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   threat boundaries. Mark every capability as proposed until implemented.
 - **Verify:** architecture review and threat-model traceability; no code or egress
   change in the documentation slice.
-- **Status:** **PARTIAL DESIGN** — ADR-0018 inventory foundation implemented
-  locally; managed-service acceptance remains open.
+- **Status:** **PARTIAL DESIGN** — ADR-0018 inventory foundation implemented on
+  `feat/fleet-enrollment` (PR pending, unmerged); managed-service acceptance
+  remains open.
 
 ### P2-4 — real-cluster Kubernetes evidence — TODO (later support claim)
 
@@ -240,10 +254,10 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## P3 — later research and optional improvements
 
-### P3-1 — distributed mesh and managed fleet — INVENTORY CANDIDATE
+### P3-1 — distributed mesh and managed fleet — INVENTORY IMPLEMENTED (PR pending)
 
 - **Evidence:** experimental fleet inventory with authenticated enrollment and
-  heartbeats in the current uncommitted candidate; see ADR-0018 and
+  heartbeats on `feat/fleet-enrollment`, stacked on #75; see ADR-0018 and
   `architecture/fleet-protocol.md`, with local receipts in `verification.md`.
 - **Affected:** fleet identity/protocol/hub/agent packages, strict config,
   runtime status/counters/lifecycle and console inventory administration.
@@ -252,12 +266,16 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   persistent replay cache, private atomic state, role/CSRF/audit and revocation.
   Hub never dials agents and cannot command nodes; this invariant is permanent.
 - **Scope:** not multi-tenant, not a managed service; forwards no evidence.
-- **Remaining:** review/hosted CI/merge; evidence batches and bounded spool,
+- **Remaining:** open the PR, hosted CI, review and merge; evidence batches and bounded spool,
   key rotation, attestation, hosted tenancy/SSO and upgrades are proposed,
   not implemented. P2-3 managed-service design remains partial.
-- **Status:** **IMPLEMENTED LOCALLY, UNCOMMITTED**. No publication or deployment.
+- **Status:** **IMPLEMENTED — PR pending, unmerged**. Hosted CI NOT RUN. Manual
+  two-process loopback check (enrollment, `online`, `stale` after three missed
+  heartbeats, token creation and audit) is in `verification.md`; revocation was
+  verified by a two-process run and automated tests, not in the browser. No
+  publication or deployment.
 
-### P3-2 — read-mostly operator console — BACKEND CANDIDATE
+### P3-2 — read-mostly operator console — IMPLEMENTED (PRs #74, #75, unmerged)
 
 - **Evidence:** `internal/console` and `internal/evidenceindex`; fixed API v1 in
   `architecture/console-api.md`; local checks in `verification.md`.
@@ -268,9 +286,12 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Scope:** single-node, single-tenant. Encrypted storage is live-only; console
   notes/audit remain plaintext. SSO/multi-tenancy remain absent; optional fleet
   inventory administration is the separate P3-1 item.
-- **Remaining:** human review, exact-head hosted CI and merge.
-- **Status:** **IMPLEMENTED (API + embedded UI), UNMERGED**. Complete product
-  acceptance is not claimed; use the verification ledger for exact command receipts.
+- **Remaining:** human review and merge of #74 and #75.
+- **Status:** **IMPLEMENTED (API in #74, embedded UI in #75), UNMERGED**. Hosted
+  CI PASS on both PR heads (6 of 6 jobs; #75 includes the Node UI tests step).
+  Manual browser check against `aegismesh demo --console` passed. Complete
+  product acceptance is not claimed; use the verification ledger for exact
+  command receipts.
 
 ### P3-3 — continuous defensive simulation — TODO
 

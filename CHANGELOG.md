@@ -15,9 +15,10 @@ changes bump MINOR).
   listener, TLS beyond loopback, shared egress classification with a dedicated
   private-network opt-in, independent jittered delivery and fixed-label metrics.
   Not multi-tenant, not a managed service; forwards no evidence and cannot
-  command nodes. Changes remain uncommitted pending review and hosted CI.
+  command nodes. On `feat/fleet-enrollment`; PR pending, unmerged, hosted CI not
+  yet run.
 
-- Uncommitted first operator console backend candidate: disabled-by-default,
+- First operator console (PRs #74 and #75, open and unmerged): disabled-by-default,
   authenticated single-node HTTP API, token operator roles, ephemeral sessions/
   CSRF, bounded evidence index/live SSE, atomic operator investigations and
   hash-chained private audit. The same listener serves an embedded operator UI
@@ -27,7 +28,8 @@ changes bump MINOR).
   `console hash` and opt-in `demo --console`. Encrypted evidence remains live-only;
   no SSO, tenant isolation or sensor control is included in that console slice.
 
-- Optional native age/X25519 evidence-at-rest encryption writes independently
+- Optional native age/X25519 evidence-at-rest encryption (PR #73, open and
+  unmerged) writes independently
   authenticated `.jsonl.age` frames, supports explicit read identities during
   key rotation, preserves mixed-history retention, and fails closed on wrong
   keys, corruption, truncation, unsafe key/segment aliases, or accidental

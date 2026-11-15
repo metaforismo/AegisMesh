@@ -126,17 +126,17 @@ autonomous response connectors or enforcement,
 distributed evidence aggregation, multi-tenancy, hosted SaaS/control plane, SSO,
 or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
 
-The encryption slice is implemented in the current development candidate (PR
-pending); human review, exact-head CI and merge remain open. Encryption protects
+The encryption slice is implemented in open PR #73 (hosted CI PASS on its head);
+human review and merge remain pending. Encryption protects
 new event contents on storage media. Existing plaintext, exported NDJSON,
 filenames, sizes and timing remain exposed. Compromised runtime hosts and stolen
 private identities defeat confidentiality; lost identities have no escrow or
 recovery service. Interrupted encrypted segments fail closed without automatic
 salvage. See ADR-0016 and `evidence-encryption.md`.
 
-## First operator console candidate (P3-2)
+## First operator console (P3-2, open PRs #74 and #75)
 
-The candidate provides a disabled-by-default, authenticated HTTP API and an
+The console provides a disabled-by-default, authenticated HTTP API and an
 embedded operator UI inside the single binary. The UI has no build step and no
 third-party code, and is served only when `console.enabled` is true. It is single-node and single-
 tenant, uses named token operators (viewer/analyst/admin), and reads bounded
@@ -148,10 +148,10 @@ Local tests and the verification ledger describe the evidence; this is not a
 merged, deployed, SSO, multi-tenant or production-readiness claim.
 
 
-## First fleet inventory candidate (P3-1 foundation)
+## First fleet inventory (P3-1 foundation, PR pending)
 
 Experimental fleet inventory with authenticated enrollment and heartbeats is
-implemented in the current uncommitted candidate. A hub lists node identities
+implemented on `feat/fleet-enrollment` (PR pending, unmerged). A hub lists node identities
 and self-reported health through the authenticated console. Agents dial that
 hub using local Ed25519 identities and a bounded independent loop. One-time
 admin tokens establish identity; signed requests, expiry/replay checks and

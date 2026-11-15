@@ -1,6 +1,6 @@
 # AegisMesh v0.2 delivery plan
 
-Updated: 2026-11-14. This document is the finite completion contract for the
+Updated: 2026-11-15. This document is the finite completion contract for the
 current milestone. `docs/BACKLOG.md` owns the detailed live queue.
 
 ## Goal
@@ -24,10 +24,10 @@ this v0.2 completion claim.
 | 3 | Supply-chain pinning | 2 | Immutable action/tool/image references; deterministic schema-valid SBOM; separated release authority; no publication credentials | MERGED — PR #47, `7d0e591` |
 | 4 | Dry-run recommendation engine | 2 | Deterministic proposals linked to verified evidence; malformed input yields no report; no enforcement or external action seam | MERGED — PR #51, `86041b8` |
 | 5 | Self-contained `aegismesh demo` | 2, 4 | Synthetic loopback HTTP/TCP/MCP/SSH flow, OS-assigned ports, integrity-verified evidence and deterministic cleanup | MERGED — PR #52, `1911678` |
-| 6 | Optional evidence-at-rest encryption | 1 | Disabled by default; age/X25519 only; fail closed; no plaintext downgrade; restart/wrong-key/corruption/truncation/rotation/retention/recovery evidence; dependency/license proof | IMPLEMENTED — PR pending; human review, exact-head CI and merge pending |
+| 6 | Optional evidence-at-rest encryption | 1 | Disabled by default; age/X25519 only; fail closed; no plaintext downgrade; restart/wrong-key/corruption/truncation/rotation/retention/recovery evidence; dependency/license proof | IMPLEMENTED — PR #73, unmerged; hosted CI PASS on head, human review and merge pending |
 | 7 | Extension live-policy boundary | 4 | Observe-only strict contract; no output-derived response, evidence, path, config or enforcement authority | MERGED — PR #53, `ee54a63` |
 | 8 | Per-sensor process isolation | 2, 7 | Fixed same-binary identity, bounded versioned IPC, minimal environment, parent-authoritative evidence, crash/fuzz/race/cross-build proof | MERGED — PR #54, `eef2b93` |
-| 9 | v0.2 release-readiness audit | 1–8 | Current docs and threat model; clean `master`; complete race/fuzz/Helm/license/secret/vulnerability/SBOM evidence; no unresolved P0/P1/P2 item | TODO — blocked on slice 6 |
+| 9 | v0.2 release-readiness audit | 1–8 | Current docs and threat model; clean `master`; complete race/fuzz/Helm/license/secret/vulnerability/SBOM evidence; no unresolved P0/P1/P2 item | TODO — blocked on the PR stack (#72-#75, fleet PR) merging |
 
 Each implementation slice is one reviewable PR unless a red correctness or
 security regression is safer as a smaller prerequisite. Splitting work may add
