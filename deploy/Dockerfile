@@ -9,7 +9,7 @@
 #   - No secrets baked in; configuration is mounted at runtime.
 #   - CGO_ENABLED=0 for a fully static binary (works on distroless/scratch).
 
-FROM golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS build
+FROM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build
 WORKDIR /src
 
 # Cache module downloads independently of source changes.

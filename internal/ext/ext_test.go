@@ -188,7 +188,7 @@ func buildEchoExtension(t *testing.T) (dir, exeName string, sum string) {
 	if err := os.WriteFile(src, mainSrc, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(goMod, []byte("module echo-responder\n\ngo 1.25\n"), 0o600); err != nil {
+	if err := os.WriteFile(goMod, []byte("module echo-responder\n\ngo 1.27.4\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	exeName = "echo-responder"
@@ -424,7 +424,7 @@ func main() {
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module silent\n\ngo 1.25\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module silent\n\ngo 1.27.4\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("go", "build", "-o", filepath.Join(dir, "silent"), ".")
@@ -513,7 +513,7 @@ func main() {
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module violator\n\ngo 1.25\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module violator\n\ngo 1.27.4\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "violator")

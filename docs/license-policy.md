@@ -20,7 +20,7 @@ product lives in this repository under the same license.
 | Module | Version | License | Why |
 |---|---|---|---|
 | gopkg.in/yaml.v3 | v3.0.1 | MIT (+Apache-2.0 portions) | Config parsing; YAML is a user-facing requirement and stdlib has none |
-| `golang.org/x/crypto` (`ssh` package) | `v0.55.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
+| `golang.org/x/crypto` (`ssh` package) | `v0.59.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
 
 The v0.1.0 release used only the YAML module. The SSH slice adds the pinned
 `x/crypto` module. Metrics exposition, CLI dispatch, JSON-RPC/MCP handling,
@@ -30,17 +30,17 @@ deliberately (ADR-0001, ADR-0008).
 ## Resolved SSH dependency review
 
 The resolved graph also contains the transitive modules selected by
-`x/crypto`: `golang.org/x/net v0.57.0`, `golang.org/x/sys v0.47.0`,
-`golang.org/x/term v0.45.0`, and `golang.org/x/text v0.41.0`, plus the existing
+`x/crypto`: `golang.org/x/net v0.62.0`, `golang.org/x/sys v0.50.0`,
+`golang.org/x/term v0.48.0`, and `golang.org/x/text v0.44.0`, plus the existing
 YAML test dependency `gopkg.in/check.v1`. All seven non-main modules passed the
 repository's allowed-license scan and `go mod verify`.
 
-Pinned `govulncheck v1.7.0` reports no reachable symbol or imported-package
-vulnerability with Go 1.25.14. It reports the module-only advisory
-`GO-2026-5932` for the unmaintained `x/crypto/openpgp` package; AegisMesh does
-not import or call that package. A future imported or reachable advisory blocks
-the dependency; no silent fallback may be substituted without amending
-ADR-0010.
+Go 1.27.4 and `x/crypto v0.59.0` replace the unsupported Go 1.25 line
+and include the SSH fixes for `GO-2026-6354` and `GO-2026-6355` (fixed upstream
+in v0.56.0). Pinned `govulncheck v1.7.0` remains the reachable-vulnerability
+gate; current execution results and blockers are in `docs/verification.md`.
+A future imported or reachable advisory blocks the dependency; no silent
+fallback may be substituted without amending ADR-0010.
 
 ## SBOM and provenance strategy
 
@@ -67,7 +67,7 @@ the same PR that changes them.
 |---|---|---|---|
 | CycloneDX GoMod | `v1.10.0` through the Go checksum database | Apache-2.0 | Build-only application dependency inventory; no runtime import |
 | `golang.org/x/vuln/cmd/govulncheck` | `v1.7.0` | BSD-3-Clause | Build-only reachable-vulnerability gate |
-| Go builder image | `golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59` | upstream Go/Alpine notices | Build environment only; multi-platform index resolved from Docker Hub |
+| Go builder image | `golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf` | upstream Go/Alpine notices | Build environment only; multi-platform index resolved from Docker Hub |
 | Distroless runtime image | `gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab` | upstream Distroless/Debian notices | Minimal runtime filesystem; multi-platform index resolved from GCR |
 | GitHub Actions | full 40-character commit SHAs in workflow files | upstream action repositories | CI orchestration; a static gate rejects mutable references |
 

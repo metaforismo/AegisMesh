@@ -137,10 +137,11 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ### P1-3 — automated dependency PR triage — TODO
 
-- **Evidence:** open PR #48 updates only the Docker Go image to a new Go major
-  line, while the module, CI and release toolchain remain pinned to Go 1.25.14.
-  Open PR #49 changes pinned GitHub Action commits. Neither should be merged
-  merely because Dependabot opened it.
+- **Evidence:** PR #48 proposed a Docker-only Go major upgrade. The
+  2026-11-14 toolchain security refresh aligns the module, CI, releases,
+  container builder and local tools on Go 1.27.4; local verification is in
+  `docs/verification.md`. Dependency PR triage remains unfinished; no PR
+  closure or merge is implied. PR #49 changes pinned GitHub Action commits.
 - **Affected:** Dockerfile, CI/release workflows, immutable-reference fixtures,
   Go toolchain policy and verification.
 - **Security/egress:** build-time supply chain. No credentials or runtime egress.

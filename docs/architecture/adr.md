@@ -201,8 +201,8 @@ boundary. A persistent host-key file would also add secret lifecycle, path, back
 that are not required for an observation-only sensor.
 
 **Decision.** Add an in-process `sshsensor` behind the existing `Sensor` interface. It uses
-the pinned `golang.org/x/crypto/ssh` version `v0.55.0`; the resolved module
-graph and licenses are verified in the introducing change. The sensor creates
+the pinned `golang.org/x/crypto/ssh` version `v0.59.0`; the resolved module
+graph and licenses are verified by the repository gates. The sensor creates
 one Ed25519 host key per sensor instance and keeps it in memory only. It has no configured host-key path or
 persistent key material, so reconstructing the sensor rotates the advertised host key by design.
 
@@ -236,7 +236,8 @@ auditable and less safe. No external egress is added.
 and rejection tests, invalid-proof and input/deadline/concurrency cases,
 redaction assertions, deterministic startup/shutdown race tests, race and fuzz
 coverage, `make lint test`, `go mod verify`, license and secret checks, and a
-pinned vulnerability scan with the current Go 1.25.14 toolchain.
+pinned vulnerability scan. The 2026-11-14 security refresh uses Go 1.27.4
+and x/crypto v0.59.0; current results are recorded in `docs/verification.md`.
 
 ---
 
