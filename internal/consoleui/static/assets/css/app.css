@@ -57,6 +57,9 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 .bullets { padding-left: var(--space-5); font-size: var(--text-sm); }
 .bullets li + li { margin-top: var(--space-1); }
 .hash { color: var(--color-ink-3); font-size: var(--text-xs); overflow-wrap: anywhere; }
+/* In a table the hash is already shortened: keep it on one line instead of
+   letting the wide detail column squeeze it into a vertical strip. */
+.table .hash { white-space: nowrap; overflow-wrap: normal; }
 
 .chart-figure { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; }
 .chart-figure__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
@@ -419,3 +422,72 @@ a.origin .origin__name { color: var(--color-accent); }
 .strip-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-2); font-size: var(--text-xs); color: var(--color-ink-2); }
 .sensor-trace { display: flex; flex-direction: column; gap: var(--space-1); }
 .sensor-trace__note { color: var(--color-ink-3); font-size: var(--text-2xs); }
+
+/* ---- Tenant and account (top bar) ------------------------------------- */
+
+.top-tenant {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 12rem;
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.top-tenant--static { background: var(--color-surface-2); }
+.top-tenant__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink); }
+button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
+
+@media (max-width: 30rem) {
+  .top-tenant { max-width: 6.5rem; }
+}
+
+/* ---- Sign-in: single sign-on, divider, token fallback ------------------ */
+
+.login__sso-block { display: flex; flex-direction: column; gap: var(--space-2); }
+.login__sso { gap: var(--space-2); }
+.login__sso.is-busy { pointer-events: none; opacity: 0.8; }
+.login__sso-note { text-align: center; }
+.login__error .banner { margin: 0; }
+
+.login__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+}
+
+.login__divider::before,
+.login__divider::after { content: ""; flex: 1; border-top: var(--border-width) solid var(--color-border); }
+
+.login__alt { display: flex; flex-direction: column; }
+.login__alt-summary {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  list-style: none;
+}
+
+.login__alt-summary::-webkit-details-marker { display: none; }
+.login__alt[open] .login__alt-summary { margin-bottom: var(--space-3); color: var(--color-ink-2); }
+
+/* ---- Audit: identity claims from an OIDC provider ---------------------- */
+
+.audit-detail { display: flex; flex-direction: column; gap: var(--space-1); }
+.audit-claims { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px var(--space-2); font-size: var(--text-xs); }
+.audit-claims dt { color: var(--color-ink-3); }
+.audit-claims dd { min-width: 0; }

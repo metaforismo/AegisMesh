@@ -6,7 +6,18 @@ import { PRIORITIES } from '../lib/taxonomy.js';
 import { formatClock, formatDateTime } from '../lib/format.js';
 import { describeOrigin, eventKey, originQuery, originVisible } from '../lib/origin.js';
 import { icon } from '../ui/icons.js';
-import { banner, table, sevChip, clsChip, evidence, link, chip, openDialog, inputField, selectField, labelFor, badge } from '../ui/components.js';
+import { banner, table, sevChip, clsChip, evidence, link, chip, openDialog, inputField, selectField, labelFor, badge, empty } from '../ui/components.js';
+
+// Empty state for a 404 while tenants are in play. Another tenant's objects
+// answer exactly like absent ones (no existence probe crosses tenants), so
+// the console cannot tell which it was and says both. `info` is tenantInfo().
+export function notFoundInTenant(info) {
+  return empty(
+    `Not found in tenant ${info.active}`,
+    `This session acts in tenant ${info.active} only. The link may point at something in another tenant, which answers exactly like something that does not exist, or the item aged out of the in-memory index.${info.canSwitch ? ' To look elsewhere, switch tenant from the top bar.' : ''}`,
+    link(href('overview'), 'Go to the overview'),
+    { icon: 'tenant' });
+}
 
 // `accepting`: this node is a hub that accepts forwarded evidence. Such a hub
 // reports history "unavailable" because forwarded copies are indexed live

@@ -49,8 +49,15 @@ async function toApiError(res) {
 
 export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base = '/api/v1', onUnauthenticated = () => {} } = {}) {
   let csrf = null;
+  // A tenant switch rotates the session cookie and invalidates the old one.
+  // A request that was already on its way with the old cookie can come back
+  // 401 even though the operator is still signed in, so a 401 for a request
+  // that started before (or during) a switch is an answer, not a sign-out.
+  let epoch = 0;
+  let switching = false;
 
   async function request(method, path, { query, body, signal, allow401 = false } = {}) {
+    const startedAt = epoch;
     const qs = query ? toQuery(query) : '';
     const headers = { Accept: 'application/json' };
     const init = { method, headers, credentials: 'same-origin', cache: 'no-store', signal };
@@ -70,8 +77,9 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     if (!res.ok) {
       const err = await toApiError(res);
       if (res.status === 401) {
-        csrf = null;
-        if (!allow401) onUnauthenticated(err);
+        const superseded = switching || startedAt !== epoch;
+        if (!superseded) csrf = null;
+        if (!allow401 && !superseded) onUnauthenticated(err);
       }
       throw err;
     }
@@ -106,6 +114,22 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
       const session = await get('/session', undefined, { allow401: true, ...opts });
       csrf = typeof session?.csrf_token === 'string' ? session.csrf_token : null;
       return session;
+    },
+
+    // Move this session to another member tenant. The server rotates the
+    // session cookie and the CSRF token; the old session (and its live
+    // streams) stop working. Cookie sessions only.
+    async switchTenant(tenant) {
+      switching = true;
+      epoch++;
+      try {
+        const session = await request('POST', '/session/tenant', { body: { tenant }, allow401: true });
+        csrf = typeof session?.csrf_token === 'string' ? session.csrf_token : null;
+        return session;
+      } finally {
+        epoch++;
+        switching = false;
+      }
     },
 
     async logout() {

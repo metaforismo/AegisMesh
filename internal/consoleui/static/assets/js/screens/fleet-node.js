@@ -1,6 +1,7 @@
 import { h, mount } from '../lib/dom.js';
 import { ApiError } from '../lib/api.js';
 import { href } from '../lib/route.js';
+import { tenantInfo } from '../lib/tenant.js';
 import { formatCount, formatDateTime, formatDuration } from '../lib/format.js';
 import { formatFingerprint, idMatchesFingerprint } from '../lib/fleet.js';
 import { pageHead, panel, kv, badge, table, empty, banner, toast, openDialog, labelFor, chip, link } from '../ui/components.js';
@@ -44,6 +45,7 @@ export default {
       return;
     }
     const v = n.version || {};
+    const tenants = tenantInfo(ctx.session);
     const sensors = Array.isArray(n.sensors) ? n.sensors : [];
     const fpOk = idMatchesFingerprint(n.id, n.public_key_fingerprint);
     const revoked = n.status === 'revoked';
@@ -91,6 +93,9 @@ export default {
             ['Status', fleetStatusBadge(n.status)],
             ['Enrolled', n.enrolled_at ? `${formatDateTime(n.enrolled_at)} (recorded by the hub)` : ''],
             ['Last seen', seenCell(n.last_seen_at, 'never (no heartbeat yet)')],
+            // Bound at enrollment by the registry that minted the token; an
+            // agent cannot choose or change it.
+            tenants.show ? ['Tenant', n.tenant ? h('span', { class: 'stack-tight' }, n.tenant, h('span', { class: 'muted' }, 'Fixed at enrollment by the hub')) : ''] : undefined,
           ]),
         }),
         panel({

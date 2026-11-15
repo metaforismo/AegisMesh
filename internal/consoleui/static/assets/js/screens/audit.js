@@ -1,9 +1,10 @@
 import { h, mount } from '../lib/dom.js';
 import { href, normalizeAuditFilters } from '../lib/route.js';
 import { AUDIT_ACTIONS } from '../lib/taxonomy.js';
+import { tenantInfo } from '../lib/tenant.js';
 import { formatDateTime, formatCount, shortId } from '../lib/format.js';
 import { waveDelays } from '../lib/chart.js';
-import { pageHead, panel, table, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable } from '../ui/components.js';
+import { pageHead, panel, table, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable, evidence } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 
 const PAGE = 100;
@@ -51,6 +52,20 @@ function chainView(records) {
   };
 }
 
+// OIDC records carry the provider's stable identity: issuer and subject.
+// Both are claims from an external identity provider, so they are shown as
+// evidence (mono inset, text only), never as interface text.
+function detailCell(r) {
+  const issuer = typeof r.issuer === 'string' ? r.issuer : '';
+  const subject = typeof r.subject === 'string' ? r.subject : '';
+  if (!issuer && !subject) return r.detail || '—';
+  return h('div', { class: 'audit-detail' },
+    r.detail ? h('span', null, r.detail) : null,
+    h('dl', { class: 'audit-claims' },
+      issuer ? [h('dt', null, 'Issuer'), h('dd', null, evidence(issuer, { max: 64 }))] : null,
+      subject ? [h('dt', null, 'Subject'), h('dd', null, evidence(subject, { max: 48 }))] : null));
+}
+
 function chainLegend() {
   return h('p', { class: 'chain-legend' },
     h('span', null, h('i'), 'Not checked'),
@@ -64,6 +79,7 @@ export default {
   role: 'admin',
   async render(root, ctx) {
     const filters = normalizeAuditFilters(ctx.route.query);
+    const tenants = tenantInfo(ctx.session);
     const res = await ctx.api.audit(filters, '', PAGE, { signal: ctx.signal });
     const rows = Array.isArray(res.records) ? res.records : [];
     let cursor = res.next_cursor || '';
@@ -84,7 +100,7 @@ export default {
           { label: 'Target', cell: (r) => (r.target ? h('code', null, r.target) : '—') },
           { label: 'Outcome', cell: (r) => badge(OUTCOME[r.outcome] || 'neutral', labelFor(r.outcome || 'unknown')) },
           { label: 'Remote', cell: (r) => h('code', null, r.remote || '—') },
-          { label: 'Detail', className: 'col-summary', cell: (r) => r.detail || '—' },
+          { label: 'Detail', className: 'col-summary', cell: detailCell },
           { label: 'Hash', cell: (r) => h('span', { class: 'hash' }, copyable(r.hash, { label: 'record hash', display: shortId(r.hash, 12) })) },
         ],
         rows,
@@ -139,7 +155,10 @@ export default {
     });
 
     mount(root,
-      pageHead({ title: 'Audit trail', subtitle: 'Append-only, hash-chained record of console logins and investigation changes. Reading it is itself audited.' }),
+      pageHead({
+        title: 'Audit trail',
+        subtitle: `Append-only, hash-chained record of console sign-ins, tenant switches, investigation changes and fleet administration. Reading it is itself audited.${tenants.show ? ` Each tenant keeps its own chain; this is the chain of tenant ${tenants.active}.` : ''}`,
+      }),
       panel({ title: 'Chain integrity', actions: verifyBtn, body: verifySlot }),
       panel({ title: 'Filters', body: form }),
       panel({ title: 'Records', meta: 'Newest first', flush: true, body: tableSlot, foot: pagerSlot }));

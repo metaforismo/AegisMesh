@@ -56,6 +56,7 @@ export const WINDOWS = Object.freeze(['1h', '24h', '7d']);
 export const HISTORY_STATES = Object.freeze(['complete', 'truncated', 'unavailable']);
 export const AUDIT_ACTIONS = Object.freeze([
   'session.login', 'session.login_failed', 'session.logout',
+  'session.oidc_login', 'session.oidc_denied', 'session.tenant_switch',
   'investigation.create', 'investigation.update', 'investigation.note',
   'investigation.attach', 'investigation.detach', 'audit.read', 'audit.verify',
   'authz.denied',

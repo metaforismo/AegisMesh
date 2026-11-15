@@ -9,6 +9,7 @@
 
 import { h, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
+import { tenantInfo } from '../lib/tenant.js';
 import { ApiError } from '../lib/api.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
 import { formatBytes, formatCount, formatDateTime, formatRelative, shortId } from '../lib/format.js';
@@ -188,7 +189,9 @@ function nodesTable(nodes, { accepting = false } = {}) {
 // Shows the raw token exactly once. The value lives only in this function's
 // closure and one Text node; on close the Text node is emptied and the dialog
 // removed, so nothing remains in the DOM, storage, URL or logs.
-export function showTokenOnce(minted) {
+// `showTenant`: tenant UI is visible (several tenants, or one not named
+// "default"); then the tenant the node will join is printed.
+export function showTokenOnce(minted, { showTenant = false } = {}) {
   return new Promise((resolve) => {
     let value = String(minted?.token ?? '');
     const tokenText = document.createTextNode(value);
@@ -204,6 +207,8 @@ export function showTokenOnce(minted) {
         kv([
           ['Token id', h('code', null, minted?.id ?? '—')],
           ['Expires', `${formatDateTime(normalizeExpiry(minted?.expires_at))} (${formatExpiresIn(minted?.expires_at)})`],
+          // The hub binds the enrolling node to the tenant that minted the token.
+          showTenant && minted?.tenant ? ['Tenant', `${minted.tenant} (the node joins this tenant)`] : undefined,
         ]),
         status),
       h('div', { class: 'dialog__foot' }, copy, done));
@@ -228,11 +233,16 @@ export function showTokenOnce(minted) {
 }
 
 function createTokenDialog(ctx) {
+  const tenants = tenantInfo(ctx.session);
   return openDialog({
     title: 'Create enrollment token',
     submitLabel: 'Create token',
     build: () => [
       h('p', null, 'A one-time token lets one new node enroll with this hub. It is consumed on first use and refused after it expires.'),
+      tenants.show
+        ? banner('info', `The node will join tenant ${tenants.active}`,
+          'A token belongs to the tenant it is created in. The node enrolls into that tenant permanently: a later token from another tenant cannot move it.')
+        : null,
       selectField({ label: 'Valid for', name: 'ttl', value: String(TOKEN_TTL_DEFAULT), options: TTL_CHOICES.map(([v, t]) => [String(v), t]) }),
       inputField({ label: 'Note (optional)', name: 'note', maxlength: 256, hint: 'Plain ASCII, up to 256 characters, for example which host it is for. Never put secrets here: notes are listed to every admin.' }),
     ],
@@ -251,7 +261,7 @@ function tokensPanel(ctx, tokens) {
   create.addEventListener('click', async () => {
     let minted = await createTokenDialog(ctx);
     if (!minted) return;
-    await showTokenOnce(minted);
+    await showTokenOnce(minted, { showTenant: tenantInfo(ctx.session).show });
     minted = null;
     ctx.rerender();
   });

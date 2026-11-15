@@ -13,7 +13,7 @@ const ALLOWED_ATTRS = new Set([
   'maxlength', 'minlength', 'min', 'max', 'step', 'rows', 'cols', 'colspan',
   'scope', 'datetime', 'disabled', 'checked', 'selected', 'readonly',
   'required', 'hidden', 'open', 'multiple', 'inputmode', 'enterkeyhint',
-  'method', 'novalidate', 'aria-hidden',
+  'method', 'novalidate', 'aria-hidden', 'popover', 'popovertarget',
   // SVG geometry and presentation attributes used by the charts.
   'viewBox', 'width', 'height', 'x', 'y', 'x1', 'x2', 'y1', 'y2', 'rx', 'ry',
   'cx', 'cy', 'r', 'd', 'points', 'transform', 'text-anchor',
@@ -27,6 +27,11 @@ const CLASS_TOKEN = /^[A-Za-z][A-Za-z0-9_-]*$/;
 // In-app routes only: "#/" followed by URL-safe characters. Dynamic route
 // segments are percent-encoded by the route module before they get here.
 const HASH_HREF = /^#\/[A-Za-z0-9\-._~%/?=&+]*$/;
+
+// Same-origin server paths the console may link to. The only one is the
+// OIDC sign-in start: a plain navigation, so the server can redirect the
+// browser to the identity provider.
+const SERVER_HREFS = new Set(['/api/v1/auth/oidc/login']);
 
 // The fixed set of external links the console may render (project docs).
 const EXTERNAL_HREFS = new Set([
@@ -44,7 +49,7 @@ export class UnsafeAttributeError extends Error {
 }
 
 export function isSafeHref(value) {
-  return typeof value === 'string' && (HASH_HREF.test(value) || EXTERNAL_HREFS.has(value));
+  return typeof value === 'string' && (HASH_HREF.test(value) || SERVER_HREFS.has(value) || EXTERNAL_HREFS.has(value));
 }
 
 export function isClassToken(value) {
@@ -65,7 +70,7 @@ function setAttr(el, name, value) {
     throw new UnsafeAttributeError(`attribute not allowed: ${name}`);
   }
   if (name === 'href' && !isSafeHref(value)) {
-    throw new UnsafeAttributeError('href rejected: only in-app #/ routes and allowlisted project links');
+    throw new UnsafeAttributeError('href rejected: only in-app #/ routes, the OIDC sign-in path and allowlisted project links');
   }
   if (name === 'class') value = classValue(value);
   el.setAttribute(name, value === true ? '' : String(value));

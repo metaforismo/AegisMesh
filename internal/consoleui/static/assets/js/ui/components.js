@@ -114,7 +114,9 @@ export function sparkline(values, { series = '', width = 88, height = 28, label 
 
 export function kv(pairs) {
   const items = [];
-  for (const [k, v] of pairs) {
+  for (const pair of pairs) {
+    if (!pair) continue; // a row left out conditionally
+    const [k, v] = pair;
     if (v === undefined) continue;
     items.push(h('dt', null, k), h('dd', null, v === null || v === '' ? h('span', { class: 'muted' }, '—') : v));
   }
@@ -172,16 +174,20 @@ export function seal(ok, label) {
 
 // ---- Bar list -------------------------------------------------------------
 
-// items: [{ label: Node|string, value: number, valueText?, href? }]
+// items: [{ label: Node|string, value: number, valueText?, href?, aside? }]
+// `aside` is a small decorative shape (a trace) drawn between the label and
+// the printed value; the value stays the number of record.
 export function barList(items, { max } = {}) {
   const top = max ?? items.reduce((m, i) => Math.max(m, Number(i.value) || 0), 0);
-  return h('ul', { class: 'bar-list' }, items.map((item) => {
+  const withAside = items.some((i) => i.aside);
+  return h('ul', { class: ['bar-list', withAside ? 'bar-list--aside' : ''] }, items.map((item) => {
     const fill = h('span', { class: 'bar-list__fill' });
     const ratio = top > 0 ? Math.min(1, Math.max(0, (Number(item.value) || 0) / top)) : 0;
     // CSSOM write, not a style attribute: allowed under style-src 'self'.
     fill.style.transform = `scaleX(${ratio.toFixed(4)})`;
     return h('li', { class: 'bar-list__row' },
       h('span', { class: 'bar-list__label' }, item.href ? h('a', { href: item.href }, item.label) : item.label),
+      withAside ? h('span', { class: 'bar-list__aside', 'aria-hidden': 'true' }, item.aside || null) : null,
       h('span', { class: 'bar-list__value' }, item.valueText ?? String(item.value)),
       h('span', { class: 'bar-list__track', 'aria-hidden': 'true' }, fill));
   }));

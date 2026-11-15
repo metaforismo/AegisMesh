@@ -8,7 +8,8 @@ import { moveIndex, isTypingTarget } from '../lib/keys.js';
 import { pageHead, panel, selectField, inputField, empty, banner, pager, labelFor, errorState } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { eventKey, parseEventKey, normalizeNodeFilter, nodeFilterOptions, originVisible, isNodeId } from '../lib/origin.js';
-import { eventTableView, historyBanner, forwardedNote } from './shared.js';
+import { eventTableView, historyBanner, forwardedNote, notFoundInTenant } from './shared.js';
+import { tenantInfo } from '../lib/tenant.js';
 import { renderEventDetail } from './event.js';
 
 const PAGE = 50;
@@ -365,7 +366,8 @@ export default {
         drawer.scroll.scrollTop = 0;
       } catch (err) {
         if (signal.aborted || err?.name === 'AbortError') return;
-        mount(drawer.body, h('div', { class: 'panel' }, errorState(err)));
+        const tenants = tenantInfo(ctx.session);
+        mount(drawer.body, h('div', { class: 'panel' }, err?.code === 'not_found' && tenants.show ? notFoundInTenant(tenants) : errorState(err)));
       } finally {
         if (!signal.aborted) drawer.body.removeAttribute('aria-busy');
       }
