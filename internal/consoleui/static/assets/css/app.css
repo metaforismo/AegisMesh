@@ -380,7 +380,9 @@ a.origin .origin__name { color: var(--color-accent); }
 .kv-note { color: var(--color-ink-2); font-size: var(--text-sm); }
 .fwd { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); max-width: 100%; min-width: 0; }
 .fwd .badge { max-width: 100%; white-space: normal; }
-.table-wrap.table-wrap--scroll { overflow-x: auto; }
+/* A scroll container captures position: sticky, so its header sticks to the
+   wrapper itself: the top-bar offset would push it over the first row. */
+.table-wrap.table-wrap--scroll { overflow-x: auto; --sticky-top: 0px; }
 .fleet-loss { padding: var(--space-3) var(--space-4) 0; }
 .fleet-loss .icon { color: var(--color-warn); }
 .fwd__loss { color: var(--color-ink-2); font-size: var(--text-2xs); max-width: 32ch; white-space: normal; }

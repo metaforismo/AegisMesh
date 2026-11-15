@@ -649,12 +649,16 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   position: relative; /* contains the visually hidden caption, so it cannot widen the page */
   width: 100%;
   overflow-x: auto;
+  /* This wrapper is a scroll container, which captures position: sticky. The
+     header then sticks to the wrapper, so the top-bar offset must not apply
+     or it is pushed down over the first rows. */
+  --sticky-top: 0px;
 }
 
 /* Wide screens: let the page scroll the table so headers can stick under the
-   top bar. (A horizontal scroll container would capture position: sticky.) */
+   top bar. */
 @media (min-width: 90rem) {
-  .table-wrap { overflow: visible; }
+  .table-wrap { overflow: visible; --sticky-top: var(--topbar-h); }
 }
 
 .table {
