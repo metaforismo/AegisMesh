@@ -1,12 +1,14 @@
 # Engineering backlog
 
-Current local branch (`feat/console-sso`, uncommitted): **SSO via OIDC
-(experimental)** and **logical tenant isolation (experimental)** are implemented
-as specified in ADR-0019/0020 and `architecture/console-api.md`. Current evidence
-is in `verification.md`; the dated branch amendment below defines scope and limits.
+Current local branch: `perf/console-hot-paths`, based on `feat/console-sso`
+(`338eea7`). The measured backend performance/architecture changes remain
+uncommitted. Inherited SSO via OIDC and logical tenant isolation remain
+experimental as specified in ADR-0019/0020 and `architecture/console-api.md`.
+Current local performance and verification evidence is dated 2026-11-16 in
+`verification.md`; older branch receipts below are historical.
 
 
-Updated: 2026-11-15. This is the living, evidence-backed queue. The cumulative
+Updated: 2026-11-16. This is the living, evidence-backed queue. The cumulative
 queue through merge commit `eef2b93` is preserved in
 [`BACKLOG-history-through-eef2b93.md`](BACKLOG-history-through-eef2b93.md).
 
@@ -14,7 +16,92 @@ An item is complete only after implementation, focused tests, relevant broader
 tests, documentation truth-sync and captured evidence. Status vocabulary is
 `TODO`, `IN PROGRESS`, `PASS`, `FAIL`, `BLOCKED` and `NOT RUN`.
 
-## Current baseline
+## 2026-11-16 — measured backend follow-up (`perf/console-hot-paths`)
+
+These are scoped follow-ups from the local architecture pass, not capability
+claims or release blockers invented from hypothetical load. Measurements and
+limits are in `architecture/performance.md` and the dated verification entry.
+
+- **TODO P1 — isolate doctor tests from live default listeners.**
+  `internal/cli/cli_test.go:TestDoctorReportsChecksHumanAndJSON`, the correlation
+  doctor tests and webhook doctor tests expect scaffold/default ports to be
+  free. The first full local gate failed on occupied 8081/6399/8090/9110 while the
+  backend changes left those processes and existing tests untouched. A later
+  baseline control and full retry passed after the conflict cleared. Give these
+  tests ephemeral listener fixtures in a separate change; preserve production
+  doctor bind checks. See the dated verification entry for the baseline control.
+- **TODO P1 — paired console/IO controls and accepting-hub overview.** The
+  eight-tenant cookie overview did not improve in the short handler samples,
+  despite lower allocation, and unchanged storage/session/heartbeat controls
+  varied or regressed. Repeat with controlled machine load and interleaved
+  baselines before attributing those timings. Add an accepting fleet hub and
+  live registry-name resolution: `overview_handlers.go` adds `ByNode`, and
+  `evidenceindex/overview.go:ByNode` currently resolves names per observation.
+  The current handler benchmark has no hub and no live resolver. Keep this gap
+  distinct from the independent hub ingestion benchmark.
+- **TODO P1 — append codec ownership.** `storage.Store.Append`,
+  `evidenceindex.Index.add` and `fleet/agent.Agent.Enqueue` each marshal the same
+  envelope. Define a small trusted encoded-envelope seam before trying to share
+  bytes: storage success must precede either tap, byte bounds must remain exact,
+  and queue/index copies must outlive callers without aliasing. Benchmark taps
+  separately from disk, including queue overflow and encrypted checkpoints.
+- **TODO P1 — out-of-order append and contention workloads.**
+  `evidenceindex/index.go` and `selectors.go` maintain chronological lists;
+  substantially late arrivals walk backwards under the writer lock, including
+  secondary lists. Add skewed timestamps and simultaneous append/read benchmarks
+  before choosing a different ordered structure. Current timing is sequential
+  chronological append and read-only queries, not lock-wait or saturation proof.
+- **TODO P1 — source and filter cardinality.** `overview.go` still sorts all
+  distinct source aggregates before returning the top ten/fifty; severity-only
+  and free-text queries still scan retained candidates to provide exact
+  `total_matched`. `index.go:GetNode` still scans when resolving an unscoped
+  remote ID and rejecting collisions; the related benchmark uses a local signal.
+  Measure high-cardinality sources, remote lookup, long rule sets and query
+  mixes before adding heap selection or another maintained index. Keep exact
+  ordering, inclusive query timestamps and half-open overview windows.
+- **TODO P1 — explicit runtime monitor ownership and shutdown errors.**
+  `runtime/lifecycle.go:Run` uses the caller context for sensor-monitor goroutines;
+  an early return relies on sensor `Done`/caller cancellation for their exit.
+  Give monitors their own cancellation/join scope, with a terminal-failure test.
+  Separately decide how `System.Stop` can expose fleet/store shutdown failures:
+  it currently returns no error and several close errors are discarded or logged.
+  Changing that contract belongs in a lifecycle change, not this mechanical split.
+- **TODO P2 — preserve runtime error causes deliberately.**
+  `runtime/runtime.go` uses `fmt.Errorf("%w: %v", errRuntime, err)` at several
+  construction boundaries. That retains text but discards `errors.Is`/`As`
+  access to the provider/storage cause. Decide the error-inspection contract and
+  safe diagnostic boundaries before replacing this with multiple wrapping or
+  typed construction errors; add caller-level error assertions. Do not expose
+  provider responses or secret-bearing configuration through richer diagnostics.
+- **TODO P2 — move shared private state IO out of console.** Fleet hub and
+  identity already reuse `console/stateio`; this is a package ownership problem,
+  not duplicate atomic-write code. Move it to a neutral small internal package
+  with import-only changes, preserving private modes, fixed names, stale-temp
+  refusal, directory sync and the 32 MiB limit. Tenant migration and encrypted
+  storage have different durability/format contracts and must stay separate.
+- **TODO P2 — tenant fleet dispatch lookup.**
+  `fleet/hub/tenants.go:routePartition` searches declared partitions for a node,
+  and enrollment searches token digests. Current maximum is 32 partitions;
+  existing hub benchmarks use one partition. Measure the eight/thirty-two-tenant
+  registry path before adding an ownership directory; revocation, enrollment and
+  restart must invalidate/update it atomically. Console evidence already uses
+  separate per-tenant indexes, not post-filtering.
+- **TODO P2 — shared SSE encoding.** `console/events_handlers.go:stream` encodes
+  per subscriber (16 maximum). The paced benchmark includes real stream handlers
+  but no sockets, cookie-revalidation churn or TLS. Only introduce shared frames
+  with a tenant-owned broadcaster, explicit cancellation/join ownership, immutable
+  bytes and slow-client tests. Current bounded drop/close behavior stays intact.
+
+Reviewed and deliberately retained: constant-time scan of at most 32 operator
+hashes (`console/auth`), separate session/fleet limiter policies, endpoint-specific
+cursor keys/scopes, OIDC provider/JWKS refresh and allowlist boundaries, config
+validation in `config/console.go`, `oidc.go` and `fleet.go`, and consumer-owned
+runtime sink interfaces. They have different contracts or no demonstrated hot
+cost in this workload. No enforcement, token policy, state format or config
+surface was changed. Secondary lists/cursor anchors are removed on eviction;
+static catalog metadata has no runtime registration/invalidation mechanism.
+
+## Recorded earlier baseline
 
 - Local `master` is `484bd65`, verified through local Git ancestry, with the
   merges of #72-#76 (toolchain, encryption, console API/UI and fleet inventory).

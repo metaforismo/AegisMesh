@@ -1,9 +1,7 @@
 package runtime
 
 import (
-	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/console"
@@ -14,27 +12,6 @@ import (
 	"github.com/metaforismo/aegismesh/internal/storage"
 	"github.com/metaforismo/aegismesh/internal/version"
 )
-
-// Both bus observations and directly persisted correlation signals share this
-// append-only tap. Signals never enter the bus or its outbound fan-out.
-type indexedSink struct {
-	mu      sync.Mutex
-	primary event.Sink
-	index   *evidenceindex.Index
-}
-
-// Append updates the disposable index only after the authoritative evidence append succeeds.
-func (s *indexedSink) Append(ctx context.Context, envelope event.Envelope) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := s.primary.Append(ctx, envelope); err != nil {
-		return err
-	}
-
-	s.index.Add(envelope)
-	return nil
-}
 
 func (s *System) buildConsole() error {
 	index, err := evidenceindex.New(s.cfg.Console.IndexMaxEvents, s.meter)

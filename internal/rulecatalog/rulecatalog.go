@@ -34,9 +34,14 @@ type Entry struct {
 	Summary  string `json:"summary"`
 }
 
-// All returns every entry in deterministic owner-defined order. The slice is
-// freshly allocated; callers may mutate it without affecting later calls.
-func All() []Entry {
+// Entries derive once from compile-time engine registries. There is no runtime
+// registration or invalidation; caller-visible slices are always independent.
+var entries = buildEntries()
+
+// All returns every entry in deterministic owner-defined order as a fresh slice.
+func All() []Entry { return append([]Entry(nil), entries...) }
+
+func buildEntries() []Entry {
 	det := detect.RuleCatalog()
 	out := make([]Entry, 0, len(det)+4)
 	for _, r := range det {
@@ -61,12 +66,12 @@ func All() []Entry {
 
 // Lookup resolves one id with exact byte matching only: no case folding, no
 // trimming, no prefixes. The catalogs are tiny (~10 entries), so a linear
-// scan keeps the API stateless and allocation-free for misses.
+// scan over immutable metadata is allocation-free for hits and misses.
 func Lookup(id string) (Entry, bool) {
 	if id == "" {
 		return Entry{}, false
 	}
-	for _, e := range All() {
+	for _, e := range entries {
 		if e.ID == id {
 			return e, true
 		}

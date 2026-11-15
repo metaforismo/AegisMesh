@@ -3,7 +3,6 @@
 package evidenceindex
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"unicode"
@@ -65,12 +64,32 @@ func ValidID(value string) bool {
 		return false
 	}
 
-	_, err := hex.DecodeString(value)
-	return err == nil
+	for i := range len(value) {
+		c := value[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // Bound repairs UTF-8, replaces control characters, and limits text to maxRunes characters.
 func Bound(value string, maxRunes int) string {
+	// Most stored display fields already satisfy the projection bounds.
+	if maxRunes >= 0 && utf8.ValidString(value) {
+		count := 0
+		clean := true
+		for _, c := range value {
+			count++
+			if count > maxRunes || unicode.IsControl(c) {
+				clean = false
+				break
+			}
+		}
+		if clean {
+			return value
+		}
+	}
 	if len(value) > maxRunes*utf8.UTFMax {
 		value = value[:maxRunes*utf8.UTFMax]
 	}
@@ -111,8 +130,12 @@ func Rank(value string) int {
 }
 
 func text(fields map[string]json.RawMessage, key string, maxRunes int) string {
+	raw := fields[key]
+	if len(raw) == 0 {
+		return ""
+	}
 	var value string
-	_ = json.Unmarshal(fields[key], &value)
+	_ = json.Unmarshal(raw, &value)
 	return Bound(value, maxRunes)
 }
 
@@ -127,7 +150,7 @@ func sourceText(fields map[string]json.RawMessage, key string) string {
 
 func object(body []byte) map[string]json.RawMessage {
 	var fields map[string]json.RawMessage
-	if len(body) <= event.MaxStoredEnvelopeBytes {
+	if len(body) > 0 && len(body) <= event.MaxStoredEnvelopeBytes {
 		_ = json.Unmarshal(body, &fields)
 	}
 
@@ -161,7 +184,7 @@ func Project(envelope event.Envelope) (Summary, []Finding, []string) {
 			summary.RuleIDs = append(summary.RuleIDs, id)
 		}
 		var ids []json.RawMessage
-		if json.Unmarshal(observation["source_event_ids"], &ids) == nil {
+		if raw := observation["source_event_ids"]; len(raw) > 0 && json.Unmarshal(raw, &ids) == nil {
 			for _, raw := range ids[:min(len(ids), 64)] {
 				var id string
 				if json.Unmarshal(raw, &id) == nil && ValidID(id) {
@@ -177,7 +200,7 @@ func Project(envelope event.Envelope) (Summary, []Finding, []string) {
 			summary.Action = action
 		}
 		var rawFindings []json.RawMessage
-		if json.Unmarshal(detection["findings"], &rawFindings) == nil {
+		if raw := detection["findings"]; len(raw) > 0 && json.Unmarshal(raw, &rawFindings) == nil {
 			seen := map[string]bool{}
 			for _, raw := range rawFindings[:min(len(rawFindings), 64)] {
 				finding := object(raw)

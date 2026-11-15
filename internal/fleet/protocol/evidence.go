@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/strictjson"
 )
 
 // EvidencePath accepts signed data only; it has no response command channel.
@@ -135,7 +136,7 @@ func decodeBatchEvents(raw []byte, events *[]json.RawMessage) bool {
 // DecodeEvidence strictly validates an untrusted stored envelope and recomputes its payload hash.
 func DecodeEvidence(raw []byte, now time.Time) (event.Envelope, error) {
 	var envelope event.Envelope
-	if len(raw) > event.MaxStoredEnvelopeBytes || bytes.ContainsAny(raw, "\r\n") || !validObject(raw) {
+	if len(raw) > event.MaxStoredEnvelopeBytes || bytes.ContainsAny(raw, "\r\n") || !strictjson.ValidObject(raw) {
 		return envelope, ErrInvalid
 	}
 	var fields map[string]json.RawMessage

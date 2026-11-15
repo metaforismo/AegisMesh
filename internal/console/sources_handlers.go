@@ -21,7 +21,7 @@ func (s *Server) sources(w http.ResponseWriter, r *http.Request, _ caller) {
 	}
 
 	now := time.Now().UTC()
-	sources := evidenceindex.Sources(s.index.Summaries(), now.Add(-duration), now)
+	sources := s.index.Sources(now.Add(-duration), now)
 	if len(sources) > count {
 		sources = sources[:count]
 	}
@@ -55,14 +55,7 @@ func (s *Server) source(w http.ResponseWriter, r *http.Request, _ caller) {
 		return
 	}
 
-	sources := evidenceindex.Sources(s.index.Summaries(), time.Time{}, time.Now().Add(time.Second))
-	var summary *evidenceindex.SourceSummary
-	for i := range sources {
-		if sources[i].Source == source {
-			summary = &sources[i]
-			break
-		}
-	}
+	summary := s.index.Source(source, time.Time{}, time.Now().Add(time.Second))
 
 	if summary == nil {
 		fail(w, 404, "not_found", "source is no longer indexed")

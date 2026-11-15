@@ -134,7 +134,27 @@ func ParseFilter(values url.Values) (Filter, error) {
 // Matches selects live summaries using the same validated filters as paginated queries.
 func (filter Filter) Matches(summary Summary) bool { return filter.matches(summary) }
 
+func searchText(summary Summary) string {
+	return strings.ToLower(summary.Summary + " " + summary.Source + " " + strings.Join(summary.RuleIDs, " "))
+}
+
+func (filter Filter) selectsAll() bool {
+	return filter.Node == "" && filter.Classification == "" && filter.Sensor == "" && filter.Kind == "" && filter.Source == "" && filter.Rule == "" && filter.Severity == "" && filter.Q == "" && filter.Since.IsZero() && filter.Until.IsZero()
+}
+
 func (filter Filter) matches(summary Summary) bool {
+	var timestamp time.Time
+	if !filter.Since.IsZero() || !filter.Until.IsZero() {
+		timestamp, _ = time.Parse(time.RFC3339Nano, summary.Time)
+	}
+	var search string
+	if filter.Q != "" {
+		search = searchText(summary)
+	}
+	return filter.matchesAt(summary, timestamp, search, strings.ToLower(filter.Q))
+}
+
+func (filter Filter) matchesAt(summary Summary, timestamp time.Time, search, needle string) bool {
 	if filter.Node == "local" && summary.Node != nil ||
 		filter.Node != "" && filter.Node != "local" && (summary.Node == nil || summary.Node.ID != filter.Node) {
 		return false
@@ -147,7 +167,6 @@ func (filter Filter) matches(summary Summary) bool {
 		return false
 	}
 
-	timestamp, _ := time.Parse(time.RFC3339Nano, summary.Time)
 	if !filter.Since.IsZero() &&
 		timestamp.Before(filter.Since) ||
 		!filter.Until.IsZero() &&
@@ -165,8 +184,7 @@ func (filter Filter) matches(summary Summary) bool {
 		}
 	}
 
-	searchText := summary.Summary + " " + summary.Source + " " + strings.Join(summary.RuleIDs, " ")
-	return filter.Q == "" || strings.Contains(strings.ToLower(searchText), strings.ToLower(filter.Q))
+	return needle == "" || strings.Contains(search, needle)
 }
 
 type cursor struct {

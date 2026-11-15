@@ -136,44 +136,55 @@ func inWindow(summary Summary, from, to time.Time) bool {
 
 // Sources aggregates observations in the half-open time window and sorts by activity.
 func Sources(summaries []Summary, from, to time.Time) []SourceSummary {
-	bySource := map[string]*SourceSummary{}
+	counts := sourceCounts{}
 	for _, summary := range summaries {
-		if summary.Source == "" || !inWindow(summary, from, to) {
-			continue
-		}
-		source := bySource[summary.Source]
-		if source == nil {
-			source = &SourceSummary{
-				Source:    summary.Source,
-				FirstSeen: summary.Time,
-				LastSeen:  summary.Time,
-				Sensors:   []string{},
-				Kinds:     []string{},
-			}
-			bySource[summary.Source] = source
-		}
-		source.Events++
-		if summary.Time < source.FirstSeen {
-			source.FirstSeen = summary.Time
-		}
-		if summary.Time > source.LastSeen {
-			source.LastSeen = summary.Time
-		}
-		source.Sensors = unique(source.Sensors, summary.Sensor.ID)
-		source.Kinds = unique(source.Kinds, summary.Sensor.Kind)
-		if summary.Classification == "canary_invocation" {
-			source.CanaryInvocations++
-		}
-		if summary.Classification == "correlation_signal" {
-			source.Signals++
-		}
-		if Rank(summary.Severity) > Rank(source.MaxSeverity) {
-			source.MaxSeverity = summary.Severity
+		if inWindow(summary, from, to) {
+			counts.add(summary)
 		}
 	}
+	return counts.sorted()
+}
 
-	out := make([]SourceSummary, 0, len(bySource))
-	for _, source := range bySource {
+type sourceCounts map[string]*SourceSummary
+
+func (counts sourceCounts) add(summary Summary) {
+	if summary.Source == "" {
+		return
+	}
+	source := counts[summary.Source]
+	if source == nil {
+		source = &SourceSummary{
+			Source:    summary.Source,
+			FirstSeen: summary.Time,
+			LastSeen:  summary.Time,
+			Sensors:   []string{},
+			Kinds:     []string{},
+		}
+		counts[summary.Source] = source
+	}
+	source.Events++
+	if summary.Time < source.FirstSeen {
+		source.FirstSeen = summary.Time
+	}
+	if summary.Time > source.LastSeen {
+		source.LastSeen = summary.Time
+	}
+	source.Sensors = unique(source.Sensors, summary.Sensor.ID)
+	source.Kinds = unique(source.Kinds, summary.Sensor.Kind)
+	if summary.Classification == "canary_invocation" {
+		source.CanaryInvocations++
+	}
+	if summary.Classification == "correlation_signal" {
+		source.Signals++
+	}
+	if Rank(summary.Severity) > Rank(source.MaxSeverity) {
+		source.MaxSeverity = summary.Severity
+	}
+}
+
+func (counts sourceCounts) sorted() []SourceSummary {
+	out := make([]SourceSummary, 0, len(counts))
+	for _, source := range counts {
 		sort.Strings(source.Sensors)
 		sort.Strings(source.Kinds)
 		out = append(out, *source)
@@ -198,32 +209,36 @@ func unique(values []string, source string) []string {
 	return append(values, source)
 }
 
-func totals(summaries []Summary, from, to time.Time) Totals {
-	counts := Totals{}
-	sources := map[string]bool{}
-	sensors := map[string]bool{}
-	for _, summary := range summaries {
-		if !inWindow(summary, from, to) {
-			continue
-		}
-		counts.Events++
-		switch summary.Classification {
-		case "interaction":
-			counts.Interaction++
-		case "canary_invocation":
-			counts.CanaryInvocation++
-		case "correlation_signal":
-			counts.CorrelationSignal++
-		}
-		if summary.Source != "" {
-			sources[summary.Source] = true
-		}
-		sensors[summary.Sensor.ID] = true
-	}
+type totalCounts struct {
+	counts  Totals
+	sources map[string]bool
+	sensors map[string]bool
+}
 
-	counts.Sources = len(sources)
-	counts.SensorsActive = len(sensors)
-	return counts
+func newTotalCounts() totalCounts {
+	return totalCounts{sources: map[string]bool{}, sensors: map[string]bool{}}
+}
+
+func (counts *totalCounts) add(summary Summary) {
+	counts.counts.Events++
+	switch summary.Classification {
+	case "interaction":
+		counts.counts.Interaction++
+	case "canary_invocation":
+		counts.counts.CanaryInvocation++
+	case "correlation_signal":
+		counts.counts.CorrelationSignal++
+	}
+	if summary.Source != "" {
+		counts.sources[summary.Source] = true
+	}
+	counts.sensors[summary.Sensor.ID] = true
+}
+
+func (counts totalCounts) totals() Totals {
+	counts.counts.Sources = len(counts.sources)
+	counts.counts.SensorsActive = len(counts.sensors)
+	return counts.counts
 }
 
 // Overview aggregates retained evidence for the selected window and preceding comparison window.
@@ -237,15 +252,15 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 		window = "24h"
 	}
 
-	summaries := index.Summaries()
 	from := now.Add(-duration)
+	items := index.snapshot(from.Add(-duration), now, "")
+	current, previous := newTotalCounts(), newTotalCounts()
+	sources := sourceCounts{}
 	overview := Overview{
-		Window:         window,
-		GeneratedAt:    now.UTC().Format(time.RFC3339Nano),
-		Totals:         totals(summaries, from, now),
-		PreviousTotals: totals(summaries, from.Add(-duration), from),
-		Buckets:        make([]Bucket, bucketCount),
-		BySensor:       []SensorCount{},
+		Window:      window,
+		GeneratedAt: now.UTC().Format(time.RFC3339Nano),
+		Buckets:     make([]Bucket, bucketCount),
+		BySensor:    []SensorCount{},
 		BySeverity: map[string]int{
 			"critical": 0,
 			"high":     0,
@@ -255,7 +270,7 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 			"none":     0,
 		},
 		TopRules:      []RuleCount{},
-		TopSources:    Sources(summaries, from, now),
+		TopSources:    []SourceSummary{},
 		RecentSignals: []Summary{},
 	}
 
@@ -266,11 +281,14 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 
 	sensors := map[string]SensorCount{}
 	rules := map[string]RuleCount{}
-	for _, summary := range summaries {
-		if !inWindow(summary, from, now) {
+	for _, item := range items {
+		summary, timestamp := item.summary, item.envelope.Time
+		if timestamp.Before(from) {
+			previous.add(summary)
 			continue
 		}
-		timestamp, _ := time.Parse(time.RFC3339Nano, summary.Time)
+		current.add(summary)
+		sources.add(summary)
 		bucket := &overview.Buckets[min(bucketCount-1, int(timestamp.Sub(from)/step))]
 		switch summary.Classification {
 		case "interaction":
@@ -280,7 +298,7 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 		case "correlation_signal":
 			bucket.CorrelationSignal++
 			if len(overview.RecentSignals) < 10 {
-				overview.RecentSignals = append(overview.RecentSignals, summary)
+				overview.RecentSignals = append(overview.RecentSignals, index.resolved(summary))
 			}
 		}
 		severity := summary.Severity
@@ -319,6 +337,10 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 		}
 	}
 
+	overview.Totals = current.totals()
+	overview.PreviousTotals = previous.totals()
+	overview.TopSources = sources.sorted()
+
 	for _, sensorCount := range sensors {
 		overview.BySensor = append(overview.BySensor, sensorCount)
 	}
@@ -347,10 +369,8 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 func (index *Index) ByNode(window string, now time.Time) []NodeCount {
 	duration, _, _ := Window(window)
 	counts := map[string]NodeCount{}
-	for _, summary := range index.Summaries() {
-		if !inWindow(summary, now.Add(-duration), now) {
-			continue
-		}
+	for _, item := range index.snapshot(now.Add(-duration), now, "") {
+		summary := index.resolved(item.summary)
 		id, name := "local", ""
 		if summary.Node != nil {
 			id, name = summary.Node.ID, summary.Node.Name
@@ -366,4 +386,30 @@ func (index *Index) ByNode(window string, now time.Time) []NodeCount {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// Sources aggregates retained sources in the half-open time window.
+func (index *Index) Sources(from, to time.Time) []SourceSummary {
+	counts := sourceCounts{}
+	for _, item := range index.snapshot(from, to, "") {
+		counts.add(item.summary)
+	}
+	return counts.sorted()
+}
+
+// Source aggregates one exact stored source value in the half-open window.
+func (index *Index) Source(value string, from, to time.Time) *SourceSummary {
+	if value == "" {
+		return nil
+	}
+	counts := sourceCounts{}
+	for _, item := range index.snapshot(from, to, value) {
+		counts.add(item.summary)
+	}
+	if source := counts[value]; source != nil {
+		sort.Strings(source.Sensors)
+		sort.Strings(source.Kinds)
+		return source
+	}
+	return nil
 }
