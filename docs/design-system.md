@@ -379,7 +379,8 @@ and does not ship.
 |---|---|
 | `make ui-test` (108 tests: the 81 before plus palette ranking, keyboard helpers, frame batching, the read cache, sparkline and binning math, bucket ranges, drawer routing) | PASS |
 | `GOTOOLCHAIN=go1.27.4 go test ./internal/consoleui` (embed safety, including the literal-only `import()` rule and its detector cases) | PASS |
-| Browser, light and dark at 1440px: Overview (sparklines, chart hover, crosshair, keyboard bucket focus, click to filtered events), Events (side panel by click and Enter, j/k, Esc back with focus returned), Sources, Source (activity strip), Sensors (traces, dashed unloaded hours), Rules, Recommendations, Node, Fleet, Investigations, Investigation, Audit trail | PASS |
+| Browser, light at 1440px: Overview (sparklines, chart hover, crosshair, click to filtered events), Events (side panel by click and Enter, j/k, Esc back with focus returned), Sources, Source (activity strip), Sensors (traces, dashed unloaded hours), Rules, Recommendations, Node, Fleet, Investigations, Investigation, Audit trail. Dark at 1440px: Overview, Events in live mode, Node, Sources | PASS |
+| Dark mode for the side panel, palette, audit chain and sensor cards; keyboard focus on chart buckets with arrow keys | NOT RUN in the browser (the chart's arrow-key handling is code-reviewed only) |
 | Audit chain with a forced broken result (`first_invalid_seq: 4`, injected by the test): records 1–3 consistent, 4 broken, later records after the break | PASS |
 | Investigation edits with forced server failures: priority rolled back with a toast; failed note text restored | PASS |
 | Palette (Cmd/Ctrl+K, search, arrows, Enter), shortcut sheet (`?`), `g i` | PASS |
