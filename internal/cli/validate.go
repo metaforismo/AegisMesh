@@ -52,12 +52,17 @@ func (c *validateCmd) Run(_ context.Context, args []string) error {
 	if !*effective {
 		if c.g.jsonOut {
 			type out struct {
-				OK         bool   `json:"ok"`
-				ConfigPath string `json:"config_path"`
-				Schema     string `json:"schema"`
-				Sensors    int    `json:"sensors"`
+				OK         bool             `json:"ok"`
+				ConfigPath string           `json:"config_path"`
+				Schema     string           `json:"schema"`
+				Sensors    int              `json:"sensors"`
+				Console    *consoleExposure `json:"console,omitempty"`
 			}
-			return writeJSON(c.env.Out, out{OK: true, ConfigPath: cfg.SourcePath, Schema: cfg.APIVersion, Sensors: len(cfg.Sensors)})
+			rep := out{OK: true, ConfigPath: cfg.SourcePath, Schema: cfg.APIVersion, Sensors: len(cfg.Sensors)}
+			if cfg.Console.Enabled {
+				rep.Console = &consoleExposure{true, cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)}
+			}
+			return writeJSON(c.env.Out, rep)
 		}
 		printValidateSummary(c.env.Out, cfg)
 		return nil
@@ -74,6 +79,9 @@ func (c *validateCmd) Run(_ context.Context, args []string) error {
 func printValidateSummary(w io.Writer, cfg *config.Config) {
 	fmt.Fprintf(w, "ok: %s (schema %s, %d sensor(s))\n",
 		cfg.SourcePath, cfg.APIVersion, len(cfg.Sensors))
+	if cfg.Console.Enabled {
+		fmt.Fprintf(w, "  console %s (TLS=%t, %d token operators)\n", cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators))
+	}
 	for i := range cfg.Sensors {
 		s := &cfg.Sensors[i]
 		extra := ""
@@ -150,7 +158,14 @@ func renderEffectiveHuman(w io.Writer, cfg *config.Config, rep effectiveReport) 
 	}
 }
 
+type consoleExposure struct {
+	Enabled   bool   `json:"enabled"`
+	Listen    string `json:"listen"`
+	TLS       bool   `json:"tls"`
+	Operators int    `json:"operators"`
+}
 type effectiveReport struct {
+	Console     consoleExposure  `json:"console"`
 	ConfigPath  string           `json:"config_path"`
 	Provider    string           `json:"provider"`
 	EgressClass string           `json:"egress_class"`
@@ -203,6 +218,7 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 	class, base := classifyProviderEndpoint(cfg)
 	totalRules := len(detect.KnownRuleIDs())
 	rep := effectiveReport{
+		Console:     consoleExposure{cfg.Console.Enabled, cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)},
 		ConfigPath:  cfg.SourcePath,
 		Provider:    cfg.LLM.Provider,
 		EgressClass: class,

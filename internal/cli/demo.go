@@ -21,7 +21,7 @@ func newDemoCmd(env *Env) *demoCmd {
 }
 
 func (c *demoCmd) Name() string  { return "demo" }
-func (c *demoCmd) Usage() string { return "demo [--json]" }
+func (c *demoCmd) Usage() string { return "demo [--json] [--console]" }
 func (c *demoCmd) Help() string {
 	return `Run a self-contained, synthetic AegisMesh scenario on loopback.
 
@@ -30,14 +30,19 @@ OS-assigned unprivileged ports, drives one fixed interaction through each,
 verifies the stored evidence and its observation hashes, generates a dry-run
 recommendation, stops every listener, and removes its private temporary data.
 
+With --console, retains the synthetic evidence on an OS-assigned loopback
+console until interrupted and prints a fresh admin token once. Available UI
+assets are served alongside the console API. Cannot combine with --json.
+
 It accepts no config, API key, path, port or destination. It uses no cloud
 service or external egress and never performs enforcement.`
 }
 
 func (c *demoCmd) Run(ctx context.Context, args []string) error {
-	var jsonOut strictBoolFlag
+	var jsonOut, consoleFlag strictBoolFlag
 	fs := newFlagSet(c.Name())
 	fs.Var(&jsonOut, "json", "emit machine-readable JSON output")
+	fs.Var(&consoleFlag, "console", "keep synthetic evidence behind a loopback console until interrupted")
 	if err := fs.Parse(args); err != nil {
 		return Usagef("%v", err)
 	}
@@ -47,6 +52,16 @@ func (c *demoCmd) Run(ctx context.Context, args []string) error {
 
 	runCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if consoleFlag.Value() {
+		if jsonOut.Value() {
+			return Usagef("--console and --json cannot be combined")
+		}
+		_, err := demo.RunConsole(runCtx, func(addr, token string) error {
+			_, e := fmt.Fprintf(c.env.Out, "Console: http://%s\nOperator: demo-admin (admin)\nToken (save now): %s\nSynthetic evidence only. Press Ctrl-C to stop and remove temporary state.\n", addr, token)
+			return e
+		})
+		return err
+	}
 	summary, err := c.run(runCtx)
 	if err != nil {
 		return err

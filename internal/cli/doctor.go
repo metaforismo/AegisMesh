@@ -119,6 +119,11 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 		add(st, "port:admin", detail, "stop the conflicting process or change admin.listen")
 	}
 
+	if cfg.Console.Enabled {
+		st, detail := probePort(cfg.Console.Listen)
+		add(st, "port:console", detail, "change console.listen or stop the conflicting listener")
+		add("warn", "console", fmt.Sprintf("authenticated console on %s (TLS=%t, %d token operators)", cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)), "console evidence and operator notes are sensitive; keep state private")
+	}
 	// Safety posture reporting: loud but non-failing.
 	if cfg.Security.AllowPublicBind {
 		add("warn", "bind-policy", "security.allow_public_bind=true — decoys may bind beyond loopback", "revert unless this is a deliberate network placement")

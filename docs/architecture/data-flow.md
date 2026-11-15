@@ -32,6 +32,12 @@ internal/extmanager    supervised data-only observer extensions (`observe` permi
 internal/rulecatalog   read-only catalog of every emit-able rule (detection + correlation)
 internal/ruletest      offline detection evaluator behind read-only `rules test`
 internal/observe       in-process metrics registry served by admin /metrics
+internal/evidenceindex bounded disposable console projection and SSE subscriptions
+internal/console       dedicated authenticated HTTP API and injected static UI host
+  /auth                token digests, bounded ephemeral sessions and login attempts
+  /audit               fsynced hash-chained audit with bounded rotation
+  /investigations      private atomic operator annotations; no evidence mutations
+  /stateio             rooted fixed-name private state I/O
 internal/admin         loopback listener: /healthz /readyz /metrics /version
 internal/ext           extension manifest schema, digest/signature verifier, subprocess host
 internal/migrate       clean-room importers (beelzebub YAML shapes)
@@ -115,7 +121,8 @@ fail the store path.
 bypassing the bus and the composite sink. Signals therefore reach neither the webhook stream nor observer
 extensions today. That fan-out is deferred work, not shipped behavior; correlation signals and raw
 interactions are not delivered symmetrically, and nothing here should be read as claiming they are.
-Signals remain observations only — no path from any signal influences decoy behavior or policy.
+When console is enabled, the primary append tap also indexes signals locally,
+without adding them to any outbound fan-out. Signals remain observations only — no path from any signal influences decoy behavior or policy.
 
 The recommendation branch is also read-only. It validates and parses the complete
 bounded evidence input before applying filters or a final limit, derives all prose
@@ -235,7 +242,7 @@ they use stdio only and introduce no destination or other external egress.
    Extension requests are capped at 128 KiB and successful replies must equal
    the canonical event-linked acknowledgement byte for byte; extension text is
    never surfaced as a runtime result.
-   Fired signals reach only the store today; delivering signals to webhook/extensions is deferred and
+   Fired signals reach the store and, when enabled, the local console index; delivering signals to webhook/extensions is deferred and
    unimplemented.
 8. Producer offers hold a shared lifecycle lock from the closed-state check through the non-blocking send;
    shutdown closes each queue only under the exclusive lock and waits after releasing it. Global runtime
@@ -260,3 +267,31 @@ boundary; no identity reaches sensors, workers, LLMs, webhooks or logs. Complete
 read success includes the footer before any CLI output is published. Count
 retention reads framing without private keys; it does not authenticate history.
 There is no added network destination or command execution edge.
+
+## Console read path (ADR-0017)
+
+```mermaid
+flowchart LR
+    Bus[Bounded bus] --> Tap[Serialized indexedSink]
+    Cor[Direct correlation persistence] --> Tap
+    Tap --> Store[Authoritative store append]
+    Store -->|success only| Index[Bounded in-memory index]
+    Reader[Plaintext startup reader] --> Index
+    Index --> API[Dedicated console API and SSE]
+    Operator[Authenticated operator] --> API
+    API --> Notes[Fixed-name atomic investigations]
+    API --> Audit[Fsynced hash-chain audit]
+    UI[Injected FS snapshotted at startup] --> API
+```
+
+`Runtime.ConsoleNode/ConsoleSensors` supply value snapshots to the console through
+its narrow interface. The API has no sensor, bus-submit, config-write or outbound
+client capability. Cookie mutations require role/CSRF/Origin checks; bearer
+scripts use the same role grants. No API route can mutate authoritative evidence.
+The UI is optional and must render evidence as text. Plaintext backfill occurs
+before serving; encrypted mode never backfills or loads identities. Failed
+appends produce neither index entries nor SSE. The tap precedes the existing
+raw-envelope observer/webhook/correlation offers; signal appends use only the tap.
+Shutdown closes SSE/HTTP, then sensors, bus and storage. The opt-in demo retains
+its synthetic runtime until interruption, then performs its original cleanup.
+``aegismesh demo`` without the flag retains its original finite behavior.

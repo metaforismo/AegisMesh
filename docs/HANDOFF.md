@@ -3,6 +3,32 @@
 Updated: 2026-11-14. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 `docs/ROADMAP.md` before changing code.
 
+## 2026-11-14 console API backend candidate
+
+Worktree branch `feat/console-api` stacks the toolchain/encryption candidates.
+All console changes remain uncommitted, including the supplied contract file.
+No commit, push, branch switch, `gh`, merge, publication or deployment occurred.
+Read `architecture/console-api.md` and ADR-0017 before integrating the parallel UI.
+`console.Options.UI fs.FS` is the sole UI injection; runtime currently passes nil,
+so `/` serves a notice. The orchestrator should wire `consoleui.FS()` when that
+package lands. API/session/overview/node endpoints work independently of the UI.
+
+The append tap is `runtime.indexedSink`: storage first, then index. Both the bus
+sink and direct correlation persistence share it; derived signals acquire no new
+webhook/extension/bus route. Runtime snapshots expose only node/sensor values.
+Encrypted storage never loads a private identity; node history is `unavailable`.
+The index is count- and byte-bounded; full envelope detail remains unmodified.
+
+Config, token/hash CLI, opt-in `demo --console`, auth/CSRF/Host protections,
+SSE, investigations, audit, metrics and API host are implemented. Local command
+and curl receipts belong to `verification.md`; exact-head hosted CI, orchestrator
+review and UI/browser acceptance remain separate. Added contract clarifications:
+64 MiB accounted index budget, 65536-entry node metadata bound,
+4096-envelope recommendation input, finite state/
+audit quotas, timestamp-ordered pagination, zero expiry for bearer session views,
+and separate investigation/audit transactions. Inspect state before retrying a
+503 that explicitly says the investigation was already saved.
+
 ## 2026-11-14 encryption candidate
 
 Implementation is uncommitted on `feat/evidence-at-rest-encryption`, based on
@@ -125,7 +151,8 @@ claimed today; they require separate authorization and threat models.
 - Evidence is plaintext by default. This candidate implements opt-in encryption;
   the merged baseline still awaits the slice review/CI/merge gate.
 - There is no Telnet/database sensor, decoy-listener TLS, distributed mesh,
-  public control API, multi-tenancy, web console or autonomous response path.
+  public control API, multi-tenancy or autonomous response path. The optional
+  console API candidate is described above; UI integration remains separate.
 - Helm is verified packaging, not verified real-cluster support.
 - No v0.2 tag, GitHub release, published image, binary signature or executed
   provenance statement exists.

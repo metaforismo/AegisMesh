@@ -1,6 +1,6 @@
 # AegisMesh roadmap
 
-Updated: 2026-08-31. Checked items are implemented **and verified** in this
+Updated: 2026-11-14. Checked items are implemented **and verified** in this
 repository. Intent, research and product direction remain unchecked until an
 implementation and its acceptance gates are complete.
 
@@ -77,8 +77,11 @@ live queue is in [BACKLOG.md](BACKLOG.md), and current evidence is in
 - Distributed sensor fleets with explicit control-channel authorization,
   per-sensor identity and attestation, offline buffering and deterministic
   reconciliation.
-- A read-only-by-default web console after the query and authorization contracts
-  are stable.
+- First operator console: **backend implemented, uncommitted candidate** for
+  P3-2. Fixed v1 API, token roles, bounded index, audited investigations and
+  static-host injection are present. Parallel UI integration, review and
+  exact-head CI/merge remain open. See the console contract and verification
+  ledger; this is single-node/single-tenant with no sensor control.
 - Continuous adversarial simulation that probes only operator-owned decoys in
   CI and never becomes an offensive execution framework.
 - Local-first clustering and TTP summaries over redacted evidence, with model

@@ -51,6 +51,11 @@ func Load(path string) (*Config, error) {
 		base := filepath.Dir(absClean(path))
 		c.Runtime.DataDir = filepath.Join(base, c.Runtime.DataDir)
 	}
+	for _, p := range []*string{&c.Console.TLSCertFile, &c.Console.TLSKeyFile} {
+		if *p != "" && !filepath.IsAbs(*p) {
+			*p = filepath.Join(filepath.Dir(absClean(path)), *p)
+		}
+	}
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
@@ -175,6 +180,7 @@ func translateDecodeError(err error) error {
 }
 
 func (c *Config) applyDefaults() {
+	c.Console.defaults()
 	if c.Runtime.DataDir == "" {
 		c.Runtime.DataDir = defaultDataDir
 	}
@@ -330,6 +336,16 @@ func (c *Config) applyEnvOverrides() error {
 	}
 	if err := setString(&c.Runtime.DataDir, "AEGISMESH_DATA_DIR"); err != nil {
 		return err
+	}
+	if err := setString(&c.Console.Listen, "AEGISMESH_CONSOLE_LISTEN"); err != nil {
+		return err
+	}
+	if v, ok := os.LookupEnv("AEGISMESH_CONSOLE_ENABLED"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("AEGISMESH_CONSOLE_ENABLED is not a boolean")
+		}
+		c.Console.Enabled = b
 	}
 	if err := setString(&c.Admin.Listen, "AEGISMESH_ADMIN_LISTEN"); err != nil {
 		return err

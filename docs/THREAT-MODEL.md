@@ -230,3 +230,61 @@ authorization or multi-server client behavior is implemented here.
 Autonomous exploitation, credential theft, persistence mechanisms, botnet participation, destructive
 containment (e.g., firewall-dropping production IPs without approval), phishing delivery infrastructure,
 execution of captured malware samples.
+
+## Console trust boundary
+
+The optional console adds an inbound authenticated evidence-reading surface on
+its own HTTP server, never the sensor/admin mux. Host allowlisting (actual bound
+port, configured hostname or loopback aliases) rejects DNS rebinding with 421;
+forwarded headers never expand trust. Non-loopback binds require the public-bind
+opt-in and TLS. Browsers have no cross-origin grant: cookie mutations require a
+constant-time CSRF token check and matching Origin when supplied. Login also
+checks Origin. Tokens are hashed and compared against every configured operator
+digest; malformed/missing credentials never redirect. New login sessions rotate
+any presented previous session, and SSE expires with the session or notices
+revocation on its next heartbeat/event. Bearer credentials have no CSRF cookie.
+
+The authenticated HTTP client and stored evidence are separate untrusted inputs.
+JSON bodies are limited to 64 KiB, duplicate/unknown keys and deep structures
+are rejected, URI length is capped at 8192 bytes, and queries reject unknown,
+duplicate or malformed values. Cursors are HMAC-authenticated and tied to their
+filters/process; they cannot select files or broaden queries. Eight concurrent
+ordinary requests and sixteen SSE streams cap expensive work. Node storage
+metadata refuses directories above 65536 entries instead of allocating an
+unbounded listing; it does not read evidence payloads. Each stream has
+32 queued summaries and a five-second per-write deadline; a lagging subscriber
+is disconnected. Login state is capped at 4096 remote addresses and ten attempts
+per address/minute; exhaustion denies new remote entries until expiry. Sessions
+are capped at 1024. There is no distributed/edge DDoS protection or SSO.
+
+Evidence strings are bounded JSON data and findings use catalog-authored prose.
+Event detail preserves the native envelope and recomputes its observation hash;
+that hash authenticates neither metadata nor writer identity. The UI must render
+evidence, investigation titles and note text safely as text. CSP prohibits inline execution, third-party connections and framing.
+Static assets are snapshotted from an injected FS at startup with byte/count
+limits: request paths index memory, never choose filesystem paths. Directory
+listings and index fallbacks are absent. The nil-UI build exposes a notice only.
+
+The runtime tap sees every successful authoritative append, including direct
+correlation signals, and has no edge back to the bus, sensors, policy, extensions
+or webhooks. No read identity enters the runtime. Encrypted evidence history is
+live-only in the console; evictions affect the disposable index, never storage.
+Host resource contention from bounded queries and snapshot allocation remains
+possible; no hard total-process RSS or CPU isolation claim is made.
+
+Investigations use a fixed state filename and server-generated IDs. Atomic
+write/fsync/rename protects each snapshot, and audit records are fsynced with a
+SHA-256 chain preserved across rotation. Neither request IDs nor evidence select
+a path. State must be private; symlinks/special files are rejected, and rooted
+file operations confine it. Same-UID local attackers and simultaneous writers to
+one state directory are outside this model: operate one runtime per data/state
+directory. A filesystem writer can rewrite an entire audit chain. Investigation
+state and audit append are separate durability transactions: if the final audit
+write fails, an investigation can already be saved; the API reports 503 and tells
+the caller to inspect state before retrying. Audit quota is bounded and fails
+closed; there is no automatic history deletion, repair or external anchoring.
+Audit never stores credentials, CSRF/session values or note bodies. It records
+failed logins, denied role/CSRF calls, investigations, audit reads/verifications;
+ordinary evidence reads are deliberately not audited. Console state is plaintext
+regardless of evidence encryption. Single tenant/node only; no remote sensor
+control, fleet enrollment, tenant isolation or enforcement endpoint exists.

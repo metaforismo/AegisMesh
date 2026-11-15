@@ -251,17 +251,20 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Verify:** defined with the future slice.
 - **Status:** **TODO**.
 
-### P3-2 — read-only web investigation console — TODO
+### P3-2 — read-mostly operator console — BACKEND CANDIDATE
 
-- **Evidence:** no public query API or UI exists.
-- **Affected:** future API/UI/auth/query layers.
-- **Security/egress:** evidence may contain attacker-controlled and sensitive
-  content; output encoding, tenant isolation and authorization are mandatory.
-- **Dependencies:** stable read/query API and P2-3.
-- **Acceptance:** read-only default, explicit scopes, bounded queries, safe
-  rendering and auditability before any mutation capability is considered.
-- **Verify:** future contract, integration, authorization and browser tests.
-- **Status:** **TODO**.
+- **Evidence:** `internal/console` and `internal/evidenceindex`; fixed API v1 in
+  `architecture/console-api.md`; local checks in `verification.md`.
+- **Affected:** strict console config, runtime append tap/lifecycle, CLI token/hash
+  and opt-in persistent synthetic demo, optional static UI FS host.
+- **Security/egress:** token roles, Host/Origin/CSRF, bounded requests/index/SSE,
+  private atomic investigations and hash-chained audit; no new egress/control.
+- **Scope:** single-node, single-tenant. Encrypted storage is live-only; console
+  notes/audit remain plaintext. SSO/fleet/multi-tenancy are absent.
+- **Remaining:** orchestrator review, parallel UI FS integration/browser QA,
+  exact-head hosted CI and merge. No commit/push performed by backend engineer.
+- **Status:** **BACKEND IMPLEMENTED, UNCOMMITTED**. Complete UI product acceptance
+  is not claimed; use the verification ledger for exact command receipts.
 
 ### P3-3 — continuous defensive simulation — TODO
 

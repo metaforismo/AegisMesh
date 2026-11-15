@@ -325,3 +325,31 @@ file no larger than 1 KiB; its contents are never printed.
 
     version
     completion [bash|zsh|fish]
+
+## `console token` / `console hash`
+
+`aegismesh console token` creates 32 random bytes and prints the URL-safe token
+once, followed by a ready-to-paste `operators:` snippet with name `alice`, role
+`admin` and its SHA-256 digest. Paste the snippet beneath `console:` and protect
+the token like a password. Token values are never accepted in command arguments.
+
+`aegismesh console hash` reads a token from stdin (4096-byte maximum), trims
+surrounding whitespace and prints only its SHA-256. Empty/oversized input and
+unknown/extra arguments are usage errors. Token generation has no filesystem,
+network, credential-store or configuration side effects.
+
+## `demo --console`
+
+`aegismesh demo --console` runs the same synthetic HTTP/TCP/MCP/SSH scenario,
+keeps its evidence behind a console on an OS-assigned loopback port, and prints
+the URL plus a fresh `demo-admin` token once. It waits for Ctrl-C/SIGTERM, then
+closes listeners and removes its private temporary directory. It cannot be
+combined with `--json`. The default `demo` output and teardown are unchanged.
+The API works even when the optional UI has not been bundled.
+
+For scripts, send `Authorization: Bearer <token>` to `/api/v1/*`. Browsers exchange
+`{"token":"…"}` at `POST /api/v1/session`; retain the HttpOnly SameSite=Strict
+cookie and send the returned `csrf_token` in `X-AegisMesh-CSRF` for mutations.
+`GET /api/v1/meta` is public and `GET /api/v1/session` returns JSON 401 when
+unauthenticated. API responses are not cacheable. See the complete
+[console contract](architecture/console-api.md) for queries and endpoints.

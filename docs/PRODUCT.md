@@ -133,3 +133,15 @@ filenames, sizes and timing remain exposed. Compromised runtime hosts and stolen
 private identities defeat confidentiality; lost identities have no escrow or
 recovery service. Interrupted encrypted segments fail closed without automatic
 salvage. See ADR-0016 and `evidence-encryption.md`.
+
+## First operator console candidate (P3-2)
+
+The backend candidate provides a disabled-by-default, authenticated HTTP API and
+optional static UI host inside the single binary. It is single-node and single-
+tenant, uses named token operators (viewer/analyst/admin), and reads bounded
+indexed evidence. Operator-authored investigations and an append-only audit
+trail are the only durable console writes. It adds no egress or sensor control.
+Encrypted storage exposes live envelopes only; audit/notes remain plaintext.
+The parallel UI package is integrated separately through an injected FS.
+Local tests and the verification ledger describe the evidence; this is not a
+merged, deployed, SSO, fleet, multi-tenant or production-readiness claim.

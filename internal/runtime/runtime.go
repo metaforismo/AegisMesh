@@ -16,7 +16,9 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/admin"
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/console"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/ext"
 	"github.com/metaforismo/aegismesh/internal/extmanager"
 	"github.com/metaforismo/aegismesh/internal/llm"
@@ -41,22 +43,25 @@ var errRuntime = errors.New("runtime")
 
 // System is a fully wired but not-yet-started AegisMesh instance.
 type System struct {
-	cfg       *config.Config
-	store     *storage.Store
-	bus       *event.Bus
-	meter     observe.Meter
-	seq       *event.Sequencer
-	adminSrv  *admin.Server
-	sensors   []sensor.Sensor
-	extMgr    *extmanager.Manager
-	hook      *webhook.Sink
-	corr      *correlateAdapter
-	log       *slog.Logger
-	started   atomic.Uint64
-	stopped   atomic.Bool
-	stopMaint chan struct{}
-	maintOnce sync.Once
-	stopOnce  sync.Once
+	consoleSrv *console.Server
+	index      *evidenceindex.Index
+	builtAt    time.Time
+	cfg        *config.Config
+	store      *storage.Store
+	bus        *event.Bus
+	meter      observe.Meter
+	seq        *event.Sequencer
+	adminSrv   *admin.Server
+	sensors    []sensor.Sensor
+	extMgr     *extmanager.Manager
+	hook       *webhook.Sink
+	corr       *correlateAdapter
+	log        *slog.Logger
+	started    atomic.Uint64
+	stopped    atomic.Bool
+	stopMaint  chan struct{}
+	maintOnce  sync.Once
+	stopOnce   sync.Once
 }
 
 // evidenceSink keeps evidence authoritative while offering every envelope to
@@ -86,10 +91,16 @@ func (s evidenceSink) Append(ctx context.Context, e event.Envelope) error {
 	return nil
 }
 
-// Build validates and constructs everything. No listener is bound yet.
+// Build constructs resources and binds admin/console listeners. Sensors bind
+// during Start, after console exposure and state have passed validation.
 func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("%w: nil config", errRuntime)
+	}
+	if cfg.Console.Enabled {
+		if err := cfg.Validate(); err != nil {
+			return nil, err
+		}
 	}
 	if log == nil {
 		log = slog.Default()
@@ -123,6 +134,7 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 
 	sys := &System{
 		cfg:       cfg,
+		builtAt:   time.Now(),
 		store:     store,
 		meter:     reg,
 		seq:       &event.Sequencer{},
@@ -130,6 +142,14 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		stopMaint: make(chan struct{}),
 	}
 
+	primary := event.Sink(store)
+	if cfg.Console.Enabled {
+		if err := sys.buildConsole(); err != nil {
+			sys.closeAll()
+			return nil, fmt.Errorf("%w: %v", errRuntime, err)
+		}
+		primary = &indexedSink{primary: store, index: sys.index}
+	}
 	if cfg.Extensions.IsEnabled() {
 		manifests, err := loadObserverManifests(cfg)
 		if err != nil {
@@ -180,13 +200,13 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		}, correlateDeps{
 			seq:      sys.seq,
 			instance: cfg.Runtime.InstanceName,
-			store:    store,
+			store:    primary,
 		}, reg, log)
 	}
 
-	sink := event.Sink(store)
+	sink := primary
 	if sys.extMgr != nil || sys.hook != nil || sys.corr != nil {
-		fanout := evidenceSink{primary: store}
+		fanout := evidenceSink{primary: primary}
 		if sys.extMgr != nil {
 			fanout.mgr = sys.extMgr
 		}
@@ -288,6 +308,9 @@ func providerFor(c config.Config) (llm.Provider, error) {
 // Start brings up admin, observer extensions, and all sensors. Partial
 // failures tear everything down.
 func (s *System) Start(ctx context.Context) error {
+	if s.consoleSrv != nil {
+		s.consoleSrv.Start()
+	}
 	if s.adminSrv != nil {
 		s.adminSrv.Start()
 	}
@@ -388,6 +411,13 @@ func (s *System) closeAll() {
 	// Halt the maintenance loop first so it cannot touch the store mid-close.
 	if s.stopMaint != nil {
 		s.maintOnce.Do(func() { close(s.stopMaint) })
+	}
+	if s.consoleSrv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+		if err := s.consoleSrv.Close(ctx); err != nil {
+			s.log.Warn("console close failed", "err", err)
+		}
+		cancel()
 	}
 	s.closeSensors()
 	if s.adminSrv != nil {
