@@ -468,7 +468,7 @@
 .stat {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(2.5rem, 5.5rem);
   grid-template-areas:
     "label label"
     "value spark"
@@ -530,7 +530,8 @@
 /* Tiny trend lines. Decorative companions of a number that is printed in
    full beside them; the screen reader gets the number and a text summary. */
 .spark {
-  width: 5.5rem;
+  width: 100%;
+  max-width: 5.5rem;
   height: 1.75rem;
   overflow: visible;
   color: var(--color-ink-3);
@@ -764,7 +765,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
     border-bottom: var(--border-width) solid var(--color-border);
     /* Block rows can skip rendering while offscreen. */
     content-visibility: auto;
-    contain-intrinsic-size: auto 14rem;
+    contain-intrinsic-size: auto 10rem;
   }
 
   .table--stack td,

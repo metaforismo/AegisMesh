@@ -28,8 +28,12 @@ function bucketLabel(b) {
 
 // onSelect(range, bucket) opens the bucket; omit it for a read-only chart.
 export function stackedBarChart(buckets, window, { title = 'Observations over time', onSelect, end } = {}) {
-  const width = 1000;
-  const height = 240;
+  // Draw at roughly the size it will be shown, so 10px ticks stay 10px:
+  // the content column is the viewport minus the nav (above 960px) and
+  // the page and panel padding.
+  const vw = globalThis.innerWidth || 1200;
+  const width = Math.round(Math.min(1100, Math.max(300, vw >= 960 ? vw - 224 - 100 : vw - 66)));
+  const height = width < 600 ? 200 : 240;
   const L = stackedLayout(buckets, { width, height, padLeft: 40, padBottom: 24 });
   const tip = h('div', { class: 'chart__tip', role: 'presentation', 'aria-hidden': 'true' });
   const plot = svg('svg', {
@@ -42,7 +46,7 @@ export function stackedBarChart(buckets, window, { title = 'Observations over ti
     plot.appendChild(svg('line', { class: v === 0 ? 'chart__axis' : 'chart__grid', x1: L.plot.x, x2: L.plot.x + L.plot.w, y1: y, y2: y }));
     plot.appendChild(svg('text', { class: 'chart__tick', x: L.plot.x - 8, y, 'text-anchor': 'end', 'dominant-baseline': 'middle' }, formatCompact(v)));
   }
-  for (const i of labelIndices(L.bars.length, 7)) {
+  for (const i of labelIndices(L.bars.length, Math.max(3, Math.floor(width / 140)))) {
     const bar = L.bars[i];
     plot.appendChild(svg('text', { class: 'chart__tick', x: bar.x + 1, y: height - 6, 'text-anchor': 'start' }, formatBucketLabel(bar.start, window)));
   }

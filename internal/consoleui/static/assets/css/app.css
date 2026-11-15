@@ -43,7 +43,8 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 
 
 .grid { display: grid; gap: var(--space-4); }
-.grid--stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.75rem), 1fr)); gap: var(--space-3); }
+.grid--stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: var(--space-3); }
+@media (min-width: 75rem) { .grid--stats { grid-template-columns: repeat(auto-fit, minmax(10.75rem, 1fr)); } }
 .grid--2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); }
 .grid--cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
 
