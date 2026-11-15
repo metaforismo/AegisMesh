@@ -88,3 +88,80 @@ export function share(part, whole) {
   if (!Number.isFinite(p) || !Number.isFinite(w) || w <= 0) return 0;
   return Math.min(1, Math.max(0, p / w));
 }
+
+// Sparkline geometry for a series of non-negative values. Returns SVG path
+// data for the line and the closed area under it, plus the last point (for
+// the end dot). Flat or empty series sit on the baseline. Coordinates are
+// rounded to 0.1px to keep the path data short.
+export function sparkPath(values, { width = 88, height = 28, pad = 2 } = {}) {
+  const list = (Array.isArray(values) ? values : []).map((v) => Math.max(0, Number(v) || 0));
+  const r = (n) => Math.round(n * 10) / 10;
+  const base = height - pad;
+  if (list.length === 0) return { line: '', area: '', last: null, max: 0 };
+  const max = Math.max(...list);
+  const n = list.length;
+  const x = (i) => (n === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (n - 1));
+  const y = (v) => (max > 0 ? base - (v / max) * (height - 2 * pad) : base);
+  const pts = list.map((v, i) => [r(x(i)), r(y(v))]);
+  const line = `M${pts.map(([px, py]) => `${px} ${py}`).join('L')}`;
+  const area = `${line}L${pts[n - 1][0]} ${r(base)}L${pts[0][0]} ${r(base)}Z`;
+  const [lx, ly] = pts[n - 1];
+  return { line, area, last: { x: lx, y: ly }, max };
+}
+
+// Per-bucket totals for one classification key, or all of them.
+export function seriesOf(buckets, key) {
+  const list = Array.isArray(buckets) ? buckets : [];
+  return list.map((b) => (key ? Math.max(0, Number(b?.[key]) || 0) : bucketTotal(b)));
+}
+
+// Count timestamps into `n` equal bins over [start, end). Times outside the
+// range are ignored (and counted in `outside`), never clamped into an edge
+// bin, so a trace never shows activity that did not happen in its window.
+export function binTimes(times, start, end, n) {
+  const s = Number(start);
+  const e = Number(end);
+  const count = Math.max(1, Math.floor(Number(n) || 1));
+  const bins = new Array(count).fill(0);
+  let outside = 0;
+  if (!(e > s)) return { bins, outside: (times || []).length };
+  const size = (e - s) / count;
+  for (const t of times || []) {
+    const ms = typeof t === 'number' ? t : Date.parse(t);
+    if (!Number.isFinite(ms) || ms < s || ms >= e) { outside++; continue; }
+    bins[Math.min(count - 1, Math.floor((ms - s) / size))]++;
+  }
+  return { bins, outside };
+}
+
+// Time range a bucket covers, for "open these events": [start, next start).
+// The API's `until` is inclusive, so the range ends one second before the
+// next bucket starts. The last bucket ends at `end` (e.g. generated_at).
+export function bucketRange(buckets, index, end) {
+  const list = Array.isArray(buckets) ? buckets : [];
+  const b = list[index];
+  const since = Date.parse(b?.start);
+  if (!Number.isFinite(since)) return null;
+  let next = Date.parse(list[index + 1]?.start);
+  if (!Number.isFinite(next)) {
+    const prev = Date.parse(list[index - 1]?.start);
+    const step = Number.isFinite(prev) ? since - prev : NaN;
+    const fallback = Date.parse(end);
+    next = Number.isFinite(step) ? since + step : fallback;
+  }
+  if (!Number.isFinite(next) || next <= since) return null;
+  const iso = (ms) => new Date(ms).toISOString().replace('.000Z', 'Z');
+  return { since: iso(since), until: iso(Math.max(since, next - 1000)) };
+}
+
+// Delays for a left-to-right entry wave: eased, so the wave starts quickly
+// and settles, and capped at `total` ms however many bars there are.
+export function waveDelays(n, total = 240) {
+  const count = Math.max(0, Math.floor(Number(n) || 0));
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const t = count > 1 ? i / (count - 1) : 0;
+    out.push(Math.round(total * (1 - (1 - t) ** 2)));
+  }
+  return out;
+}
