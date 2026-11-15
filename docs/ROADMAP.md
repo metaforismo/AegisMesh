@@ -43,9 +43,14 @@ implementation and its acceptance gates are complete.
    that preserves the complete native envelope and adds no connector or egress.
 4. [x] **Dry-run recommendations.** Deterministic evidence-linked proposals for
    operator review with no enforcement, asset mutation or runtime feedback path.
-5. [ ] **Optional evidence-at-rest encryption.** age/X25519 segment encryption,
-   disabled by default, with no silent plaintext downgrade and explicit key
-   rotation, recovery and mixed-history semantics.
+5. [ ] **Optional evidence-at-rest encryption — implemented, PR pending.** Uses
+   native age/X25519, is disabled by default, blocks silent plaintext downgrade,
+   and defines explicit key rotation, recovery and mixed-history semantics.
+   Authenticated v2 footers reject frame-boundary truncation. Ordinary flushes
+   preserve the active segment; size rotation, close or a five-minute age check
+   at flush seals it. Active-segment read delay and retention costs are documented
+   in ADR-0016. See the current local verification ledger.
+   This checkbox remains open until exact-head CI and merge complete.
 6. [x] **Observe-only extension boundary.** Strict manifests and exact
    event-linked acknowledgements; extension output cannot affect evidence,
    policy, responses, paths, configuration or enforcement.

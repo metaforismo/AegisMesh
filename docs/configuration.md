@@ -11,7 +11,7 @@ api_version: aegismesh.io/v1alpha1   # required, exact string
 runtime:    { instance_name, data_dir }
 admin:      { enabled, listen }       # loopback-only invariant
 security:   { allow_public_bind, allow_privileged_ports }
-storage:    { max_file_bytes, retention: { max_events, max_age_days } }
+storage:    { max_file_bytes, max_event_bytes, encryption?, retention: { max_events, max_age_days } }
 llm:        { provider, system_prompt?, api_key_env?, base_url? }
 sensors:    [ ... ]                   # 1..64 entries
 ```
@@ -51,9 +51,27 @@ for parallel test runs; still subject to host-loopback rules.
 | field | default | notes |
 |---|---|---|
 | `max_file_bytes` | `16777216` (16 MiB) | rotate evidence segment above this size |
-| `max_event_bytes` | `262144` (256 KiB) | reject an encoded event above this size before it reaches a segment |
-| `retention.max_events` | `100000` | delete oldest closed segments beyond this |
+| `max_event_bytes` | `262144` (256 KiB) | reject an encoded event above this size before it reaches a segment; hard maximum 1 MiB so every accepted record remains readable |
+| `encryption.enabled` | `false` / omitted | write new evidence as bounded native age/X25519 `.jsonl.age` segments; once an encrypted data directory is initialized it refuses later plaintext writes |
+| `encryption.recipient` | none | one native public `age1...` X25519 recipient; required when encryption is enabled; no passphrase, SSH recipient, plugin, KMS or private identity is accepted here |
+| `retention.max_events` | `100000` | delete oldest closed segments beyond this, across plaintext/encrypted history |
 | `retention.max_age_days` | `30` | delete segments older than this |
+
+Periodic flush writes buffered ciphertext to the OS without sealing or `fsync`.
+Encrypted mode seals on size rotation, close, or a flush at the fixed five-minute
+segment age, measured from the first event (not a configuration field). Empty
+segments never age out; the next append after a seal opens a new segment. Active
+segments fail closed on read until sealed: normally within five minutes plus the
+next five-second runtime flush, with longer delays if maintenance is stalled.
+Full-directory inspection still requires every segment to be sealed, so stop the
+runtime or inspect a separate sealed-only snapshot for a successful complete read.
+Age alone produces at most 288 seals/day; size rotation and restarts add files.
+The 1 KiB footer reserve counts against `max_file_bytes`,
+so a near-limit record may require a larger segment cap. Private identities are
+read-time `--identity FILE` references only, never config fields or environment
+key values. Existing plaintext is not migrated. See
+[evidence-encryption.md](evidence-encryption.md) for exact bounds, mixed-history,
+anti-downgrade and crash-recovery semantics.
 
 ### llm
 

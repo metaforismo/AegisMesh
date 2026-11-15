@@ -1,7 +1,30 @@
 # HANDOFF — current verified state
 
-Updated: 2026-08-31. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
+Updated: 2026-11-14. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 `docs/ROADMAP.md` before changing code.
+
+## 2026-11-14 encryption candidate
+
+Implementation is uncommitted on `feat/evidence-at-rest-encryption`, based on
+reviewed but unmerged toolchain branch head `c64b58f`. The recovered PR #58
+patch is draft provenance only. The candidate uses age v1.3.2 and retains Go
+1.27.4 / x/crypto v0.59.0 / x/sys v0.50.0. Local execution receipts are in
+`docs/verification.md`; PR number is pending. Human review, exact-head CI and
+merge remain open. No new publication or deployment occurred.
+
+Authenticated v2 segment footers detect record-boundary truncation and order
+changes. Flush writes buffers to the OS; sealing occurs only on size rotation,
+close or a flush at five minutes from the first event. Empty segments do not
+age out; only the next append after sealing opens a new file. Active segments
+remain unreadable until sealed; full-directory inspection requires no unsealed
+successor (stop the runtime or inspect a separate sealed-only snapshot).
+Crash-incomplete segments fail closed and require deliberate operator recovery;
+there is no automatic repair, plaintext downgrade or key escrow. Explicit read
+identities remain file references only. See `docs/evidence-encryption.md` and
+ADR-0016 for recovery and confidentiality limits.
+
+The authoritative baseline below records merged history. BACKLOG P1-1 and
+delivery-plan slice 6 distinguish this candidate from that merged state.
 
 ## Authoritative baseline
 
@@ -53,10 +76,11 @@ container namespaces. v0.2 does not automatically restart them.
 
 ## Exact remaining v0.2 work
 
-1. **Optional evidence-at-rest encryption.** Design and implement age/X25519
-   segment encryption behind an explicit opt-in. It must fail closed, never
-   silently write plaintext, preserve the disabled path byte-for-byte, and cover
-   restart, wrong-key, corruption, truncation, rotation, retention and recovery.
+1. **Optional evidence-at-rest encryption review/merge gate.** Implementation
+   and local focused/race/fuzz/license/vulnerability checks pass in this
+   candidate. Direct SBOM generation remains blocked by linked-worktree support;
+   identical-source ordinary-clone generation and validation pass. Human review,
+   exact-head hosted CI and merge remain open; PR number is pending.
 2. **Final release-readiness audit.** Re-run every required gate on the resulting
    `master`, reconcile all product/security/deployment claims, and leave release
    publication, tags, signing and real-cluster operation explicitly unexecuted
@@ -98,16 +122,16 @@ claimed today; they require separate authorization and threat models.
 
 ## Known boundaries
 
-- Evidence is plaintext at rest until the remaining encryption slice lands.
+- Evidence is plaintext by default. This candidate implements opt-in encryption;
+  the merged baseline still awaits the slice review/CI/merge gate.
 - There is no Telnet/database sensor, decoy-listener TLS, distributed mesh,
   public control API, multi-tenancy, web console or autonomous response path.
 - Helm is verified packaging, not verified real-cluster support.
 - No v0.2 tag, GitHub release, published image, binary signature or executed
   provenance statement exists.
-- The local macOS checkout named by the operator is not mounted in every agent
-  environment. Record local commands as `BLOCKED` rather than inferring them;
-  hosted CI can provide independent evidence but does not retroactively turn an
-  unrun local command into `PASS`.
+- Local verification for this candidate ran in the requested macOS worktree.
+  Hosted CI remains independent and pending. The linked-worktree SBOM limitation
+  and exact ordinary-clone fallback are recorded in `docs/verification.md`.
 
 ## Commands that matter
 

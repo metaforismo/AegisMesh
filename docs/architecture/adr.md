@@ -448,3 +448,76 @@ health/metrics, and runtime shutdown semantics rather than silently recovered.
 Operators requiring stronger resource or namespace isolation must supply it at
 the container/host layer; enabling this setting alone is not a malware
 execution boundary. Protocol changes require a new protocol version and ADR.
+
+## ADR-0016: Evidence encryption is optional native age/X25519 with an irreversible per-directory mode guard
+
+**Status:** Accepted for the v0.2 encryption slice; merge verification pending.
+
+**Context.** The native JSONL store is intentionally local-first, but plaintext
+evidence can contain sensitive attacker-controlled context. AegisMesh needs an
+optional confidentiality layer without inventing cryptography, adding a key
+service, changing the default offline posture, or allowing a configuration
+mistake to silently resume plaintext writes after encryption was enabled.
+
+**Decision.** `internal/storage` accepts one public native age X25519 recipient
+for writes. Encrypted segments use `.jsonl.age` and contain a repository-owned,
+bounded framing header followed by length-prefixed independent standard age
+ciphertexts, one per native event envelope. An authenticated v2 footer binds
+the count and SHA-256 of the ordered framed
+ciphertexts. Periodic flush pushes buffers to the OS without sealing or `fsync`.
+Only size rotation, close, or a flush at the fixed five-minute segment age seals
+it; age starts at the first event and empty segments never age out. After sealing,
+only a subsequent append opens another segment. The five-minute constant balances
+read delay against age-driven file/retention cost (at most 288 seals/day under
+steady traffic; size rotation and restarts add files). There is no directory scan
+or per-event `fsync` in append/flush. EOF without the footer, including
+record-boundary truncation, is an error. The framing is not a new cipher; age
+owns key wrapping, encryption and authentication. Reads accept only explicit
+local X25519 identity files through `inspect`/`recommend`, with bounded file
+count/size, permission and regular-file checks. Each frame is consumed to EOF
+before its plaintext is released to the caller. Missing/wrong identities,
+authentication failures, corruption and truncation are terminal storage errors.
+
+The existing plaintext path remains unchanged when encryption is omitted in a
+new data directory. Once encrypted mode successfully initializes, an owner-only
+mode guard makes later plaintext store construction fail closed; the existence
+of encrypted history independently enforces the same rule. Old plaintext is not
+rewritten or represented as encrypted. Restart always creates a new segment and
+key rotation is performed by changing the public recipient while supplying old
+and new read identities during the retention window.
+
+The stored-envelope maximum is shared by writer and reader so configuration
+cannot create evidence that the local reader cannot consume. Segment and
+identity opens reject special-file and replacement races at the read boundary.
+
+**Consequences.** AegisMesh gains local at-rest confidentiality without runtime
+egress, KMS, passphrases, plugins or command execution. Operators own identity
+backup and rotation; losing required private identities is unrecoverable.
+Filenames, sizes, times, exports and host metadata remain visible. The mode guard
+prevents accidental sequential downgrade but is not host attestation, a
+filesystem sandbox, or protection from a privileged local writer. A data
+directory remains a single-runtime operational resource. An active segment cannot
+be verified until sealing, normally within five minutes from its first event plus
+the next five-second flush; stalled maintenance can take longer. Full-directory
+inspection still fails if a new active successor exists. Stop the runtime or use
+a separate snapshot of sealed segments; live-read/active-file skipping is absent.
+Retention runs every ten minutes, scanning files sequentially; it is a periodic
+whole-segment cap, not a hard disk quota. Retention holds the store mutex while
+scanning and can delay appends/flushes. Flush does not promise power-loss durability.
+
+**Recovery and mixed history.** An unfinished segment survives restart unchanged
+and blocks successful full-history reads until an operator explicitly handles
+the damaged copy; there is no automatic salvage command. Retention uses common
+oldest-mtime/filename ordering for both suffixes, counts framing without private
+keys, and never deletes the current segment. Existing plaintext stays plaintext.
+Callbacks are provisional until the complete read succeeds; all CLI reads buffer
+or stage output through the final footer, including `inspect show` exact matches.
+
+A single age stream per segment was considered. It would require decryption keys
+for exact retention counts or a separate count index. Independent frames with
+an encrypted completion footer keep the writer public-key-only, bound per-event
+memory, and make crash incompleteness explicit without a second metadata store.
+No new primitive is designed; age supplies ciphertext authentication. Frame or
+whole-segment forgery by a public-recipient holder, file deletion, compromised
+runtime memory, and stolen identities remain outside the confidentiality claim.
+The v1 draft was never released; it is intentionally unsupported.

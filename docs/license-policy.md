@@ -7,7 +7,7 @@ product lives in this repository under the same license.
 
 ## Dependency rules
 
-1. Allowed licenses: Apache-2.0, MIT, BSD-2/3-Clause, ISC. Everything else (GPL/LGPL/AGPL/SSPL/unlicensed)
+1. Allowed licenses: Apache-2.0, MIT, BSD-0/2/3-Clause, ISC. Everything else (GPL/LGPL/AGPL/SSPL/unlicensed)
    is rejected.
 2. Every dependency needs a recorded justification: what it does, why stdlib is insufficient, who reviewed
    it. Recorded below.
@@ -19,12 +19,13 @@ product lives in this repository under the same license.
 
 | Module | Version | License | Why |
 |---|---|---|---|
+| `filippo.io/age` | `v1.3.2` | BSD-3-Clause | Maintained native age/X25519 authenticated encryption; stdlib has no age format implementation (ADR-0016) |
 | gopkg.in/yaml.v3 | v3.0.1 | MIT (+Apache-2.0 portions) | Config parsing; YAML is a user-facing requirement and stdlib has none |
 | `golang.org/x/crypto` (`ssh` package) | `v0.59.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
 
 The v0.1.0 release used only the YAML module. The SSH slice adds the pinned
 `x/crypto` module. Metrics exposition, CLI dispatch, JSON-RPC/MCP handling,
-JSONL storage, and crypto digests/signatures remain standard-library code
+plaintext JSONL storage and crypto digests/signatures remain standard-library code
 deliberately (ADR-0001, ADR-0008).
 
 ## Resolved SSH dependency review
@@ -41,6 +42,52 @@ in v0.56.0). Pinned `govulncheck v1.7.0` remains the reachable-vulnerability
 gate; current execution results and blockers are in `docs/verification.md`.
 A future imported or reachable advisory blocks the dependency; no silent
 fallback may be substituted without amending ADR-0010.
+
+## Evidence encryption dependency review (2026-11-14)
+
+Reviewer: Codex implementation review, pending orchestrator/human PR review.
+The introducing PR is **pending**; this record must be linked in its description.
+[Upstream releases](https://github.com/FiloSottile/age/releases) and the Go
+module proxy both select **age v1.3.2**, requiring Go >=1.25; the current Go
+**1.27.4**, x/crypto **v0.59.0**, and x/sys **v0.50.0** are preserved.
+The [age LICENSE](https://github.com/FiloSottile/age/blob/v1.3.2/LICENSE) is
+BSD-3-Clause; downloaded LICENSE SHA-256:
+`c5d65279d02955c0fc2294ae417c3add650d228f4f5c82bd6d531fc26c89cd96`.
+Only native X25519 constructors are used; no plugin, SSH recipient, passphrase,
+KMS, command, key lookup, or network behavior is enabled.
+
+The full resolved graph contains fourteen non-main modules. In addition to the
+seven baseline modules above, the new graph requirements are:
+
+| Module/version | License | Boundary / evidence |
+|---|---|---|
+| `filippo.io/age v1.3.2` | BSD-3-Clause | Runtime format/encryption; LICENSE above |
+| `filippo.io/hpke v0.4.0` | BSD-3-Clause | age runtime dependency; module LICENSE |
+| `filippo.io/edwards25519 v1.2.0` | BSD-3-Clause | Graph-only for our native X25519 import; module LICENSE |
+| `filippo.io/nistec v0.0.4` | BSD-3-Clause | Graph-only; module LICENSE |
+| `github.com/rogpeppe/go-internal v1.16.0` | BSD-3-Clause | Upstream test graph only; module LICENSE |
+| `golang.org/x/tools v0.49.0` | BSD-3-Clause | Upstream test/tool graph only; module LICENSE |
+| `c2sp.org/CCTV/age v0.0.0-20260829155415-4448f2097b2d` | 0BSD (selected option) | Upstream age test vectors only; embedded README license |
+
+The CCTV submodule has no standalone LICENSE. Its
+[pinned README license](https://github.com/C2SP/CCTV/blob/4448f2097b2d/age/README.md#license)
+offers **0BSD**, CC0, or Unlicense for the vectors and top-level files. We select
+**0BSD**, within the BSD-only family, and explicitly add it to this policy;
+CC0 and Unlicense are not approved alternatives. We do not import the vector
+generator's internal code or run upstream module tests. The license scanner
+checks this exact module/version against README SHA-256
+`fdbd4b06044f3803c72bdaf2df7681fdce3a45a326a2898e75640eae906606ad`
+before recognizing its embedded grant. Module directories come from Go's
+resolved `Dir`, preserving uppercase-module cache escaping.
+
+The common Go BSD LICENSE SHA-256 is
+`911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad`
+(hpke, nistec, and x/*). edwards25519:
+`2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067`;
+go-internal:
+`4835612df0098ca95f8e7d9e3bffcb02358d435dbb38057c844c99d7f725eb20`.
+These are inspected license texts, not conclusions inferred from an SBOM.
+Current gate execution is recorded in [verification.md](verification.md).
 
 ## SBOM and provenance strategy
 

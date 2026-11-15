@@ -102,12 +102,12 @@ extension or webhook, or perform enforcement.
 
 ## aegismesh inspect
 
-    inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
-    inspect show   --data-dir DIR --id EVENT_ID [--verify]
-    inspect export --data-dir DIR --out FILE.ndjson [--profile ecs] [--verify]
+    inspect list   --data-dir DIR [--identity FILE ...] [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
+    inspect show   --data-dir DIR --id EVENT_ID [--identity FILE ...] [--verify]
+    inspect export --data-dir DIR --out FILE.ndjson [--identity FILE ...] [--profile ecs] [--verify]
 
 Read-only access to evidence. `show` accepts ID prefixes (shortest unambiguous
-match). `--verify` recomputes each event's integrity hash; corrupt lines are
+match). `--verify` recomputes each event's integrity hash; corrupt plaintext lines are
 skipped, counted, and reported — never silently dropped. `--finding PI-001`
 filters to events where a named detection rule fired (rule ids are validated
 against the registry before any file is read). `--classification CLASS` keeps
@@ -130,13 +130,29 @@ Verified export is fail closed. It stages the complete output and replaces the
 destination only after every event and line passes validation and integrity
 checks. An existing output file is unchanged on malformed input, corrupt
 evidence, or a failed integrity check. `--verify=false` is an explicit recovery
-mode: invalid records are reported and skipped, so its output is not suitable as
-a verified evidence set. The destination may not resolve to a source evidence
-segment, including through a symlink or hard link.
+mode for plaintext: invalid records are reported and skipped, so its output is
+not suitable as a verified evidence set. Encrypted framing/authentication failures are always
+terminal, including with `--verify=false`. The destination may not resolve to
+a source evidence segment or supplied private identity file, including through a symlink or hard link. Encrypted
+segments require at least one matching `--identity FILE`; repeat the flag during
+key rotation. Identity files are native X25519 only, bounded and owner-only. See
+[evidence-encryption.md](evidence-encryption.md).
+
+Encrypted evidence reads require a complete authenticated v2 footer. An exact
+`inspect show --id` match does not bypass validation of later history. List,
+show, export and recommend emit no successful output after a later encrypted
+read failure. Active segments remain unreadable through ordinary flushes. They
+seal on size rotation, close or the first flush at five minutes from their first
+event (normally up to five more seconds; stalled maintenance can take longer).
+Full-directory reads still fail if a new active successor exists. Stop the runtime
+or inspect a separate snapshot of sealed segments for a complete read. Interrupted
+segments are preserved and fail closed on restart;
+see [recovery semantics](evidence-encryption.md). `--identity` accepts file
+references only; inline private values are rejected without echoing them.
 
 ## aegismesh recommend
 
-    recommend --data-dir DIR [--limit N] [--rule RULE_ID]
+    recommend --data-dir DIR [--identity FILE ...] [--limit N] [--rule RULE_ID]
               [--sensor ID]
               [--classification interaction|canary_invocation|correlation_signal]
               [--json]
@@ -161,7 +177,9 @@ stdout is written. Empty or whitespace values, padded values, comma-separated
 filters, repeated flags, missing values, invalid enums/IDs, positional
 arguments, and unknown flags are usage errors. The command is read-only and has
 no runtime-policy, LLM, webhook, extension, command, filesystem-mutation,
-configuration-mutation, external-egress, or enforcement path.
+configuration-mutation, external-egress, or enforcement path. Encrypted
+history requires matching `--identity FILE` values under the same rules as
+`inspect`; decryption failure aborts before recommendation output is written.
 
 ## aegismesh rules
 

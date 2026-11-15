@@ -111,16 +111,25 @@ service or public administration API today.
 
 ## Current core scope
 
-Ships: CLI (`init`, `doctor`, `validate`, `run`, `demo`, `inspect`, `recommend`,
+Implemented in the current tree: CLI (`init`, `doctor`, `validate`, `run`, `demo`, `inspect`, `recommend`,
 `rules`, `migrate beelzebub`, `ext`, `healthcheck`, `version`, `completion`);
 HTTP/TCP/MCP sensors plus authentication-only SSH; static policies;
 deterministic local and opt-in remote providers; optional per-sensor fixed-worker
-fault containment; JSONL evidence with correlation signals; ECS-compatible local
-export; deterministic dry-run recommendations; loopback admin endpoints;
+fault containment; JSONL evidence with correlation signals and optional native
+age/X25519 at-rest encryption; ECS-compatible local export; deterministic dry-run
+recommendations; loopback admin endpoints;
 data-only observer extensions; opt-in webhook delivery; Docker/Compose; Helm
 packaging; pinned CI/release definitions and documentation.
 
-Does not ship yet: evidence-at-rest encryption, Telnet/database sensors, OTLP or
-automatic SIEM connectors, autonomous response connectors or enforcement,
+Does not ship yet: Telnet/database sensors, OTLP or automatic SIEM connectors,
+autonomous response connectors or enforcement,
 distributed deployment, multi-tenancy, hosted SaaS/control plane, web console,
 or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
+
+The encryption slice is implemented in the current development candidate (PR
+pending); human review, exact-head CI and merge remain open. Encryption protects
+new event contents on storage media. Existing plaintext, exported NDJSON,
+filenames, sizes and timing remain exposed. Compromised runtime hosts and stolen
+private identities defeat confidentiality; lost identities have no escrow or
+recovery service. Interrupted encrypted segments fail closed without automatic
+salvage. See ADR-0016 and `evidence-encryption.md`.

@@ -227,6 +227,42 @@ func TestMaxEventBytesMinimum(t *testing.T) {
 	}
 }
 
+func TestMaxEventBytesCannotExceedReadableEnvelopeLimit(t *testing.T) {
+	_, err := New(Options{
+		Dir:           t.TempDir(),
+		MaxFileBytes:  2 << 20,
+		MaxEventBytes: event.MaxStoredEnvelopeBytes + 1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "max_event_bytes must be <=") {
+		t.Fatalf("expected maximum validation, got %v", err)
+	}
+}
+
+func TestPlaintextScannerAcceptsMaximumStoredEnvelopeToken(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events-20260101T000000.000000000Z.jsonl")
+	record := strings.Repeat("x", event.MaxStoredEnvelopeBytes)
+	if err := os.WriteFile(path, append([]byte(record), '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := CountSegment(path); err != nil || n != 1 {
+		t.Fatalf("CountSegment(max token) = %d, %v", n, err)
+	}
+	seen := 0
+	if err := forEachLine(path, func(line string) error {
+		seen++
+		if len(line) != event.MaxStoredEnvelopeBytes {
+			t.Fatalf("line length = %d", len(line))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if seen != 1 {
+		t.Fatalf("seen = %d", seen)
+	}
+}
+
 func FuzzDecodeEventEnvelope(f *testing.F) {
 	f.Add([]byte(`{"schema":"aegismesh.event/v1"}`))
 	f.Add([]byte(`{"schema":123}`))

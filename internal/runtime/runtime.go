@@ -103,6 +103,11 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		MaxEvents:     cfg.Storage.Retention.MaxEvents,
 		MaxAgeDays:    cfg.Storage.Retention.MaxAgeDays,
 	}
+	if cfg.Storage.Encryption != nil && cfg.Storage.Encryption.Enabled {
+		storeOpts.Encryption = &storage.EncryptionOptions{
+			Recipient: cfg.Storage.Encryption.Recipient,
+		}
+	}
 	store, err := storage.New(storeOpts)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", errRuntime, err)

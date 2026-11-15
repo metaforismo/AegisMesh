@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +12,6 @@ import (
 	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/ecsexport"
 	"github.com/metaforismo/aegismesh/internal/event"
-	"github.com/metaforismo/aegismesh/internal/storage"
 )
 
 type inspectCmd struct {
@@ -28,9 +26,9 @@ func (c *inspectCmd) Usage() string { return "inspect <list|show|export> [flags]
 func (c *inspectCmd) Help() string {
 	return `Read and export recorded evidence.
 
-  inspect list   --data-dir DIR [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
-  inspect show   --data-dir DIR --id EVENT_ID [--verify]
-  inspect export --data-dir DIR --out FILE.ndjson [--profile ecs] [--verify]
+  inspect list   --data-dir DIR [--identity FILE ...] [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
+  inspect show   --data-dir DIR --id EVENT_ID [--identity FILE ...] [--verify]
+  inspect export --data-dir DIR --out FILE.ndjson [--identity FILE ...] [--profile ecs] [--verify]
 
 Events are observations of decoy interactions — they are not incidents and do
 not prove compromise. --verify recomputes each event's integrity hash while
@@ -40,7 +38,9 @@ events where the named detection rule fired (e.g. --finding PI-001).
 canary_invocation, correlation_signal); it applies before --limit, so
 --limit N caps matching rows. Export keeps the native envelope by default;
 --profile ecs emits the documented ECS-compatible mapping while preserving
-the complete native envelope under the aegismesh field.`
+the complete native envelope under the aegismesh field. Encrypted segments
+require one or more explicit native age/X25519 identity files; repeat
+--identity during key rotation.`
 }
 
 func (c *inspectCmd) Run(ctx context.Context, args []string) error {
@@ -59,16 +59,6 @@ func (c *inspectCmd) Run(ctx context.Context, args []string) error {
 	}
 }
 
-func (c *inspectCmd) openReader(fs *flag.FlagSet, dataDir *string) (*storage.Reader, error) {
-	if err := fs.Parse(nil); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(*dataDir) == "" {
-		return nil, Usagef("--data-dir is required")
-	}
-	return storage.NewReader(*dataDir)
-}
-
 func (c *inspectCmd) list(args []string) error {
 	fs := newFlagSet("inspect list")
 	addGlobalFlags(fs, &c.g)
@@ -79,8 +69,10 @@ func (c *inspectCmd) list(args []string) error {
 	finding := fs.String("finding", "", "only events where this detection rule id fired (e.g. PI-001)")
 	var class singleValueFlag
 	fs.Var(&class, "classification", "filter to one evidence class (interaction|canary_invocation|correlation_signal)")
+	var identities identityFilesFlag
+	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
 	verify := fs.Bool("verify", false, "recompute integrity hashes while reading")
-	if err := fs.Parse(args); err != nil {
+	if err := parseIdentityFlags(fs, args); err != nil {
 		return Usagef("%v", err)
 	}
 	if fs.NArg() > 0 {
@@ -102,7 +94,7 @@ func (c *inspectCmd) list(args []string) error {
 			return Usagef("%v", err)
 		}
 	}
-	r, err := storage.NewReader(*dataDir)
+	r, err := identities.openReader(*dataDir)
 	if err != nil {
 		return err
 	}
@@ -182,8 +174,10 @@ func (c *inspectCmd) show(args []string) error {
 	addGlobalFlags(fs, &c.g)
 	dataDir := fs.String("data-dir", "./data", "evidence directory")
 	id := fs.String("id", "", "event id to display")
+	var identities identityFilesFlag
+	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
 	verify := fs.Bool("verify", true, "verify this event's integrity hash")
-	if err := fs.Parse(args); err != nil {
+	if err := parseIdentityFlags(fs, args); err != nil {
 		return Usagef("%v", err)
 	}
 	if fs.NArg() > 0 {
@@ -192,23 +186,26 @@ func (c *inspectCmd) show(args []string) error {
 	if strings.TrimSpace(*id) == "" {
 		return Usagef("--id is required")
 	}
-	r, err := storage.NewReader(*dataDir)
+	r, err := identities.openReader(*dataDir)
 	if err != nil {
 		return err
 	}
 	var found *event.Envelope
 	var matches int
 	err = r.ForEach(func(e event.Envelope) error {
+		if found != nil && found.ID == *id {
+			return nil
+		}
 		if e.ID == *id || strings.HasPrefix(e.ID, *id) {
 			matches++
-			found = &e
 			if e.ID == *id {
-				return io.EOF // exact match wins; stop immediately
+				matches = 1
 			}
+			found = &e
 		}
 		return nil
 	}, nil)
-	if err != nil && err != io.EOF {
+	if err != nil {
 		return err
 	}
 	switch {
@@ -238,8 +235,10 @@ func (c *inspectCmd) export(args []string) error {
 	outPath := fs.String("out", "", "output NDJSON file ('-' for stdout)")
 	var profile singleValueFlag
 	fs.Var(&profile, "profile", "export mapping profile (ecs)")
+	var identities identityFilesFlag
+	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
 	verify := fs.Bool("verify", true, "refuse to export events failing integrity checks")
-	if err := fs.Parse(args); err != nil {
+	if err := parseIdentityFlags(fs, args); err != nil {
 		return Usagef("%v", err)
 	}
 	if fs.NArg() > 0 {
@@ -258,17 +257,17 @@ func (c *inspectCmd) export(args []string) error {
 			return Usagef("unknown export profile %q (want ecs)", profileName)
 		}
 	}
-	r, err := storage.NewReader(*dataDir)
+	r, err := identities.openReader(*dataDir)
 	if err != nil {
 		return err
 	}
 	if *outPath != "-" {
-		isSegment, serr := r.IsSegmentPath(*outPath)
+		protected, serr := r.IsProtectedPath(*outPath)
 		if serr != nil {
 			return serr
 		}
-		if isSegment {
-			return Usagef("--out must not resolve to an evidence segment in --data-dir")
+		if protected {
+			return Usagef("--out must not resolve to an evidence segment or supplied identity file")
 		}
 	}
 	tempDir := os.TempDir()
@@ -356,11 +355,6 @@ func short(id string) string {
 }
 
 const timeLayout = "15:04:05.000"
-
-var (
-	_ = context.Background
-	_ = os.Exit
-)
 
 // eventClassifications is derived from the owning constants in internal/event
 // so this filter cannot drift from the classifications envelopes validate.

@@ -14,9 +14,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/metaforismo/aegismesh/internal/agekey"
 	"github.com/metaforismo/aegismesh/internal/correlate"
 	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/egress"
+	"github.com/metaforismo/aegismesh/internal/event"
 )
 
 var (
@@ -143,11 +145,34 @@ func (c *Config) Validate() error {
 	if c.Storage.MaxEventBytes < 1024 {
 		return fmt.Errorf("%w: storage.max_event_bytes must be >= 1024", errConfig)
 	}
+	if c.Storage.MaxEventBytes > event.MaxStoredEnvelopeBytes {
+		return fmt.Errorf("%w: storage.max_event_bytes must be <= %d", errConfig, event.MaxStoredEnvelopeBytes)
+	}
+	if err := validateStorageEncryption(c.Storage); err != nil {
+		return fmt.Errorf("%w: storage.encryption: %v", errConfig, err)
+	}
 	if c.Storage.Retention.MaxEvents <= 0 || c.Storage.Retention.MaxEvents > 10_000_000 {
 		return fmt.Errorf("%w: storage.retention.max_events must be within 1..10000000", errConfig)
 	}
 	if c.Storage.Retention.MaxAgeDays <= 0 || c.Storage.Retention.MaxAgeDays > 3650 {
 		return fmt.Errorf("%w: storage.retention.max_age_days must be within 1..3650", errConfig)
+	}
+	return nil
+}
+
+func validateStorageEncryption(storage Storage) error {
+	if storage.Encryption == nil {
+		return nil
+	}
+	enc := storage.Encryption
+	if !enc.Enabled {
+		if enc.Recipient != "" {
+			return fmt.Errorf("recipient requires enabled: true")
+		}
+		return nil
+	}
+	if _, err := agekey.ParseRecipient(enc.Recipient); err != nil {
+		return err
 	}
 	return nil
 }

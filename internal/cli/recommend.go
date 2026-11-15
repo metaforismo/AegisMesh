@@ -10,7 +10,6 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/recommend"
-	"github.com/metaforismo/aegismesh/internal/storage"
 )
 
 type recommendCmd struct {
@@ -22,13 +21,13 @@ func newRecommendCmd(env *Env) *recommendCmd { return &recommendCmd{env: env} }
 func (c *recommendCmd) Name() string { return "recommend" }
 
 func (c *recommendCmd) Usage() string {
-	return "recommend --data-dir DIR [--limit N] [--rule RULE_ID] [--sensor ID] [--classification CLASS] [--json]"
+	return "recommend --data-dir DIR [--identity FILE ...] [--limit N] [--rule RULE_ID] [--sensor ID] [--classification CLASS] [--json]"
 }
 
 func (c *recommendCmd) Help() string {
 	return `Generate deterministic, dry-run operator recommendations from recorded evidence.
 
-  recommend --data-dir DIR
+  recommend --data-dir DIR [--identity FILE ...]
   recommend --data-dir DIR --rule PI-001 --limit 10
   recommend --data-dir DIR --classification correlation_signal --json
 
@@ -46,6 +45,7 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
 	var sensorID strictValueFlag
 	var classification strictValueFlag
 	var jsonOut strictBoolFlag
+	var identities identityFilesFlag
 
 	fs := newFlagSet(c.Name())
 	fs.Var(&dataDir, "data-dir", "evidence directory (required)")
@@ -54,8 +54,9 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
 	fs.Var(&sensorID, "sensor", "filter by exact sensor id")
 	fs.Var(&classification, "classification", "filter by evidence class")
 	fs.Var(&jsonOut, "json", "emit machine-readable JSON output")
+	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := parseIdentityFlags(fs, args); err != nil {
 		return Usagef("%v", err)
 	}
 	if fs.NArg() > 0 {
@@ -98,7 +99,7 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
 		return Usagef("%v", err)
 	}
 
-	reader, err := storage.NewReader(dataDir.values[0])
+	reader, err := identities.openReader(dataDir.values[0])
 	if err != nil {
 		return err
 	}

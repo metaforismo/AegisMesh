@@ -8,6 +8,12 @@ changes bump MINOR).
 
 ### Added
 
+- Optional native age/X25519 evidence-at-rest encryption writes independently
+  authenticated `.jsonl.age` frames, supports explicit read identities during
+  key rotation, preserves mixed-history retention, and fails closed on wrong
+  keys, corruption, truncation, unsafe key/segment aliases, or accidental
+  plaintext downgrade. Plaintext remains the default for data directories that
+  have never enabled encryption.
 - Authentication-only SSH deception sensor with synthetic password/public-key
   authentication, per-instance in-memory Ed25519 host keys, bounded
   sessions/inputs/concurrency, redacted evidence, and unconditional rejection
@@ -24,6 +30,15 @@ changes bump MINOR).
 
 ### Fixed
 
+- Encrypted v2 segments require authenticated completion footers, rejecting
+  truncation at complete-frame boundaries and changed record order. Flush seals
+  encrypted segments; subsequent writes start a new segment. Exact-match
+  `inspect show` validates later input before emitting output. Malformed
+  authenticated event JSON fails closed instead of being skipped.
+
+- Storage now enforces one shared 1 MiB maximum stored-envelope boundary across
+  configuration, plaintext/encrypted writers and readers, preventing accepted
+  writes that the local reader cannot consume at the configured boundary.
 - `storage.max_event_bytes` is now an actual runtime/store bound rather than a
   validation-only setting. Oversized encoded envelopes are rejected before
   segment mutation even when they would fit within `max_file_bytes`.
