@@ -16,6 +16,7 @@ reference. `site/design-system.html` shows every component rendered.
 | `site/assets/css/site.css` | Landing page and reference-page layout |
 | `internal/consoleui/static/assets/js/ui/icons.js` | The icon set and the brand mark (the site's static SVGs are generated from it) |
 | `internal/consoleui/static/assets/js/lib/{palette,keys,batch,swr,chart}.js` | Pure logic behind the palette, keyboard navigation, live batching, the read cache and the small charts; unit-tested in `webtest/` |
+| `internal/consoleui/static/assets/js/lib/{auth,tenant}.js` | Sign-in option selection and OIDC error codes; tenant visibility, switch targets and where a switch lands; unit-tested in `webtest/` |
 
 There is no build step, no npm dependency and no third-party code. The console
 is plain HTML, CSS and ES modules embedded into the binary with `go:embed`.
@@ -40,10 +41,11 @@ is plain HTML, CSS and ES modules embedded into the binary with `go:embed`.
    are labelled "proposed, not executed". Limits (bounded index, single node,
    what the audit chain proves) are stated where they matter.
 6. **Honest marks.** A small chart never shows activity it did not load:
-   activity traces draw time older than the oldest loaded event dashed and
-   say so; the audit chain colors only what the server's one verification
-   answer supports; sparklines exist only where the API has a per-bucket
-   series.
+   activity traces draw time the index cannot speak for (or, in the
+   fallback, older than the oldest loaded event) dashed and say so; the audit
+   chain colors only what the server's one verification answer supports;
+   sparklines and traces exist only where the API has a per-bucket series
+   (`overview.buckets`, `overview.by_sensor[].buckets`).
 
 ## Tokens
 
@@ -197,7 +199,7 @@ cycles System → Light → Dark and remembers the choice in `localStorage`
 | `.toast` | Transient confirmation | Never the only place an error is reported |
 | `.timeline` | Ordered signals or notes | Order is labelled |
 | `.code`, `.json-*` | JSON viewer | Tokens built from the parsed value, rendered as text |
-| `.bar-list` | Share within one measure | Fill width is set through CSSOM, not a style attribute |
+| `.bar-list`, `--aside` | Share within one measure | Fill width is set through CSSOM, not a style attribute. `--aside` adds a small decorative trace between label and value (Overview, Events by sensor); the printed value stays the number of record |
 | `.chart`, `.chart__*`, `.legend` | Hand-written SVG stacked bars | 2px surface gap between segments, focusable buckets, table view |
 | `.shell`, `.nav-link`, `.nav-indicator`, `.brand` | Console frame | Navigation becomes a drawer below 960px; the indicator slides to the active link |
 | `.icon`, `--xs`/`--sm`/`--lg` | Icon | See Icons |
@@ -212,6 +214,8 @@ cycles System → Light → Dark and remembers the choice in `localStorage`
 | `.skeleton` | Loading placeholder | Shaped like the screen; compositor-only sheen |
 | `.route-progress` | Thin progress bar | Only when a screen takes more than ~140ms |
 | `.live-pill` | "N new events" | Appears when rows arrive out of view |
+| `.menu` (`__title`, `__list`, `__item`, `__check`, `__hint`, `__note`, `__head`, `__kv`) | Top-bar menu | A native `popover` (light dismiss, Esc, top layer from the platform), placed under its button by CSSOM. Opened many times a day, so it never animates. The current item carries `aria-current`, a check and the word "Current". Route changes close it |
+| `.top-tenant`, `--static` | Active tenant in the top bar | A button that opens the tenant menu with several tenants; a static label with one tenant not named `default`; absent otherwise |
 
 ## Console security rules
 
@@ -220,14 +224,18 @@ The console server sends
 (see `docs/architecture/console-api.md`). The UI is written for it:
 
 - All markup is built by `assets/js/lib/dom.js`. Children become Text nodes,
-  attributes come from an allowlist, `href` accepts only `#/…` routes and a
-  fixed set of project links, class names are validated tokens, and only
+  attributes come from an allowlist, `href` accepts only `#/…` routes, one
+  same-origin server path (`/api/v1/auth/oidc/login`, the single sign-on
+  start) and a fixed set of project links, class names are validated tokens, and only
   form-state properties can be set. `innerHTML` and friends are never used.
 - Route parameters and filters are validated against the contract's closed
   vocabularies before they reach a request, a class name or a link
   (`lib/route.js`).
 - The CSRF token lives only in the API client's closure; the session is an
-  HttpOnly cookie. Nothing sensitive goes into `localStorage`.
+  HttpOnly cookie. Nothing sensitive goes into `localStorage`. A tenant
+  switch replaces the token with the rotated one from the response. A 401
+  for a request that was already in flight with the old cookie during a
+  switch is treated as an answer, not as a sign-out.
 - The live stream is filtered by the server only by origin (`node`), so every
   other filter is re-applied in the browser with the same semantics as the
   server (`matchesEventFilters`, which also re-checks the origin). When
@@ -251,8 +259,10 @@ forbidden.
 The read cache (`lib/swr.js`) keeps only responses the console server
 already returned, in memory, for the life of the page: in-flight requests
 are shared, a response under 10s old is reused, back/forward navigation
-shows a response under 2 minutes old and refreshes it, and any write clears
-everything. The audit trail is never cached or prefetched, because reading
+shows a response under 2 minutes old and refreshes it, and any write (or
+a tenant switch) clears everything. A response to a request that started
+before the clear is handed to its caller but never cached, so a late answer
+from the departing tenant cannot reappear in the new one. The audit trail is never cached or prefetched, because reading
 it is an audited action.
 
 ## Screens
@@ -263,6 +273,94 @@ detail, Audit trail (admin only), Fleet and Fleet node (experimental).
 Analyst-only actions (create, rename, change status or priority, attach and
 detach evidence, add notes) are hidden for viewers; the server enforces the
 same rules.
+
+### Sign-in (operator token and experimental single sign-on)
+
+The card is built from `GET /meta` `auth` (`signInOptions`):
+
+| `auth.token` | `auth.oidc.enabled` | Card |
+|---|---|---|
+| true | false | Token form (as before OIDC existed; also when `/meta` cannot be read or has no `auth`) |
+| true | true | "Continue with <display name>" as the primary button, an "or" divider, and the token form collapsed behind "Use an operator token" (`<details>`) |
+| false | true | Only the single sign-on button |
+| false | false | A notice that no sign-in method is enabled |
+
+The single sign-on button is a plain same-origin link to
+`/api/v1/auth/oidc/login`; the server redirects to the identity provider. The
+display name is configuration shown as plain text, with control and bidi
+characters removed and the length capped. A one-line note under the button
+says it is experimental.
+
+A failed callback returns to `#/login?error=<code>`. The code is read once,
+removed from the address bar (`history.replaceState`), and mapped to fixed
+words; provider text never reaches the page (the server discards it, and
+the UI would not show it anyway):
+
+| Code | Title |
+|---|---|
+| `unavailable` | Single sign-on is temporarily unavailable |
+| `rate_limited` | Too many sign-in attempts |
+| `invalid_request` | The sign-in response was incomplete |
+| `invalid_state` | That sign-in attempt expired |
+| `invalid_identity` | Your identity was not accepted |
+| `access_denied` | Sign-in was not granted |
+| anything else | Single sign-on did not complete |
+
+Where the token form is also offered, `unavailable` and `access_denied`
+mention it. A failed attempt while already signed in keeps the session and
+shows a toast.
+
+### Tenants (experimental, logical isolation)
+
+A session acts in one tenant. The console shows tenant UI only when it
+matters (`tenantInfo`): nothing with a single tenant named `default`; a
+static label with one tenant of another name; a switcher with several.
+
+- **Top bar:** the active tenant sits beside the principal. With several
+  tenants it opens a menu of member tenants (current one checked and
+  labelled), with one line on what switching does and that isolation is
+  logical. The palette offers "Switch tenant: <name>" for each other tenant.
+- **Account menu:** name, role, how the session signed in ("Operator token"
+  or "Single sign-on (<display name>)"), the tenant, and when the session
+  expires; sign out.
+- **Switching** (`POST /session/tenant`): the current screen is torn down
+  first (aborting its requests and closing its live stream), then the
+  rotated session and CSRF token replace the old ones, the read cache is
+  cleared, the shell is rebuilt and the same view renders in the new tenant.
+  A route that names an object (event, investigation, fleet node, source)
+  goes to Overview instead; on Events, the side panel and an origin filter
+  are cleared (`routeAfterSwitch`). The address is replaced, not pushed, so
+  Back does not lead to a page that cannot exist. A toast says where the
+  operator is and why. No transition plays: it is a change of context.
+- **Not found:** with tenant UI visible, a 404 on a page or in the side
+  panel shows "Not found in tenant <name>" and says plainly that another
+  tenant's objects answer exactly like missing ones.
+- **Fleet:** the token dialog says which tenant the node will join (the
+  hub binds it at enrollment; an agent cannot choose or move it), the shown
+  token lists its tenant, and node detail shows the node's tenant.
+- **Audit:** the subtitle names the tenant whose chain is shown. OIDC
+  records carry `issuer` and `subject`; both are claims from an external
+  provider, so they render as evidence (`.evidence`, truncated with the peek
+  for the full value) in the Detail column. The action filter lists
+  `session.oidc_login`, `session.oidc_denied` and `session.tenant_switch`.
+
+The isolation is logical: one process, one disk and one evidence
+encryption recipient serve every tenant. Copy never calls it a hard
+boundary.
+
+### Activity traces (per-sensor buckets)
+
+Sensors and the Overview's "Events by sensor" panel draw traces from
+`overview.by_sensor[].buckets`, which share the main series' starts. The
+Sensors screen makes one overview request (24 hours, 48 half-hour buckets,
+shared with Overview through the read cache) instead of one events request
+per sensor. A sensor absent from a shorter `by_sensor` list had no events
+(zeros on the main starts). The old per-sensor events request remains the
+fallback for servers without buckets and for a sensor that may be past the
+64-entry cap. Time before the index can speak for (`indexKnownFrom`: the
+process start when history is `unavailable`, the oldest indexed event when
+`truncated`) is dashed. On a hub that accepts forwarded evidence the
+traces group by sensor id across origins, and the Sensors screen says so.
 
 ### Fleet (experimental inventory)
 
@@ -332,7 +430,8 @@ On a hub that accepts forwarded evidence, an event summary may carry `node:
 ## Interaction
 
 - **Command palette** (Cmd/Ctrl+K, or the search button): screens, actions
-  (live events, theme, shortcuts, sign out), sensors, the top 50 sources of
+  (live events, theme, shortcuts, "Switch tenant: …" with several tenants,
+  sign out), sensors, the top 50 sources of
   the last 24 hours and investigations. Ranking: exact, prefix, word start,
   substring, then fuzzy; tested in `webtest/palette.test.mjs`. A pasted
   32-hex event id offers to open that event.
@@ -356,8 +455,13 @@ On a hub that accepts forwarded evidence, an event summary may carry `node:
 ## Performance
 
 Measured with Playwright (Chromium) against the mock, cache disabled,
-1440×900, median of three loads of `#/overview`, on 2026-11-15. The mock does
-not compress responses, so byte counts are uncompressed.
+1440×900, median of three loads of `#/overview`, on 2026-11-15. At the time
+the mock did not compress responses, so byte counts are uncompressed. The
+mock now mirrors the server's static handling (gzip for text above 256
+bytes when smaller, a strong SHA-256 `ETag` per representation,
+`Cache-Control: no-cache`, `Vary: Accept-Encoding`, 304 on a matching
+`If-None-Match`, 406 when every encoding is refused, `index.html` no-store);
+these figures were not re-measured.
 
 | Measure | Before | After |
 |---|---|---|
@@ -385,6 +489,15 @@ paint. The burst figure comes from `GET /__mock/burst?n=200` on the mock.
 # node reporting drops and gaps, a local/forwarded id collision)
 # add --burst N to push N observations 3s after each stream connects, or call
 # GET /__mock/burst?n=200 while a live list is open
+# add --auth token|oidc|both to choose the sign-in methods in /meta (default
+# token); with oidc, "Continue with Example IdP (mock)" goes through a fake
+# provider page at /__mock/idp that offers synthetic identities (ada: admin,
+# every tenant; ana: analyst, every tenant; vera: viewer, first tenant only)
+# and every failure code
+# add --tenants a,b to declare tenants (default one tenant, "default"); the
+# first owns the local sensors, rules and node, the others hold only evidence
+# forwarded by their own, differently named fleet; dev-admin and dev-analyst
+# belong to every tenant, dev-viewer to the first only
 make ui-dev
 # UI unit and integration tests (Node.js >= 20, no npm install)
 make ui-test
@@ -456,3 +569,19 @@ and does not ship.
 | Live insertion and route changes in the browser | PASS with a caveat: the browser pane was hidden, so `requestAnimationFrame` and View Transitions never completed; the check replaced `requestAnimationFrame` with a timer and removed `startViewTransition` in the page. Batching and transitions themselves were not re-verified |
 | Reduced motion | NOT RUN in the browser: the pane cannot emulate it. The change adds no animation or transition (static CSS only) |
 | Against the real Go console server | NOT RUN: verified against the mock and the contract only |
+
+### Verification: single sign-on, tenants, per-sensor traces (2026-11-15, macOS, Node 25.8.2, Go 1.27.4, Chromium in the Claude browser pane)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (169 tests: the 132 before plus sign-in option selection, display-name cleaning, error-code mapping, the sign-in card for each method combination, tenant visibility, switch targets and landing routes, CSRF rotation and superseded 401s across a switch, the read cache across an invalidation, the top-bar tenant and account controls, bucket → trace math and fallbacks, and mock routes for OIDC, tenants, `by_sensor` buckets and compressed static files) | PASS |
+| `GOTOOLCHAIN=go1.27.4 go test ./internal/consoleui` (embed safety) | PASS |
+| Browser, `--auth both --tenants alpha,bravo`: SSO button through the fake provider to a session (OIDC, admin); "Deny consent" lands on the sign-in card with the mapped message, the code removed from the address and the provider text absent; every code (and an unknown one) shows its own message | PASS |
+| Browser, token only (default mock) and OIDC only (`--auth oidc`, `unavailable` without the token hint); token sign-in with one tenant named `default` shows no tenant control and "Operator token" in the account menu | PASS |
+| Tenant switch from Overview (menu), from Events in live mode with the side panel open (palette action: panel and filter cleared, one live stream left on the mock, toast says why), from an investigation (lands on Overview); the investigation's deep link in the other tenant shows "Not found in tenant bravo" | PASS |
+| Sensors traces from `by_sensor` buckets with no per-sensor events requests; Overview "Events by sensor" traces; Fleet token dialog and shown token name the tenant; node detail shows it; Audit shows issuer and subject as evidence and the new actions in the filter | PASS |
+| No horizontal page scroll at 375px (dark: Overview, Sensors, Events live, Fleet, Audit, a not-found investigation; light: Audit, Fleet) and 1440px (Audit, Sensors); sign-in card at 375px dark and 1440px light; tenant and account menus open inside the viewport at 375px | PASS |
+| Found and fixed: the Audit table's short hash broke into a vertical strip beside the wide Detail column (pre-existing; now one line); the toast after clearing the side panel claimed a move to Overview; menus stayed open across a route change | PASS |
+| Reduced motion | NOT RUN in the browser: the pane cannot emulate it. The menus never animate; nothing new animates |
+| Firefox and Safari (native `popover`, `<details>`) | NOT RUN: only Chromium was available |
+| Real identity providers and the real Go console server | NOT RUN: verified against the contract and the mock's fake provider only |

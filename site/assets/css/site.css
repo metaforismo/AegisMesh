@@ -351,4 +351,5 @@ body { font-size: var(--text-md); }
 .ds-palette { max-width: 34rem; overflow: hidden; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--elev-3), var(--highlight); }
 .ds-palette__q { display: flex; align-items: center; }
 .ds-static { max-width: 23rem; }
+.ds-menu { position: static; width: 18rem; max-width: 100%; }
 .ds-grow-2 { flex-grow: 2; } .ds-grow-3 { flex-grow: 3; } .ds-grow-4 { flex-grow: 4; } .ds-grow-30 { flex-grow: 30; }
