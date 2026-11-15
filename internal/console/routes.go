@@ -12,7 +12,7 @@ type routeSpec struct {
 }
 
 func (s *Server) routeTable() []routeSpec {
-	return []routeSpec{
+	return append(s.fleetRoutes(), []routeSpec{
 		{
 			pattern: "GET /api/v1/meta",
 			role:    "",
@@ -151,7 +151,7 @@ func (s *Server) routeTable() []routeSpec {
 			group:   "audit",
 			handle:  s.verifyAudit,
 		},
-	}
+	}...)
 }
 
 func (s *Server) routes() {

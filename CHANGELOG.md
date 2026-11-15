@@ -8,7 +8,17 @@ changes bump MINOR).
 
 ### Added
 
-- Uncommitted first operator console backend candidate: disabled-by-default,
+- Experimental fleet inventory with authenticated enrollment and heartbeats:
+  opt-in same-binary hub/agent roles, private local Ed25519 identities, one-use
+  expiring enrollment tokens, persistent bounded nonce replay protection,
+  permanent key revocation and console inventory administration. Dedicated hub
+  listener, TLS beyond loopback, shared egress classification with a dedicated
+  private-network opt-in, independent jittered delivery and fixed-label metrics.
+  Not multi-tenant, not a managed service; forwards no evidence and cannot
+  command nodes. On `feat/fleet-enrollment`; PR #76, unmerged, hosted CI not
+  yet run.
+
+- First operator console (PRs #74 and #75, open and unmerged): disabled-by-default,
   authenticated single-node HTTP API, token operator roles, ephemeral sessions/
   CSRF, bounded evidence index/live SSE, atomic operator investigations and
   hash-chained private audit. The same listener serves an embedded operator UI
@@ -16,9 +26,10 @@ changes bump MINOR).
   code, strict CSP, evidence rendered as text) only when `console.enabled` is
   true; `make ui-test` runs its Node.js tests and CI runs them too. CLI adds `console token`,
   `console hash` and opt-in `demo --console`. Encrypted evidence remains live-only;
-  no SSO, fleet, tenant isolation or sensor control is included.
+  no SSO, tenant isolation or sensor control is included in that console slice.
 
-- Optional native age/X25519 evidence-at-rest encryption writes independently
+- Optional native age/X25519 evidence-at-rest encryption (PR #73, open and
+  unmerged) writes independently
   authenticated `.jsonl.age` frames, supports explicit read identities during
   key rotation, preserves mixed-history retention, and fails closed on wrong
   keys, corruption, truncation, unsafe key/segment aliases, or accidental

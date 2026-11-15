@@ -81,7 +81,7 @@ func (c *runCmd) Run(_ context.Context, args []string) error {
 func (c *runCmd) dryRun(cfg *config.Config, sys *runtime.System, log *slog.Logger) error {
 	ctx, cancel := context.WithTimeout(context.Background(), startTimeoutCLI())
 	defer cancel()
-	if err := sys.Start(ctx); err != nil {
+	if err := sys.StartDryRun(ctx); err != nil {
 		return fmt.Errorf("dry-run failed: %v", err)
 	}
 	sys.Stop(context.Background())

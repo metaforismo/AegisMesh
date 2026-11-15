@@ -101,13 +101,13 @@ AegisMesh is intended to remain commercially usable under Apache-2.0 and to
 support a future managed SaaS. The single-node runtime, evidence format,
 self-hosted operation and core defensive capabilities remain public and usable.
 
-A future hosted product may provide fleet enrollment, tenant isolation, SSO and
+A future hosted product may build on experimental inventory with tenant isolation, SSO and
 RBAC, collaborative investigation, searchable managed retention, audit
 administration, usage metering, managed upgrades, support and service-level
 operations. Those capabilities introduce new identity, authorization, egress,
 data residency and supply-chain boundaries. They are product direction only:
-there is no shipped multi-tenant control plane, billing system, hosted evidence
-service or public administration API today.
+there is no shipped multi-tenant control plane, billing system or hosted evidence
+service today. Self-hosted inventory administration is described below.
 
 ## Current core scope
 
@@ -123,25 +123,43 @@ packaging; pinned CI/release definitions and documentation.
 
 Does not ship yet: Telnet/database sensors, OTLP or automatic SIEM connectors,
 autonomous response connectors or enforcement,
-distributed deployment, multi-tenancy, hosted SaaS/control plane, SSO/fleet
-console features, or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
+distributed evidence aggregation, multi-tenancy, hosted SaaS/control plane, SSO,
+or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
 
-The encryption slice is implemented in the current development candidate (PR
-pending); human review, exact-head CI and merge remain open. Encryption protects
+The encryption slice is implemented in open PR #73 (hosted CI PASS on its head);
+human review and merge remain pending. Encryption protects
 new event contents on storage media. Existing plaintext, exported NDJSON,
 filenames, sizes and timing remain exposed. Compromised runtime hosts and stolen
 private identities defeat confidentiality; lost identities have no escrow or
 recovery service. Interrupted encrypted segments fail closed without automatic
 salvage. See ADR-0016 and `evidence-encryption.md`.
 
-## First operator console candidate (P3-2)
+## First operator console (P3-2, open PRs #74 and #75)
 
-The candidate provides a disabled-by-default, authenticated HTTP API and an
+The console provides a disabled-by-default, authenticated HTTP API and an
 embedded operator UI inside the single binary. The UI has no build step and no
 third-party code, and is served only when `console.enabled` is true. It is single-node and single-
 tenant, uses named token operators (viewer/analyst/admin), and reads bounded
 indexed evidence. Operator-authored investigations and an append-only audit
-trail are the only durable console writes. It adds no egress or sensor control.
+trail are the durable writes in that console slice. Optional fleet inventory
+administration is additive; the console cannot control sensors.
 Encrypted storage exposes live envelopes only; audit/notes remain plaintext.
 Local tests and the verification ledger describe the evidence; this is not a
-merged, deployed, SSO, fleet, multi-tenant or production-readiness claim.
+merged, deployed, SSO, multi-tenant or production-readiness claim.
+
+
+## First fleet inventory (P3-1 foundation, PR #76)
+
+Experimental fleet inventory with authenticated enrollment and heartbeats is
+implemented on `feat/fleet-enrollment` (PR #76, unmerged). A hub lists node identities
+and self-reported health through the authenticated console. Agents dial that
+hub using local Ed25519 identities and a bounded independent loop. One-time
+admin tokens establish identity; signed requests, expiry/replay checks and
+permanent revocation protect the inventory boundary. Neither status signatures
+nor online state attest host integrity. The hub cannot command nodes.
+
+This is not multi-tenant, not a managed service, and forwards no evidence.
+Evidence batching/spooling, rotation, attestation, SSO, upgrades and commercial
+service boundaries remain proposed, not implemented. See ADR-0018, the fleet
+protocol and current verification ledger; local proof is separate from review,
+hosted CI, merge, deployment and operational acceptance.

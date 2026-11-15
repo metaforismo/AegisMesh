@@ -7,8 +7,8 @@ as any behavior change.
 
 The console is a *read-mostly* view over evidence already owned by the runtime.
 It never changes sensor behavior, policy, configuration or evidence, and it adds
-no outbound connection. Its only mutable state is operator-authored
-investigations and its own audit trail.
+no outbound connection. Mutable state includes operator-authored investigations,
+audit and optional fleet inventory/token administration (ADR-0018).
 
 ## Transport and exposure
 
@@ -307,3 +307,57 @@ Event and source-detail pagination have distinct trusted cursor scopes, even
 when their selection filters match. Invalid, truncated, tampered, wrong-scope,
 or changed-filter cursors return 400. Audit cursors use a separate process key.
 Static traversal paths are rejected with 404 before path normalization.
+
+## Experimental fleet inventory additions (ADR-0018)
+
+These routes use the existing console listener, authentication, role hierarchy,
+Host checks, cookie CSRF/Origin checks, request bounds, errors and audit. They do
+not share the machine-facing hub mux. No route controls a sensor. This is
+experimental fleet inventory with authenticated enrollment and heartbeats; it
+is not multi-tenant, not a managed service, and forwards no evidence.
+
+| Method and path | Minimum role | Response |
+| --- | --- | --- |
+| `GET /api/v1/fleet` | viewer | `{hub:{enabled,listen,tls},agent:{enabled,hub_url,node_id,enrolled,last_heartbeat_at,last_error}}` |
+| `GET /api/v1/fleet/nodes?status=` | viewer | `{nodes:[FleetNode]}` sorted by ID; optional status online/stale/offline/revoked |
+| `GET /api/v1/fleet/nodes/{id}` | viewer | `FleetNode`, 404 if absent |
+| `POST /api/v1/fleet/enrollment-tokens` | admin | 201 `{id,token,expires_at}`; raw token returned only here |
+| `GET /api/v1/fleet/enrollment-tokens` | admin | `{tokens:[{id,expires_at,note}]}`; outstanding only, sorted ID; `expires_at` is RFC 3339 UTC like every other timestamp |
+| `DELETE /api/v1/fleet/enrollment-tokens/{id}` | admin | 204; 404 if absent/expired |
+| `POST /api/v1/fleet/nodes/{id}/revoke` | admin | `FleetNode`; idempotent permanent revoked state, 404 if absent |
+
+Mint body is `{ttl_seconds?,note?}`: default TTL 3600, 1..86400 accepted; note
+printable ASCII up to 256 bytes. Zero selects the default. Mint expiry is a UTC
+RFC3339Nano string. Token listing exposes neither raw token nor digest. All
+other mutations accept no body. Unknown/duplicate query keys are rejected;
+only the node-list route accepts `status`.
+
+`FleetNode` has exactly `{id,name,status,enrolled_at,last_seen_at,version,
+uptime_seconds,sensors,counters,bus_dropped_events,storage_healthy,
+public_key_fingerprint}`. `version` is `{version,commit,go}`, `sensors` is
+`[{id,kind,state}]`, and counters are uint64
+`{interaction,canary_invocation,correlation_signal}`. Sensor addresses and
+evidence are absent. Timestamps are UTC RFC3339Nano, empty before the first
+heartbeat. Enrollment time is hub-owned; version/health/counters are signed
+self-reports, not attestation. The fingerprint is full SHA-256(public key) hex.
+Liveness is derived at read time (stale at three missed reporting intervals,
+offline at ten); no heartbeat reads offline. Revoked takes precedence.
+
+With hub disabled every node/token route returns 503 `unavailable` and a clear
+hub-disabled message after auth/CSRF validation. `GET /fleet` always works.
+Agent status reflects this process; last error is a fixed safe local category,
+last heartbeat is the last acknowledged send, and empty strings mean no result.
+With both roles off all enabled flags are false. Enabled hub listen reports the
+actual authority, including an assigned test port. No secret references appear
+in this endpoint.
+
+Audit adds `fleet.token.create`, `fleet.token.delete`, `fleet.node.enroll`,
+`fleet.node.revoke`, `fleet.node.rejected`. Machine enrollment/rejection are also
+written to private hub audit state when the console is off. Mutation/audit are
+separate durability transactions: an audit failure may follow a saved mutation;
+503 tells operators to inspect before retrying. Audit's existing quota and
+failure gates apply to admin routes as well as analyst mutations. Ordinary
+inventory reads remain unaudited.
+
+The [machine protocol](fleet-protocol.md) defines signing, skew/replay protection,
+limits and errors. There is no hub-to-agent command or configuration API.

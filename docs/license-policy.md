@@ -45,8 +45,8 @@ fallback may be substituted without amending ADR-0010.
 
 ## Evidence encryption dependency review (2026-11-14)
 
-Reviewer: Codex implementation review, pending orchestrator/human PR review.
-The introducing PR is **pending**; this record must be linked in its description.
+Reviewer: Codex implementation review; human PR review pending.
+The introducing PR is #73 (open, unmerged); this record is its dependency review.
 [Upstream releases](https://github.com/FiloSottile/age/releases) and the Go
 module proxy both select **age v1.3.2**, requiring Go >=1.25; the current Go
 **1.27.4**, x/crypto **v0.59.0**, and x/sys **v0.50.0** are preserved.

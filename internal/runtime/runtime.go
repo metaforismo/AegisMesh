@@ -21,6 +21,8 @@ import (
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/ext"
 	"github.com/metaforismo/aegismesh/internal/extmanager"
+	"github.com/metaforismo/aegismesh/internal/fleet/agent"
+	"github.com/metaforismo/aegismesh/internal/fleet/hub"
 	"github.com/metaforismo/aegismesh/internal/llm"
 	"github.com/metaforismo/aegismesh/internal/observe"
 	"github.com/metaforismo/aegismesh/internal/policy"
@@ -43,25 +45,30 @@ var errRuntime = errors.New("runtime")
 
 // System is a fully wired but not-yet-started AegisMesh instance.
 type System struct {
-	consoleSrv *console.Server
-	index      *evidenceindex.Index
-	builtAt    time.Time
-	cfg        *config.Config
-	store      *storage.Store
-	bus        *event.Bus
-	meter      observe.Meter
-	seq        *event.Sequencer
-	adminSrv   *admin.Server
-	sensors    []sensor.Sensor
-	extMgr     *extmanager.Manager
-	hook       *webhook.Sink
-	corr       *correlateAdapter
-	log        *slog.Logger
-	started    atomic.Uint64
-	stopped    atomic.Bool
-	stopMaint  chan struct{}
-	maintOnce  sync.Once
-	stopOnce   sync.Once
+	fleetHub      *hub.Hub
+	fleetServer   *hub.Server
+	fleetAgent    *agent.Agent
+	fleetCounts   fleetCounts
+	storageFailed atomic.Bool
+	consoleSrv    *console.Server
+	index         *evidenceindex.Index
+	builtAt       time.Time
+	cfg           *config.Config
+	store         *storage.Store
+	bus           *event.Bus
+	meter         observe.Meter
+	seq           *event.Sequencer
+	adminSrv      *admin.Server
+	sensors       []sensor.Sensor
+	extMgr        *extmanager.Manager
+	hook          *webhook.Sink
+	corr          *correlateAdapter
+	log           *slog.Logger
+	started       atomic.Uint64
+	stopped       atomic.Bool
+	stopMaint     chan struct{}
+	maintOnce     sync.Once
+	stopOnce      sync.Once
 }
 
 // evidenceSink keeps evidence authoritative while offering every envelope to
@@ -97,7 +104,7 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("%w: nil config", errRuntime)
 	}
-	if cfg.Console.Enabled {
+	if cfg.Console.Enabled || cfg.Fleet.Hub.Enabled || cfg.Fleet.Agent.Enabled {
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}
@@ -142,6 +149,10 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		stopMaint: make(chan struct{}),
 	}
 
+	if err := sys.buildFleet(); err != nil {
+		sys.closeAll()
+		return nil, fmt.Errorf("%w: %v", errRuntime, err)
+	}
 	primary := event.Sink(store)
 	if cfg.Console.Enabled {
 		if err := sys.buildConsole(); err != nil {
@@ -149,6 +160,20 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 			return nil, fmt.Errorf("%w: %v", errRuntime, err)
 		}
 		primary = &indexedSink{primary: store, index: sys.index}
+	}
+	if cfg.Fleet.Agent.Enabled {
+		primary = &fleetSink{
+			primary: primary,
+			system:  sys,
+		}
+	}
+	if cfg.Fleet.Hub.Enabled {
+		listener, err := hub.Listen(cfg.Fleet.Hub.Listen, cfg.Fleet.Hub.TLSCertFile, cfg.Fleet.Hub.TLSKeyFile, sys.fleetHub)
+		if err != nil {
+			sys.closeAll()
+			return nil, fmt.Errorf("%w: fleet hub listener: %v", errRuntime, err)
+		}
+		sys.fleetServer = listener
 	}
 	if cfg.Extensions.IsEnabled() {
 		manifests, err := loadObserverManifests(cfg)
@@ -308,6 +333,18 @@ func providerFor(c config.Config) (llm.Provider, error) {
 // Start brings up admin, observer extensions, and all sensors. Partial
 // failures tear everything down.
 func (s *System) Start(ctx context.Context) error {
+	return s.start(ctx, true)
+}
+
+// StartDryRun verifies listeners without starting fleet agent egress or consuming an enrollment token.
+func (s *System) StartDryRun(ctx context.Context) error {
+	return s.start(ctx, false)
+}
+
+func (s *System) start(ctx context.Context, reportFleet bool) error {
+	if s.fleetServer != nil {
+		s.fleetServer.Start()
+	}
 	if s.consoleSrv != nil {
 		s.consoleSrv.Start()
 	}
@@ -343,6 +380,9 @@ func (s *System) Start(ctx context.Context) error {
 		}
 		s.started.Add(1)
 	}
+	if reportFleet && s.fleetAgent != nil {
+		s.fleetAgent.Start()
+	}
 	go s.maintenanceLoop()
 	return nil
 }
@@ -368,7 +408,7 @@ func (s *System) Status() admin.Status {
 	return admin.Status{
 		SensorsStarted: startedHealthy,
 		SensorsWanted:  len(s.sensors),
-		StoreHealthy:   true,
+		StoreHealthy:   !s.storageFailed.Load(),
 		DroppedEvents:  s.bus.Dropped(),
 	}
 }
@@ -384,6 +424,7 @@ func (s *System) maintenanceLoop() {
 			return
 		case <-flush.C:
 			if err := s.store.Flush(); err != nil {
+				s.storageFailed.Store(true)
 				s.log.Warn("evidence flush failed", "err", err)
 			}
 		case <-retention.C:
@@ -411,6 +452,17 @@ func (s *System) closeAll() {
 	// Halt the maintenance loop first so it cannot touch the store mid-close.
 	if s.stopMaint != nil {
 		s.maintOnce.Do(func() { close(s.stopMaint) })
+	}
+	if s.fleetAgent != nil {
+		s.fleetAgent.Close()
+	}
+	if s.fleetServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+		_ = s.fleetServer.Close(ctx)
+		cancel()
+	}
+	if s.fleetHub != nil {
+		_ = s.fleetHub.Close()
 	}
 	if s.consoleSrv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)

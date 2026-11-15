@@ -57,8 +57,12 @@ func (c *validateCmd) Run(_ context.Context, args []string) error {
 				Schema     string           `json:"schema"`
 				Sensors    int              `json:"sensors"`
 				Console    *consoleExposure `json:"console,omitempty"`
+				Fleet      *config.Fleet    `json:"fleet,omitempty"`
 			}
 			rep := out{OK: true, ConfigPath: cfg.SourcePath, Schema: cfg.APIVersion, Sensors: len(cfg.Sensors)}
+			if cfg.Fleet.Hub.Enabled || cfg.Fleet.Agent.Enabled {
+				rep.Fleet = &cfg.Fleet
+			}
 			if cfg.Console.Enabled {
 				rep.Console = &consoleExposure{true, cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)}
 			}
@@ -77,6 +81,11 @@ func (c *validateCmd) Run(_ context.Context, args []string) error {
 }
 
 func printValidateSummary(w io.Writer, cfg *config.Config) {
+	if cfg.Fleet.Hub.Enabled || cfg.Fleet.Agent.Enabled {
+		fmt.Fprintf(w, "fleet: experimental inventory hub=%t agent=%t interval=%ds private_egress=%t\n",
+			cfg.Fleet.Hub.Enabled, cfg.Fleet.Agent.Enabled,
+			cfg.Fleet.Agent.HeartbeatIntervalSeconds, cfg.Fleet.Agent.AllowPrivateEgress)
+	}
 	fmt.Fprintf(w, "ok: %s (schema %s, %d sensor(s))\n",
 		cfg.SourcePath, cfg.APIVersion, len(cfg.Sensors))
 	if cfg.Console.Enabled {
@@ -165,6 +174,7 @@ type consoleExposure struct {
 	Operators int    `json:"operators"`
 }
 type effectiveReport struct {
+	Fleet       *config.Fleet    `json:"fleet,omitempty"`
 	Console     consoleExposure  `json:"console"`
 	ConfigPath  string           `json:"config_path"`
 	Provider    string           `json:"provider"`
@@ -237,6 +247,9 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 	}
 	if rep.Detection.ThrottlePerMinute == 0 {
 		rep.Detection.ThrottlePerMinute = 600 // documented default
+	}
+	if cfg.Fleet.Hub.Enabled || cfg.Fleet.Agent.Enabled {
+		rep.Fleet = &cfg.Fleet
 	}
 	if cfg.Webhook.IsEnabled() {
 		class, u, _ := classifyWebhookEndpoint(cfg)

@@ -134,6 +134,17 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     detachEvent: (id, eventId) => request('DELETE', `/investigations/${seg(id)}/events/${seg(eventId)}`),
     audit: (filters, cursor, limit, opts) => get('/audit', { ...filters, cursor, limit }, opts),
     verifyAudit: (opts) => get('/audit/verify', undefined, opts),
+
+    // Experimental fleet inventory (ADR-0018). Read-only except token
+    // management and revocation; there is no route that controls a node.
+    fleet: (opts) => get('/fleet', undefined, opts),
+    fleetNodes: (status, opts) => get('/fleet/nodes', { status }, opts),
+    fleetNode: (id, opts) => get(`/fleet/nodes/${seg(id)}`, undefined, opts),
+    revokeNode: (id) => request('POST', `/fleet/nodes/${seg(id)}/revoke`),
+    enrollmentTokens: (opts) => get('/fleet/enrollment-tokens', undefined, opts),
+    // The response carries the raw token exactly once. Callers must not keep it.
+    createEnrollmentToken: (body) => request('POST', '/fleet/enrollment-tokens', { body }),
+    deleteEnrollmentToken: (id) => request('DELETE', `/fleet/enrollment-tokens/${seg(id)}`),
   };
 }
 

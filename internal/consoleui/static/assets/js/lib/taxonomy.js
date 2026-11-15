@@ -59,6 +59,8 @@ export const AUDIT_ACTIONS = Object.freeze([
   'investigation.create', 'investigation.update', 'investigation.note',
   'investigation.attach', 'investigation.detach', 'audit.read', 'audit.verify',
   'authz.denied',
+  'fleet.token.create', 'fleet.token.delete', 'fleet.node.enroll', 'fleet.node.revoke',
+  'fleet.node.rejected',
 ]);
 
 export function roleAtLeast(role, minimum) {

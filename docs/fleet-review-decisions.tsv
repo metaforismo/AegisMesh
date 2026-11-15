@@ -1,0 +1,6 @@
+ts	phase	decision	why	evidence	result
+2026-11-15T00:00:55Z	baseline	Reproduced all three reported defects before implementation	Keep regression evidence separate from final passing checks	docs/fleet-review-verification.log	FAIL expected: 100 audits; unspaced heartbeat accepted; synchronous rewrite
+2026-11-15T00:00:55Z	isolation	Use separate abuse-limit mutex and per-node replay windows	Rejects must not fsync or consume another node replay capacity	internal/fleet/hub/limits.go	PASS: regression and concurrent HTTP burst tests
+2026-11-15T00:00:55Z	durability	Coalesce soft state at five seconds and retain synchronous durable changes	Avoid full snapshot per heartbeat while documenting the crash replay gap	docs/architecture/fleet-protocol.md	PASS: real snapshot crash, shutdown, coalescing and failure-latch tests
+2026-11-15T00:06:45Z	verification	All requested final gates passed sequentially	Keep final evidence distinct from expected pre-fix failures and synthetic performance	docs/fleet-review-verification.log	PASS: lint/test; focused race; 12 fuzz targets; vuln; benchmark
+2026-11-15T00:08:28Z	test-fidelity	Keep the consumed-token reuse fixture unexpired across ten-second spacing	A one-second TTL would let expiration hide a broken single-use check	internal/fleet/hub/integration_test.go	PASS: complete and focused race suites rerun after fixture correction

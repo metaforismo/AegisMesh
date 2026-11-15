@@ -52,7 +52,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("%w: runtime.instance_name %q must match %s", errConfig, c.Runtime.InstanceName, slugRe)
 	}
 
-	if n := len(c.Sensors); n == 0 {
+	if n := len(c.Sensors); n == 0 && !c.Fleet.Hub.Enabled {
 		return fmt.Errorf("%w: at least one sensor is required", errConfig)
 	} else if n > MaxSensors {
 		return fmt.Errorf("%w: %d sensors exceeds cap of %d", errConfig, n, MaxSensors)
@@ -97,6 +97,9 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := c.ValidateFleet(); err != nil {
+		return err
+	}
 	if err := c.ValidateConsole(); err != nil {
 		return err
 	}

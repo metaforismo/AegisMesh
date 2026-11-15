@@ -167,6 +167,15 @@ Apache-2.0 licensed (see [LICENSE](LICENSE), [NOTICE](NOTICE)). Start with
 [CONTRIBUTING.md](CONTRIBUTING.md), the [release process](docs/RELEASE.md), and the
 [license/supply-chain policy](docs/license-policy.md). Agents: read [AGENTS.md](AGENTS.md) first.
 
+## Status of unreleased work
+
+The at-rest encryption, console and fleet sections of this README describe work
+in open, unmerged pull requests: #73 (encryption), #74 (console API), #75
+(embedded console UI) and the fleet branch (PR #76), stacked in that order on
+#72 (Go 1.27.4 toolchain fixes). Hosted CI passes on #72-#75; the fleet branch
+has not run hosted CI. None of it is in `master` or in a release yet. See
+[docs/HANDOFF.md](docs/HANDOFF.md).
+
 ## Console
 
 An optional single-node, single-tenant operator API runs inside the binary on
@@ -180,8 +189,19 @@ modules: no build step, no third-party code) and is served at `/` only when
 The console reads a bounded in-memory evidence index and supports operator
 investigations plus an audited viewer/analyst/admin token model. It cannot
 control sensors or change evidence/configuration. Encrypted storage stays
-live-only: no private identity is loaded into the runtime. SSO, fleet and
-multi-tenancy are absent. See [configuration](docs/configuration.md#operator-console-optional)
+live-only: no private identity is loaded into the runtime. SSO and multi-tenancy
+are absent. Optional fleet inventory is described below. See
+[configuration](docs/configuration.md#operator-console-optional),
 the [API contract](docs/architecture/console-api.md) and the
-[design system](docs/design-system.md). This candidate is uncommitted and awaits
-human review and exact-head CI.
+[design system](docs/design-system.md).
+
+## Fleet (experimental)
+
+The same binary can run an opt-in inventory hub or outbound reporting agent.
+Local Ed25519 identities, one-time enrollment and signed heartbeats provide
+experimental fleet inventory with authenticated enrollment and heartbeats. The
+hub cannot command nodes. This is not multi-tenant, not a managed service, and
+forwards no evidence. Both roles default off and the machine listener is separate
+from console/admin/sensors. Start with [fleet configuration](docs/configuration.md#experimental-fleet-inventory-adr-0018),
+the [operator API](docs/architecture/console-api.md#experimental-fleet-inventory-additions-adr-0018)
+and [wire protocol](docs/architecture/fleet-protocol.md).

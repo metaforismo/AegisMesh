@@ -10,6 +10,248 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-11-15 — stack status
+
+**Status record, not a new test run.** The work of 2026-11-14/15 is committed and
+pushed as a stack of open, unmerged pull requests against `master` (`01579d3`).
+Each PR is stacked on the previous one. Older entries below that say "uncommitted"
+or name a candidate describe the state when they were written.
+
+| PR | Branch | Content | Hosted CI on PR head | Merged? |
+|---|---|---|---|---|
+| #72 | `security/go-toolchain-vuln-fixes` | Go 1.27.4, x/crypto v0.59.0 | **PASS**, all 6 jobs | no |
+| #73 | `feat/evidence-at-rest-encryption` (on #72) | opt-in age/X25519 evidence encryption | **PASS**, all 6 jobs | no |
+| #74 | `feat/console-api` (on #73) | operator console API | **PASS**, all 6 jobs | no |
+| #75 | `feat/console-ui-embed` (on #74) | embedded console UI, design system, landing page | **PASS**, all 6 jobs, including the Node UI tests step | no |
+| pending | `feat/fleet-enrollment` (on #75) | experimental fleet inventory | **NOT RUN** | no |
+
+No release, tag, image, signature, deployment or repository-setting change
+happened. Dependabot PRs #68 and #70 are superseded by #72 but still open; #71
+(pinned Action bumps) is untriaged.
+
+**Manual browser verification, 2026-11-15.**
+
+- Console against the real server started by `aegismesh demo --console`: login,
+  overview, events, recommendations, node, audit and investigation creation.
+- Fleet with two real processes on loopback: a token minted through the operator
+  API; an agent enrolled and appeared `online`; interaction counters propagated;
+  after the agent stopped it became `stale` once three 10 s heartbeats were
+  missed; a token created from the Fleet screen was recorded in the audit trail.
+- Fleet token revocation was **not** re-run in the browser. It was verified by
+  the backend two-process run and automated tests.
+
+## 2026-11-15 — fleet review: abuse resistance and heartbeat write coalescing
+
+**PASS — local fixes and requested gates.** Base is the local draft `ad53dc7`
+(`wip(fleet): draft before review`), branch `feat/fleet-enrollment`. These changes
+were uncommitted when the entry was written; they are now committed on
+`feat/fleet-enrollment` (PR #76). No commit, push, branch switch or `gh`
+command was run during the recorded checks.
+`docs/architecture/console-api.md` and the operator-facing response shapes are
+unchanged. No module files, dependencies or configuration knobs were added.
+This entry supersedes the earlier candidate's rejection-audit, replay-budget and
+per-heartbeat durability claims; the earlier verification record is historical.
+
+All suites ran sequentially on macOS arm64 / Apple M3, Go 1.27.4, with
+`GOTOOLCHAIN=go1.27.4 GOFLAGS=-p=1 GOMAXPROCS=2`. The `vuln` target itself
+sets `GOFLAGS=-mod=readonly`, as printed in the captured command output.
+[Raw command output](fleet-review-verification.log) includes the initial expected
+regression failures, all benchmark samples, and the final complete gate outputs.
+[Decision trail](fleet-review-decisions.tsv) records the main tradeoffs.
+
+| Check | Exact command | Result |
+| --- | --- | --- |
+| Formatting, vet and complete race suite | `make lint test` | **PASS**, exit 0; all packages passed. Optional `golangci-lint` was not installed and was skipped explicitly; gofmt/vet ran. |
+| Fresh affected-package race suite | `go test -race -count=1 ./internal/fleet/... ./internal/console/... ./internal/runtime` | **PASS**, exit 0; all 10 packages passed. |
+| Bounded real fuzzing | `make fuzz-seed` | **PASS**, exit 0; all 12 targets passed at 15 seconds each. Fleet protocol: 680703 executions, 44 new interesting inputs, no failure. |
+| Pinned vulnerability check | `make vuln` | **PASS**, exit 0; `No vulnerabilities found.` |
+| Heartbeat benchmark | `go test ./internal/fleet/hub -run '^$' -bench '^BenchmarkHeartbeat1000$' -benchmem -benchtime=200x -count=3` | **PASS**, exit 0; before/after samples below. |
+| Patch whitespace | `git diff --check` | **PASS**, exit 0; no output, repeated after this ledger update. |
+| Fleet Go line lengths | `awk 'length($0) > 140 {n++} END {print n+0}' $(rg --files internal/fleet -g '*.go')` | **PASS**, exit 0; **0**, including all new Go files. |
+| Protected API document | `git diff --exit-code -- docs/architecture/console-api.md` | **PASS**, exit 0; no output. |
+
+The new regression tests drove the three reported defects before implementation:
+100 invalid requests wrote 100 audit records; an immediate second heartbeat
+returned 200 instead of 429; accepted heartbeats changed the snapshot immediately.
+Those expected pre-fix failures are retained in the raw log, separately from the
+passing final gates. Final review also extended the reuse fixture's token TTL
+past the ten-second retry spacing, so the cross-key refusal proves single-use
+consumption rather than expiration. The complete and focused race suites were
+rerun afterward; production code did not change after fuzz/vuln/benchmark checks.
+
+**Implemented evidence:**
+
+- A 100-request malformed burst increments 100 rejection metrics and produces
+  exactly five audit samples plus one summary with count 95 after the injected
+  minute boundary. The real concurrent HTTP test also keeps a legitimate signed
+  heartbeat successful during four workers' 400-request invalid burst.
+- Stateless rejection tests hold the hub mutex and still complete method, path,
+  content-type, header, body-cap, skew and enrollment-signature failures. Stored
+  heartbeat public-key lookup is the necessary short state dependency; crypto,
+  body parsing and response writes hold no hub mutex.
+- Source-IP throttling returns 429/Retry-After, aggregates changing ports and
+  ignores forwarded headers. More than 4096 distinct remotes leave exactly 4096
+  buckets; expiry/pruning restores admission. Fixed 8192 requests/minute supports
+  the maximum ten-second fleet behind one NAT, with documented collateral risk.
+- A rogue key's 155 attempts over 31 injected seconds admit exactly four
+  heartbeats at its ten-second interval while the second node's four heartbeats
+  succeed. A filled 64-nonce window affects only its node; expiry reclaims it.
+  Revoked and rate-limited requests leave the snapshot, dirty flag and nonce count
+  unchanged. Signed re-enrollment retries cannot bypass the write throttle.
+- Snapshot-byte tests verify no synchronous heartbeat rewrite, no flush before
+  five seconds, one snapshot containing both nodes at the deadline, no clean
+  rewrite, synchronous revocation, and orderly shutdown flushing. A real worker
+  test verifies an injected-clock advance triggers the background flush.
+- Abrupt-restart tests reopen the real last on-disk snapshot without Close's
+  soft-state flush: last flushed inventory and replay protection survive; an
+  unflushed nonce can be accepted again inside the skew window, then expires.
+  A real stale temporary file proves background write failure latches unavailable
+  and Close reports the failure. Legacy oversized live nonce windows fail closed;
+  startup succeeds after expiry without discarding live replay protection.
+
+**Benchmark comparison.** The identical final benchmark harness seeds a valid
+1000-node enrolled registry, then times signing, request construction, ServeHTTP,
+verification, replay handling and acknowledgement. Empty sensor lists are used;
+setup and shutdown are excluded. Each node reports at 30-second intervals when
+cycled; per-node synthetic source IPs keep remote throttling out of this workload.
+The controlled 200-operation samples finish before the worker's first wake, so
+these are request-path measurements, **not amortized background flush cost or
+production throughput**. Coalescing correctness is tested separately above.
+
+The draft was measured with the same final `benchmark_test.go` using
+`go test -overlay=/tmp/fleet-baseline/overlay.json` plus the benchmark flags above.
+The overlay substitutes `hub.go`, `requests.go`, `nodes.go`, `tokens.go`,
+`state.go`, and `server.go` from `git show ad53dc7:internal/fleet/hub/<file>`;
+new `limits.go` and `abuse_test.go` are replaced with `package hub` stubs.
+No working source replacement or branch switch was needed.
+
+| Version | Median ns/op | Median B/op | Median allocs/op | Time range, 3 samples |
+| --- | ---: | ---: | ---: | --- |
+| Draft `ad53dc7` | 9276050 | 2458381 | 1294 | 9205144..10794933 ns/op |
+| Fixed worktree | 63871 | 15441 | 165 | 61161..80244 ns/op |
+
+Medians are computed per metric. The measured request path is about 145 times
+faster, with about 87% fewer allocations, for this bounded synthetic workload.
+
+**Residual risks and durability:** durable enrollment/key/interval/revocation and
+token changes remain synchronous. Normally a crash loses at most the latest
+five-second soft-state interval; scheduler/IO stalls can extend elapsed loss.
+Restart displays the last flushed inventory until the next heartbeat. Unflushed
+nonces can reopen within signed timestamp ±120 seconds (up to 240 seconds after
+initial receipt for a future-dated request). No process-start timestamp floor is
+imposed. Pending rejection samples/counts can also be lost on crash. Flushed
+nonces, consumed tokens and revocation remain durable. Shared NAT throttling,
+remote-table saturation, bounded audit quota exhaustion and distributed CPU/disk
+pressure remain possible; no DDoS/host isolation or prospective performance
+claim is made. The full registry is still rewritten under the mutex at the
+coalesced cadence, plus synchronous durable changes.
+
+## 2026-11-15 — experimental fleet inventory candidate
+
+**PASS — local implementation and required verification.** Branch
+`feat/fleet-enrollment`, base HEAD `20a2dbb`, stacking the operator console.
+All changes were uncommitted when this entry was written; they are now committed
+on `feat/fleet-enrollment` (PR #76, unmerged). No commit, push, branch
+switch, `gh`, merge, publication or deployment occurred during the recorded checks. macOS arm64, `go version go1.27.4 darwin/arm64`.
+No module files or dependencies changed. All suites ran sequentially with
+`GOTOOLCHAIN=go1.27.4 GOFLAGS=-p=1 GOMAXPROCS=2`; Makefile pins that toolchain.
+
+The candidate is experimental fleet inventory with authenticated enrollment and
+heartbeats. It is not multi-tenant, not a managed service, and forwards no
+evidence. The hub cannot command nodes. ADR-0018 and `architecture/fleet-protocol.md`
+define the implemented boundaries and proposed work.
+
+| Check | Exact command | Final local result / captured output |
+| --- | --- | --- |
+| Formatting, vet, complete race suite | `make lint test` | PASS, exit 0; `go vet ./...`, `go test -race ./...`; all packages passed. Optional `golangci-lint` was not installed and was explicitly skipped. (49.80 s) |
+| Fresh affected-package race suite | `go test -race -count=1 ./internal/fleet/... ./internal/console/... ./internal/runtime ./internal/config ./internal/cli` | PASS, exit 0; fleet agent/hub/identity/protocol, console and its subpackages, runtime, config and CLI all passed with `-count=1`. (49.26 s) |
+| Bounded real fuzzing | `make fuzz-seed` | PASS, exit 0; all 12 targets passed at 15 seconds/target. New `FuzzFleetProtocol`: 692619 executions, 65 new interesting inputs; no failure. Target added to Makefile and CI lists. (198.29 s) |
+| Pinned vulnerability check | `make vuln` | PASS, exit 0; `No vulnerabilities found.` (3.57 s) |
+| Dependency licenses and tracked-file secret scan | `make license-check secrets-scan` | PASS, exit 0; `license-check: ok — 14 module(s) within policy`; `secrets-scan: ok`. (2.00 s) |
+| Immutable supply-chain references | `make supply-chain-check` | PASS, exit 0; `supply-chain-check: ok`. (0.09 s) |
+| Module checksum verification | `go mod verify` | PASS, exit 0; `all modules verified`. (0.56 s) |
+| Patch whitespace | `git diff --check` | PASS, exit 0; empty output. Repeated after the final documentation update. (0.02 s) |
+| Built binary for manual verification | `make build` | PASS, exit 0; built `bin/aegismesh` with the Makefile version/commit flags. (2.28 s) |
+| New Go line-length count | `git ls-files --others --exclude-standard '*.go'` piped to `awk 'length($0) > 140 {count++} END {print count+0}'` | PASS, exit 0; **0** overlong lines across 25 new Go files. |
+| Supplemental secret scan | Existing scanner with its file inventory extended to `git ls-files --cached --others --exclude-standard`, temporary helper outside the repo | PASS, exit 0; `secrets-scan: ok`; includes the untracked new files. |
+
+Captured focused-suite output includes:
+
+```text
+ok  github.com/metaforismo/aegismesh/internal/fleet/agent
+ok  github.com/metaforismo/aegismesh/internal/fleet/hub
+ok  github.com/metaforismo/aegismesh/internal/fleet/identity
+ok  github.com/metaforismo/aegismesh/internal/fleet/protocol
+ok  github.com/metaforismo/aegismesh/internal/console
+ok  github.com/metaforismo/aegismesh/internal/console/audit
+ok  github.com/metaforismo/aegismesh/internal/console/auth
+ok  github.com/metaforismo/aegismesh/internal/console/investigations
+ok  github.com/metaforismo/aegismesh/internal/console/stateio
+ok  github.com/metaforismo/aegismesh/internal/runtime
+ok  github.com/metaforismo/aegismesh/internal/config
+ok  github.com/metaforismo/aegismesh/internal/cli
+```
+
+Integration evidence uses real loopback listeners and the real hub/agent:
+enrollment → heartbeat → online, injected-clock stale/offline, token reuse and
+concurrent single-use consumption, expiry/wrong token, proof failure, tampered
+body/path/timestamp/nonce, replay across hub restart, out-of-window skew,
+revocation and refused re-enrollment, oversized body, registry/identity restart,
+TLS with a generated CA and unknown-CA refusal, redirect/proxy refusal and safe
+response bounds. Runtime tests send a real sensor request and verify stored
+evidence while the hub is down. Config tests cover every new field and override,
+unknown/inline fields, unsafe egress/TLS and credential references. A hub can run
+without sensors; ordinary nodes/agents still require sensors. Dry-run startup
+binds listeners without agent egress/token consumption; an explicit live send
+from the same preflighted agent then succeeds.
+
+The route-driven authorization matrix now covers all 30 registered routes with
+210 exact-status cases (none, malformed, wrong, expired, viewer, analyst, admin).
+An additional enabled-fleet matrix exercises 28 role cases across all seven new
+routes, plus cookie CSRF/Origin, strict bodies/queries, token secrecy and audit.
+Initial development runs exposed missing matrix fixtures, an invalid HTTP test
+fixture, a wrong session-field reference and formatting-helper comma errors;
+all were corrected. The final receipts above supersede those intermediate
+failures. The dry-run egress issue and hub-only sensor requirement found during
+review were fixed and the complete/focused/fuzz gates rerun afterward.
+The timestamp-tamper fixture was then strengthened to change the header by one
+second, inside the allowed skew window, so signature verification must reject
+it. `GOTOOLCHAIN=go1.27.4 go test -race -count=1 ./internal/fleet/hub -run
+TestAuthenticatedRequestFailuresAndReplayAcrossRestart` passed (exit 0,
+`ok .../internal/fleet/hub 2.165s`), followed by another passing `make lint test`.
+This final edit changed test coverage only; the manually exercised production
+binary was unchanged.
+
+Manual built-binary receipt (**PASS**, separate processes and private temp data
+roots, loopback HTTP development transport, ten-second reporting interval):
+
+1. Started a sensor-free hub with console. Authenticated `GET /api/v1/fleet`
+   returned 200 with hub enabled.
+2. Admin `POST /api/v1/fleet/enrollment-tokens` returned 201. Token **REDACTED**;
+   supplied through a 0600 file, never a command argument or inline config.
+3. Started a second process as agent. One node appeared `online`; the token
+   disappeared from outstanding metadata and agent status reported enrolled.
+4. Agent sensor returned HTTP 200. The next heartbeat carried interaction=1;
+   the hub's evidence endpoint still returned an empty event list.
+5. Stopped the agent with SIGTERM (exit 0). Inventory became `stale` **30.0 s**
+   after stop. Restart reused the same node ID and returned to `online` with
+   exactly one inventory record.
+6. Admin revoked the node (200, status `revoked`). Its next live heartbeat was
+   refused: agent reported the fixed HTTP-403 category
+   `fleet: node revoked; operator review required`. Last-seen did not advance.
+   Audit contained token.create, node.enroll, node.revoke and node.rejected.
+7. Both processes stopped cleanly, exit 0. Disposable state/token/key directories
+   were removed. Only redacted summaries are retained here; no raw transcript or
+   helper script was added to the repository.
+
+Offline-after-ten-intervals was verified with the injected clock in integration
+tests, not by waiting 100 seconds in this manual run. Public-network deployment,
+scale/load validation, UI acceptance, hosted CI, merge and production operation
+are **NOT RUN**. The inventory is authenticated self-report, not host attestation.
+Optional `fleet status` and `demo --fleet` were omitted. Evidence forwarding,
+rotation, mTLS/attestation, remote configuration, upgrades, tenancy and SSO remain
+proposed, not implemented; no hub-to-agent control channel is reserved.
+
 ## 2026-11-15 — embedded operator console UI
 
 Worktree branch `feat/console-ui-embed` on top of `feat/console-api`, macOS arm64,
@@ -27,10 +269,10 @@ CI step were added; the CI step has not run on hosted CI.
 | `make supply-chain-check` and `./scripts/check-supply-chain_test.sh` | **PASS**: no new action was added; the CI step uses the runner's Node.js. |
 | `make license-check secrets-scan` | **PASS**: 14 modules within policy; no secrets found. |
 | `git diff --check` | **PASS** after stripping trailing whitespace from the staged UI scripts. |
-| Full `make test`, fuzzing, `make vuln` | **NOT RUN** in this change; left to the orchestrator. |
-| Hosted CI for the new Node.js step | **NOT RUN**: nothing was pushed. |
+| Full `make test`, fuzzing, `make vuln` | **NOT RUN** in this change; covered by hosted CI on PR #75. |
+| Hosted CI for the new Node.js step | **NOT RUN** when this entry was written; later **PASS** on PR #75 (see the stack status entry). |
 
-**Manual browser evidence (orchestrator, not repeated by the implementer).** Run in
+**Manual browser evidence (recorded separately from the implementer's checks).** Run in
 a browser against the real server started by `aegismesh demo --console`: login,
 overview, events, recommendations, node, audit trail, and creating an
 investigation (cookie session plus CSRF) all worked, with no CSP violations. The
@@ -98,11 +340,12 @@ now describes available UI assets without assuming whether this build embeds the
 ## 2026-11-14 — first operator console backend candidate
 
 Worktree `feat/console-api`, base `e82df977c4119629b3bd87b8496428615ff1b865`,
-macOS arm64 / Go **1.27.4**. All changes remain uncommitted, including the supplied
-console contract. No commit, push, branch switch, `gh`, hosted CI, merge,
-publication or deployment occurred. UI implementation/embedding and browser QA
-belong to the parallel UI work and are **NOT RUN** here; runtime passes nil UI
-and `/` serves a notice.
+macOS arm64 / Go **1.27.4**. All changes were uncommitted when this entry was written, including the supplied
+console contract; they are now committed in PR #74 (open, unmerged). No commit,
+push, branch switch, `gh`, hosted CI, merge, publication or deployment occurred
+during the recorded checks. UI embedding and browser QA were **NOT RUN** in this
+entry (later done in PR #75); at this point the runtime passed a nil UI and `/`
+served a notice.
 
 **Architecture.** `runtime.indexedSink` serializes successful storage append →
 `evidenceindex.Index` for both bus observations and direct correlation signals.
@@ -170,7 +413,7 @@ the Go integration tests are the maintained reproduction path.
 
 ## 2026-11-14 — steady-traffic encryption segment review
 
-Candidate remains uncommitted on `feat/evidence-at-rest-encryption`, based on
+Candidate was uncommitted when written (now committed in PR #73), on `feat/evidence-at-rest-encryption`, based on
 `c64b58f29373ac475ec6a44ce692722062c5dfba`, macOS arm64 / Go **1.27.4**.
 This entry supersedes the unconditional flush/seal policy in the earlier recovery
 receipt below. No commit, push, branch switch, `gh`, staging, hosted CI, merge,
@@ -228,11 +471,11 @@ model, CLI/data-flow guidance, roadmap and handoff now describe these boundaries
 
 ## 2026-11-14 — evidence-at-rest encryption recovery and review
 
-Candidate: uncommitted `feat/evidence-at-rest-encryption` on
+Candidate: `feat/evidence-at-rest-encryption` (uncommitted when written; now PR #73) on
 `c64b58f29373ac475ec6a44ce692722062c5dfba` (reviewed but unmerged toolchain
 upgrade). Host: macOS arm64, Go **1.27.4**. No commit, push, reset, branch
 checkout, `gh`, hosted workflow, publication or deployment was performed.
-The index is unchanged. PR number: **pending**. PR #58 is closed/unmerged and
+The index is unchanged. PR number at the time: pending; now #73 (open, unmerged). PR #58 is closed/unmerged and
 its patch is draft provenance, not review or exact-head CI evidence.
 
 ### Recovery and defects corrected
@@ -304,7 +547,7 @@ were reconciled manually without importing historical PASS claims. Neither
 | `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o "$TMPDIR/.../aegismesh-linux-arm64" ./cmd/aegismesh` | **PASS**, exit 0. |
 | `CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o "$TMPDIR/.../aegismesh-darwin-arm64" ./cmd/aegismesh` | **PASS**, exit 0. |
 | `sh -n scripts/license-check.sh`; `./scripts/check-supply-chain_test.sh` | **PASS**, exits 0; `check-supply-chain_test: ok`. |
-| Human review, exact-head hosted CI and merge | **NOT RUN**; changes remain uncommitted for the orchestrator. |
+| Human review, exact-head hosted CI and merge | **NOT RUN** when written; hosted CI later **PASS** on the PR #73 head, human review and merge pending. |
 | Explicit `make helm-contract` | **NOT RUN** in this encryption slice; chart behavior did not change. The normal guarded package tests ran under `make test`; they are not a live Helm receipt. |
 
 Final focused race stdout:

@@ -148,15 +148,38 @@ non-relative import, or a markup or code sink (`innerHTML`, `eval`,
 
 Sign-in, Overview, Events (with live mode), Event detail, Sources, Source
 detail, Sensors, Rules, Recommendations, Node, Investigations, Investigation
-detail, and Audit trail (admin only). Analyst-only actions (create, rename,
-change status or priority, attach and detach evidence, add notes) are hidden
-for viewers; the server enforces the same rules.
+detail, Audit trail (admin only), Fleet and Fleet node (experimental).
+Analyst-only actions (create, rename, change status or priority, attach and
+detach evidence, add notes) are hidden for viewers; the server enforces the
+same rules.
+
+### Fleet (experimental inventory)
+
+The Fleet screen shows this node's hub and agent roles, and on a hub the
+inventory of enrolled nodes. Its copy must keep three facts visible: node data
+is self-reported in signed heartbeats (not attestation), the hub cannot
+command or configure nodes, and no evidence is forwarded.
+
+| Node status | Badge | Dot shape |
+|---|---|---|
+| Online | `badge--ok` | filled circle |
+| Stale | `badge--warn` | diamond |
+| Offline | `badge--neutral` | hollow ring |
+| Revoked | `badge--danger` | triangle |
+
+Admin-only controls: enrollment tokens (list, create, delete) and permanent
+revocation behind a dialog that requires an explicit acknowledgement. A newly
+created token is shown once in a dialog; its text node is emptied and the
+dialog removed on close, and it is never written to storage, the URL or logs.
+With the hub disabled, node and token routes answer `unavailable`, which the
+screen shows as a hub-unavailable notice rather than a console error.
 
 ## Developing and testing
 
 ```bash
 # mock API + UI on http://127.0.0.1:9121 (tokens: dev-viewer, dev-analyst, dev-admin)
 # (equivalent to: node internal/consoleui/devserver/mock-server.mjs --port 9121)
+# add --fleet hub|agent|both|none to choose the mock node's fleet roles (default hub)
 make ui-dev
 # UI unit and integration tests (Node.js >= 20, no npm install)
 make ui-test
@@ -180,3 +203,15 @@ and does not ship.
 | Browser walk-through against the mock: all 13 screens, attach-to-investigation flow, live mode, dark and light, 375px width without horizontal scroll | PASS (manual) |
 | `make lint test` for the whole module | NOT RUN: disk space was limited, and the instruction was to keep Go builds to this package |
 | Behavior against the real Go console server | NOT RUN: the server is built on a separate branch; only the contract and the mock were available |
+
+### Verification: Fleet screen (2026-11-15, macOS, Node 25.8.2, Go 1.25.14)
+
+| Check | Result |
+|---|---|
+| `make ui-test` equivalent (81 tests, adding fleet helpers, fleet routes, fleet screen rendering per role and state, mock fleet routes as hub and with the hub disabled) | PASS |
+| `go vet ./internal/consoleui` and `go test ./internal/consoleui` | PASS |
+| Browser against the mock, hub mode, admin: create token, shown once, copy dialog closed, no 64-hex value left in the DOM, storage or URL, token listed, deleted via confirmation; revoke refused until acknowledged, then revoked; audit filter lists the fleet actions | PASS (manual) |
+| Browser, viewer: inventory visible, no token panel, no revoke control | PASS (manual) |
+| Browser, `--fleet none` (teaching state, node detail shows hub-unavailable), `--fleet agent` (agent role, inventory pointer) | PASS (manual) |
+| Light at 800 and 1440px, dark at 375px (no horizontal scroll) | PASS (manual) |
+| Fleet screen against the real Go hub | NOT RUN: the backend is in progress on another branch |

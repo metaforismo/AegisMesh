@@ -17,6 +17,7 @@ export const NAV = [
     { route: 'sensors', label: 'Sensors', href: '#/sensors' },
     { route: 'rules', label: 'Rules', href: '#/rules' },
     { route: 'node', label: 'Node', href: '#/node' },
+    { route: 'fleet', label: 'Fleet', href: '#/fleet', also: ['fleet_node'] },
     { route: 'audit', label: 'Audit trail', href: '#/audit', role: 'admin' },
   ] },
 ];

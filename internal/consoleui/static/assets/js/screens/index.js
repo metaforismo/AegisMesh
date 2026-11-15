@@ -14,9 +14,12 @@ import node from './node.js';
 import investigations from './investigations.js';
 import investigation from './investigation.js';
 import audit from './audit.js';
+import fleet from './fleet.js';
+import fleetNode from './fleet-node.js';
 
 export const SCREENS = Object.freeze({
   overview, events, event, sources, source, sensors, rules, recommendations, node, investigations, investigation, audit,
+  fleet, fleet_node: fleetNode,
 });
 
 export const notFoundScreen = {

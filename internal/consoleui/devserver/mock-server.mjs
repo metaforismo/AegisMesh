@@ -5,7 +5,7 @@
 // and answers every endpoint from deterministic synthetic data, so the UI can
 // be built and reviewed without a running AegisMesh node.
 //
-//   node internal/consoleui/devserver/mock-server.mjs [--port 9121]
+//   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
@@ -18,6 +18,7 @@ import { readFile } from 'node:fs/promises';
 import { randomBytes, createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createFleet } from './mock-fleet.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,11 @@ const STATIC = path.resolve(HERE, '../static');
 const argPort = process.argv.indexOf('--port');
 const PORT = Number(argPort > 0 ? process.argv[argPort + 1] : process.env.PORT || 9121);
 const HOST = '127.0.0.1';
+// --fleet hub|agent|both|none selects which fleet roles this mock node has
+// (default hub). "none" and "agent" exercise the hub-disabled responses.
+const argFleet = process.argv.indexOf('--fleet');
+const FLEET_MODE = argFleet > 0 ? process.argv[argFleet + 1] : (process.env.AEGISMESH_MOCK_FLEET || 'hub');
+if (!['hub', 'agent', 'both', 'none'].includes(FLEET_MODE)) throw new Error('--fleet must be hub, agent, both or none');
 
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -129,6 +135,7 @@ const TOKENS = new Map([
   ['dev-admin', { name: 'ada', role: 'admin' }],
 ]);
 const sessions = new Map();
+const fleet = createFleet({ mode: FLEET_MODE });
 const audit = [];
 let prevHash = '0'.repeat(64);
 
@@ -570,6 +577,8 @@ async function api(req, res, url) {
     return send(res, 200, { verified: true, records: audit.length, first_invalid_seq: 0, error: '' });
   }
 
+  if (await fleet({ req, res, url, p, m, need, record, who, remote, send, fail, readBody })) return;
+
   return fail(res, 'not_found', 'no such endpoint');
 }
 
@@ -603,5 +612,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin)`);
+  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE})`);
 });

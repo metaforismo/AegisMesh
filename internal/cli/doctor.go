@@ -124,6 +124,22 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 		add(st, "port:console", detail, "change console.listen or stop the conflicting listener")
 		add("warn", "console", fmt.Sprintf("authenticated console on %s (TLS=%t, %d token operators)", cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)), "console evidence and operator notes are sensitive; keep state private")
 	}
+	if cfg.Fleet.Hub.Enabled {
+		st, detail := probePort(cfg.Fleet.Hub.Listen)
+		add(st, "port:fleet-hub", detail, "change fleet.hub.listen or stop the conflicting listener")
+		add("warn", "fleet-hub", fmt.Sprintf("experimental inventory on %s (TLS=%t)",
+			cfg.Fleet.Hub.Listen, cfg.Fleet.Hub.TLSCertFile != ""), "no evidence forwarding or agent command channel")
+	}
+	if cfg.Fleet.Agent.Enabled {
+		if _, err := cfg.ResolveFleetToken(); err != nil {
+			add("fail", "fleet-agent", err.Error(), "fix the private enrollment credential reference")
+		} else {
+			add("warn", "fleet-agent", fmt.Sprintf("inventory egress to %s every %ds (private=%t, explicit_CA=%t)",
+				cfg.Fleet.Agent.HubURL, cfg.Fleet.Agent.HeartbeatIntervalSeconds,
+				cfg.Fleet.Agent.AllowPrivateEgress, cfg.Fleet.Agent.HubCAFile != ""),
+				"static only; startup checks CA contents and local identity; no hub probe was sent")
+		}
+	}
 	// Safety posture reporting: loud but non-failing.
 	if cfg.Security.AllowPublicBind {
 		add("warn", "bind-policy", "security.allow_public_bind=true — decoys may bind beyond loopback", "revert unless this is a deliberate network placement")

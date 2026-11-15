@@ -32,6 +32,35 @@ func TestEveryRouteAuthorization(t *testing.T) {
 		status int
 	}
 	fixtures := map[string]fixture{
+		"GET /api/v1/fleet": {
+			role:   "viewer",
+			status: 200,
+		},
+		"GET /api/v1/fleet/nodes": {
+			role:   "viewer",
+			status: 503,
+		},
+		"GET /api/v1/fleet/nodes/{id}": {
+			role:   "viewer",
+			status: 503,
+		},
+		"POST /api/v1/fleet/nodes/{id}/revoke": {
+			role:   "admin",
+			status: 503,
+		},
+		"GET /api/v1/fleet/enrollment-tokens": {
+			role:   "admin",
+			status: 503,
+		},
+		"POST /api/v1/fleet/enrollment-tokens": {
+			role:   "admin",
+			body:   `{}`,
+			status: 503,
+		},
+		"DELETE /api/v1/fleet/enrollment-tokens/{id}": {
+			role:   "admin",
+			status: 503,
+		},
 		"GET /api/v1/meta": {
 			role:   "",
 			status: 200,
