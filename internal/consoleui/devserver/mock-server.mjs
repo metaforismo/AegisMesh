@@ -5,7 +5,7 @@
 // and answers every endpoint from deterministic synthetic data, so the UI can
 // be built and reviewed without a running AegisMesh node.
 //
-//   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
+//   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none] [--burst N]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
@@ -322,13 +322,26 @@ function envelope(e) {
 // ---- SSE -------------------------------------------------------------------
 
 const streams = new Set();
-setInterval(() => {
+function emitLive() {
   const e = makeEvent(Date.now());
   e.time = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   events.unshift(e);
   byId.set(e.id, e);
   for (const res of streams) res.write(`event: observation\ndata: ${JSON.stringify(summaryOf(e))}\n\n`);
-}, 4000).unref();
+}
+setInterval(emitLive, 4000).unref();
+
+// Burst: GET /__mock/burst?n=200 pushes n observations to every open stream
+// in one tight loop, to measure how the UI copes with a live spike. It is a
+// mock-only route (the product server has nothing like it). With --burst N
+// the mock also fires one burst of N, 3s after each stream connects.
+const argBurst = process.argv.indexOf('--burst');
+const AUTO_BURST = argBurst > 0 ? Math.min(1000, Math.max(1, Number(process.argv[argBurst + 1]) || 200)) : 0;
+function burst(n) {
+  const count = Math.min(1000, Math.max(1, Math.floor(Number(n) || 0)));
+  for (let i = 0; i < count; i++) emitLive();
+  return count;
+}
 setInterval(() => {
   for (const res of streams) res.write(`event: heartbeat\ndata: {"time":"${new Date().toISOString()}"}\n\n`);
 }, 15000).unref();
@@ -402,6 +415,7 @@ async function api(req, res, url) {
     res.write(': connected\n\n');
     streams.add(res);
     req.on('close', () => streams.delete(res));
+    if (AUTO_BURST) setTimeout(() => { if (streams.has(res)) burst(AUTO_BURST); }, 3000).unref();
     return;
   }
 
@@ -604,6 +618,7 @@ const server = http.createServer(async (req, res) => {
   if (host !== `${HOST}:${PORT}` && host !== `localhost:${PORT}`) return fail(res, 'invalid_argument', 'host mismatch'); // 421 in production
   try {
     if (url.pathname.startsWith('/api/v1/')) return await api(req, res, url);
+    if (url.pathname === '/__mock/burst' && req.method === 'GET') return send(res, 200, { sent: burst(url.searchParams.get('n') || 200), streams: streams.size });
     if (req.method !== 'GET') return fail(res, 'not_found', 'not found');
     return await serveStatic(req, res, url);
   } catch (err) {
