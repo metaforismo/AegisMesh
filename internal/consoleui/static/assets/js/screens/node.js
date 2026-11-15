@@ -20,7 +20,7 @@ export default {
     mount(root,
       pageHead({
         title: 'Node',
-        subtitle: 'Health of this single AegisMesh instance. Fleet views are not part of this release.',
+        subtitle: 'Health of this AegisMesh instance. Other enrolled nodes appear on the experimental Fleet screen, as self-reported inventory.',
         actions: badge(n.healthy ? 'ok' : 'danger', n.healthy ? 'Healthy' : 'Unhealthy'),
       }),
       historyBanner(n),
