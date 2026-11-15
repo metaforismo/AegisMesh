@@ -393,4 +393,3 @@ and does not ship.
 | Firefox and Safari | NOT RUN: only Chromium is available to the test harness. View Transitions, `@starting-style` and scroll-driven animations are progressive enhancement; without them the swap, dialogs and reveals are instant |
 | Against the real Go console server | NOT RUN: verified against the mock only |
 | `make lint test` for the whole module | NOT RUN: disk space is limited; only this package's Go tests were run |
-
