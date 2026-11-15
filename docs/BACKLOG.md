@@ -69,7 +69,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   hosted vulnerability gates.
 - **Status:** **PASS for the current audit snapshot**.
 
-### P0-3 — enforce the configured storage event-size cap — IN PROGRESS
+### P0-3 — enforce the configured storage event-size cap — PASS
 
 - **Evidence:** `storage.max_event_bytes` was strictly decoded, defaulted and
   documented, but `runtime.Build` did not pass it to `storage.Options` and the
@@ -90,9 +90,8 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   `go test ./internal/runtime -run TestBuildWiresStorageMaxEventBytes -count=1`;
   `go test -race ./internal/storage ./internal/runtime -count=1`;
   `make lint test`; hosted CI on the exact PR head.
-- **Status:** **IN PROGRESS** — focused and affected-package race tests passed
-  locally. The enforcement shipped in the stacked work (#72 and later); hosted
-  CI PASS on those heads, merge pending human review.
+- **Status:** **PASS** — merged to `master` as PR #56 (`8652ef5`) with hosted CI
+  green on the merge commit.
 
 ## P1 — v0.2 completion and important architectural gaps
 
@@ -338,11 +337,10 @@ verification history with exact commands and regressions:
 
 ## Current evidence boundaries
 
-- **PASS:** Exa search and fetch connectors are callable in this run.
-- **PASS:** GitHub API evidence confirms `master`, merge commit `eef2b93`, PR #54
-  and its six successful CI jobs.
-- **BLOCKED:** the requested macOS checkout is not mounted in this execution
-  environment; local `git status`, `make lint test` and Go 1.25.14 runs are not
-  available here.
-- **NOT RUN:** release/tag/signing/image publication, repository settings,
-  real-cluster deployment, new runtime egress and correlation-signal fan-out.
+- **PASS:** hosted CI on the heads of PRs #72–#75 (six jobs each); local gates
+  recorded per change in `docs/verification.md`.
+- **BLOCKED:** `make sbom sbom-check` inside a linked git worktree (the pinned
+  generator cannot resolve the main-module version there); hosted CI covers it.
+- **NOT RUN:** merges, release/tag/signing/image publication, repository
+  settings, site publication, real-cluster deployment, evidence forwarding and
+  correlation-signal fan-out to webhooks or extensions.
