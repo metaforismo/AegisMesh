@@ -201,3 +201,28 @@ export function severityShare(items) {
 }
 
 export const SEVERITY_ORDER = [...SEVERITIES].reverse();
+
+// Activity trace: small columns over equal time bins (sensor cards, source
+// strip). Bins before `knownFrom` are drawn hatched: the loaded events do not
+// reach that far back, so the trace does not claim those bins were quiet.
+// The caller prints the totals beside it; this is a shape, aria-hidden.
+export function activityTrace(bins, { start, end, knownFrom = -Infinity, height = 32, startLabel, endLabel } = {}) {
+  const n = bins.length;
+  const w = 240;
+  const gap = n > 40 ? 1 : 2;
+  const slot = w / Math.max(1, n);
+  const max = Math.max(1, ...bins);
+  const size = (end - start) / Math.max(1, n);
+  const el = svg('svg', { class: 'trace', viewBox: `0 0 ${w} ${height}`, preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' },
+    svg('line', { class: 'trace__base', x1: 0, x2: w, y1: height - 0.5, y2: height - 0.5 }),
+    bins.map((v, i) => {
+      const unknown = start + (i + 1) * size <= knownFrom;
+      const hgt = unknown ? height - 1 : v > 0 ? Math.max(2, (v / max) * (height - 2)) : 1.5;
+      return svg('rect', {
+        class: ['trace__bar', unknown ? 'trace__bar--unknown' : v === 0 ? 'trace__bar--zero' : ''],
+        x: i * slot + gap / 2, y: height - 1 - hgt, width: Math.max(1, slot - gap), height: hgt, rx: 1,
+      });
+    }));
+  return h('div', { class: 'trace-wrap' }, el,
+    startLabel || endLabel ? h('div', { class: 'trace-wrap__meta' }, h('span', null, startLabel || ''), h('span', null, endLabel || '')) : null);
+}

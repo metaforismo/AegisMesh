@@ -381,3 +381,13 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 .drawer__title:focus { outline: none; }
 .drawer .state { padding: var(--space-5) var(--space-4); }
 .drawer .grid--2 { grid-template-columns: minmax(0, 1fr); }
+
+/* ---- Sensors and sources --------------------------------------------- */
+
+.sensor-trace__head { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--text-xs); }
+.sensor-trace-slot { min-height: 4.25rem; }
+.skeleton--trace { height: 3rem; margin-top: var(--space-2); }
+.trace__bar--unknown { fill: var(--color-surface-2); fill-opacity: 1; stroke: var(--color-border); stroke-width: 1; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; }
+.strip-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-2); font-size: var(--text-xs); color: var(--color-ink-2); }
+.sensor-trace { display: flex; flex-direction: column; gap: var(--space-1); }
+.sensor-trace__note { color: var(--color-ink-3); font-size: var(--text-2xs); }
