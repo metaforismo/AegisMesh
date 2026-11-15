@@ -113,10 +113,10 @@
   --color-surface-2: #f6f8fa;       /* table headers, insets */
   --color-surface-3: #e8ecf1;       /* hover, pressed */
   --color-border: #d8dee6;          /* hairlines */
-  --color-border-strong: #7d8899;   /* control edges: 3.59:1 surface, 3.17:1 canvas (WCAG 1.4.11) */
-  --color-ink: #17202b;             /* primary text:   16.43:1 surface, 14.50:1 canvas */
-  --color-ink-2: #3d4a5b;           /* secondary text:  9.02:1 surface,  7.96:1 canvas */
-  --color-ink-3: #5c6879;           /* muted text:      5.66:1 surface,  4.99:1 canvas */
+  --color-border-strong: #7d8899;   /* control edges: 3.59:1 surface, 3.14:1 canvas (WCAG 1.4.11) */
+  --color-ink: #17202b;             /* primary text:   16.43:1 surface, 14.38:1 canvas */
+  --color-ink-2: #3d4a5b;           /* secondary text:  9.02:1 surface,  7.89:1 canvas */
+  --color-ink-3: #5c6879;           /* muted text:      5.66:1 surface,  4.95:1 canvas */
   --color-ink-inverse: #ffffff;
 
   --color-accent: #2e4fc9;          /* cobalt: 6.82:1 surface; white on it 6.82:1 */

@@ -140,6 +140,12 @@ function direction(hash) {
 
 const reducedMotion = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+// Navigation the operator drives from the keyboard (g-sequences, the
+// palette, Enter on a link) happens many times a day and stays instant;
+// the content transition is for pointer navigation only.
+let lastInput = { kind: 'pointer', at: 0 };
+const keyboardDriven = () => lastInput.kind === 'keyboard' && performance.now() - lastInput.at < 1000;
+
 const progress = (() => {
   const bar = h('div', { class: 'route-progress', 'aria-hidden': 'true' });
   let attached = false;
@@ -344,7 +350,9 @@ async function render({ soft = false } = {}) {
     }
     state.cleanup = result.cleanup || null;
     state.current = { screen, key, update: result.update || null, hash: location.hash };
-    const animate = !soft && !state.firstRender && !skeletonShown && !reducedMotion();
+    const animate = !soft && !state.firstRender && !skeletonShown && !reducedMotion() && !keyboardDriven();
+    // An in-place refresh must not replay entrance animations.
+    if (soft) view.classList.add('view--static');
     await swapView(main, view, { animate, dir, fade: skeletonShown && !reducedMotion() });
     window.scrollTo(0, keepY);
     result.mounted?.();
@@ -412,6 +420,8 @@ async function boot() {
     }
   }
   installPeek();
+  document.addEventListener('keydown', () => { lastInput = { kind: 'keyboard', at: performance.now() }; }, true);
+  document.addEventListener('pointerdown', () => { lastInput = { kind: 'pointer', at: performance.now() }; }, true);
   window.addEventListener('hashchange', () => render());
   document.addEventListener('keydown', onKeydown);
   render();

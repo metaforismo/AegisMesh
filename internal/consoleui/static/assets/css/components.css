@@ -1494,7 +1494,6 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   pointer-events: none;
   opacity: 0;
   transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
-  will-change: transform;
 }
 
 .chart__tip.is-shown { opacity: 1; }
@@ -1763,6 +1762,12 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 @keyframes view-in-back { from { opacity: 0; transform: translateX(-10px); } }
 @keyframes view-out { to { opacity: 0; transform: translateX(-10px); } }
 @keyframes view-out-back { to { opacity: 0; transform: translateX(10px); } }
+
+/* In-place refreshes (stale-while-revalidate, after a write) keep entrance
+   animations from replaying. */
+.view--static .chart__bar,
+.view--static .segbar,
+.view--static .spark__draw { animation: none; }
 
 ::view-transition-old(root),
 ::view-transition-new(root) { animation: none; }
