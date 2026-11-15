@@ -373,7 +373,13 @@ export default {
 
     // A click on a row link pushes a history entry; Esc then goes back.
     tableSlot.addEventListener('click', (e) => {
-      if (e.target.closest?.('[data-row-link]') && !e.metaKey && !e.ctrlKey && !e.shiftKey) pushedOpen = true;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (e.target.closest?.('[data-row-link]')) { pushedOpen = true; return; }
+      // The whole row is the target, not only its summary link. Clicks on
+      // other controls and drags that selected text keep their own meaning.
+      if (e.target.closest?.('a, button, input, select, summary')) return;
+      if (String(getSelection?.() ?? '')) return;
+      e.target.closest?.('tr')?.querySelector('[data-row-link]')?.click();
     });
 
     // ---- Keyboard: j/k rows, Enter opens, o for full page --------------------
