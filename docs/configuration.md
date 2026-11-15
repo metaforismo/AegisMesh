@@ -57,17 +57,20 @@ for parallel test runs; still subject to host-loopback rules.
 | `retention.max_events` | `100000` | delete oldest closed segments beyond this, across plaintext/encrypted history |
 | `retention.max_age_days` | `30` | delete segments older than this |
 
-Periodic flush writes buffered ciphertext to the OS without sealing or `fsync`.
-Encrypted mode seals on size rotation, close, or a flush at the fixed five-minute
-segment age, measured from the first event (not a configuration field). Empty
-segments never age out; the next append after a seal opens a new segment. Active
-segments fail closed on read until sealed: normally within five minutes plus the
-next five-second runtime flush, with longer delays if maintenance is stalled.
-Full-directory inspection still requires every segment to be sealed, so stop the
-runtime or inspect a separate sealed-only snapshot for a successful complete read.
-Age alone produces at most 288 seals/day; size rotation and restarts add files.
-The 1 KiB footer reserve counts against `max_file_bytes`,
-so a near-limit record may require a larger segment cap. Private identities are
+Periodic flush publishes buffered ciphertext and a v3 checkpoint to the OS
+without `fsync`. It writes no checkpoint unless new frames arrived. Encrypted
+mode seals on size rotation, close, a flush at the fixed five-minute age from
+the first event, or when a checkpoint would consume reserved seal space. Empty
+segments never age out; the next append after sealing opens a new file.
+Live CLI reads return only the last authenticated checkpoint prefix with an
+incompleteness notice; `--require-sealed` rejects any open segment. Older open
+files are interrupted-segment warnings, also reported structurally by doctor.
+Each checkpoint/seal is 250 bytes with pinned age/X25519 and counts against
+`max_file_bytes`; the 1 KiB seal reserve is retained. No new cadence setting or
+private runtime identity is introduced. Sealed v2 keeps its strict read semantics.
+See [evidence-encryption.md](evidence-encryption.md) for the exact format and
+rollback limits: a removed seal is indistinguishable from an open checkpointed
+file unless completeness is required. Private identities are
 read-time `--identity FILE` references only, never config fields or environment
 key values. Existing plaintext is not migrated. See
 [evidence-encryption.md](evidence-encryption.md) for exact bounds, mixed-history,

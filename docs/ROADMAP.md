@@ -43,15 +43,14 @@ implementation and its acceptance gates are complete.
    that preserves the complete native envelope and adds no connector or egress.
 4. [x] **Dry-run recommendations.** Deterministic evidence-linked proposals for
    operator review with no enforcement, asset mutation or runtime feedback path.
-5. [ ] **Optional evidence-at-rest encryption — implemented in PR #73, unmerged.** Uses
-   native age/X25519, is disabled by default, blocks silent plaintext downgrade,
-   and defines explicit key rotation, recovery and mixed-history semantics.
-   Authenticated v2 footers reject frame-boundary truncation. Ordinary flushes
-   preserve the active segment; size rotation, close or a five-minute age check
-   at flush seals it. Active-segment read delay and retention costs are documented
-   in ADR-0016. See the current local verification ledger.
-   Hosted CI passes on the PR #73 head; this checkbox remains open until human
-   review and merge complete.
+5. [x] **Optional evidence-at-rest encryption — in supplied master baseline.**
+   Native age/X25519, explicit key rotation and persistent plaintext downgrade
+   guard. Local uncommitted v3 work adds authenticated busy-flush checkpoints,
+   live CLI prefix reads, interrupted-segment/doctor warnings and
+   `--require-sealed`. Historical v2 stays seal-only. See ADR-0016 for the
+   unavoidable rollback limit: a removed seal back to a checkpoint looks open
+   unless strict completion is required. Local gates are in `docs/verification.md`;
+   v3 hosted CI, merge and release are separate, not performed here.
 6. [x] **Observe-only extension boundary.** Strict manifests and exact
    event-linked acknowledgements; extension output cannot affect evidence,
    policy, responses, paths, configuration or enforcement.

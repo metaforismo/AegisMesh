@@ -257,16 +257,19 @@ they use stdio only and introduce no destination or other external egress.
     protocol or startup failures fail closed for that sensor and never select a command, path, credential,
     provider destination, or enforcement action.
 
-Encrypted segments use authenticated v2 completion footers. Ordinary flushes
-write buffers to the OS; size rotation, close or a flush at five minutes from
-the first event seals the segment. Empty segments never age out. Only the next
-append after sealing opens a new segment. Active segments fail closed on read;
-full-directory reads require every segment to be sealed. Only public recipients enter the
-runtime writer. Explicit bounded owner-only identity files enter the local read
-boundary; no identity reaches sensors, workers, LLMs, webhooks or logs. Complete
-read success includes the footer before any CLI output is published. Count
-retention reads framing without private keys; it does not authenticate history.
-There is no added network destination or command execution edge.
+Encrypted v3 segments use authenticated checkpoints on flush after new frames,
+and a final seal on size/age/close or checkpoint space exhaustion. Flush pushes
+buffers to the OS without `fsync`. Only the next append after sealing opens a
+successor. Local reads authenticate a size snapshot and replay the checkpointed
+prefix, reporting explicit open/interrupted status; `--require-sealed` rejects
+incompleteness. Complete corrupt records fail closed; torn tails after a valid
+checkpoint are excluded explicitly. Historical v2 still requires a seal. A removed
+v3 seal is indistinguishable from an open checkpointed file in permissive mode;
+see ADR-0016 for rollback limits. Only public recipients enter the runtime writer.
+Explicit bounded owner-only identities enter the local CLI read boundary; none
+reach sensors, workers, LLMs, webhooks, console or logs. CLI output is staged until
+the full directory read succeeds. Retention/doctor scan framing without keys or
+authenticity claims. There is no new network destination or command execution.
 
 ## Console read path (ADR-0017)
 

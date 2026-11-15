@@ -126,15 +126,20 @@ autonomous response connectors or enforcement,
 distributed evidence aggregation, multi-tenancy, hosted SaaS/control plane, SSO,
 or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
 
-The encryption slice is implemented in open PR #73 (hosted CI PASS on its head);
-human review and merge remain pending. Encryption protects
-new event contents on storage media. Existing plaintext, exported NDJSON,
-filenames, sizes and timing remain exposed. Compromised runtime hosts and stolen
-private identities defeat confidentiality; lost identities have no escrow or
-recovery service. Interrupted encrypted segments fail closed without automatic
-salvage. See ADR-0016 and `evidence-encryption.md`.
+Evidence encryption is present in the supplied master baseline. This local,
+uncommitted v3 amendment enables CLI reads of a running node through the last
+authenticated checkpoint. Open segments carry explicit incompleteness notices;
+older ones are interrupted-segment warnings, also reported structurally by doctor.
+`--require-sealed` restores strict completion checks. Checkpoints add 250 bytes
+per busy flush with pinned age/X25519, and idle flushes write none. No private
+identity enters the runtime or console. Historical v2 remains seal-only; no
+migration occurs. Encryption protects new event contents on media; existing
+plaintext, exports and file metadata remain exposed. Host/identity compromise,
+key loss, public-recipient forgery and checkpoint-tail rollback remain limits.
+Even a removed seal looks open if truncated to a checkpoint; strict reads are
+needed for full completion assurance. See ADR-0016 and `evidence-encryption.md`.
 
-## First operator console (P3-2, open PRs #74 and #75)
+## First operator console (P3-2, merged baseline #74 and #75)
 
 The console provides a disabled-by-default, authenticated HTTP API and an
 embedded operator UI inside the single binary. The UI has no build step and no
@@ -151,7 +156,7 @@ merged, deployed, SSO, multi-tenant or production-readiness claim.
 ## First fleet inventory (P3-1 foundation, PR #76)
 
 Experimental fleet inventory with authenticated enrollment and heartbeats is
-implemented on `feat/fleet-enrollment` (PR #76, unmerged). A hub lists node identities
+implemented in the local master baseline (merge #76). A hub lists node identities
 and self-reported health through the authenticated console. Agents dial that
 hub using local Ed25519 identities and a bounded independent loop. One-time
 admin tokens establish identity; signed requests, expiry/replay checks and

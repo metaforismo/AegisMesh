@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -304,7 +303,7 @@ func TestEncryptedKeyRotationReadsSegmentsWithRepeatedIdentities(t *testing.T) {
 	}
 }
 
-func TestEncryptedTruncatedFinalFrameLeavesEarlierFrameAuthenticatable(t *testing.T) {
+func TestEncryptedUncheckpointedTruncationEmitsNothing(t *testing.T) {
 	identity, identityPath := generateIdentityFile(t)
 	dir := t.TempDir()
 	store := encryptedStore(t, dir, identity, nil)
@@ -340,7 +339,7 @@ func TestEncryptedTruncatedFinalFrameLeavesEarlierFrameAuthenticatable(t *testin
 	}
 	seen := 0
 	err = reader.ForEach(func(event.Envelope) error { seen++; return nil }, nil)
-	if err == nil || seen != 1 {
+	if err == nil || seen != 0 {
 		t.Fatalf("seen=%d err=%v", seen, err)
 	}
 }
@@ -687,40 +686,39 @@ func TestEncryptionGuardRejectsUnsafeReplacement(t *testing.T) {
 }
 
 func FuzzEncryptedFrameStructure(f *testing.F) {
-	identity, err := age.GenerateX25519Identity()
-	if err != nil {
-		f.Fatal(err)
+	fixture := newCheckpointFixture(f)
+	seeds := [][]byte{
+		fixture.header,
+		joinRecords(fixture.header, fixture.a),
+		joinRecords(fixture.header, fixture.a, fixture.cp),
+		joinRecords(fixture.header, fixture.a, fixture.cp, fixture.b),
+		joinRecords(fixture.header, fixture.a, fixture.cp, fixture.b[:len(fixture.b)-1]),
+		joinRecords(fixture.header, fixture.a, fixture.cp, fixture.b, fixture.seal),
+		joinRecords(fixture.header, fixture.a, fixture.b, fixture.seal, fixture.seal),
+		joinRecords(fixture.header, fixture.b, fixture.a, fixture.seal),
+		joinRecords([]byte(encryptedSegmentV2Magic), fixture.a, fixture.b, fixture.v2seal),
+		joinRecords([]byte(encryptedSegmentV2Magic), fixture.a),
+		joinRecords(fixture.header, make([]byte, 8)),
 	}
-	encryptor, err := newSegmentEncryptor(&EncryptionOptions{Recipient: identity.Recipient().String()})
-	if err != nil {
-		f.Fatal(err)
+	for _, seed := range seeds {
+		f.Add(seed)
 	}
-	frame, err := encryptor.frame([]byte(`{"schema":"aegismesh.event/v1"}`))
-	if err != nil {
-		f.Fatal(err)
-	}
-	f.Add([]byte(encryptedSegmentMagic))
-	f.Add(append([]byte(encryptedSegmentMagic), frame...))
-	digest := sha256.Sum256(frame)
-	footer := make([]byte, 8)
-	binary.BigEndian.PutUint64(footer, 1)
-	footer = append(footer, digest[:]...)
-	sealed, err := encryptor.frame(footer)
-	if err != nil {
-		f.Fatal(err)
-	}
-	valid := append([]byte(encryptedSegmentMagic), frame...)
-	valid = append(valid, 0, 0, 0, 0)
-	valid = append(valid, sealed...)
-	f.Add(valid)
-	f.Add(append([]byte(encryptedSegmentMagic), 0, 0, 0, 0))
-
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) > 2*agekey.MaxEncryptedFrameBytes {
 			return
 		}
 		_, _ = countEncryptedFramesReader(bufio.NewReader(bytes.NewReader(raw)), "fuzz.jsonl.age")
-		_ = readEncryptedFrames(bufio.NewReader(bytes.NewReader(raw)), "fuzz.jsonl.age", identitySet{values: []age.Identity{identity}}, func([]byte) error { return nil })
+		seen := 0
+		err := readEncryptedFrames(bytes.NewReader(raw), int64(len(raw)), "fuzz.jsonl.age", fixture.ids,
+			func([]byte) error { seen++; return nil })
+		var open *OpenSegmentError
+		if errors.As(err, &open) {
+			if uint64(seen) != open.VerifiedEvents {
+				t.Fatalf("uncheckpointed events emitted: seen=%d status=%+v", seen, open)
+			}
+		} else if err != nil && seen != 0 {
+			t.Fatalf("corruption emitted %d events: %v", seen, err)
+		}
 	})
 }
 
@@ -809,8 +807,13 @@ func TestEncryptedFlushKeepsSegmentUntilAgeBound(t *testing.T) {
 	if err := reader.ForEach(func(event.Envelope) error { return nil }, nil); err == nil || !strings.Contains(err.Error(), "not sealed") {
 		t.Fatalf("active segment read: %v", err)
 	}
-	if _, err := CountSegment(filepath.Join(dir, store.path)); err == nil || !strings.Contains(err.Error(), "not sealed") {
-		t.Fatalf("active segment count: %v", err)
+	if n, err := CountSegment(filepath.Join(dir, store.path)); n != flushes || err == nil {
+		t.Fatalf("active segment count: n=%d err=%v", n, err)
+	}
+	live := 0
+	notices, err := reader.ForEachVerified(func(event.Envelope) error { live++; return nil }, nil)
+	if err != nil || live != flushes || len(notices) != 1 || notices[0].VerifiedEvents != flushes {
+		t.Fatalf("live read: seen=%d notices=%+v err=%v", live, notices, err)
 	}
 
 	// At exactly five minutes seal once, without eagerly opening an empty successor.

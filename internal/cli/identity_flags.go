@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/metaforismo/aegismesh/internal/agekey"
@@ -31,9 +32,10 @@ func (f *identityFilesFlag) Set(value string) error {
 	return nil
 }
 
-func (f identityFilesFlag) openReader(dataDir string) (*storage.Reader, error) {
+func (f identityFilesFlag) openReader(dataDir string, requireSealed bool) (*storage.Reader, error) {
 	return storage.NewReaderWithOptions(dataDir, storage.ReaderOptions{
 		IdentityFiles: append([]string(nil), f.values...),
+		RequireSealed: requireSealed,
 	})
 }
 
@@ -46,4 +48,10 @@ func parseIdentityFlags(fs *flag.FlagSet, args []string) error {
 		return err
 	}
 	return nil
+}
+
+func reportOpenSegments(w io.Writer, notices []storage.OpenSegmentError) {
+	for i := range notices {
+		fmt.Fprintln(w, notices[i].Error())
+	}
 }

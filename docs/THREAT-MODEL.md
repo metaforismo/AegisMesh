@@ -193,22 +193,28 @@ reachable. The summary still describes observations, not an incident.
   retained encrypted segments is unrecoverable. The per-directory mode guard
   prevents accidental plaintext downgrade but is not host attestation or a
   filesystem sandbox. Encryption protects the storage medium, not a
-  compromised runtime host or a stolen private identity. Authenticated v2
-  completion footers detect record-boundary truncation and order changes
-  relative to the footer. Entire-file deletion/replacement and forgery by a
-  public-recipient holder are not writer provenance checks. Crash-unsealed
-  segments fail closed; no automatic salvage is implemented. Normal flushes
-  publish ciphertext without sealing or `fsync`. A fixed five-minute age from
-  the first event, checked at flush, limits age-driven seals to 288/day under
-  steady traffic; size rotation and restarts add files. Empty segments do not
-  age out. Active evidence is unverifiable until sealing, normally within five
-  minutes plus the next five-second flush (longer if maintenance stalls).
-  Full-directory reads still fail when a new unsealed successor is present;
-  stop the runtime or inspect a separate sealed-only snapshot. Ten-minute
-  retention scans are off the append/flush path and open one segment at a time,
-  but hold the store mutex and can delay writes/flushes. Count retention can be
-  blocked by a damaged closed segment. Traffic can still consume disk between
-  retention passes; retention is not a hard disk quota.
+  compromised runtime host or a stolen private identity. V3 checkpoint/seal
+  controls authenticate the count and SHA-256 of ordered event records. Live
+  reads return only an authenticated prefix, naming every open file and warning
+  that later events may exist. Complete corrupt records and invalid controls
+  fail closed; incomplete tails after a checkpoint are excluded explicitly.
+  Newest-only openness is normal; older open files are interrupted-segment
+  warnings, detected structurally by doctor without private identities.
+  A medium writer can roll back an open file to an earlier checkpoint undetected.
+  **Even a formerly sealed v3 file can be truncated to an earlier checkpoint and
+  appear open**: without trusted external completion state this is indistinguishable.
+  Use `--require-sealed` for strict truncation/completion detection. A present or
+  required seal binds the full sequence; records after it fail. Historical v2
+  has no checkpoint fallback and still requires a seal. Whole-file deletion,
+  replacement and public-recipient forgery are outside the guarantee; this is
+  consistency, not writer provenance. No automatic rewriting/migration occurs.
+  Normal flushes publish checkpoints only after new events, without `fsync`;
+  size, close, five-minute age from first event, or checkpoint space exhaustion
+  seal the file. Empty files do not age out. Ten-minute retention scans are off
+  append/flush, open one descriptor at a time, and can delay writes under the
+  store mutex. They count interrupted v3 prefixes structurally and may delete
+  whole closed files, never the active file. Damaged framing/no usable checkpoint
+  or v2 incompleteness can block count retention. Retention is not a hard disk quota.
 - Build provenance depends on GitHub-hosted runner, OIDC, Sigstore, registry,
   and source-control integrity. It covers named binary subjects only; current
   SBOM/checksum files are not attested, and no SLSA level or binary signature is

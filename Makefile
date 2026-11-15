@@ -52,6 +52,7 @@ fuzz-seed: ## run bounded real fuzzing without post-discovery minimization
 	go test -run '^$$' -fuzz=FuzzCursorFilter ./internal/evidenceindex -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzParseConfig ./internal/config -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzDecodeEventEnvelope ./internal/event -fuzztime=15s -fuzzminimizetime=0
+	# V2 compatibility and V3 checkpoint/seal structure and prefix invariants.
 	go test -run '^$$' -fuzz=FuzzEncryptedFrameStructure ./internal/storage -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzMatchTCPLine ./internal/sensor/tcpsensor -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzSSHMetadataHelpers ./internal/sensor/sshsensor -fuzztime=15s -fuzzminimizetime=0

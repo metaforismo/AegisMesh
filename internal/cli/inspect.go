@@ -26,9 +26,9 @@ func (c *inspectCmd) Usage() string { return "inspect <list|show|export> [flags]
 func (c *inspectCmd) Help() string {
 	return `Read and export recorded evidence.
 
-  inspect list   --data-dir DIR [--identity FILE ...] [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
-  inspect show   --data-dir DIR --id EVENT_ID [--identity FILE ...] [--verify]
-  inspect export --data-dir DIR --out FILE.ndjson [--identity FILE ...] [--profile ecs] [--verify]
+  inspect list   --data-dir DIR [--identity FILE ...] [--require-sealed] [--limit N] [--sensor ID] [--kind KIND] [--finding RULE_ID] [--classification CLASS] [--verify]
+  inspect show   --data-dir DIR --id EVENT_ID [--identity FILE ...] [--require-sealed] [--verify]
+  inspect export --data-dir DIR --out FILE.ndjson [--identity FILE ...] [--require-sealed] [--profile ecs] [--verify]
 
 Events are observations of decoy interactions — they are not incidents and do
 not prove compromise. --verify recomputes each event's integrity hash while
@@ -40,7 +40,10 @@ canary_invocation, correlation_signal); it applies before --limit, so
 --profile ecs emits the documented ECS-compatible mapping while preserving
 the complete native envelope under the aegismesh field. Encrypted segments
 require one or more explicit native age/X25519 identity files; repeat
---identity during key rotation.`
+--identity during key rotation. Open v3 segments return the last checkpoint prefix
+with a notice; --require-sealed rejects them. Exit 0 means the requested read
+succeeded (possibly incomplete); exit 1 means a read/output failure; exit 2
+means invalid arguments.`
 }
 
 func (c *inspectCmd) Run(ctx context.Context, args []string) error {
@@ -71,6 +74,7 @@ func (c *inspectCmd) list(args []string) error {
 	fs.Var(&class, "classification", "filter to one evidence class (interaction|canary_invocation|correlation_signal)")
 	var identities identityFilesFlag
 	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
+	requireSealed := fs.Bool("require-sealed", false, "reject segments without a final seal")
 	verify := fs.Bool("verify", false, "recompute integrity hashes while reading")
 	if err := parseIdentityFlags(fs, args); err != nil {
 		return Usagef("%v", err)
@@ -94,7 +98,7 @@ func (c *inspectCmd) list(args []string) error {
 			return Usagef("%v", err)
 		}
 	}
-	r, err := identities.openReader(*dataDir)
+	r, err := identities.openReader(*dataDir, *requireSealed)
 	if err != nil {
 		return err
 	}
@@ -108,7 +112,7 @@ func (c *inspectCmd) list(args []string) error {
 	}
 	var rows []row
 	var corrupt int
-	err = r.ForEach(func(e event.Envelope) error {
+	notices, err := r.ForEachVerified(func(e event.Envelope) error {
 		if *sensorID != "" && e.Sensor.ID != *sensorID {
 			return nil
 		}
@@ -139,8 +143,13 @@ func (c *inspectCmd) list(args []string) error {
 	if err != nil {
 		return err
 	}
+	reportOpenSegments(c.env.Err, notices)
 	if c.g.jsonOut {
-		return writeJSON(c.env.Out, map[string]any{"events": rows, "corrupt_lines": corrupt})
+		payload := map[string]any{"events": rows, "corrupt_lines": corrupt}
+		if len(notices) > 0 {
+			payload["open_segments"] = notices
+		}
+		return writeJSON(c.env.Out, payload)
 	}
 	if len(rows) == 0 {
 		fmt.Fprintln(c.env.Out, "no events recorded yet")
@@ -176,6 +185,7 @@ func (c *inspectCmd) show(args []string) error {
 	id := fs.String("id", "", "event id to display")
 	var identities identityFilesFlag
 	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
+	requireSealed := fs.Bool("require-sealed", false, "reject segments without a final seal")
 	verify := fs.Bool("verify", true, "verify this event's integrity hash")
 	if err := parseIdentityFlags(fs, args); err != nil {
 		return Usagef("%v", err)
@@ -186,13 +196,13 @@ func (c *inspectCmd) show(args []string) error {
 	if strings.TrimSpace(*id) == "" {
 		return Usagef("--id is required")
 	}
-	r, err := identities.openReader(*dataDir)
+	r, err := identities.openReader(*dataDir, *requireSealed)
 	if err != nil {
 		return err
 	}
 	var found *event.Envelope
 	var matches int
-	err = r.ForEach(func(e event.Envelope) error {
+	notices, err := r.ForEachVerified(func(e event.Envelope) error {
 		if found != nil && found.ID == *id {
 			return nil
 		}
@@ -208,6 +218,7 @@ func (c *inspectCmd) show(args []string) error {
 	if err != nil {
 		return err
 	}
+	reportOpenSegments(c.env.Err, notices)
 	switch {
 	case found == nil:
 		return fmt.Errorf("no event with id %s in %s", *id, *dataDir)
@@ -221,6 +232,9 @@ func (c *inspectCmd) show(args []string) error {
 	payload := map[string]any{
 		"envelope": found,
 		"verified": *verify && integrityErr == nil,
+	}
+	if len(notices) > 0 {
+		payload["open_segments"] = notices
 	}
 	if integrityErr != nil {
 		payload["integrity_error"] = integrityErr.Error()
@@ -237,6 +251,7 @@ func (c *inspectCmd) export(args []string) error {
 	fs.Var(&profile, "profile", "export mapping profile (ecs)")
 	var identities identityFilesFlag
 	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
+	requireSealed := fs.Bool("require-sealed", false, "reject segments without a final seal")
 	verify := fs.Bool("verify", true, "refuse to export events failing integrity checks")
 	if err := parseIdentityFlags(fs, args); err != nil {
 		return Usagef("%v", err)
@@ -257,7 +272,7 @@ func (c *inspectCmd) export(args []string) error {
 			return Usagef("unknown export profile %q (want ecs)", profileName)
 		}
 	}
-	r, err := identities.openReader(*dataDir)
+	r, err := identities.openReader(*dataDir, *requireSealed)
 	if err != nil {
 		return err
 	}
@@ -283,7 +298,7 @@ func (c *inspectCmd) export(args []string) error {
 	defer staged.Close()
 
 	count, bad := 0, 0
-	err = r.ForEach(func(e event.Envelope) error {
+	notices, err := r.ForEachVerified(func(e event.Envelope) error {
 		if verr := e.Validate(); verr != nil {
 			bad++
 			return nil
@@ -315,6 +330,7 @@ func (c *inspectCmd) export(args []string) error {
 	if err != nil {
 		return err
 	}
+	reportOpenSegments(c.env.Err, notices)
 	if *verify && bad > 0 {
 		return fmt.Errorf("integrity verification failed for %d event(s); output was not changed", bad)
 	}
