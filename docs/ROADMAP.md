@@ -78,8 +78,8 @@ live queue is in [BACKLOG.md](BACKLOG.md), and current evidence is in
   per-sensor identity and attestation, offline buffering and deterministic
   reconciliation.
 - First operator console: **backend implemented, uncommitted candidate** for
-  P3-2. Fixed v1 API, token roles, bounded index, audited investigations and
-  static-host injection are present. Parallel UI integration, review and
+  P3-2. Fixed v1 API, token roles, bounded index, audited investigations and an
+  embedded zero-dependency UI (no build step) are present. Human review and
   exact-head CI/merge remain open. See the console contract and verification
   ledger; this is single-node/single-tenant with no sensor control.
 - Continuous adversarial simulation that probes only operator-owned decoys in

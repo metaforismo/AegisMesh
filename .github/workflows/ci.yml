@@ -50,6 +50,12 @@ jobs:
       - name: test (-race)
         run: go test -race ./...
 
+      # Uses the runner's preinstalled Node.js; the UI has no npm dependencies.
+      - name: console UI tests (node)
+        run: |
+          node --version
+          node --test 'internal/consoleui/webtest/*.test.mjs'
+
   fuzz-smoke:
     name: fuzz seeds (bounded)
     runs-on: ubuntu-latest

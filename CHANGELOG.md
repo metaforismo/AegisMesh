@@ -11,8 +11,10 @@ changes bump MINOR).
 - Uncommitted first operator console backend candidate: disabled-by-default,
   authenticated single-node HTTP API, token operator roles, ephemeral sessions/
   CSRF, bounded evidence index/live SSE, atomic operator investigations and
-  hash-chained private audit. A separate listener hosts optional injected UI
-  assets; no UI is wired by this backend change. CLI adds `console token`,
+  hash-chained private audit. The same listener serves an embedded operator UI
+  (`internal/consoleui`: plain HTML/CSS/ES modules, no build step, no third-party
+  code, strict CSP, evidence rendered as text) only when `console.enabled` is
+  true; `make ui-test` runs its Node.js tests and CI runs them too. CLI adds `console token`,
   `console hash` and opt-in `demo --console`. Encrypted evidence remains live-only;
   no SSO, fleet, tenant isolation or sensor control is included.
 

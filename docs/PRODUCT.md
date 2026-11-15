@@ -123,8 +123,8 @@ packaging; pinned CI/release definitions and documentation.
 
 Does not ship yet: Telnet/database sensors, OTLP or automatic SIEM connectors,
 autonomous response connectors or enforcement,
-distributed deployment, multi-tenancy, hosted SaaS/control plane, web console,
-or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
+distributed deployment, multi-tenancy, hosted SaaS/control plane, SSO/fleet
+console features, or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
 
 The encryption slice is implemented in the current development candidate (PR
 pending); human review, exact-head CI and merge remain open. Encryption protects
@@ -136,12 +136,12 @@ salvage. See ADR-0016 and `evidence-encryption.md`.
 
 ## First operator console candidate (P3-2)
 
-The backend candidate provides a disabled-by-default, authenticated HTTP API and
-optional static UI host inside the single binary. It is single-node and single-
+The candidate provides a disabled-by-default, authenticated HTTP API and an
+embedded operator UI inside the single binary. The UI has no build step and no
+third-party code, and is served only when `console.enabled` is true. It is single-node and single-
 tenant, uses named token operators (viewer/analyst/admin), and reads bounded
 indexed evidence. Operator-authored investigations and an append-only audit
 trail are the only durable console writes. It adds no egress or sensor control.
 Encrypted storage exposes live envelopes only; audit/notes remain plaintext.
-The parallel UI package is integrated separately through an injected FS.
 Local tests and the verification ledger describe the evidence; this is not a
 merged, deployed, SSO, fleet, multi-tenant or production-readiness claim.

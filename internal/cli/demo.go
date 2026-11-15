@@ -31,8 +31,9 @@ verifies the stored evidence and its observation hashes, generates a dry-run
 recommendation, stops every listener, and removes its private temporary data.
 
 With --console, retains the synthetic evidence on an OS-assigned loopback
-console until interrupted and prints a fresh admin token once. Available UI
-assets are served alongside the console API. Cannot combine with --json.
+console until interrupted and prints a fresh admin token once. The embedded
+operator UI is served at the printed URL alongside the console API. Cannot
+combine with --json.
 
 It accepts no config, API key, path, port or destination. It uses no cloud
 service or external egress and never performs enforcement.`

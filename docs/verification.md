@@ -10,6 +10,33 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-11-15 — embedded operator console UI
+
+Worktree branch `feat/console-ui-embed` on top of `feat/console-api`, macOS arm64,
+Go **1.27.4**, Node.js v25.8.2. Local commits only: no push, `gh`, hosted CI,
+merge or deployment. The runtime now passes `consoleui.FS()` to the console, so the
+UI is embedded, has no build step and no third-party code, and is served only
+when `console.enabled` is true. Makefile targets `ui-test`/`ui-dev` and a Node.js
+CI step were added; the CI step has not run on hosted CI.
+
+| Command / check | Result |
+|---|---|
+| `make ui-test` | **PASS**: 63 tests, 0 failures (DOM safety, routing, API client, stream, charts, components, mock server, site checks). |
+| `go test -race -count=1 ./internal/consoleui ./internal/console/... ./internal/runtime ./internal/cli` | **PASS**: all eight packages, including the new `TestConsoleServesEmbeddedUI` (real runtime on loopback: `/` is 200 `text/html` with the exact CSP and `no-store`, the entry script is served as JavaScript, unauthenticated `/api/v1/overview` is 401). |
+| `make lint` | **PASS**: gofmt clean, `go vet ./...`; `golangci-lint` not installed, skipped by the Makefile. |
+| `make supply-chain-check` and `./scripts/check-supply-chain_test.sh` | **PASS**: no new action was added; the CI step uses the runner's Node.js. |
+| `make license-check secrets-scan` | **PASS**: 14 modules within policy; no secrets found. |
+| `git diff --check` | **PASS** after stripping trailing whitespace from the staged UI scripts. |
+| Full `make test`, fuzzing, `make vuln` | **NOT RUN** in this change; left to the orchestrator. |
+| Hosted CI for the new Node.js step | **NOT RUN**: nothing was pushed. |
+
+**Manual browser evidence (orchestrator, not repeated by the implementer).** Run in
+a browser against the real server started by `aegismesh demo --console`: login,
+overview, events, recommendations, node, audit trail, and creating an
+investigation (cookie session plus CSRF) all worked, with no CSP violations. The
+mock-based walk-through of all 13 screens in both themes and at 375px is recorded
+in `docs/design-system.md`.
+
 ## 2026-11-15 — console backend review fixes
 
 Worktree `feat/console-api`, continuing local draft `4976522` without committing,

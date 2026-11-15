@@ -8,10 +8,11 @@ Updated: 2026-11-14. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 Worktree branch `feat/console-api` stacks the toolchain/encryption candidates.
 All console changes remain uncommitted, including the supplied contract file.
 No commit, push, branch switch, `gh`, merge, publication or deployment occurred.
-Read `architecture/console-api.md` and ADR-0017 before integrating the parallel UI.
-`console.Options.UI fs.FS` is the sole UI injection; runtime currently passes nil,
-so `/` serves a notice. The orchestrator should wire `consoleui.FS()` when that
-package lands. API/session/overview/node endpoints work independently of the UI.
+Read `architecture/console-api.md` and ADR-0017 before changing the console.
+`console.Options.UI fs.FS` is the sole UI injection; runtime passes
+`consoleui.FS()`, the embedded zero-dependency UI (no build step), so `/` serves
+the app when `console.enabled` is true. The API works independently of the UI;
+`make ui-test` runs the UI's Node.js tests and `make ui-dev` a mock server.
 
 The append tap is `runtime.indexedSink`: storage first, then index. Both the bus
 sink and direct correlation persistence share it; derived signals acquire no new
@@ -22,7 +23,7 @@ The index is count- and byte-bounded; full envelope detail remains unmodified.
 Config, token/hash CLI, opt-in `demo --console`, auth/CSRF/Host protections,
 SSE, investigations, audit, metrics and API host are implemented. Local command
 and curl receipts belong to `verification.md`; exact-head hosted CI, orchestrator
-review and UI/browser acceptance remain separate. Added contract clarifications:
+review remains separate; browser acceptance of the UI is recorded in `verification.md`. Added contract clarifications:
 64 MiB accounted index budget, 65536-entry node metadata bound,
 4096-envelope recommendation input, finite state/
 audit quotas, timestamp-ordered pagination, zero expiry for bearer session views,
@@ -152,7 +153,7 @@ claimed today; they require separate authorization and threat models.
   the merged baseline still awaits the slice review/CI/merge gate.
 - There is no Telnet/database sensor, decoy-listener TLS, distributed mesh,
   public control API, multi-tenancy or autonomous response path. The optional
-  console API candidate is described above; UI integration remains separate.
+  console API candidate and its embedded UI are described above.
 - Helm is verified packaging, not verified real-cluster support.
 - No v0.2 tag, GitHub release, published image, binary signature or executed
   provenance statement exists.

@@ -448,7 +448,9 @@ state directory when full. There is no automatic deletion or audit repair.
 Audit and investigations are plaintext even when evidence encryption is enabled;
 use an encrypted local volume when their confidentiality is required.
 
-UI assets are injected by the build integrator using `console.Options.UI fs.FS`.
-Without them `/` is a plain-text notice; the API remains available. Asset loading
+The operator UI is embedded in the binary (`internal/consoleui`; no build step,
+no third-party code) and the runtime injects it through `console.Options.UI fs.FS`.
+It is served only when `console.enabled` is true. A server constructed without a
+UI FS serves a plain-text notice at `/`; the API is unaffected. Asset loading
 is capped at 1024 files, 16 MiB/file and 32 MiB total, snapshotted at startup.
 Only `/` serves `index.html`; deep links do not fall back to the index.

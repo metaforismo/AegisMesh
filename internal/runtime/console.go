@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/console"
+	"github.com/metaforismo/aegismesh/internal/consoleui"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/rulecatalog"
@@ -94,6 +95,7 @@ func (s *System) buildConsole() error {
 		Runtime:  s,
 		Rules:    rules,
 		Meter:    s.meter,
+		UI:       consoleui.FS(),
 	})
 	if err != nil {
 		return err
