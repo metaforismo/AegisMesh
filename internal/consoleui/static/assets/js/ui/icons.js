@@ -1,0 +1,85 @@
+// The console icon set. Every icon is drawn on one 16-unit grid with a
+// 1.5 stroke and round caps (styled by .icon in base.css), so icons in the
+// nav, buttons, states and statuses share weight and optical size. Paths are
+// constants in this file: nothing here is built from API data.
+
+import { svg } from '../lib/dom.js';
+
+const circle = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+const rrect = (x, y, w, h, r) =>
+  `M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}h${-(w - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}z`;
+
+// name → path data (string) or [[d, className], …] for mixed fill/stroke.
+const PATHS = {
+  overview: `${rrect(2, 2, 5, 5, 1.2)}${rrect(9, 2, 5, 3, 1)}${rrect(9, 7, 5, 7, 1.2)}${rrect(2, 9, 5, 5, 1.2)}`,
+  events: 'M1.5 8.5h2.6l1.9-5 3.6 9 1.9-4h3',
+  sources: `${circle(8, 8, 5.5)}${circle(8, 8, 1.6)}M8 1v2.5M8 12.5V15M1 8h2.5M12.5 8H15`,
+  investigations: 'M1.75 4.25a1 1 0 0 1 1-1h3.1l1.5 1.5h5.9a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1zM5.5 9.25h5',
+  recommendations: 'M6 13.75h4M6.4 11.75h3.2M8 1.75a4.25 4.25 0 0 0-2.5 7.7c.35.26.5.6.5 1v.55h4v-.55c0-.4.15-.74.5-1A4.25 4.25 0 0 0 8 1.75z',
+  sensors: `${circle(8, 8, 1.4)}M5 11a4.25 4.25 0 0 1 0-6M11 5a4.25 4.25 0 0 1 0 6M2.75 13.25a7.4 7.4 0 0 1 0-10.5M13.25 2.75a7.4 7.4 0 0 1 0 10.5`,
+  rules: 'M2 4.25l1.25 1.25 2.25-2.25M2 10.75l1.25 1.25 2.25-2.25M8 4.5h6M8 11h6',
+  node: `${rrect(2, 2.5, 12, 4.5, 1.2)}${rrect(2, 9, 12, 4.5, 1.2)}M4.75 4.75h.01M4.75 11.25h.01M8 4.75h3.5M8 11.25h3.5`,
+  fleet: `${circle(8, 3.25, 1.75)}${circle(3.25, 12.25, 1.75)}${circle(12.75, 12.25, 1.75)}M7.1 4.8l-3 5.9M8.9 4.8l3 5.9M5 12.25h6`,
+  audit: 'M6.6 9.4l2.8-2.8M7.2 4.6l1.1-1.1a2.75 2.75 0 0 1 3.9 3.9l-1.1 1.1M8.8 11.4l-1.1 1.1a2.75 2.75 0 0 1-3.9-3.9l1.1-1.1',
+  search: `${circle(7, 7, 4.5)}M10.4 10.4L14 14`,
+  copy: `${rrect(5.5, 5.5, 8.5, 8.5, 1.5)}M10.5 3.25v-.5a.75.75 0 0 0-.75-.75H2.75a.75.75 0 0 0-.75.75v7a.75.75 0 0 0 .75.75h.5`,
+  check: 'M3 8.5l3.25 3.25L13 5',
+  close: 'M4 4l8 8M12 4l-8 8',
+  'chevron-right': 'M6 3.5L10.5 8 6 12.5',
+  'chevron-left': 'M10 3.5L5.5 8l4.5 4.5',
+  'chevron-up': 'M3.5 10L8 5.5l4.5 4.5',
+  'chevron-down': 'M3.5 6L8 10.5 12.5 6',
+  'arrow-left': 'M13 8H3M7 4L3 8l4 4',
+  'arrow-up': 'M8 13V3M4 7l4-4 4 4',
+  'trend-up': 'M3.5 12.5l9-9M5.5 3.5h7v7',
+  'trend-down': 'M3.5 3.5l9 9M12.5 5.5v7h-7',
+  'trend-flat': 'M2.5 8h11M10 4.5L13.5 8 10 11.5',
+  external: 'M9 2.5h4.5V7M13.5 2.5L7.5 8.5M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3',
+  pause: 'M5.5 3.5v9M10.5 3.5v9',
+  play: [['M4.75 3.1v9.8a.5.5 0 0 0 .76.43l7.6-4.9a.5.5 0 0 0 0-.86l-7.6-4.9a.5.5 0 0 0-.76.43z', 'fill']],
+  live: `${circle(8, 8, 1.75)}M4.5 11.5a5 5 0 0 1 0-7M11.5 4.5a5 5 0 0 1 0 7`,
+  sun: `${circle(8, 8, 3)}M8 1.25v1.5M8 13.25v1.5M1.25 8h1.5M13.25 8h1.5M3.2 3.2l1.05 1.05M11.75 11.75l1.05 1.05M3.2 12.8l1.05-1.05M11.75 4.25l1.05-1.05`,
+  moon: 'M13.5 9.6A5.75 5.75 0 0 1 6.4 2.5a5.75 5.75 0 1 0 7.1 7.1z',
+  monitor: `${rrect(1.75, 2.5, 12.5, 8.5, 1.25)}M5.5 14h5M8 11v3`,
+  'sign-out': 'M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.25 5L13.25 8l-3 3M13.25 8H6',
+  filter: 'M2 3.5h12l-4.75 5.25V13l-2.5 1.25v-5.5z',
+  keyboard: `${rrect(1.25, 3.75, 13.5, 8.5, 1.5)}M4.25 6.75h.01M6.75 6.75h.01M9.25 6.75h.01M11.75 6.75h.01M5 9.5h6`,
+  warn: 'M8 2.25l6.25 11H1.75zM8 6.5v3M8 11.5h.01',
+  info: `${circle(8, 8, 6.25)}M8 7.25v4M8 4.75h.01`,
+  inbox: 'M1.75 9.25l1.9-5.5h8.7l1.9 5.5v3a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1zM1.75 9.25h3.5l1 1.5h3.5l1-1.5h3.5',
+  refresh: 'M13.25 2.75v3.5h-3.5M2.75 13.25v-3.5h3.5M12.6 6.25A5 5 0 0 0 3.5 5.6M3.4 9.75a5 5 0 0 0 9.1.65',
+  menu: 'M2.5 4h11M2.5 8h11M2.5 12h11',
+  shield: 'M8 1.5l5.5 2.1v4.2c0 3.3-2.3 5.9-5.5 6.7-3.2-.8-5.5-3.4-5.5-6.7V3.6zM5.6 8l1.7 1.7 3.2-3.2',
+  plus: 'M8 3v10M3 8h10',
+  clock: `${circle(8, 8, 6.25)}M8 4.5V8l2.25 1.5`,
+  link: 'M6.6 9.4l2.8-2.8M7.2 4.6l1.1-1.1a2.75 2.75 0 0 1 3.9 3.9l-1.1 1.1M8.8 11.4l-1.1 1.1a2.75 2.75 0 0 1-3.9-3.9l1.1-1.1',
+  'corner-down': 'M3 3v5.5a1.5 1.5 0 0 0 1.5 1.5H13M10 7l3 3-3 3',
+};
+
+export const ICON_NAMES = Object.freeze(Object.keys(PATHS));
+
+// icon('search') → <svg class="icon"> … ; size: xs | sm | md (default) | lg.
+export function icon(name, { size = 'md', className } = {}) {
+  const def = PATHS[name];
+  if (!def) throw new Error(`unknown icon: ${name}`);
+  const parts = typeof def === 'string' ? [[def, null]] : def;
+  return svg('svg', {
+    class: ['icon', size !== 'md' ? `icon--${size}` : '', `icon--${name}`, className || ''],
+    viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false',
+  }, parts.map(([d, cls]) => svg('path', { d, class: cls })));
+}
+
+// The brand mark: a shield plate carrying a small mesh (three nodes linked
+// to a core). Drawn on a 24-unit grid; the plate takes the accent color.
+export function brandMark() {
+  const nodes = [[12, 7.4], [7.6, 14.6], [16.4, 14.6]];
+  const core = [12, 11.9];
+  return svg('svg', { class: 'brand__mark', viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' },
+    svg('path', { class: 'brand__plate', d: 'M12 1.75 3.75 4.9v6.35c0 5.05 3.5 9.35 8.25 10.95 4.75-1.6 8.25-5.9 8.25-10.95V4.9z' }),
+    svg('path', {
+      class: 'brand__edge',
+      d: `M${nodes[0].join(' ')}L${nodes[1].join(' ')}L${nodes[2].join(' ')}Z${nodes.map((n) => `M${n.join(' ')}L${core.join(' ')}`).join('')}`,
+    }),
+    nodes.map(([cx, cy]) => svg('circle', { class: 'brand__node', cx, cy, r: 1.55 })),
+    svg('circle', { class: 'brand__core', cx: core[0], cy: core[1], r: 1.9 }));
+}

@@ -87,6 +87,15 @@ func TestHTMLIsCSPCompatible(t *testing.T) {
 
 var (
 	jsImport = regexp.MustCompile(`(?m)^\s*(?:import|export)\s[^'"]*?from\s+'([^']+)'`)
+	// Lazy screen loading uses import() with a string-literal, relative,
+	// same-directory-tree .js specifier (screens/index.js). That form cannot
+	// carry data: the module graph is fixed at build time, every specifier is
+	// checked to resolve below, and CSP script-src 'self' applies to it. Any
+	// other import() (a variable, a template, a URL) stays forbidden: the
+	// "dynamic import" detector counts every import( and only literal ones
+	// are subtracted.
+	anyDynamicImport     = regexp.MustCompile(`\bimport\s*\(`)
+	literalDynamicImport = regexp.MustCompile(`\bimport\('(\.{1,2}/[A-Za-z0-9_./-]+\.js)'\)`)
 	// Markup and code sinks that would turn API data into behavior.
 	forbiddenJS = map[string]*regexp.Regexp{
 		"innerHTML":                regexp.MustCompile(`\binnerHTML\b`),
@@ -95,7 +104,6 @@ var (
 		"document.write":           regexp.MustCompile(`\bdocument\.write`),
 		"eval":                     regexp.MustCompile(`\beval\s*\(`),
 		"new Function":             regexp.MustCompile(`\bnew\s+Function\b`),
-		"dynamic import":           regexp.MustCompile(`\bimport\s*\(`),
 		"string timers":            regexp.MustCompile(`\bset(?:Timeout|Interval)\s*\(\s*['"\x60]`),
 		"createContextualFragment": regexp.MustCompile(`createContextualFragment`),
 		"DOMParser":                regexp.MustCompile(`\bDOMParser\b`),
@@ -112,6 +120,15 @@ func TestJavaScriptAvoidsUnsafeSinksAndImportsResolve(t *testing.T) {
 		for name, re := range forbiddenJS {
 			if re.MatchString(body) {
 				t.Errorf("%s: forbidden construct %s", p, name)
+			}
+		}
+		literal := literalDynamicImport.FindAllStringSubmatch(body, -1)
+		if n := len(anyDynamicImport.FindAllString(body, -1)); n != len(literal) {
+			t.Errorf("%s: forbidden construct dynamic import (%d import() calls, only %d use a literal relative .js specifier)", p, n, len(literal))
+		}
+		for _, m := range literal {
+			if _, err := fs.Stat(FS(), path.Join(path.Dir(p), m[1])); err != nil {
+				t.Errorf("%s: lazy import %q does not resolve", p, m[1])
 			}
 		}
 		for _, m := range jsImport.FindAllStringSubmatch(body, -1) {
@@ -150,12 +167,22 @@ func TestDetectorsCatchViolations(t *testing.T) {
 		{"innerHTML", forbiddenJS["innerHTML"], `el.innerHTML = s`},
 		{"eval", forbiddenJS["eval"], `eval (s)`},
 		{"string timer", forbiddenJS["string timers"], "setTimeout('x()', 1)"},
-		{"dynamic import", forbiddenJS["dynamic import"], `await import(url)`},
+		{"dynamic import", anyDynamicImport, `await import(url)`},
+		{"dynamic import (template)", anyDynamicImport, "import(`./${name}.js`)"},
 	}
 	for _, c := range cases {
 		if !c.re.MatchString(c.in) {
 			t.Errorf("%s: detector missed %q", c.name, c.in)
 		}
+	}
+	// Only a literal relative .js specifier counts as allowed.
+	for _, bad := range []string{`import(url)`, "import(`./${x}.js`)", `import('https://x.test/a.js')`, `import('./a.js' + q)`, `import("./a.js")`} {
+		if literalDynamicImport.MatchString(bad) {
+			t.Errorf("literal dynamic import allowlist accepts %q", bad)
+		}
+	}
+	if !literalDynamicImport.MatchString(`() => import('./overview.js')`) {
+		t.Error("literal dynamic import allowlist rejects a plain screen import")
 	}
 	if inlineScript.MatchString(`<script type="module" src="a.js"></script>`) {
 		t.Error("inline script detector flags an external module script")

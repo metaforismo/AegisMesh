@@ -1,10 +1,12 @@
 // Reusable view builders. Every builder returns DOM nodes made through dom.js;
 // API strings only ever become Text nodes or validated attribute values.
 
-import { h } from '../lib/dom.js';
+import { h, svg } from '../lib/dom.js';
 import { classificationMeta, isSeverity, severityLabel, capitalize } from '../lib/taxonomy.js';
 import { formatDateTime, formatRelative, truncate } from '../lib/format.js';
 import { describeError } from '../lib/api.js';
+import { sparkPath } from '../lib/chart.js';
+import { icon } from './icons.js';
 
 // ---- Severity, classification, badges ------------------------------------
 
@@ -78,11 +80,36 @@ export function panel({ title, meta, actions, body, flush = false, foot, id, hea
     foot ? h('div', { class: 'panel__foot' }, foot) : null);
 }
 
-export function stat({ label, value, delta, icon }) {
-  return h('div', { class: 'stat' },
-    h('span', { class: 'stat__label' }, icon || null, label),
+const TREND_ICON = { up: 'trend-up', down: 'trend-down', flat: 'trend-flat' };
+
+// Stat tile. `spark` is an optional sparkline node; `delta` comes from
+// formatDelta and is always neutral ink: the arrow states direction only.
+export function stat({ label, value, delta, icon: lead, spark, title, note }) {
+  return h('div', { class: 'stat', title: title || null },
+    h('span', { class: 'stat__label' }, lead || null, label),
     h('span', { class: 'stat__value' }, value),
-    delta ? h('span', { class: 'stat__delta' }, h('strong', null, delta.text), ` ${delta.detail}`) : null);
+    spark ? h('span', { class: 'stat__spark' }, spark) : null,
+    delta ? h('span', { class: 'stat__delta' },
+      h('strong', null, icon(TREND_ICON[delta.direction] || 'trend-flat', { size: 'xs' }), delta.text),
+      ` ${delta.detail}`) : null,
+    !delta && note ? h('span', { class: 'stat__delta' }, note) : null);
+}
+
+// Decorative trend line beside a printed number (aria-hidden: the number
+// and the chart's table view carry the data). `series` picks a class color.
+export function sparkline(values, { series = '', width = 88, height = 28, label } = {}) {
+  const p = sparkPath(values, { width, height, pad: 2.5 });
+  const el = svg('svg', {
+    class: ['spark', series ? `spark--${series}` : ''], viewBox: `0 0 ${width} ${height}`,
+    'aria-hidden': label ? null : 'true', role: label ? 'img' : null, 'aria-label': label || null, focusable: 'false',
+    preserveAspectRatio: 'none',
+  });
+  if (!p.line) return el;
+  el.appendChild(svg('g', { class: 'spark__draw' },
+    svg('path', { class: 'spark__area', d: p.area }),
+    svg('path', { class: 'spark__line', d: p.line }),
+    p.last ? svg('circle', { class: 'spark__dot', cx: p.last.x, cy: p.last.y, r: 2 }) : null));
+  return el;
 }
 
 export function kv(pairs) {
@@ -111,8 +138,9 @@ export function loading(label = 'Loading') {
     h('span', { class: 'btn-row' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), `${label}…`));
 }
 
-export function empty(title, detail, action) {
+export function empty(title, detail, action, { icon: name = 'inbox' } = {}) {
   return h('div', { class: 'state' },
+    h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(name)),
     h('p', { class: 'state__title' }, title),
     detail ? h('p', null, detail) : null,
     action || null);
@@ -121,13 +149,17 @@ export function empty(title, detail, action) {
 export function errorState(err, onRetry) {
   const d = describeError(err);
   return h('div', { class: ['state', 'state--error'], role: 'alert' },
+    h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon('warn')),
     h('p', { class: 'state__title' }, d.title),
     h('p', null, d.detail),
-    onRetry ? h('button', { class: 'btn', type: 'button', on: { click: onRetry } }, 'Try again') : null);
+    onRetry ? h('button', { class: 'btn', type: 'button', on: { click: onRetry } }, icon('refresh'), 'Try again') : null);
 }
+
+const BANNER_ICON = { info: 'info', warn: 'warn', danger: 'warn' };
 
 export function banner(kind, title, ...body) {
   return h('div', { class: ['banner', `banner--${kind}`], role: kind === 'danger' ? 'alert' : null },
+    BANNER_ICON[kind] ? icon(BANNER_ICON[kind]) : null,
     h('div', null, title ? h('p', { class: 'banner__title' }, title) : null, ...body.map((b) => (typeof b === 'string' ? h('p', null, b) : b))));
 }
 
@@ -203,21 +235,149 @@ export function pager({ hasMore, onMore, shown, total }) {
 }
 
 // ---- Toasts -----------------------------------------------------------------
+// Newest at the bottom, at most TOAST_MAX on screen. Timers pause while the
+// pointer is over the stack or the tab is hidden, so a toast is never missed
+// because the operator was reading another one. Errors stay twice as long.
 
 let toastRegion = null;
+const TOAST_MAX = 4;
+const LEAVE_MS = 200;
 
-export function toast(kind, message, { timeout = 5000 } = {}) {
+function leave(el) {
+  if (el.dataset.leaving) return;
+  el.dataset.leaving = '1';
+  el.classList.add('is-leaving');
+  setTimeout(() => el.remove(), LEAVE_MS);
+}
+
+export function toast(kind, message, { timeout } = {}) {
   if (!toastRegion) {
     toastRegion = h('div', { class: 'toast-region', role: 'status', 'aria-live': 'polite' });
     document.body.appendChild(toastRegion);
+    toastRegion.addEventListener('pointerenter', () => { toastRegion.dataset.hold = '1'; });
+    toastRegion.addEventListener('pointerleave', () => { delete toastRegion.dataset.hold; });
   }
-  const close = h('button', { class: ['btn', 'btn--ghost', 'btn--sm'], type: 'button', 'aria-label': 'Dismiss' }, '×');
-  const el = h('div', { class: ['toast', kind === 'error' ? 'toast--error' : 'toast--ok'] },
+  const isError = kind === 'error';
+  const ms = timeout ?? (isError ? 9000 : 4500);
+  const close = h('button', { class: ['btn', 'btn--ghost', 'btn--sm', 'btn--icon'], type: 'button', 'aria-label': 'Dismiss' }, icon('close', { size: 'sm' }));
+  const el = h('div', { class: ['toast', isError ? 'toast--error' : 'toast--ok'] },
+    icon(isError ? 'warn' : 'check'),
     h('p', { class: 'toast__text' }, message), close);
-  const remove = () => el.remove();
-  close.addEventListener('click', remove);
+  close.addEventListener('click', () => leave(el));
   toastRegion.appendChild(el);
-  if (timeout) setTimeout(remove, timeout);
+  const live = [...toastRegion.children].filter((t) => !t.dataset.leaving);
+  for (const old of live.slice(0, Math.max(0, live.length - TOAST_MAX))) leave(old);
+  if (!ms) return;
+  // Count down only while visible and not hovered.
+  let left = ms;
+  let last = performance.now();
+  const tick = () => {
+    if (!el.isConnected || el.dataset.leaving) return;
+    const now = performance.now();
+    if (!document.hidden && !toastRegion.dataset.hold) left -= now - last;
+    last = now;
+    if (left <= 0) leave(el);
+    else setTimeout(tick, Math.min(250, left));
+  };
+  setTimeout(tick, 250);
+}
+
+// ---- Copy to clipboard -------------------------------------------------------
+
+// A value with a copy button. The icon morphs to a check for 1.6s and a
+// polite announcement says what was copied. `display` replaces the shown
+// text (e.g. a shortened hash) while the full value is what gets copied.
+export function copyable(value, { label = 'value', display, mono = true } = {}) {
+  const full = String(value ?? '');
+  const shown = display ?? full;
+  const btn = copyButton(full, label);
+  return h('span', { class: 'copyable' },
+    mono ? h('code', { title: shown !== full ? full : null }, shown) : h('span', null, shown), btn);
+}
+
+export function copyButton(value, label = 'value') {
+  const status = h('span', { class: 'visually-hidden', role: 'status' });
+  const btn = h('button', { class: 'copy', type: 'button', 'aria-label': `Copy ${label}`, title: `Copy ${label}` },
+    icon('copy', { size: 'sm' }), icon('check', { size: 'sm' }), status);
+  let timer = null;
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(String(value ?? ''));
+      btn.classList.add('is-copied');
+      status.textContent = `Copied ${label}`;
+      clearTimeout(timer);
+      timer = setTimeout(() => { btn.classList.remove('is-copied'); status.textContent = ''; }, 1600);
+    } catch {
+      toast('error', 'The browser blocked clipboard access. Select the text and copy it manually.');
+    }
+  });
+  return btn;
+}
+
+// ---- Peek: full value of truncated evidence ---------------------------------
+// One shared floating element. It reads the element's title (set by
+// evidence() when it truncates) and shows it as a Text node: hover after a
+// short delay, keyboard focus at once. The native title is parked while the
+// peek is up so the browser tooltip does not double it.
+
+export function installPeek(root = document) {
+  const box = h('div', { class: 'peek', 'aria-hidden': 'true' });
+  document.body.appendChild(box);
+  let target = null;
+  let timer = null;
+
+  const place = (el) => {
+    const r = el.getBoundingClientRect();
+    const below = r.bottom + 6;
+    const maxTop = window.innerHeight - box.offsetHeight - 8;
+    const top = below > maxTop ? Math.max(8, r.top - box.offsetHeight - 6) : below;
+    const left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - box.offsetWidth - 8));
+    box.style.left = `${Math.round(left)}px`;
+    box.style.top = `${Math.round(top)}px`;
+  };
+  const show = (el) => {
+    const full = el.getAttribute('title') ?? el.dataset.peek;
+    if (!full) return;
+    if (el.hasAttribute('title')) {
+      el.dataset.peek = full;
+      el.removeAttribute('title');
+    }
+    target = el;
+    box.textContent = full;
+    box.classList.add('is-shown');
+    place(el);
+  };
+  const hide = () => {
+    clearTimeout(timer);
+    if (target?.dataset.peek) {
+      target.setAttribute('title', target.dataset.peek);
+      delete target.dataset.peek;
+    }
+    target = null;
+    box.classList.remove('is-shown');
+  };
+  const find = (node) => node?.closest?.('.evidence[title], .evidence[data-peek]');
+
+  root.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch') return;
+    const el = find(e.target);
+    if (!el || el === target) return;
+    hide();
+    timer = setTimeout(() => show(el), 350);
+  });
+  root.addEventListener('pointerout', (e) => {
+    const el = find(e.target);
+    if (el && !el.contains(e.relatedTarget)) hide();
+  });
+  root.addEventListener('focusin', (e) => {
+    const el = e.target?.matches?.('.evidence[title]') ? e.target : e.target?.querySelector?.('.evidence[title]');
+    if (el) { hide(); show(el); }
+  });
+  root.addEventListener('focusout', hide);
+  window.addEventListener('scroll', hide, { passive: true, capture: true });
+  return { hide };
 }
 
 // ---- Dialog ----------------------------------------------------------------
@@ -253,8 +413,9 @@ export function openDialog({ title, build, submitLabel = 'Save', onSubmit, dange
       }
     });
     dialog.addEventListener('close', () => {
-      dialog.remove();
       resolve(result);
+      // Leave time for the exit transition before removing the node.
+      setTimeout(() => dialog.remove(), 220);
     });
     document.body.appendChild(dialog);
     dialog.showModal();
