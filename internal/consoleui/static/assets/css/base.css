@@ -20,6 +20,8 @@ body {
   line-height: var(--leading-normal);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
@@ -47,7 +49,9 @@ a {
   text-underline-offset: 0.2em;
 }
 
-a:hover { color: var(--color-accent-hover); }
+@media (hover: hover) {
+  a:hover { color: var(--color-accent-hover); }
+}
 
 code,
 kbd,
@@ -64,6 +68,25 @@ svg {
   display: block;
   max-width: 100%;
 }
+
+/* Icons: one 16-unit grid, stroked in currentColor (see ui/icons.js). */
+.icon {
+  display: inline-block;
+  flex: none;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: middle;
+}
+
+.icon--xs { width: var(--icon-xs); height: var(--icon-xs); }
+.icon--sm { width: var(--icon-sm); height: var(--icon-sm); }
+.icon--lg { width: var(--icon-lg); height: var(--icon-lg); }
+.icon .fill { fill: currentColor; stroke: none; }
 
 button,
 input,
@@ -125,11 +148,38 @@ hr {
 
 .skip-link:focus { top: var(--space-2); }
 
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 0.3125rem;
+  border: var(--border-width) solid var(--color-border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-ink-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+}
+
 .mono { font-family: var(--font-mono); }
+.num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--color-ink-3); }
 .nowrap { white-space: nowrap; }
 
+/* Reduced motion: nothing moves. Transitions and animations finish
+   instantly (their end state still applies), View Transitions are skipped
+   in script, and ambient loops stop. */
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+
   *,
   *::before,
   *::after {
