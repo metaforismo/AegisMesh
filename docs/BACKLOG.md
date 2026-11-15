@@ -19,7 +19,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   is stacked on the previous one and has hosted CI PASS (6 of 6 jobs) on its
   head. Human review and merge are pending.
 - Current worktree: `feat/fleet-enrollment`, stacked on #75 (experimental fleet
-  inventory). PR pending; hosted CI NOT RUN.
+  inventory). PR #76; hosted CI NOT RUN.
 - No release, tag, image, signature, deployment or repository-setting change
   happened. Dependabot PRs #68 and #70 are superseded by #72 but still open;
   #71 (pinned Action bumps) is untriaged.
@@ -232,7 +232,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Verify:** architecture review and threat-model traceability; no code or egress
   change in the documentation slice.
 - **Status:** **PARTIAL DESIGN** — ADR-0018 inventory foundation implemented on
-  `feat/fleet-enrollment` (PR pending, unmerged); managed-service acceptance
+  `feat/fleet-enrollment` (PR #76, unmerged); managed-service acceptance
   remains open.
 
 ### P2-4 — real-cluster Kubernetes evidence — TODO (later support claim)
@@ -253,7 +253,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## P3 — later research and optional improvements
 
-### P3-1 — distributed mesh and managed fleet — INVENTORY IMPLEMENTED (PR pending)
+### P3-1 — distributed mesh and managed fleet — INVENTORY IMPLEMENTED (PR #76)
 
 - **Evidence:** experimental fleet inventory with authenticated enrollment and
   heartbeats on `feat/fleet-enrollment`, stacked on #75; see ADR-0018 and
@@ -268,7 +268,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Remaining:** open the PR, hosted CI, review and merge; evidence batches and bounded spool,
   key rotation, attestation, hosted tenancy/SSO and upgrades are proposed,
   not implemented. P2-3 managed-service design remains partial.
-- **Status:** **IMPLEMENTED — PR pending, unmerged**. Hosted CI NOT RUN. Manual
+- **Status:** **IMPLEMENTED — PR #76, unmerged**. Hosted CI NOT RUN. Manual
   two-process loopback check (enrollment, `online`, `stale` after three missed
   heartbeats, token creation and audit) is in `verification.md`; revocation was
   verified by a two-process run and automated tests, not in the browser. No

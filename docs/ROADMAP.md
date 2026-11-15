@@ -112,7 +112,7 @@ billing, public APIs or hosted operation ship today.
   without explicit independent evidence.
 
 
-## Fleet foundation — `feat/fleet-enrollment`, PR pending, 2026-11-15
+## Fleet foundation — `feat/fleet-enrollment`, PR #76, 2026-11-15
 
 P3-1 now has experimental fleet inventory with authenticated enrollment and
 heartbeats; ADR-0018 settles data/control-plane ownership for this bounded slice.

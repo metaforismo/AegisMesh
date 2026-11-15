@@ -45,7 +45,7 @@ happened. Dependabot PRs #68 and #70 are superseded by #72 but still open; #71
 **PASS — local fixes and requested gates.** Base is the local draft `ad53dc7`
 (`wip(fleet): draft before review`), branch `feat/fleet-enrollment`. These changes
 were uncommitted when the entry was written; they are now committed on
-`feat/fleet-enrollment` (PR pending). No commit, push, branch switch or `gh`
+`feat/fleet-enrollment` (PR #76). No commit, push, branch switch or `gh`
 command was run during the recorded checks.
 `docs/architecture/console-api.md` and the operator-facing response shapes are
 unchanged. No module files, dependencies or configuration knobs were added.
@@ -151,7 +151,7 @@ coalesced cadence, plus synchronous durable changes.
 **PASS — local implementation and required verification.** Branch
 `feat/fleet-enrollment`, base HEAD `20a2dbb`, stacking the operator console.
 All changes were uncommitted when this entry was written; they are now committed
-on `feat/fleet-enrollment` (PR pending, unmerged). No commit, push, branch
+on `feat/fleet-enrollment` (PR #76, unmerged). No commit, push, branch
 switch, `gh`, merge, publication or deployment occurred during the recorded checks. macOS arm64, `go version go1.27.4 darwin/arm64`.
 No module files or dependencies changed. All suites ran sequentially with
 `GOTOOLCHAIN=go1.27.4 GOFLAGS=-p=1 GOMAXPROCS=2`; Makefile pins that toolchain.

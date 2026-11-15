@@ -19,7 +19,7 @@ PR is based on the one above it.
 | 2 | #73 | `feat/evidence-at-rest-encryption` | Opt-in age/X25519 evidence encryption | PASS, 6 of 6 jobs |
 | 3 | #74 | `feat/console-api` | Disabled-by-default operator console API | PASS, 6 of 6 jobs |
 | 4 | #75 | `feat/console-ui-embed` | Embedded console UI, design system and landing page | PASS, 6 of 6 jobs (includes the Node UI tests step) |
-| 5 | PR pending | `feat/fleet-enrollment` | Experimental fleet inventory: enrollment, signed heartbeats, operator routes and Fleet screen | NOT RUN |
+| 5 | PR #76 | `feat/fleet-enrollment` | Experimental fleet inventory: enrollment, signed heartbeats, operator routes and Fleet screen | NOT RUN |
 
 None of these is merged. Human review and merge are pending for all five. No
 release, tag, image, signature, deployment or repository-setting change has

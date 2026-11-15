@@ -15,7 +15,7 @@ changes bump MINOR).
   listener, TLS beyond loopback, shared egress classification with a dedicated
   private-network opt-in, independent jittered delivery and fixed-label metrics.
   Not multi-tenant, not a managed service; forwards no evidence and cannot
-  command nodes. On `feat/fleet-enrollment`; PR pending, unmerged, hosted CI not
+  command nodes. On `feat/fleet-enrollment`; PR #76, unmerged, hosted CI not
   yet run.
 
 - First operator console (PRs #74 and #75, open and unmerged): disabled-by-default,

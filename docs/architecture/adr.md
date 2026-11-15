@@ -588,7 +588,7 @@ by the v1 contract. This decision does not claim production readiness.
 
 ## ADR-0018 — outbound-only experimental fleet identity and inventory
 
-Date: 2026-11-15. Status: implemented on `feat/fleet-enrollment` (PR pending,
+Date: 2026-11-15. Status: implemented on `feat/fleet-enrollment` (PR #76,
 unmerged); hosted CI not yet run, review pending. See the current verification
 ledger.
 

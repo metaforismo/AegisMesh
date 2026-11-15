@@ -148,10 +148,10 @@ Local tests and the verification ledger describe the evidence; this is not a
 merged, deployed, SSO, multi-tenant or production-readiness claim.
 
 
-## First fleet inventory (P3-1 foundation, PR pending)
+## First fleet inventory (P3-1 foundation, PR #76)
 
 Experimental fleet inventory with authenticated enrollment and heartbeats is
-implemented on `feat/fleet-enrollment` (PR pending, unmerged). A hub lists node identities
+implemented on `feat/fleet-enrollment` (PR #76, unmerged). A hub lists node identities
 and self-reported health through the authenticated console. Agents dial that
 hub using local Ed25519 identities and a bounded independent loop. One-time
 admin tokens establish identity; signed requests, expiry/replay checks and
