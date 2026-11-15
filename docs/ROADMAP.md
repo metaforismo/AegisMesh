@@ -115,10 +115,21 @@ billing, public APIs or hosted operation ship today.
 
 P3-1 now has experimental fleet inventory with authenticated enrollment and
 heartbeats; ADR-0018 settles data/control-plane ownership for this bounded slice.
-It is not multi-tenant, not a managed service, and forwards no evidence. The hub
+It is not multi-tenant or a managed service. Evidence forwarding has a local experimental amendment below. The hub
 cannot command nodes. Local and manual verification is in `verification.md`;
-the PR is not yet open, hosted CI has not run, and review and merge remain open. P2-3 hosted tenancy/residency/billing design
-remains incomplete. Evidence spool/batches, key rotation, attestation, SSO and
+inventory merge #76 is in local ancestry. The current evidence amendment has no hosted-CI/review/merge receipt.
+P2-3 hosted tenancy/residency/billing design
+remains incomplete. Durable evidence spooling, key rotation, attestation, SSO and
 upgrades are proposed, not implemented, and require separate review. Any future
 configuration workflow must preserve the permanent no hub-to-agent control
 channel invariant. No arbitrary remote-runner stub is reserved.
+
+
+## Experimental evidence forwarding — local amendment, 2026-11-15
+
+Implemented locally and uncommitted on `feat/evidence-forwarding`, stacked on PR #77:
+opt-in signed live batches, bounded oldest-drop queue, per-node quotas and encrypted/native
+hub copies, origin-tagged console lists/detail/SSE and overview. Experimental; best-effort
+forwarding with counted loss; local store authoritative. No cross-node correlation,
+historical forwarding, deletion propagation, durable spool, tenancy or hub-to-node traffic.
+Verification is recorded separately in verification.md; no merge, deployment or hosted-CI claim.

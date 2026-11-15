@@ -599,9 +599,9 @@ by the v1 contract. This decision does not claim production readiness.
 
 ## ADR-0018 — outbound-only experimental fleet identity and inventory
 
-Date: 2026-11-15. Status: implemented on `feat/fleet-enrollment` (PR #76,
-unmerged); hosted CI not yet run, review pending. See the current verification
-ledger.
+Date: 2026-11-15. Inventory merged in #76; experimental evidence forwarding is
+implemented locally, uncommitted on `feat/evidence-forwarding`, stacked on the
+encrypted live-read branch (PR #77). Hosted CI/review are not claimed; see verification.md.
 
 **Context and ownership.** The console's `Runtime` seam exposes value snapshots;
 its evidence index is disposable and must not become an agent transport. The
@@ -614,13 +614,13 @@ machine and operator listeners independent. `fleet.hub.enabled` and
 tests may compose both packages in one process. A hub-only runtime may have
 zero sensors, keeping the control plane separate from decoys. This is experimental fleet
 inventory with authenticated enrollment and heartbeats. It is not multi-tenant,
-is not a managed service, and forwards no evidence.
+is not a managed service. Evidence disclosure now requires separate consent on both sides.
 
 **Permanent invariant.** Agents dial the hub. The hub never dials agents and has
 no channel to send commands, configuration, files or code to a node. This is a
 permanent trust invariant, not an unimplemented command stub. A compromised hub
 can falsify its inventory, deny enrollment/acknowledgements and expose received
-metadata; it cannot command nodes. Responses are strictly typed acknowledgements
+metadata and redacted evidence of every forwarding node; it cannot command nodes. Responses are strictly typed acknowledgements
 and never enter sensors, paths, configuration mutation or execution.
 
 **Shape and alternatives.** `identity.Load` owns the fixed private seed;
@@ -695,12 +695,36 @@ a full remote table can temporarily deny new addresses. Bounded work and audit q
 limit allocation but do not provide DDoS or host resource isolation. Permanent
 tombstones count toward the node cap; there is no deletion/rotation escape hatch.
 
-**Proposed, not implemented — evidence forwarding.** Signed batches, at-least-once
-from a bounded local spool, idempotent by event ID, hub-side per-node quotas and
-explicit backpressure/drop accounting. Encryption design must decide whether
-nodes forward ciphertext (hub cannot query without read identities) or explicitly
-redacted plaintext under transport protection (a new confidentiality boundary).
-Never silently reuse webhook delivery as a fleet evidence promise.
+**Implemented locally — experimental evidence forwarding.** Best-effort forwarding with counted loss;
+local store authoritative. Agent and hub evidence consent default off. The post-successful-append
+tap feeds a bounded memory ring, including direct correlation signals; a separate signed-batch
+worker and HTTP transport isolate retry latency from storage and heartbeats. The alternatives
+were synchronous storage-to-network callbacks (rejected for latency coupling) and an independent
+queue with encrypted disk spooling (deferred: no runtime read identity and a plaintext spool would
+defeat node encryption). This slice chooses a process-only ring and explicit crash/offline loss.
+Disabled enqueue does no allocation; enabled enqueue serializes only stored redacted envelopes.
+
+Canonical `/fleet/v1/evidence` signatures use the existing replay/revocation rules, with a separate
+4 MiB/1,000-event batch cap. A random process stream ID scopes monotonic forwarding ranges.
+The hub rejects malformed framing, skips/counts invalid envelopes, recomputes payload hashes,
+and deduplicates each node's last 4,096 event IDs. Individual 16 MiB/minute and 1,000-event/second
+budgets, five-second spacing and 16 MiB retention prevent one key exhausting the 256 MiB aggregate
+segment cap. Per-node locks keep evidence IO outside the registry lock; conservative atomic byte
+reservations bound concurrent appends. Full limits, retry behavior and crash/dedup caveats are in
+[fleet-protocol.md](fleet-protocol.md). Storage copies inherit hub encryption and count/age retention;
+origin metadata never alters native envelope bytes. Live index entries carry authenticated node ID,
+with current registry names resolved at read time. Hash verification means consistency on the hub,
+not provenance, attestation or trustworthy telemetry. Redaction is the confidentiality control;
+a compromised hub now learns redacted evidence from all consenting nodes.
+
+**Not implemented — cross-node correlation.** Forwarded data bypasses the local correlation and
+recommendation inputs. Existing correlation links resolve only within one origin.
+**Not implemented — historical forwarding.** Only live successful appends enter the queue.
+**Not implemented — deletion propagation.** Node and hub retention remain independent.
+**Not implemented — durable spool/offline guarantee.** Overflow drops oldest, counted; crashes and
+stopping with queued events leave them only on the node. An in-flight eviction can still arrive.
+**Not implemented — hub-to-node traffic.** Permanently forbidden; no dialer or command channel.
+**Not implemented — multi-tenant evidence.** One operator trust domain only.
 
 **Proposed, not implemented — key rotation.** A separately reviewed protocol must
 bind old/new possession and preserve revocation/audit lineage, with offline

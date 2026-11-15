@@ -28,6 +28,7 @@ type entry struct {
 
 // Index owns chronological projections with count, byte, and subscriber bounds.
 type Index struct {
+	nodeName        func(string) string
 	mu              sync.RWMutex
 	capacity, bytes int
 	items           *list.List
@@ -81,17 +82,64 @@ func clone(envelope event.Envelope) event.Envelope {
 
 func copySummary(summary Summary) Summary {
 	summary.RuleIDs = append([]string{}, summary.RuleIDs...)
+	if summary.Node != nil {
+		node := *summary.Node
+		summary.Node = &node
+	}
 	return summary
 }
 
 // Add must be called only after the authoritative append succeeds.
 func (index *Index) Add(envelope event.Envelope) {
+	index.add(envelope, "")
+}
+
+// SetNodeNames installs the trusted read-time registry name resolver before serving.
+func (index *Index) SetNodeNames(resolve func(string) string) {
+	index.nodeName = resolve
+}
+
+// AddForwarded indexes a successfully appended envelope with authenticated origin metadata.
+func (index *Index) AddForwarded(envelope event.Envelope, node string) {
+	if !ValidID(node) {
+		return
+	}
+	index.add(envelope, node)
+}
+
+func originKey(id, node string) string {
+	if node == "" || node == "local" {
+		return id
+	}
+	return node + ":" + id
+}
+
+func origin(summary Summary) string {
+	if summary.Node != nil {
+		return summary.Node.ID
+	}
+	return ""
+}
+
+func (index *Index) resolved(summary Summary) Summary {
+	summary = copySummary(summary)
+	if summary.Node != nil && index.nodeName != nil {
+		summary.Node.Name = index.nodeName(summary.Node.ID)
+	}
+	return summary
+}
+
+func (index *Index) add(envelope event.Envelope, node string) {
 	body, err := json.Marshal(envelope)
 	if err != nil || len(body) > event.MaxStoredEnvelopeBytes || !ValidID(envelope.ID) {
 		return
 	}
 
 	summary, findings, related := Project(envelope)
+	if node != "" {
+		summary.Node = &Node{ID: node}
+	}
+	key := originKey(envelope.ID, node)
 	item := entry{
 		summary:  summary,
 		envelope: clone(envelope),
@@ -103,7 +151,7 @@ func (index *Index) Add(envelope event.Envelope) {
 	index.mu.Lock()
 	defer index.mu.Unlock()
 
-	if index.ids[envelope.ID] != nil {
+	if index.ids[key] != nil {
 		return
 	}
 
@@ -117,16 +165,16 @@ func (index *Index) Add(envelope event.Envelope) {
 	}
 
 	if previous == nil {
-		index.ids[envelope.ID] = index.items.PushFront(item)
+		index.ids[key] = index.items.PushFront(item)
 	} else {
-		index.ids[envelope.ID] = index.items.InsertAfter(item, previous)
+		index.ids[key] = index.items.InsertAfter(item, previous)
 	}
 
 	index.bytes += item.bytes
 	for index.items.Len() > index.capacity || index.bytes > MaxBytes {
 		element := index.items.Front()
 		old := element.Value.(entry)
-		delete(index.ids, old.summary.ID)
+		delete(index.ids, originKey(old.summary.ID, origin(old.summary)))
 		index.items.Remove(element)
 		index.bytes -= old.bytes
 		if index.history != "unavailable" {
@@ -137,7 +185,7 @@ func (index *Index) Add(envelope event.Envelope) {
 	index.size.Set(float64(index.items.Len()))
 	for subscriber := range index.subscribers {
 		select {
-		case subscriber <- copySummary(summary):
+		case subscriber <- index.resolved(summary):
 		default:
 			delete(index.subscribers, subscriber)
 			close(subscriber)
@@ -210,7 +258,7 @@ func (index *Index) Query(filter Filter) (Page, error) {
 			continue
 		}
 		if len(page.Events) < filter.Limit {
-			page.Events = append(page.Events, copySummary(item.summary))
+			page.Events = append(page.Events, index.resolved(item.summary))
 			last = item
 		} else if page.NextCursor == "" {
 			page.NextCursor = index.encodeCursor(last.envelope.Time, last.ordinal, filter)
@@ -222,10 +270,24 @@ func (index *Index) Query(filter Filter) (Page, error) {
 
 // Get returns copies of an indexed observation, findings, and related observations.
 func (index *Index) Get(id string) (Summary, event.Envelope, []Finding, []Summary, bool) {
+	return index.GetNode(id, "")
+}
+
+// GetNode looks up a scoped event ID; unscoped lookup prefers local and refuses ambiguous remote IDs.
+func (index *Index) GetNode(id, node string) (Summary, event.Envelope, []Finding, []Summary, bool) {
 	index.mu.RLock()
 	defer index.mu.RUnlock()
-
-	element := index.ids[id]
+	element := index.ids[originKey(id, node)]
+	if element == nil && node == "" {
+		for candidate := index.items.Back(); candidate != nil; candidate = candidate.Prev() {
+			if candidate.Value.(entry).summary.ID == id {
+				if element != nil {
+					return Summary{}, event.Envelope{}, nil, nil, false
+				}
+				element = candidate
+			}
+		}
+	}
 	if element == nil {
 		return Summary{}, event.Envelope{}, nil, nil, false
 	}
@@ -234,6 +296,9 @@ func (index *Index) Get(id string) (Summary, event.Envelope, []Finding, []Summar
 	related := []Summary{}
 	for element := index.items.Back(); element != nil && len(related) < 200; element = element.Prev() {
 		other := element.Value.(entry)
+		if origin(other.summary) != origin(item.summary) {
+			continue
+		}
 		match := false
 		if item.summary.Classification == event.ClassificationCorrelationSignal {
 			for _, id := range item.related {
@@ -245,11 +310,11 @@ func (index *Index) Get(id string) (Summary, event.Envelope, []Finding, []Summar
 			}
 		}
 		if match {
-			related = append(related, copySummary(other.summary))
+			related = append(related, index.resolved(other.summary))
 		}
 	}
 
-	return copySummary(item.summary), clone(item.envelope), append([]Finding{}, item.findings...), related, true
+	return index.resolved(item.summary), clone(item.envelope), append([]Finding{}, item.findings...), related, true
 }
 
 // Summaries returns independent copies of all retained summaries, newest first.
@@ -259,7 +324,7 @@ func (index *Index) Summaries() []Summary {
 
 	summaries := make([]Summary, 0, index.items.Len())
 	for element := index.items.Back(); element != nil; element = element.Prev() {
-		summaries = append(summaries, copySummary(element.Value.(entry).summary))
+		summaries = append(summaries, index.resolved(element.Value.(entry).summary))
 	}
 
 	return summaries
@@ -272,7 +337,10 @@ func (index *Index) Envelopes(max int) []event.Envelope {
 
 	envelopes := []event.Envelope{}
 	for element := index.items.Back(); element != nil && len(envelopes) < max; element = element.Prev() {
-		envelopes = append(envelopes, clone(element.Value.(entry).envelope))
+		item := element.Value.(entry)
+		if item.summary.Node == nil {
+			envelopes = append(envelopes, clone(item.envelope))
+		}
 	}
 
 	return envelopes

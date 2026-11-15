@@ -6,10 +6,12 @@ Updated: 2026-11-15. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 ## Authoritative baseline
 
 - Repository: `metaforismo/AegisMesh`
-- Local `master` and the starting head of `feat/encrypted-live-read`: `484bd65`.
+- Current worktree: `feat/evidence-forwarding`, initially clean at `25645c0`
+  (encrypted live-read, stacked PR #77). Its parent baseline contains merge #76 at `484bd65`.
 - Local Git ancestry contains the merges of #72 (toolchain), #73 (encryption),
   #74 (console API), #75 (embedded UI) and #76 (experimental fleet inventory).
-- The v3 checkpoint/live-read amendment is local and uncommitted. No commit,
+- The v3 checkpoint/live-read amendment is committed in the starting head. Evidence forwarding
+  remains local and uncommitted. No commit,
   push, branch switch, GitHub CLI, publication or deployment was performed for
   this task. Hosted checks and current remote issue state were not queried.
 - Earlier hosted-CI/browser receipts remain historical evidence for their
@@ -118,7 +120,7 @@ require separate authorization and threat models.
 - The console never changes sensors, policy or evidence. Its durable writes are
   operator investigations and the audit trail.
 - The fleet hub cannot command nodes, now or through a reserved stub, and
-  receives no evidence. It never dials agents.
+  receives redacted evidence only with separate opt-in reception. It never dials agents.
 - The UI has no build step and no third-party code, and renders evidence as text
   only.
 - Derived correlation signals append directly to storage and never re-enter
@@ -152,7 +154,7 @@ require separate authorization and threat models.
   autonomous response path or hosted control plane. The console API, UI and
   fleet inventory are in the local master baseline described above.
 - The console is single-node and single-tenant, with no SSO.
-- Fleet inventory forwards no evidence; evidence-spool, key rotation,
+- Fleet evidence forwarding is experimental and opt-in locally; durable evidence-spool, key rotation,
   mTLS/attestation, a local configuration workflow, upgrade, tenancy and SSO
   designs in ADR-0018 are proposals, not implementation claims. `fleet status`
   and `demo --fleet` were omitted; the console status API supplies live
@@ -195,10 +197,28 @@ branches and opening PRs does not imply approval to merge.
 1. Review the local v3 amendment, then obtain hosted CI before any separately
    authorized publication or merge.
 2. Refresh dependency issue/PR state before triage; remote status was not queried here.
-3. Evidence forwarding agent to hub (design in ADR-0018, not implemented).
+3. Review the local evidence-forwarding implementation and its verification ledger; durable offline spooling is not implemented.
 4. Review the local v3 live-read amendment and its rollback/completion limits.
 5. SSO/OIDC and per-tenant isolation for the console.
 6. OTLP/SIEM export.
 7. Real-cluster Kubernetes evidence.
 8. Additional AI-deception sensors (multi-step synthetic MCP environments).
 9. Final v0.2 release-readiness audit and tag (needs approval).
+
+
+## Evidence-forwarding handoff — 2026-11-15
+
+Current work is uncommitted on `feat/evidence-forwarding`, based on `25645c0`
+(encrypted live-read, PR #77). No commit/push/branch switch/gh operation is authorized.
+Experimental; best-effort forwarding with counted loss; local store authoritative.
+The hub cannot command nodes. Agent disclosure and hub reception are separately off by default.
+
+Runtime appends feed the process-only queue after successful local storage, including direct
+correlation signals. The independent worker signs `/fleet/v1/evidence`; hub hostile validation,
+bounded deduplication and per-node quotas precede native per-node copies and live indexing.
+Node encryption does not inhibit forwarding; hub encryption independently protects its copies.
+No private runtime read identity, disk spool, history forwarding, cross-node correlation,
+deletion propagation or tenancy exists. Console forwarded history is live-only after restart.
+See the amended protocol/console API contracts for exact fields, quotas and consistency wording.
+All local command/manual/benchmark receipts belong in verification.md; hosted CI and deployment
+are not inferred. No UI changes are included; UI work should consume the additive API contract.

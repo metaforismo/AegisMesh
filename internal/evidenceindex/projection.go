@@ -13,8 +13,18 @@ import (
 	"github.com/metaforismo/aegismesh/internal/rulecatalog"
 )
 
+// Node identifies the authenticated origin outside the native envelope bytes.
+type Node struct {
+	// ID is the cryptographic fleet identity.
+	ID string `json:"id"`
+	// Name is resolved from the current registry at read time.
+	Name string `json:"name"`
+}
+
 // Summary is bounded display metadata derived only from an already stored observation.
 type Summary struct {
+	// Node is absent for locally observed events.
+	Node *Node `json:"node,omitempty"`
 	// ID references the stored envelope.
 	ID string `json:"id"`
 	// Time is its canonical UTC observation time.

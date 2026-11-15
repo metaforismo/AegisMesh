@@ -1,4 +1,4 @@
-// Package agent sends signed inventory to one fixed, egress-validated hub.
+// Package agent sends signed inventory and opt-in evidence to one fixed, egress-validated hub.
 // Hub responses are acknowledgements only and cannot select configuration, files, code or actions.
 package agent
 
@@ -45,6 +45,8 @@ func localError(code, hint string) error {
 
 // Options injects trusted startup configuration, a snapshot seam and deterministic clock when needed.
 type Options struct {
+	// ForwardEvidence explicitly consents to disclosure of redacted local evidence.
+	ForwardEvidence bool
 	// HubURL is the fixed origin subjected to egress validation.
 	HubURL string
 	// StateDir is the trusted private identity directory.
@@ -71,8 +73,9 @@ type Options struct {
 	Transport http.RoundTripper
 }
 
-// Agent owns one key and one background delivery loop, independent of evidence writes.
+// Agent owns one key and independent inventory/evidence workers, isolated from authoritative writes.
 type Agent struct {
+	forward  *forwarder
 	stepMu   sync.Mutex
 	mu       sync.Mutex
 	status   protocol.AgentStatus
@@ -123,7 +126,7 @@ func New(opts Options) (*Agent, error) {
 	if opts.Meter == nil {
 		opts.Meter = observe.NewRegistry()
 	}
-	return &Agent{
+	a := &Agent{
 		status: protocol.AgentStatus{
 			Enabled: true,
 			HubURL:  strings.TrimSuffix(endpoint.String(), "/"),
@@ -139,14 +142,37 @@ func New(opts Options) (*Agent, error) {
 		now:      opts.Now,
 		log:      opts.Log,
 		outcomes: opts.Meter.CounterVec("aegismesh_fleet_agent_attempts_total", "Fleet delivery outcomes", 2),
-	}, nil
+	}
+	if opts.ForwardEvidence {
+		stream, err := protocol.Random(16)
+		if err != nil {
+			return nil, err
+		}
+		// A separate transport isolates heartbeat connection capacity from evidence retries.
+		forwardClient, err := newClient(endpoint, opts.AllowPrivate, opts.CAFile)
+		if err != nil {
+			return nil, err
+		}
+		if opts.Transport != nil {
+			forwardClient.Transport = opts.Transport
+		}
+		a.forward = &forwarder{
+			items: make([]queuedEvidence, QueueEvents), stream: stream,
+			status:   protocol.Forwarding{Enabled: true},
+			outcomes: opts.Meter.CounterVec("aegismesh_fleet_forwarding_total", "Fixed forwarding outcomes", 3),
+			client:   &Agent{key: key, client: forwardClient, endpoint: a.endpoint, now: opts.Now, status: a.status},
+		}
+	}
+	return a, nil
 }
 
 // Status returns a secret-free value snapshot of this process's delivery state.
 func (a *Agent) Status() protocol.AgentStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.status
+	status := a.status
+	status.Forwarding = a.forwardingStatus()
+	return status
 }
 
 // Step performs one bounded enrollment/heartbeat attempt; failures never escape into the evidence path.
@@ -171,6 +197,8 @@ func (a *Agent) Step(ctx context.Context) error {
 	if err == nil {
 		status := a.snapshot()
 		status.Name = a.name
+		forwarding := a.forwardingStatus()
+		status.Forwarding = &forwarding
 		if !status.Valid() {
 			err = localError("projection", "invalid local status projection")
 		} else {
@@ -192,8 +220,12 @@ func (a *Agent) Step(ctx context.Context) error {
 }
 
 func (a *Agent) post(ctx context.Context, path string, value any) error {
+	return a.postAck(ctx, path, value, nil)
+}
+
+func (a *Agent) postAck(ctx context.Context, path string, value any, ack *protocol.EvidenceAck) error {
 	body, err := json.Marshal(value)
-	if err != nil || len(body) > protocol.MaxBodyBytes {
+	if err != nil || len(body) > protocol.BodyLimit(path) {
 		return localError("request", "local request exceeds bounds")
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, a.endpoint+path, bytes.NewReader(body))
@@ -213,8 +245,17 @@ func (a *Agent) post(ctx context.Context, path string, value any) error {
 	if err != nil || len(payload) > protocol.MaxBodyBytes {
 		return localError("response", "invalid or oversized hub response")
 	}
+	if response.StatusCode == http.StatusConflict && path == protocol.EvidencePath {
+		return localError("evidence_disabled", "hub evidence reception disabled; slow retry")
+	}
 	if response.StatusCode != http.StatusOK {
 		return responseError(response.StatusCode)
+	}
+	if ack != nil {
+		if protocol.Decode(payload, ack) != nil || ack.NodeID != a.Status().NodeID {
+			return localError("response", "invalid evidence acknowledgement")
+		}
+		return nil
 	}
 	var acknowledgement struct {
 		NodeID string `json:"node_id"`
@@ -241,6 +282,10 @@ func (a *Agent) Start() {
 	a.once.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		a.cancel = cancel
+		if a.forward != nil {
+			a.wg.Add(1)
+			go a.runForward(ctx)
+		}
 		a.wg.Add(1)
 		go func() {
 			defer a.wg.Done()
@@ -274,6 +319,9 @@ func (a *Agent) Close() {
 	}
 	a.wg.Wait()
 	a.client.CloseIdleConnections()
+	if a.forward != nil {
+		a.forward.client.client.CloseIdleConnections()
+	}
 }
 
 // Origin returns the normalized fixed hub URL without credentials or query data.

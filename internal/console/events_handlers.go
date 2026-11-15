@@ -40,7 +40,16 @@ func (s *Server) eventDetail(w http.ResponseWriter, r *http.Request, _ caller) {
 		return
 	}
 
-	summary, envelope, findings, related, ok := s.index.Get(id)
+	values, valid := query(w, r, "node")
+	if !valid {
+		return
+	}
+	node := values.Get("node")
+	if node != "" && node != "local" && !evidenceindex.ValidID(node) {
+		invalid(w)
+		return
+	}
+	summary, envelope, findings, related, ok := s.index.GetNode(id, node)
 	if !ok {
 		fail(w, 404, "not_found", "event is no longer indexed")
 		return
@@ -53,34 +62,48 @@ func (s *Server) eventDetail(w http.ResponseWriter, r *http.Request, _ caller) {
 	}
 
 	cases := []map[string]string{}
-	for _, investigation := range s.cases.List("") {
-		for _, eventID := range investigation.EventIDs {
-			if eventID == id {
-				cases = append(cases, map[string]string{
-					"id":     investigation.ID,
-					"title":  investigation.Title,
-					"status": investigation.Status,
-				})
+	// Legacy annotations store bare IDs; remote collisions must not inherit local links.
+	if summary.Node == nil {
+		for _, investigation := range s.cases.List("") {
+			for _, eventID := range investigation.EventIDs {
+				if eventID == id {
+					cases = append(cases, map[string]string{
+						"id":     investigation.ID,
+						"title":  investigation.Title,
+						"status": investigation.Status,
+					})
+				}
 			}
 		}
 	}
 
-	send(w, 200, map[string]any{
-		"summary":  summary,
-		"envelope": envelope,
-		"findings": findings,
-		"related":  related,
-		"integrity": map[string]any{
-			"verified":  verified,
-			"algorithm": "sha256",
-			"error":     errText,
-		},
+	integrity := map[string]any{"verified": verified, "algorithm": "sha256", "error": errText}
+	if summary.Node != nil {
+		integrity["scope"] = "hub_payload_hash_consistency"
+		integrity["description"] = "Verified on the hub against the envelope payload hash; consistency, not provenance."
+	}
+	detail := map[string]any{
+		"summary":        summary,
+		"envelope":       envelope,
+		"findings":       findings,
+		"related":        related,
+		"integrity":      integrity,
 		"investigations": cases,
-	})
+	}
+	if summary.Node != nil {
+		detail["node"] = summary.Node
+	}
+	send(w, 200, detail)
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials caller) {
-	if _, ok := query(w, r); !ok {
+	values, valid := query(w, r, "node")
+	if !valid {
+		return
+	}
+	filter, err := evidenceindex.ParseFilter(values)
+	if err != nil {
+		invalid(w)
 		return
 	}
 
@@ -159,6 +182,9 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 				if _, ok := s.auth.Session(credentials.id); !ok {
 					return
 				}
+			}
+			if !filter.Matches(observation) {
+				continue
 			}
 			if !write("observation", observation) {
 				return

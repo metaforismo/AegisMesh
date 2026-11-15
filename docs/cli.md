@@ -398,3 +398,25 @@ status seam is `GET /api/v1/fleet`; reading on-disk state in a second CLI proces
 would not describe the running agent's delivery status. `demo --console` retains
 its existing scenario. Fleet integration/manual verification uses separate
 synthetic processes rather than adding another demo lifecycle.
+
+## Experimental fleet evidence forwarding
+
+Best-effort forwarding with counted loss; local store authoritative. Configure explicit
+`fleet.agent.forward_evidence.enabled` and `fleet.hub.accept_evidence.enabled` consent on
+separate agent/hub configs. `validate --effective --json` prints their effective booleans;
+`doctor --json` discloses them with queue-loss/confidentiality wording and sends no probe.
+Both accept the documented full-path `AEGISMESH_FLEET_*_ENABLED` environment overrides.
+
+Existing inspect commands work directly on each hub copy:
+
+```sh
+aegismesh inspect list --data-dir /hub/data/fleet-hub/evidence/NODE_ID --verify --json
+aegismesh inspect list --data-dir /hub/data/fleet-hub/evidence/NODE_ID --identity /private/read.agekey --verify
+```
+
+Replace `NODE_ID` with the canonical ID from the authenticated fleet node list. Explicit
+identities are required only when the hub encrypts evidence; agent encryption is independent.
+Open encrypted segments report the verified checkpoint prefix and incompleteness notices.
+Add `--require-sealed` only when full completion is required. Integrity is the hub's payload
+hash consistency check, not node provenance. No new forwarding/history/delete CLI exists;
+use console `GET /api/v1/fleet`, `/events?node=ID`, `/overview` and the documented SSE filter.

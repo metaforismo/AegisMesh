@@ -10,6 +10,110 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-11-15 — experimental evidence forwarding, local uncommitted slice
+
+**PASS — local verification.** Worktree `feat/evidence-forwarding`, initially clean at
+`25645c03188b9dcc0a6e81c7bbd7177b46ecbb58` (encrypted live-read / stacked PR #77,
+above local inventory merge #76). Changes remain uncommitted. No commit, push, branch
+switch or GitHub CLI operation was performed; hosted CI, review, merge and deployment
+of this amendment are **NOT RUN**.
+
+Experimental; **best-effort forwarding with counted loss; local store authoritative**.
+Both evidence consent switches default off. Native redacted envelopes enter a memory-only
+oldest-drop ring after successful local append, including correlation signals. Independent
+signed batch delivery and transport preserve heartbeat scheduling. Hub validation, per-node
+locks/quotas, bounded deduplication and atomic aggregate reservations precede native storage
+and origin-tagged live indexing. No private read identity, disk spool or new dependency.
+
+All suites were run sequentially on macOS arm64 / Apple M3, Go 1.27.4; disk availability
+remained approximately 8.1 GiB. Fuzz workers alone used `GOMAXPROCS=4` to bound pressure.
+
+| Command | Result and captured output summary |
+| --- | --- |
+| `make lint test` | **PASS**, exit 0 on final rerun: `go vet ./...`, `go test -race ./...`, all packages successful. Optional `golangci-lint` unavailable; Makefile reports `golangci-lint not installed; skipped (vet+fmt ran)`. |
+| `go test -race -count=1 ./internal/fleet/... ./internal/console/... ./internal/evidenceindex ./internal/runtime ./internal/config ./internal/cli` | **PASS**, exit 0; all named packages/subpackages `ok`, no race report. |
+| `make fuzz-seed` | **PASS**, exit 0; all 13 targets pass, sequentially. New `FuzzEvidenceBatch`: 1,553,537 executions in approximately 15 s; Makefile and CI both include it. |
+| `make vuln` | **PASS**, exit 0: `No vulnerabilities found.` |
+| `make license-check secrets-scan` | **PASS**, exit 0: `14 module(s) within policy`; `secrets-scan: ok`. No dependency added. |
+| `make supply-chain-check` | **PASS**, exit 0: `supply-chain-check: ok`. |
+| `go mod verify` | **PASS**, exit 0: `all modules verified`. |
+| `git diff --check` | **PASS**, exit 0, no output (rechecked after ledger edit). |
+| `awk 'length($0) > 140'` over all new/changed Go files | **PASS**, 36 files, **0 lines** over 140 characters. |
+| `make ui-test` | **PASS**, exit 0: **81 tests, 81 pass, 0 fail**, no UI changes. |
+| `make build` | **PASS**, exit 0, built the binary used in the final manual run. |
+
+Earlier development failures were corrected: the scalar-only fleet env fixture needed nested
+consent coverage; the integration test needed to wait for enqueue rather than an earlier append
+counter; the hostile-acknowledgement test needed a private child state directory instead of the
+parent test temp directory. The final full suite and focused race run both pass after those fixes.
+
+**Benchmarks — PASS.** Three repetitions each, `-run '^$' -bench ... -benchmem -count=3`:
+
+| Benchmark | Three timings | Allocation evidence |
+| --- | --- | --- |
+| `BenchmarkAgentEnqueue/disabled-8` | 5.208 / 5.216 / 5.223 ns/op | 0 B/op; 0 allocs/op |
+| `BenchmarkAgentEnqueue/enabled-8` | 785.2 / 786.0 / 788.8 ns/op | 864 B/op; 3 allocs/op |
+| `BenchmarkEvidenceBatch1000-8` | 17.268 / 17.006 / 16.818 ms/batch | 16,372,315 / 16,384,530 / 16,372,445 B/batch; 187,153 / 187,177 / 187,154 allocs/batch |
+
+Commands were `go test ./internal/fleet/agent -run '^$' -bench BenchmarkAgentEnqueue -benchmem -count=3`
+and the corresponding hub command with `BenchmarkEvidenceBatch1000`. The hub workload includes
+synthetic envelope/batch encoding, signing, HTTP handler parsing/authentication, strict validation,
+real native-store appends/flush/retention and live indexing; it is not a network throughput or
+production sizing claim. Protocol quotas intentionally cap an individual node below that throughput.
+
+**Behavioral coverage — PASS.** Real-loopback hub/agent tests cover accepted copies and origin,
+unavailable hub and ordered recovery, oldest overflow and heartbeat drop/gap counters, fresh-signed
+duplicate idempotence, hash mismatch, oversize, malformed framing, wrong signature, replay,
+revocation, node byte-quota exhaustion while another succeeds, both disabled-consent cases,
+independent heartbeats, hub encrypted copies/live index and encrypted local agent forwarding.
+Runtime console tests exercise node list/detail/overview filters and SSE. Authorization matrix
+rows cover changed query routes. Origin-collision tests prevent cross-node related links,
+recommendation input contamination and inherited local investigations. Hostile acknowledgement
+integer overflow is rejected without removing queued evidence. Atomic aggregate reservation and
+small configured segment-cap/rotation tests check bounded storage admission. Native readers verify
+payload hashes, including encrypted checkpoint prefixes with explicit test-only read identities.
+
+**Manual built-binary run — PASS**, repeated on the final build. One hub (console plus reception)
+and two agents ran in separate temporary data dirs on real loopback listeners. Each agent generated
+one initial HTTP observation: `GET /api/v1/events?node=<id>` returned one correctly attributed
+summary and `/overview.by_node` contained one event per node. The hub was stopped; both agents
+continued sensor traffic and local writes, generating three observations each. After restart,
+each filtered live index returned `/offline-0`, `/offline-1`, `/offline-2` (newest first in API),
+and by_node reported three per node. Both heartbeat snapshots reached `forwarded_total:4`,
+`dropped_total:0`, `gaps_total:0`. The difference between four forwarded and three currently
+indexed is intentional: forwarded index history is not backfilled after restart.
+
+`bin/aegismesh inspect list --data-dir <hub-state>/evidence/<id> --verify --json` exited **0**
+for each node, returning **four envelopes each**, every `integrity_ok:true`, `corrupt_lines:0`.
+All three processes were stopped by the harness. Only synthetic data was used; no transcript or
+helper file was added to the repository.
+
+**Chosen bounds and deviations.** Agent queue: 4,096 events /16 MiB, plus one bounded 4 MiB
+in-flight reference set. Batches: 1,000 events /4 MiB. Hub: five-second per-node spacing,
+1,000 events per fixed second, 16 MiB request bytes/minute/node, 16 MiB retained segment
+bytes/node, 256 MiB aggregate. Segments cap at 4 MiB while respecting smaller configured caps;
+small caps use conservative raw-size +1 KiB fit admission. This bounds disk pressure and
+rotation slack and prevents one identity consuming the aggregate budget. Conservative reservations
+can refuse a batch before physical capacity; many colluding nodes can exhaust the shared budget.
+Deduplication is the last 4,096 accepted IDs per node, in memory. Duplicate-only/invalid-only
+batches perform no append-space retention eviction. Per-node copies inherit hub encryption and
+count/age retention; dormant copies are revisited on that node's next batch.
+
+The wire adds `stream_id` because process-local sequence resets otherwise masquerade as replay
+or hide gaps. This is not a durable node-lifetime sequence or exact crash-loss count. Queue
+evictions can still arrive if already in flight; dropped counters count evictions and invalid
+acknowledgements, not proven permanent absence. Crashes/stops with a queue, outages longer than
+its coverage and a trailing missing range leave evidence only on the node. A bounded dedup
+window or hub restart can permit another append; flush is OS publication, not fsync. Native
+instance/listen metadata is disclosed with the envelope. A compromised hub learns redacted
+evidence; a compromised node can forge its own evidence or include secrets. Redaction is the
+control, not a proof the hub can validate. Hash consistency on the hub is not provenance.
+
+Cross-node correlation, historical forwarding, deletion propagation, disk spool, node-scoped
+investigation annotations, forwarded-index history backfill, hub-to-node traffic and tenancy
+are not implemented; the last two retain the permanent no-control/single-tenant boundary.
+Exact additive API fields and integrity wording are in architecture/console-api.md.
+
 ## 2026-11-15 — stack status
 
 **Status record, not a new test run.** The work of 2026-11-14/15 is committed and

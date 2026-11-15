@@ -73,6 +73,7 @@ jobs:
       # because its independent 60s default would violate this smoke bound.
       - name: fuzz targets
         run: |
+          go test -run '^$' -fuzz=FuzzEvidenceBatch ./internal/fleet/protocol -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzFleetProtocol ./internal/fleet/protocol -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzObservationProjection ./internal/evidenceindex -fuzztime=15s -fuzzminimizetime=0
           go test -run '^$' -fuzz=FuzzCursorFilter ./internal/evidenceindex -fuzztime=15s -fuzzminimizetime=0

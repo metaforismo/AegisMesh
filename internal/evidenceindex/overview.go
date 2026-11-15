@@ -75,8 +75,20 @@ type RuleCount struct {
 	Severity string `json:"severity"`
 }
 
+// NodeCount counts window observations from an authenticated origin.
+type NodeCount struct {
+	// ID is the cryptographic node ID, or local.
+	ID string `json:"id"`
+	// Name is the current enrolled node name.
+	Name string `json:"name"`
+	// Events counts indexed window observations.
+	Events int `json:"events"`
+}
+
 // Overview combines bounded window aggregates and recent correlation signals.
 type Overview struct {
+	// ByNode is added by accepting hubs and absent on single-node consoles.
+	ByNode *[]NodeCount `json:"by_node,omitempty"`
 	// Window is the selected window label.
 	Window string `json:"window"`
 	// GeneratedAt is the UTC aggregation time.
@@ -310,4 +322,29 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 	}
 
 	return overview, nil
+}
+
+// ByNode counts retained observations in the selected overview window.
+func (index *Index) ByNode(window string, now time.Time) []NodeCount {
+	duration, _, _ := Window(window)
+	counts := map[string]NodeCount{}
+	for _, summary := range index.Summaries() {
+		if !inWindow(summary, now.Add(-duration), now) {
+			continue
+		}
+		id, name := "local", ""
+		if summary.Node != nil {
+			id, name = summary.Node.ID, summary.Node.Name
+		}
+		count := counts[id]
+		count.ID, count.Name = id, name
+		count.Events++
+		counts[id] = count
+	}
+	out := make([]NodeCount, 0, len(counts))
+	for _, count := range counts {
+		out = append(out, count)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }

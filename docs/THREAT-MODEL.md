@@ -319,10 +319,44 @@ there is no path to configuration mutation, filesystem selection or execution.
 | Replay/rollback | Each node retains at most 64 nonces until signed timestamp plus skew, without evicting live entries or sharing capacity. Replay windows and liveness coalesce at five-second intervals and orderly shutdown. Restart retains flushed entries; a crash may lose the most recent interval (longer under scheduler/IO stalls), reopening unflushed nonces within the remaining timestamp window, up to 240 seconds after receipt for future-dated requests. Inventory shows last flushed data until the next heartbeat. Durable token consumption/revocation remain synchronous. Same-UID/privileged disk rollback or valid whole-state rewriting remains outside the claim; no external state/audit anchor exists. Clock synchronization is operationally required. |
 | Availability/resource pressure | Separate listeners, eight concurrent hub handlers, deadlines/header/body limits, finite registry/tokens/per-node nonces, source-IP rate limits, sampled rejection audits, five-second heartbeat snapshot coalescing and independent jittered agent loop. Hub outage leaves sensors/evidence operating. Snapshot fsync and audit can still contend for host disk/CPU; this is not a DDoS or host resource sandbox. Saturated replay/audit/state fails closed. |
 
-Only inventory metadata crosses TB11. No evidence is forwarded. Node names,
+TB11 carries inventory and, with separate explicit consent on both sides, redacted live evidence. Node names,
 versions, uptime and activity counters can themselves be sensitive. Hub registry,
 public keys, token hashes, replay state and audit are plaintext independently of
 evidence encryption. A separate single-writer private state dir is required per
 role. Audit and registry updates are separate transactions, so a 503 after save
 requires state inspection before retry. Inventory authentication establishes key
 possession, not trustworthy telemetry, tenant isolation or managed-service safety.
+
+
+## Experimental evidence forwarding boundary (2026-11-15)
+
+Best-effort forwarding with counted loss; local store authoritative. A compromised enrolled
+node can flood within its quotas, forge its own observations or recompute every payload hash.
+Signatures attribute submissions to key possession; payload verification on the hub establishes
+consistency, not provenance. No incident, telemetry trust or attestation follows. The node ID
+comes from the verified registry key, never its claimed name, instance or event metadata.
+
+Whole-batch framing is strictly parsed under a 4 MiB/1,000-event bound. Individual envelopes
+are size/schema/UTF-8/metadata/time/hash validated, invalid ones skipped and counted. Same-node
+work uses a separate try-lock; five-second spacing, 1,000 events/second, 16 MiB/minute,
+a 4,096-ID dedup window and 16 MiB retained bytes isolate one key. A 256 MiB aggregate
+segment budget reserves conservative encryption/rotation space before append. Many colluding
+nodes can exhaust it; shared handler/CPU/disk/NAT pressure remains possible. Duplicates older
+than the window or after hub restart may append again. Node stream resets/gaps are not
+attested; sequence gaps cannot expose a trailing loss without a later batch.
+
+A compromised hub now learns **redacted evidence of every forwarding node**, including
+correlation signals, stored addresses, payload snippets and whatever minimization leaves.
+**Redaction is the control**: node at-rest encryption does not hide live plaintext from the
+hub. TLS protects transit, and optional hub encryption protects its own storage medium;
+neither protects against that endpoint's compromise. Forwarding requires explicit off-by-default
+agent disclosure and hub reception flags. Raw pre-redaction traffic, config and private keys
+are not forwarded. A compromised node can nevertheless put secrets or deceptive data in
+its own signed evidence; the hub cannot prove upstream redaction was performed.
+
+Per-node directories use only validated cryptographic IDs beneath the trusted hub root;
+envelope bytes cannot select paths or reach commands, config mutation or enforcement.
+Copies are data only. No cross-node correlation, history forwarding, deletion propagation,
+tenancy isolation or hub-to-node traffic is implemented. Local evidence remains authoritative;
+queue overflow/crash/offline loss leaves missing forwarded evidence on its original node.
+Compromised hubs can falsely acknowledge or suppress submissions but cannot command agents.

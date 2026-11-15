@@ -101,3 +101,30 @@ func TestInvalidQueries(t *testing.T) {
 		})
 	}
 }
+
+func TestForwardingReadAuthorizationMatrix(t *testing.T) {
+	harness := newConsoleHarness(t, nil)
+	for _, path := range []string{
+		"/api/v1/events?node=local",
+		"/api/v1/events/" + harness.eventID + "?node=local",
+		"/api/v1/events/stream?node=local",
+		"/api/v1/overview",
+		"/api/v1/fleet",
+		"/api/v1/fleet/nodes",
+	} {
+		for _, role := range []string{"none", "viewer", "analyst", "admin"} {
+			t.Run(path+"/"+role, func(t *testing.T) {
+				token := ""
+				want := 401
+				if role != "none" {
+					token = "synthetic-" + role
+					want = 200
+					if path == "/api/v1/fleet/nodes" {
+						want = 503
+					}
+				}
+				requireStatus(t, harness.request(t, apiRequest{method: "GET", path: path, token: token}), want)
+			})
+		}
+	}
+}

@@ -20,6 +20,8 @@ admin:
 fleet:
   agent:
     enabled: true
+    forward_evidence:
+      enabled: true
     hub_url: http://127.0.0.1:1
     node_name: synthetic-node
     enrollment_token_env: AEGISMESH_TEST_FLEET_SECRET
@@ -50,6 +52,9 @@ sensors:
 			err = newValidateCmd(env).Run(context.Background(), append(args, "--effective"))
 		case "doctor":
 			err = newDoctorCmd(env).Run(context.Background(), args)
+		}
+		if !strings.Contains(out.String(), "forward_evidence") {
+			t.Fatalf("missing forwarding disclosure: %s", out.String())
 		}
 		if err != nil || !strings.Contains(out.String(), "fleet") || strings.Contains(out.String(), secret) {
 			t.Fatalf("%s: err=%v output=%s", command, err, out.String())

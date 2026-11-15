@@ -89,7 +89,8 @@ func printValidateSummary(w io.Writer, cfg *config.Config) {
 	fmt.Fprintf(w, "ok: %s (schema %s, %d sensor(s))\n",
 		cfg.SourcePath, cfg.APIVersion, len(cfg.Sensors))
 	if cfg.Console.Enabled {
-		fmt.Fprintf(w, "  console %s (TLS=%t, %d token operators)\n", cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators))
+		fmt.Fprintf(w, "  console %s (TLS=%t, %d token operators)\n",
+			cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators))
 	}
 	for i := range cfg.Sensors {
 		s := &cfg.Sensors[i]
@@ -248,9 +249,7 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 	if rep.Detection.ThrottlePerMinute == 0 {
 		rep.Detection.ThrottlePerMinute = 600 // documented default
 	}
-	if cfg.Fleet.Hub.Enabled || cfg.Fleet.Agent.Enabled {
-		rep.Fleet = &cfg.Fleet
-	}
+	rep.Fleet = &cfg.Fleet
 	if cfg.Webhook.IsEnabled() {
 		class, u, _ := classifyWebhookEndpoint(cfg)
 		rep.Webhook = &webhookSummary{

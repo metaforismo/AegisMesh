@@ -22,7 +22,7 @@ func (s *Server) caseEvents(investigation investigations.Investigation) investig
 
 	summaries := []evidenceindex.Summary{}
 	for _, summary := range s.index.Summaries() {
-		if ids[summary.ID] {
+		if summary.Node == nil && ids[summary.ID] {
 			summaries = append(summaries, summary)
 		}
 	}

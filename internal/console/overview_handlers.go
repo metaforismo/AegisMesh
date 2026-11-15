@@ -13,12 +13,17 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request, _ caller) {
 		return
 	}
 
-	overview, err := s.index.Overview(values.Get("window"), time.Now().UTC())
+	now := time.Now().UTC()
+	overview, err := s.index.Overview(values.Get("window"), now)
 	if err != nil {
 		invalid(w)
 		return
 	}
 
+	if s.fleetHub != nil && s.fleetHub.EvidenceEnabled() {
+		byNode := s.index.ByNode(overview.Window, now)
+		overview.ByNode = &byNode
+	}
 	for _, investigation := range s.cases.List("") {
 		if investigation.Status != "closed" {
 			overview.OpenInvestigations++

@@ -231,6 +231,8 @@ func TestFleetEveryFieldStrictDecodingAndEnv(t *testing.T) {
 	}
 	// Each field has one deterministic override using its full path, including reference names only.
 	overrides := map[string]string{
+		"HUB_ACCEPT_EVIDENCE_ENABLED":      "false",
+		"AGENT_FORWARD_EVIDENCE_ENABLED":   "true",
 		"HUB_ENABLED":                      "false",
 		"HUB_LISTEN":                       "127.0.0.1:9140",
 		"HUB_STATE_DIR":                    "other-hub",
@@ -264,6 +266,10 @@ func TestFleetEveryFieldStrictDecodingAndEnv(t *testing.T) {
 		for name, value := range fields {
 			count++
 			key := strings.ToUpper(role + "_" + name)
+			if nested, ok := value.(map[string]any); ok {
+				value = nested["enabled"]
+				key += "_ENABLED"
+			}
 			expected, exists := overrides[key]
 			if !exists {
 				t.Fatalf("missing override fixture: %s", key)
@@ -296,6 +302,8 @@ func TestFleetEveryFieldStrictDecodingAndEnv(t *testing.T) {
 		t.Fatal("override schema changed")
 	}
 	for name, value := range map[string]string{
+		"HUB_ACCEPT_EVIDENCE_ENABLED":      "invalid",
+		"AGENT_FORWARD_EVIDENCE_ENABLED":   "invalid",
 		"HUB_ENABLED":                      "invalid",
 		"AGENT_ENABLED":                    "invalid",
 		"AGENT_ALLOW_PRIVATE_EGRESS":       "invalid",
@@ -367,5 +375,24 @@ func TestFleetHubMayRunWithoutSensors(t *testing.T) {
 	cfg.Fleet.Agent.HubURL = "http://127.0.0.1:9130"
 	if cfg.Validate() == nil {
 		t.Fatal("agent accepted without sensors")
+	}
+}
+
+func TestEvidenceConsentValidation(t *testing.T) {
+	for _, section := range []string{
+		"fleet:\n  hub:\n    accept_evidence:\n      enabled: true\n",
+		"fleet:\n  agent:\n    forward_evidence:\n      enabled: true\n",
+		"fleet:\n  agent:\n    enabled: true\n    forward_evidence:\n      enabled: true\n" +
+			"    hub_url: http://10.0.0.1:9130\n    allow_private_egress: true\n",
+		"fleet:\n  hub:\n    enabled: true\n    accept_evidence:\n      enabled: true\n    listen: 0.0.0.0:9130\n",
+		"fleet:\n  agent:\n    forward_evidence:\n      unknown: true\n",
+	} {
+		if _, err := fleetConfig(t, section); err == nil {
+			t.Fatalf("accepted unsafe consent: %s", section)
+		}
+	}
+	cfg, err := fleetConfig(t, "")
+	if err != nil || cfg.Fleet.Agent.ForwardEvidence.Enabled || cfg.Fleet.Hub.AcceptEvidence.Enabled {
+		t.Fatal("consent must default off", err)
 	}
 }

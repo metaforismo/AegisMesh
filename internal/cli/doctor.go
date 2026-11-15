@@ -106,7 +106,9 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 	if cfg.Storage.Encryption != nil && cfg.Storage.Encryption.Enabled {
 		add("ok", "storage-crypto", "age/X25519 evidence encryption enabled (.jsonl.age); runtime holds only the public recipient", "")
 	} else {
-		add("info", "storage-crypto", "off in configuration — new data directories use plaintext JSONL; previously encrypted directories fail closed", "enable storage.encryption only after backing up the private identity")
+		add("info", "storage-crypto",
+			"off in configuration — new data directories use plaintext JSONL; previously encrypted directories fail closed",
+			"enable storage.encryption only after backing up the private identity")
 	}
 
 	unsealed, scanErr := storage.UnsealedSegments(dataDir)
@@ -136,13 +138,15 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 	if cfg.Console.Enabled {
 		st, detail := probePort(cfg.Console.Listen)
 		add(st, "port:console", detail, "change console.listen or stop the conflicting listener")
-		add("warn", "console", fmt.Sprintf("authenticated console on %s (TLS=%t, %d token operators)", cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)), "console evidence and operator notes are sensitive; keep state private")
+		add("warn", "console", fmt.Sprintf("authenticated console on %s (TLS=%t, %d token operators)",
+			cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)),
+			"console evidence and operator notes are sensitive; keep state private")
 	}
 	if cfg.Fleet.Hub.Enabled {
 		st, detail := probePort(cfg.Fleet.Hub.Listen)
 		add(st, "port:fleet-hub", detail, "change fleet.hub.listen or stop the conflicting listener")
 		add("warn", "fleet-hub", fmt.Sprintf("experimental inventory on %s (TLS=%t)",
-			cfg.Fleet.Hub.Listen, cfg.Fleet.Hub.TLSCertFile != ""), "no evidence forwarding or agent command channel")
+			cfg.Fleet.Hub.Listen, cfg.Fleet.Hub.TLSCertFile != ""), "no agent command channel")
 	}
 	if cfg.Fleet.Agent.Enabled {
 		if _, err := cfg.ResolveFleetToken(); err != nil {
@@ -154,12 +158,17 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 				"static only; startup checks CA contents and local identity; no hub probe was sent")
 		}
 	}
+	add("warn", "fleet-evidence", fmt.Sprintf("experimental accept_evidence=%t forward_evidence=%t",
+		cfg.Fleet.Hub.AcceptEvidence.Enabled, cfg.Fleet.Agent.ForwardEvidence.Enabled),
+		"best-effort forwarding with counted loss; local store authoritative; redacted evidence disclosed to hub")
 	// Safety posture reporting: loud but non-failing.
 	if cfg.Security.AllowPublicBind {
-		add("warn", "bind-policy", "security.allow_public_bind=true — decoys may bind beyond loopback", "revert unless this is a deliberate network placement")
+		add("warn", "bind-policy", "security.allow_public_bind=true — decoys may bind beyond loopback",
+			"revert unless this is a deliberate network placement")
 	}
 	if cfg.Security.AllowPrivilegedPorts {
-		add("warn", "port-policy", "security.allow_privileged_ports=true — decoys may bind ports <1024", "prefer unprivileged ports; run a port-forward instead")
+		add("warn", "port-policy", "security.allow_privileged_ports=true — decoys may bind ports <1024",
+			"prefer unprivileged ports; run a port-forward instead")
 	}
 	switch cfg.LLM.Provider {
 	case "local":
@@ -362,7 +371,8 @@ func runWebhookProbe(ctx context.Context, cfg *config.Config) (string, string, s
 	}
 	secret, serr := cfg.ResolveWebhookSecret()
 	if serr != nil {
-		return "warn", fmt.Sprintf("webhook probe ran unsigned (secret unavailable: use --json for fields; check hmac reference)"), "fix the hmac reference"
+		return "warn", "webhook probe ran unsigned (secret unavailable: use --json for fields; check hmac reference)",
+			"fix the hmac reference"
 	}
 	body := []byte(`{"events":[]}`)
 	req, rerr := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))

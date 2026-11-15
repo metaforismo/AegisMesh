@@ -319,9 +319,39 @@ flowchart LR
 
 The only hub response is a typed matching-node acknowledgement. There is no
 hub-to-agent command/configuration/file/code channel. Counter taps see successful
-appends, including direct correlation persistence, and never forward envelopes.
+appends, including direct correlation persistence. Evidence forwarding is a separate opt-in path below.
 Snapshots exclude sensor addresses and evidence. Agent scheduling is independent
 of sensors, storage, extensions and webhook delivery; failure updates safe local
 status/metrics/logs and backs off. Hub state and replay entries persist together;
 liveness is derived at query time. Shutdown cancels/joins agent delivery, drains
 the hub listener, closes hub state, then closes console/sensors/bus/store.
+
+
+## Experimental evidence forwarding path (ADR-0018 amendment)
+
+```mermaid
+flowchart LR
+    Redacted[Native redacted envelope] --> Local[Authoritative local append]
+    Local -->|success and agent consent only| Queue[Bounded oldest-drop memory ring]
+    Queue --> Worker[Separate batch worker and transport]
+    Worker -->|signed outbound batches; fixed hub| Validate[Authenticated hostile ingestion]
+    Validate -->|hub consent and per-node quotas| Copy[Native per-node storage.Store]
+    Copy -->|append success| Index[Bounded index plus authenticated origin metadata]
+    Index --> Fleet[Console event list, detail, overview and SSE]
+```
+
+Experimental; best-effort forwarding with counted loss; local store authoritative.
+Disabled forwarding does no serialization. Enabled offers do bounded memory work without
+network/disk waits. The 4,096-event/16 MiB ring drops oldest; at most one 4 MiB in-flight
+batch may retain evicted references. No disk spool or history read exists, and no private
+read identity enters the runtime. Node encryption and hub encryption are independent.
+Signed redacted plaintext crosses the new confidentiality boundary within TLS beyond
+loopback; redaction is the control against unintended disclosure to a compromised hub.
+
+The hub copies only under the authenticated canonical node ID, never a claimed name or
+content-derived path. Per-node locks span append/index work; the registry mutex does not.
+Origin stays outside native bytes. Names resolve from the registry at read time and
+related-event links stay within that origin. Forwarded events never enter the hub bus,
+correlation engine, providers, webhooks, extensions or enforcement. Queue loss, invalid
+skips, gap counts, fixed-label metrics and disabled-reception status are observable.
+Neither acknowledgements nor forwarded content select commands or configuration.

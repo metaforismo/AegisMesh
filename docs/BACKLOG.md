@@ -12,9 +12,9 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 - Local `master` is `484bd65`, verified through local Git ancestry, with the
   merges of #72-#76 (toolchain, encryption, console API/UI and fleet inventory).
-- Current worktree: `feat/encrypted-live-read`, initially clean at that baseline.
-  V3 checkpoint changes remain uncommitted; no remote operations or hosted-CI
-  checks were run. Earlier CI/review references below are historical receipts.
+- Current worktree: `feat/evidence-forwarding`, initially clean at `25645c0`
+  (v3 encrypted live-read / stacked PR #77). Evidence forwarding remains uncommitted;
+  no remote operations or hosted-CI checks were run. Earlier references are historical receipts.
 - No release, tag, image, signature, deployment or repository-setting change is
   part of this task; refresh remote dependency issue state before further triage.
 - Manual browser checks of the console and of two-process fleet enrollment on
@@ -232,10 +232,10 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## P3 — later research and optional improvements
 
-### P3-1 — distributed mesh and managed fleet — INVENTORY IMPLEMENTED (PR #76)
+### P3-1 — distributed mesh and managed fleet — INVENTORY MERGED; LOCAL EVIDENCE AMENDMENT
 
 - **Evidence:** experimental fleet inventory with authenticated enrollment and
-  heartbeats on `feat/fleet-enrollment`, stacked on #75; see ADR-0018 and
+  heartbeats merged locally in #76 (`484bd65`); see ADR-0018 and
   `architecture/fleet-protocol.md`, with local receipts in `verification.md`.
 - **Affected:** fleet identity/protocol/hub/agent packages, strict config,
   runtime status/counters/lifecycle and console inventory administration.
@@ -243,11 +243,11 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   loopback, shared egress classification, one-use tokens, per-request Ed25519,
   persistent replay cache, private atomic state, role/CSRF/audit and revocation.
   Hub never dials agents and cannot command nodes; this invariant is permanent.
-- **Scope:** not multi-tenant, not a managed service; forwards no evidence.
-- **Remaining:** open the PR, hosted CI, review and merge; evidence batches and bounded spool,
+- **Scope:** not multi-tenant or a managed service. Local opt-in evidence amendment below.
+- **Remaining:** review/CI/merge of the separate evidence amendment; durable encrypted spool and offline guarantees,
   key rotation, attestation, hosted tenancy/SSO and upgrades are proposed,
   not implemented. P2-3 managed-service design remains partial.
-- **Status:** **IMPLEMENTED — PR #76, unmerged**. Hosted CI NOT RUN. Manual
+- **Status:** **Inventory merge observed in local ancestry**. Current forwarding hosted CI NOT RUN. Manual
   two-process loopback check (enrollment, `online`, `stale` after three missed
   heartbeats, token creation and audit) is in `verification.md`; revocation was
   verified by a two-process run and automated tests, not in the browser. No
@@ -321,5 +321,17 @@ verification history with exact commands and regressions:
 - **BLOCKED:** `make sbom sbom-check` inside a linked git worktree (the pinned
   generator cannot resolve the main-module version there); hosted CI covers it.
 - **NOT RUN:** merges, release/tag/signing/image publication, repository
-  settings, site publication, real-cluster deployment, evidence forwarding and
+  settings, site publication, real-cluster deployment, durable offline forwarding and
   correlation-signal fan-out to webhooks or extensions.
+
+
+### P3-1 evidence forwarding — experimental local implementation (2026-11-15)
+
+`feat/evidence-forwarding` is stacked on the encrypted live-read branch / PR #77.
+Best-effort forwarding with counted loss; local store authoritative. Both consent switches
+default off. Queue, signature/replay, hostile parsing, bounded deduplication, per-node and
+aggregate quotas, hub encryption, origin-scoped index/API and counters are implemented.
+See architecture/fleet-protocol.md for exact limits and verification.md for local receipts.
+Review/hosted CI/merge/deployment remain separate. Remaining: durable encrypted spool,
+forwarded-history index backfill, cross-node correlation, historical forwarding, deletion
+propagation and tenancy are not implemented. Hub-to-node traffic remains permanently forbidden.

@@ -300,6 +300,17 @@ func (s *Store) Append(_ context.Context, e event.Envelope) error {
 			errStore, len(plaintext), s.opts.MaxEventBytes)
 	}
 
+	return s.AppendEncoded(plaintext)
+}
+
+// AppendEncoded preserves a validated native envelope encoding supplied by a trusted ingestion boundary.
+// Callers must validate schema and payload integrity before using this method.
+func (s *Store) AppendEncoded(plaintext []byte) error {
+	if len(plaintext) > s.opts.MaxEventBytes || !json.Valid(plaintext) || bytes.ContainsAny(plaintext, "\r\n") {
+		return fmt.Errorf("%w: invalid encoded envelope", errStore)
+	}
+
+	var err error
 	record := plaintext
 	if s.encryptor != nil {
 		record, err = s.encryptor.frame(plaintext)
