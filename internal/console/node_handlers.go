@@ -44,7 +44,10 @@ func (s *Server) node(w http.ResponseWriter, _ *http.Request, _ caller) {
 }
 
 func (s *Server) meta(w http.ResponseWriter, _ *http.Request, _ caller) {
-	send(w, 200, map[string]string{
+	send(w, 200, map[string]any{
+		"auth": map[string]any{"token": s.cfg.TokenEnabled(), "oidc": map[string]any{
+			"enabled": s.cfg.OIDC.Enabled, "display_name": s.cfg.OIDC.DisplayName,
+		}},
 		"product":     "AegisMesh",
 		"api_version": "v1",
 		"version":     version.Version,

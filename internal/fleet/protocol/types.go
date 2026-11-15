@@ -77,6 +77,8 @@ type Heartbeat struct {
 
 // Node is the operator inventory view with read-time liveness.
 type Node struct {
+	// Tenant is the immutable registry partition, assigned by the hub only.
+	Tenant string `json:"tenant,omitempty"`
 	// Forwarding combines reported counters with hub-authored gap accounting.
 	Forwarding *Forwarding `json:"forwarding,omitempty"`
 	// ID is the stable node or configured sensor identifier.

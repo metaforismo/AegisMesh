@@ -410,8 +410,8 @@ Both accept the documented full-path `AEGISMESH_FLEET_*_ENABLED` environment ove
 Existing inspect commands work directly on each hub copy:
 
 ```sh
-aegismesh inspect list --data-dir /hub/data/fleet-hub/evidence/NODE_ID --verify --json
-aegismesh inspect list --data-dir /hub/data/fleet-hub/evidence/NODE_ID --identity /private/read.agekey --verify
+aegismesh inspect list --data-dir /hub/data/fleet-hub/tenants/default/evidence/NODE_ID --verify --json
+aegismesh inspect list --data-dir /hub/data/fleet-hub/tenants/default/evidence/NODE_ID --identity /private/read.agekey --verify
 ```
 
 Replace `NODE_ID` with the canonical ID from the authenticated fleet node list. Explicit
@@ -420,3 +420,21 @@ Open encrypted segments report the verified checkpoint prefix and incompleteness
 Add `--require-sealed` only when full completion is required. Integrity is the hub's payload
 hash consistency check, not node provenance. No new forwarding/history/delete CLI exists;
 use console `GET /api/v1/fleet`, `/events?node=ID`, `/overview` and the documented SSE filter.
+
+## Console identity and tenancy reports
+
+`validate --effective --json` includes `console_identity` with `token_login`,
+`tenants`, `local_tenant`, the complete configured `oidc` reference-only block,
+`oidc_egress` classification and `operators` membership summaries (name, role,
+tenants; no digests or resolved secrets). Human effective output shows the same
+static identity policy. `doctor` adds `console-identity` without an issuer probe,
+credential resolution or enrollment. Discovery starts only with the console.
+Existing `console token` / `console hash` behavior is unchanged; add operator
+memberships to the generated snippet when using more than the default tenant.
+There is no tenant-creation CLI; tenants are declared in reviewed configuration.
+
+SSO via OIDC (experimental) and logical tenant isolation (experimental) add no
+fleet command channel. For forwarded-evidence inspection the new trusted layout
+is `<fleet.hub.state_dir>/tenants/TENANT/evidence/NODE_ID/`; obtain TENANT from the
+active session and NODE_ID from its fleet inventory. Existing local evidence and
+agent identity paths are unchanged. Local logout does not log out of the IdP.

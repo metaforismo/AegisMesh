@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -124,6 +125,9 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 			label, segment.Segment), "inspect with identities; later events may exist")
 	}
 
+	identity := identityReport(cfg)
+	identityJSON, _ := json.Marshal(identity)
+	add("info", "console-identity", string(identityJSON), "static only; no issuer or credential probe was sent")
 	// Port availability per sensor + admin.
 	for i := range cfg.Sensors {
 		s := &cfg.Sensors[i]

@@ -103,6 +103,9 @@ func (c *Config) Validate() error {
 	if err := c.ValidateConsole(); err != nil {
 		return err
 	}
+	if err := c.validateTenantState(); err != nil {
+		return err
+	}
 	if err := c.validateAdmin(); err != nil {
 		return err
 	}

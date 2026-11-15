@@ -38,6 +38,9 @@ func (h *Hub) validState() bool {
 		return false
 	}
 	for id, record := range h.state.Nodes {
+		if record.Node.Tenant != "" && record.Node.Tenant != h.tenantID {
+			return false
+		}
 		key, err := hex.DecodeString(record.PublicKey)
 		node := record.Node
 		if err != nil || !protocol.Hex(record.PublicKey, 32) || protocol.ID(key) != id || node.ID != id ||
@@ -62,6 +65,9 @@ func (h *Hub) validState() bool {
 		}
 	}
 	for id, record := range h.state.Tokens {
+		if record.Tenant != "" && record.Tenant != h.tenantID {
+			return false
+		}
 		if id != record.ID || !protocol.Hex(id, 16) || !protocol.Hex(record.Digest, 32) ||
 			record.ExpiresAt <= 0 || !noteValid(record.Note) {
 			return false

@@ -18,6 +18,17 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if len(h.partitions) > 1 {
+		h.routePartition(w, r)
+		return
+	}
+	h.serveSingle(w, r)
+}
+
+func (h *Hub) serveSingle(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if !h.allowRemote(r.RemoteAddr) {
 		h.reject(w, failure("rate_limited"))
 		return
@@ -232,6 +243,7 @@ func (h *Hub) enroll(input protocol.Enrollment, auth protocol.Authentication) (p
 		return protocol.Node{}, err
 	}
 	node := protocol.Node{
+		Tenant:               h.tenantID,
 		ID:                   auth.NodeID,
 		Name:                 input.Name,
 		Status:               "online",

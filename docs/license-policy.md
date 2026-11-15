@@ -19,6 +19,9 @@ product lives in this repository under the same license.
 
 | Module | Version | License | Why |
 |---|---|---|---|
+| `github.com/coreos/go-oidc/v3` | `v3.21.0` | Apache-2.0 | Vetted ID-token issuer/audience/signature verification for opt-in SSO; avoids a custom JOSE verifier (ADR-0019) |
+| `golang.org/x/oauth2` | `v0.38.0` | BSD-3-Clause | Maintained Authorization Code/S256 exchange and confidential client authentication; token/refresh data is not persisted |
+| `github.com/go-jose/go-jose/v4` | `v4.1.4` | Apache-2.0 | go-oidc's JOSE dependency, used directly for bounded public JWK decoding and algorithm/kid selection; cryptography stays library-owned |
 | `filippo.io/age` | `v1.3.2` | BSD-3-Clause | Maintained native age/X25519 authenticated encryption; stdlib has no age format implementation (ADR-0016) |
 | gopkg.in/yaml.v3 | v3.0.1 | MIT (+Apache-2.0 portions) | Config parsing; YAML is a user-facing requirement and stdlib has none |
 | `golang.org/x/crypto` (`ssh` package) | `v0.59.0` | BSD-3-Clause | Maintained SSH transport and cryptographic protocol implementation; the standard library has no SSH server implementation |
@@ -127,3 +130,24 @@ proposes a digest update.
 - New vendored/adapted snippets (even small ones) go to NOTICE with origin URL, license, and date.
 - Clean-room rule: no GPL source, config samples, docs wording, or branding from other projects; concept
   inspirations documented in docs/research/competitive-landscape.md instead.
+
+
+## OIDC dependency review (2026-11-15, ADR-0019)
+
+Local source/license review: Codex in this uncommitted change; independent
+human review remains open. Versions and upstream licenses are pinned above. Primary references:
+[go-oidc](https://pkg.go.dev/github.com/coreos/go-oidc/v3@v3.21.0/oidc),
+[oauth2](https://pkg.go.dev/golang.org/x/oauth2@v0.38.0),
+[go-jose](https://pkg.go.dev/github.com/go-jose/go-jose/v4@v4.1.4).
+Application wrappers add egress/time/byte/cache policy, not an alternative JOSE
+implementation. A handwritten stdlib verifier was rejected because Go has no
+OIDC/JOSE format implementation and protocol parsing would become project-owned.
+
+The oauth2 module graph adds `cloud.google.com/go/compute/metadata v0.3.0`
+(Apache-2.0) for its Google-specific subpackages. The console imports only the
+root oauth2 package and does not import metadata acquisition or Google credential
+discovery. The application dependency scan and static destination policy remain
+the authority on reachable network behavior. Existing x/crypto, x/sys and age
+versions are unchanged. `make license-check` scans the entire resolved module
+graph, including test-only packages; current execution evidence is recorded in
+verification.md. No third-party source was copied or adapted into the repository.

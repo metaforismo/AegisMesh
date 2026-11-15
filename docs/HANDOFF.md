@@ -1,5 +1,11 @@
 # HANDOFF — current verified state
 
+Current local branch (`feat/console-sso`, uncommitted): **SSO via OIDC
+(experimental)** and **logical tenant isolation (experimental)** are implemented
+as specified in ADR-0019/0020 and `architecture/console-api.md`. Current evidence
+is in `verification.md`; the dated branch amendment below defines scope and limits.
+
+
 Updated: 2026-11-15. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 `docs/ROADMAP.md` before changing code.
 
@@ -153,10 +159,10 @@ require separate authorization and threat models.
 - There is no Telnet/database sensor, decoy-listener TLS, multi-tenancy,
   autonomous response path or hosted control plane. The console API, UI and
   fleet inventory are in the local master baseline described above.
-- The console is single-node and single-tenant, with no SSO.
+- The original console slice was single-tenant/token-only; this branch adds ADR-0019/0020 below.
 - Fleet evidence forwarding is experimental and opt-in locally; durable evidence-spool, key rotation,
-  mTLS/attestation, a local configuration workflow, upgrade, tenancy and SSO
-  designs in ADR-0018 are proposals, not implementation claims. `fleet status`
+  mTLS/attestation, a local configuration workflow and upgrade
+  designs in ADR-0018 remain proposals. SSO/logical isolation are specified in ADR-0019/0020. `fleet status`
   and `demo --fleet` were omitted; the console status API supplies live
   delivery state.
 - Helm is verified packaging, not verified real-cluster support.
@@ -222,3 +228,33 @@ deletion propagation or tenancy exists. Console forwarded history is live-only a
 See the amended protocol/console API contracts for exact fields, quotas and consistency wording.
 All local command/manual/benchmark receipts belong in verification.md; hosted CI and deployment
 are not inferred. No UI changes are included; UI work should consume the additive API contract.
+
+
+## Console identity and isolation — local branch, 2026-11-15
+
+`feat/console-sso`, stacked on `feat/evidence-forwarding` (PR #79), adds
+**SSO via OIDC (experimental)** and **logical tenant isolation (experimental)**.
+These are local uncommitted changes, not a merge, deployment, hosted CI or
+operational acceptance claim. ADR-0019/0020 and console-api.md define the exact
+contract; verification.md records executed checks and their limits.
+
+OIDC is opt-in Authorization Code/S256, state/nonce/browser binding, library-owned
+asymmetric token verification, explicit role and tenant mappings, bounded egress
+and credential-capped sessions. Existing tokens remain break-glass by default;
+`token_login: false` requires OIDC. Discovery outages retry without stopping
+sensors. Logout remains local. No refresh-token persistence or provider logout.
+
+One declared active tenant covers index queries, sources/overview/by_node,
+SSE, investigations, audit, fleet registries, enrollment tokens and forwarded
+evidence. Local runtime views belong to local_tenant. Per-tenant quotas and
+recoverable legacy migration isolate logical state pressure; no admin all view.
+At most 32 tenants share a process, OS user, data directory, hub encryption
+recipient and signing/egress settings. Host/process compromise and shared disk/
+CPU exhaustion cross tenants. Per-tenant keys, billing, rate plans, self-service
+creation and a hard hosted isolation boundary remain outside scope.
+
+Delivery polish includes bounded startup gzip, representation-specific strong
+ETags/304/no-cache for non-index assets and aligned per-sensor overview buckets
+(up to 64 sensor IDs). The existing UI is unchanged; it can consume the documented
+meta/session additions. Remaining work includes external-IdP interoperability,
+human review and independent deployment evidence; no release action is authorized.

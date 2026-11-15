@@ -104,7 +104,22 @@ func remote(r *http.Request) string {
 }
 
 func (s *Server) record(r *http.Request, principal auth.Principal, action, target, outcome string) error {
-	return s.audit.Append(audit.Record{
+	view := s
+	if principal.Tenant != "" {
+		view = s.views[principal.Tenant]
+	} else if s.tenantID == "" {
+		view = s.views[s.cfg.LocalTenant]
+	}
+	if view == nil {
+		return audit.ErrAudit
+	}
+	log := view.audit
+	if principal.Tenant == "" && s.unassignedAudit != nil {
+		log = s.unassignedAudit
+	}
+	return log.Append(audit.Record{
+		Issuer:  principal.Issuer,
+		Subject: principal.Subject,
 		Actor:   principal.Name,
 		Role:    principal.Role,
 		Action:  action,
@@ -122,11 +137,16 @@ type caller struct {
 
 func (s *Server) caller(r *http.Request) (caller, bool) {
 	if header := r.Header.Get("Authorization"); header != "" {
+		if !s.cfg.TokenEnabled() {
+			return caller{}, false
+		}
 		if !strings.HasPrefix(header, "Bearer ") {
 			return caller{}, false
 		}
 		principal, ok := s.auth.Authenticate(strings.TrimPrefix(header, "Bearer "))
-		return caller{session: auth.Session{Principal: principal}}, ok
+		return caller{session: auth.Session{
+			Principal: principal, Tenant: principal.Tenant, Tenants: principal.Tenants,
+		}}, ok
 	}
 
 	credentials, err := r.Cookie(CookieName)
@@ -142,7 +162,7 @@ func (s *Server) caller(r *http.Request) (caller, bool) {
 	}, ok
 }
 
-func (s *Server) route(pattern, role, group string, handler func(http.ResponseWriter, *http.Request, caller)) {
+func (s *Server) route(pattern, role, group string, handler func(*Server, http.ResponseWriter, *http.Request, caller)) {
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		s.requests.Inc(group)
 		switch group {
@@ -151,6 +171,7 @@ func (s *Server) route(pattern, role, group string, handler func(http.ResponseWr
 				return
 			}
 		}
+		view := s
 		credentials := caller{}
 		if role != "" {
 			var ok bool
@@ -158,6 +179,16 @@ func (s *Server) route(pattern, role, group string, handler func(http.ResponseWr
 			if !ok {
 				s.failures.Inc()
 				fail(w, 401, "unauthenticated", "valid operator authentication is required")
+				return
+			}
+			view = s.views[credentials.session.Principal.Tenant]
+			if view == nil {
+				fail(w, 401, "unauthenticated", "tenant unavailable")
+				return
+			}
+			// Local node identity exists only in local_tenant, including for administrators.
+			if group == "node" && view.tenantID != s.cfg.LocalTenant {
+				fail(w, 404, "not_found", "node not found")
 				return
 			}
 			if !auth.Granted(credentials.session.Principal.Role, role) {
@@ -201,10 +232,10 @@ func (s *Server) route(pattern, role, group string, handler func(http.ResponseWr
 				return
 			}
 		}
-		if (role == "analyst" || role == "admin") && !s.audit.Ready() {
+		if (role == "analyst" || role == "admin") && !view.audit.Ready() {
 			fail(w, 503, "unavailable", "audit trail requires inspection and restart")
 			return
 		}
-		handler(w, r, credentials)
+		handler(view, w, r, credentials)
 	})
 }

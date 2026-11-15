@@ -7,6 +7,10 @@ import (
 )
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request, _ caller) {
+	if !s.cfg.TokenEnabled() {
+		fail(w, 403, "forbidden", "token login is disabled")
+		return
+	}
 	if !s.auth.AllowLogin(remote(r)) {
 		s.failures.Inc()
 		if s.record(r, auth.Principal{}, "session.login_failed", "", "denied") != nil {
@@ -56,21 +60,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request, _ caller) {
 		return
 	}
 
-	// Successful reauthentication rotates and invalidates a preexisting session.
-	if old, err := r.Cookie(CookieName); err == nil {
-		s.auth.Logout(old.Value)
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieName,
-		Value:    id,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   s.cfg.TLSCertFile != "",
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   s.cfg.SessionTTLSeconds,
-		Expires:  session.ExpiresAt,
-	})
+	s.setSession(w, r, id, session)
 	send(w, 200, session)
 }
 

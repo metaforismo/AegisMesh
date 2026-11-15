@@ -32,6 +32,9 @@ func TestEveryRouteAuthorization(t *testing.T) {
 		status int
 	}
 	fixtures := map[string]fixture{
+		"GET /api/v1/auth/oidc/login":    {status: 302},
+		"GET /api/v1/auth/oidc/callback": {status: 302},
+		"POST /api/v1/session/tenant":    {role: "viewer", body: `{"tenant":"default"}`, status: 400},
 		"GET /api/v1/fleet": {
 			role:   "viewer",
 			status: 200,

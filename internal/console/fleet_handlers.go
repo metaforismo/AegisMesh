@@ -14,50 +14,59 @@ func (s *Server) fleetRoutes() []routeSpec {
 			pattern: "GET /api/v1/fleet",
 			role:    "viewer",
 			group:   "fleet",
-			handle:  s.fleet,
+			handle:  (*Server).fleet,
 		},
 		{
 			pattern: "GET /api/v1/fleet/nodes",
 			role:    "viewer",
 			group:   "fleet-nodes",
-			handle:  s.fleetNodes,
+			handle:  (*Server).fleetNodes,
 		},
 		{
 			pattern: "GET /api/v1/fleet/nodes/{id}",
 			role:    "viewer",
 			group:   "fleet-nodes",
-			handle:  s.fleetNode,
+			handle:  (*Server).fleetNode,
 		},
 		{
 			pattern: "POST /api/v1/fleet/nodes/{id}/revoke",
 			role:    "admin",
 			group:   "fleet-nodes",
-			handle:  s.fleetRevoke,
+			handle:  (*Server).fleetRevoke,
 		},
 		{
 			pattern: "GET /api/v1/fleet/enrollment-tokens",
 			role:    "admin",
 			group:   "fleet-tokens",
-			handle:  s.fleetTokens,
+			handle:  (*Server).fleetTokens,
 		},
 		{
 			pattern: "POST /api/v1/fleet/enrollment-tokens",
 			role:    "admin",
 			group:   "fleet-tokens",
-			handle:  s.fleetMint,
+			handle:  (*Server).fleetMint,
 		},
 		{
 			pattern: "DELETE /api/v1/fleet/enrollment-tokens/{id}",
 			role:    "admin",
 			group:   "fleet-tokens",
-			handle:  s.fleetDeleteToken,
+			handle:  (*Server).fleetDeleteToken,
 		},
 	}
 }
 
 // RecordFleet adds fixed machine-authored metadata to the console's existing audit chain.
 func (s *Server) RecordFleet(action, target, outcome string) error {
-	return s.audit.Append(audit.Record{
+	return s.RecordFleetTenant(s.cfg.LocalTenant, action, target, outcome)
+}
+
+// RecordFleetTenant appends machine observations only to their owning audit chain.
+func (s *Server) RecordFleetTenant(name, action, target, outcome string) error {
+	view := s.views[name]
+	if view == nil {
+		return audit.ErrAudit
+	}
+	return view.audit.Append(audit.Record{
 		Actor:   "fleet",
 		Role:    "agent",
 		Action:  action,

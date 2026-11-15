@@ -1,7 +1,7 @@
 # Experimental fleet protocol v1
 
 This is experimental fleet inventory with authenticated enrollment and heartbeats.
-It is not multi-tenant or a managed service. Explicit opt-in evidence forwarding is described below.
+Logical tenant isolation (experimental) is available through declared console tenants; this is not a hosted service. Explicit opt-in evidence forwarding is described below.
 Agents initiate every connection. The hub cannot command nodes, including a node
 whose administrator has enabled the agent. There is no command, configuration,
 file, code, upgrade or enforcement response field or endpoint.
@@ -144,7 +144,7 @@ not configuration knobs. Agent attempts have a ten-second total timeout, five-se
 dial/TLS/header limits, an 8 KiB response-header cap, one connection per host,
 no compression, no redirects and no environment proxy.
 
-Registry capacity is 1000 nodes including permanent revoked tombstones and 100
+Registry capacity per tenant is 1000 nodes including permanent revoked tombstones and 100
 outstanding tokens. The single snapshot is capped at 32 MiB and uses private
 fixed-name write/fsync/rename/directory-fsync. New node/key records, token
 creation/consumption/deletion, interval changes and revocation save synchronously.
@@ -294,7 +294,7 @@ for the same identity fails quickly instead of occupying all handler slots.
 The registry lock is released before validation/appending/indexing. Separate nodes
 have separate ingestion locks and replay/rate/dedup budgets.
 
-The aggregate forwarded-segment cap is **256 MiB**, enforced with atomic reservations
+The aggregate forwarded-segment cap per tenant is **256 MiB**, enforced with atomic reservations
 including a conservative encryption/rotation allowance (2× valid new envelope bytes +4 KiB per new event
 +4 KiB, reconciled to actual flushed segment sizes). Reservations can temporarily
 refuse a batch before the physical cap is reached. One identity can consume at most
@@ -305,7 +305,7 @@ capacity refusal does not evict other nodes' evidence. Dormant copies remain unt
 that node next submits or the operator manages local retention; no deletion API exists.
 These finite fixed limits are intentional experimental defaults, not tuning fields.
 
-Copies live in `<fleet.hub state dir>/evidence/<validated cryptographic node id>/`.
+Copies live in `<fleet.hub state dir>/tenants/<declared tenant>/evidence/<validated cryptographic node id>/`.
 Only canonical authenticated IDs select a child beneath that trusted parent; node
 names and envelope fields never select paths. Hub `storage.encryption` applies,
 with the same persistent encryption guard, native rotation/checkpoints and inspect
@@ -327,3 +327,22 @@ No node ID, event ID, source or attacker string becomes a metric label.
 Smaller configured segment caps also enforce a conservative raw-size +1 KiB
 fit allowance per envelope; envelopes that cannot meet it are counted invalid,
 so an operator-selected small segment cannot cause endless retries of an event.
+
+
+## Tenant ownership amendment (ADR-0020)
+
+The agent wire protocol is unchanged: nodes cannot choose or transmit a tenant.
+A one-use enrollment credential is minted in the console administrator's active
+tenant. The public key binds immutably to that registry at enrollment; machine
+routing resolves the existing identity before full signature verification, and
+concurrent unknown-key enrollments are serialized. Registry, replay and audit
+files are private to `<hub-state>/tenants/<declared-slug>/`. Legacy hub state is
+atomically renamed into `default` with resumable migration. Operator node/token
+responses include the owning tenant; this field is never trusted from an agent.
+Forwarded appends feed only that tenant's index and retain the shared hub
+recipient/retention configuration. Existing node-specific budgets remain intact.
+The maximum 32 configured partitions bounds aggregate registry capacity to 32000
+nodes/3200 outstanding credentials and active forwarded retention to 8 GiB.
+Logical isolation shares a process/OS user/data directory; host/process compromise
+and shared-resource exhaustion cross tenants. SSO via OIDC (experimental) changes
+operator authentication only and adds no machine control channel.

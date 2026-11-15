@@ -225,7 +225,7 @@ func TestRealAgentLifecycleAndRestart(t *testing.T) {
 	if err != nil || len(tokens) != 0 {
 		t.Fatalf("consumed token persisted: %v", err)
 	}
-	persisted, err := os.ReadFile(filepath.Join(h.dir, "registry.json"))
+	persisted, err := os.ReadFile(filepath.Join(h.dir, "tenants", "default", "registry.json"))
 	if err != nil || bytes.Contains(persisted, []byte(token.Token)) {
 		t.Fatal("raw token persisted")
 	}

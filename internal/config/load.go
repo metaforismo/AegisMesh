@@ -335,6 +335,9 @@ func (c *Config) applyDefaults() {
 // Only a deliberately small surface is overridable; everything else must be
 // edited in the file so configs stay reviewable.
 func (c *Config) applyEnvOverrides() error {
+	if err := c.consoleEnv(); err != nil {
+		return err
+	}
 	if err := c.fleetEnv(); err != nil {
 		return err
 	}

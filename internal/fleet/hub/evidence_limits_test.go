@@ -90,7 +90,7 @@ func TestConfiguredSmallSegmentCapCountsUnfittableEvents(t *testing.T) {
 	if json.Unmarshal(response.Body.Bytes(), &ack) != nil || response.Code != 200 || ack.Accepted != 20 || ack.Invalid != 1 {
 		t.Fatalf("segment-fit policy: %d %s", response.Code, response.Body.String())
 	}
-	copies, err := os.ReadDir(filepath.Join(dir, "copies", id))
+	copies, err := os.ReadDir(filepath.Join(dir, "hub", "tenants", "default", "evidence", id))
 	if err != nil {
 		t.Fatal(err)
 	}

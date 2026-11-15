@@ -355,3 +355,39 @@ related-event links stay within that origin. Forwarded events never enter the hu
 correlation engine, providers, webhooks, extensions or enforcement. Queue loss, invalid
 skips, gap counts, fixed-label metrics and disabled-reception status are observable.
 Neither acknowledgements nor forwarded content select commands or configuration.
+
+## Console OIDC and tenant partition flow (ADR-0019/0020)
+
+SSO via OIDC (experimental) adds a distinct opt-in egress edge:
+
+```mermaid
+flowchart LR
+    Browser --> Login[OIDC login: bounded state + nonce + S256]
+    Login --> IdP[Configured issuer authorization]
+    IdP --> Callback[Browser-bound callback]
+    Callback --> Token[Guarded token exchange + signature/claims verification]
+    Token --> Session[Same ephemeral session + CSRF format]
+    Session --> Scope[One declared active tenant view]
+    Scope --> Index[Tenant index, sources, overview and SSE]
+    Scope --> State[Tenant investigations and audit chain]
+    Scope --> Registry[Tenant hub registry and enrollment tokens]
+    Registry --> Forwarded[Tenant forwarded evidence store]
+```
+
+Only console Start launches background discovery/JWKS/token acquisition. The
+scheme/authority is fixed to the validated issuer; shared egress classification
+runs again at dial time, redirects/proxies are refused, and time/bytes/key refresh
+are bounded. Provider outages affect SSO availability independently of sensors.
+No provider text or received token selects a filesystem path, config mutation,
+sensor action or enforcement behavior.
+
+Logical tenant isolation (experimental) constructs partitions from validated
+configuration at startup. One pre-handler view selection covers all data routes,
+SSE and counters. Successful local appends feed only local_tenant's index;
+accepted forwarded appends feed only the enrolled node's immutable registry
+partition. Fleet routing identifies that registry but never dials a node.
+The hub's receiver encryption recipient and signing/egress policy remain shared.
+Authentication failures with no resolved tenant use a separate fixed chain in
+multi-tenant configs. Migration renames existing state into default without
+rewriting evidence or hashes. This remains one process/OS-user/data-directory
+boundary, with shared-resource and host-compromise risks.

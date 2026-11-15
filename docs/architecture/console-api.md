@@ -1,13 +1,12 @@
 # Console API v1 — contract
 
-Status: **implemented contract for the single-tenant operator console**. This is
+Status: **implemented local contract; SSO via OIDC (experimental), logical tenant isolation (experimental)**. This is
 the only interface between the Go console server (`internal/console`) and the
 embedded web UI (`internal/consoleui`). Change this document in the same commit
 as any behavior change.
 
 The console is a *read-mostly* view over evidence already owned by the runtime.
-It never changes sensor behavior, policy, configuration or evidence, and it adds
-no outbound connection. Mutable state includes operator-authored investigations,
+It never changes sensor behavior, policy, configuration or evidence, and adds issuer discovery, JWKS and token egress only when OIDC is enabled. Mutable state includes operator-authored investigations,
 audit and optional fleet inventory/token administration (ADR-0018).
 
 ## Transport and exposure
@@ -70,10 +69,12 @@ per remote address (429 with `Retry-After`). Sessions expire after
 
 ```jsonc
 // Principal
-{ "name": "alice", "role": "admin" }
+{ "name": "alice", "role": "admin", "auth_method": "token", "tenant": "default",
+  "tenants": ["default"] }
 
 // Session
-{ "principal": Principal, "csrf_token": "…", "expires_at": "2026-11-14T12:00:00Z" }
+{ "principal": Principal, "tenant": "default", "tenants": ["default"],
+  "csrf_token": "…", "expires_at": "2026-11-14T12:00:00Z" }
 
 // Finding — static, rule-authored; never quotes matched input
 { "rule_id": "PI-001", "severity": "high", "confidence": "medium", "reason": "…" }
@@ -111,7 +112,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
               "correlation_signal": 5, "sources": 9, "sensors_active": 3 },
   "previous_totals": { /* same shape, for the preceding window of equal length */ },
   "buckets": [Bucket],                  // 60 buckets for 1h, 48 for 24h, 56 for 7d
-  "by_sensor": [ { "sensor_id": "web", "kind": "http", "events": 80 } ],
+  "by_sensor": [ { "sensor_id": "web", "kind": "http", "events": 80, "buckets": [Bucket] } ],
   "by_severity": { "critical": 0, "high": 3, "medium": 8, "low": 2, "info": 0,
                    "none": 107 },         // "none" = events without any finding
   "top_rules": [ { "rule_id": "PI-001", "events": 6, "severity": "high" } ],
@@ -178,7 +179,9 @@ Unauthenticated:
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/api/v1/meta` | `{ "product": "AegisMesh", "api_version": "v1", "version": "…" }` |
+| GET | `/api/v1/meta` | `{ "product": "AegisMesh", "api_version": "v1", "version": "…", "auth": {"token": true, "oidc": {"enabled": false, "display_name": "Single sign-on"}} }` |
+| GET | `/api/v1/auth/oidc/login` | 302 to the configured IdP, with short-lived pre-login cookie |
+| GET | `/api/v1/auth/oidc/callback` | code exchange; 302 to `/` on success, fixed-code login error otherwise |
 | POST | `/api/v1/session` | body `{ "token": "…" }` → `Session` + cookie |
 
 Authenticated (`viewer` and above unless noted):
@@ -186,6 +189,7 @@ Authenticated (`viewer` and above unless noted):
 | Method | Path | Result |
 |---|---|---|
 | GET | `/api/v1/session` | `Session` |
+| POST | `/api/v1/session/tenant` | body `{"tenant":"bravo"}` → `Session` + rotated session cookie/CSRF; cookie authentication required |
 | DELETE | `/api/v1/session` | 204, clears cookie (a mutation: cookie callers send the CSRF header) |
 | GET | `/api/v1/overview?window=1h\|24h\|7d` | `Overview` (default `24h`) |
 | GET | `/api/v1/events` | `{ "events": [EventSummary], "next_cursor": "", "total_matched": 120 }` |
@@ -227,6 +231,7 @@ calls `GET /api/v1/session` to tell an expired session from an outage. A slow cl
 ## Audit actions
 
 `session.login`, `session.login_failed`, `session.logout`,
+`session.oidc_login`, `session.oidc_denied`, `session.tenant_switch`,
 `investigation.create`, `investigation.update`, `investigation.note`,
 `investigation.attach`, `investigation.detach`, `audit.read`, `audit.verify`,
 `authz.denied`. Token values, session identifiers and note bodies are never
@@ -268,7 +273,7 @@ written to the audit trail.
 - HTTP requests have an 8192-byte URI cap, strict duplicate query/key rejection,
   eight concurrent ordinary handlers, and independent sixteen-stream capacity.
   Login attempts (including successful attempts) are capped at ten/address/minute
-  across at most 4096 addresses; sessions are capped at 1024. Expired cookie SSE
+  across at most 4096 addresses; sessions are capped at 1024 per tenant (32768 globally). Expired cookie SSE
   closes at expiry; logout is noticed at the next heartbeat/event.
 - Public/wildcard listeners accept the exact configured hostname/IP and
   loopback aliases at the actual bound port; forwarded Host/Origin headers are
@@ -290,7 +295,8 @@ written to the audit trail.
   (`history: "unavailable"`).
 - The audit chain proves internal consistency of the audit file, not writer
   identity; an attacker with filesystem write access can rewrite it wholesale.
-- Single tenant. Fleet inventory and opt-in evidence reception are experimental; SSO and tenant isolation are not shipped.
+- SSO via OIDC (experimental) and logical tenant isolation (experimental) are
+  opt-in local capabilities. They do not isolate a compromised process or host.
 
 ### Summary and cursor projection
 
@@ -314,7 +320,7 @@ These routes use the existing console listener, authentication, role hierarchy,
 Host checks, cookie CSRF/Origin checks, request bounds, errors and audit. They do
 not share the machine-facing hub mux. No route controls a sensor. This is
 experimental fleet inventory with authenticated enrollment and heartbeats; it
-is not multi-tenant or a managed service. Evidence reception is an additional off-by-default consent boundary.
+uses logical tenant isolation (experimental); it is not a hosted service. Evidence reception is an additional off-by-default consent boundary.
 
 | Method and path | Minimum role | Response |
 | --- | --- | --- |
@@ -392,7 +398,7 @@ acknowledgements. A trailing loss or crash cannot be inferred without a subseque
 All changed GET routes require viewer (also analyst/admin). Unauthenticated requests are
 401; existing invalid credential, Host, session and body checks still apply. No new operator
 write route exists. A node filter cannot grant access; every console operator shares this
-single-tenant fleet view. Recommendations continue to use local evidence only; no cross-node
+active-tenant fleet view. Recommendations continue to use local evidence only; no cross-node
 correlation is implemented. Related events resolve within an origin. Legacy investigation
 annotations use bare event IDs and resolve local observations only; node-scoped annotations
 are not implemented. A forwarded event cannot inherit a local investigation by colliding with its ID.
@@ -401,3 +407,91 @@ Forwarded index history is live-only after restart, including plaintext copies. 
 and bounded-index eviction are independent; index entries can outlive hub retention until
 index eviction. `index.history` reports `unavailable` on accepting hubs. Inspect the native
 per-node copies locally for retained history, with explicit read identities when encrypted.
+
+
+## OIDC and tenant contract (ADR-0019, ADR-0020)
+
+`meta.auth.token` controls both bearer and token-session authentication.
+`oidc.enabled` means configured, not a live provider readiness assertion. The
+UI can link to `/api/v1/auth/oidc/login` using `display_name` as plain text.
+The server implements no UI rendering changes in this slice.
+
+OIDC is Authorization Code + S256 PKCE, state and nonce, for public clients or
+confidential clients using HTTP Basic client authentication. The callback accepts
+only single-valued `state`, `code`, `error`, `error_description`, `iss` and
+`session_state`; provider text is discarded. Error redirects are exactly
+`/#/login?error=<code>` where code is `unavailable`, `rate_limited`,
+`invalid_request`, `invalid_state`, `invalid_identity` or `access_denied`.
+The host-only `aegismesh_oidc` cookie has Path `/api/v1/auth/oidc`, HttpOnly,
+SameSite=Lax and Max-Age=120 (Secure with console TLS). Pending state is
+server-side, single-use, 120 seconds, at most 128 entries globally. Missing or
+foreign browser cookies fail closed. The registered redirect authority must
+match the bound console listener; the login request must use that exact authority.
+
+Successful callbacks rotate an existing session and create the same session
+format as token login. The cookie is HttpOnly, SameSite=Strict, Path `/`, Secure
+with TLS; `Expires` is capped by the ID token's actual expiry and configured
+session TTL. It has no longer-lived Max-Age override. `auth_method` is `token`
+or `oidc`. Session responses repeat `tenant`/`tenants` at the top level and in
+`principal`; membership is fixed at login. Token bearer requests select the
+first configured operator tenant and have no mutable active-session state.
+`POST /session/tenant` with bearer auth returns 400; cookie callers must supply
+CSRF and same Origin as for every mutation. Undeclared or nonmember tenant →
+404 `{"error":{"code":"not_found","message":"tenant not found"}}`.
+Switching rotates both session ID and CSRF, preserves the original expiry and
+invalidates the old session and its streams. OIDC initial tenant is the first
+lexicographically sorted mapped membership; token initial tenant is the first
+configured membership. Logout stays local: no RP-initiated logout, token refresh,
+UserInfo fetch or provider session revocation is implemented.
+
+All authenticated routes select a startup-created tenant view before accessing
+data. Lists, overview, sources, related events, by_node, recommendations,
+investigations, audit and SSE use only that tenant's index/stores. Local sensors,
+rules, agent status and node metadata belong to `console.local_tenant`; other
+tenants receive empty sensor/rule lists, no local agent telemetry and 404 for
+`/node`. Their `/fleet` still reports their hub availability. Foreign IDs follow
+the same 404 code/body and store lookup as absent IDs; no global existence probe
+runs. In configurations with multiple tenants, new investigation evidence
+references must resolve to that tenant's local index (404 otherwise); already
+attached, evicted references can still be detached. Existing bare-ID annotations
+remain local-only; forwarded-event annotation support is outside this slice.
+
+Each tenant has independent 1000-investigation/32 MiB snapshots, up to 100 notes
+per investigation, 200 event references, 100 outstanding enrollment tokens,
+1000 fleet nodes including tombstones, 256 MiB forwarded retention and a 64 MiB
+accounted evidence index. Existing per-node forwarding budgets remain unchanged.
+At most 32 declared tenants bounds global totals to 32000 investigations/nodes,
+3200 outstanding tokens, 8 GiB forwarded retention and 2 GiB accounted index
+bytes; sessions are capped at 1024 per tenant/32768 globally; request concurrency and stream caps remain shared.
+Audit chains retain the existing 128-segment/4 MiB limits independently per tenant.
+These bounded quotas do not reserve disk or isolate process CPU/RSS.
+
+`FleetNode`, outstanding token metadata and mint responses gain `tenant`.
+Raw enrollment secrets remain opaque one-use values whose hash is stored only
+in the minting registry. Enrollment binds a public key immutably to that registry;
+a later token from another tenant cannot move it. Machine signatures and wire
+schemas do not accept a tenant field from agents. Accepted forwarded evidence
+uses the owning registry's index, never an agent-selected partition.
+
+Audit records for OIDC gain optional `issuer` and `subject` fields, the stable
+`iss` + `sub` pair; display name remains `actor`. Existing records omit the new
+fields and their canonical hashes stay valid. Successful actions and role/CSRF
+denials go to the active tenant's chain. Switching is recorded in the departing
+chain without naming the target tenant. Authentication attempts with no resolved
+tenant go to the fixed `authentication/` chain in multi-tenant configurations
+(no console API for this operator-inspected chain); single-tenant behavior keeps
+them in its existing chain. Provider diagnostics, codes, tokens and cookies are
+never audited.
+
+Non-index assets negotiate gzip above 256 bytes for text/JS/JSON/SVG when smaller.
+The startup manifest's 32 MiB cap includes compressed variants; individual raw
+files remain capped at 16 MiB and file count at 1024. Non-index responses use
+`Cache-Control: no-cache`, representation-specific strong SHA-256 `ETag` and
+`Vary: Accept-Encoding`. Matching `If-None-Match` (including lists, weak validators
+and `*`) returns 304; headers/CSP remain unchanged. Ranges are ignored: 200 full
+representation, no Content-Range/Accept-Ranges. Excluding every available encoding
+returns 406. `/` (index.html) stays `no-store` with no ETag or compression.
+`by_sensor` has at most 64 entries; each `buckets` array has exactly the same
+starts, length and classification fields as `overview.buckets`, including zeros.
+When more sensor IDs occur across a fleet, only the first 64 represented in
+newest-first evidence are detailed; the main totals still include all events.

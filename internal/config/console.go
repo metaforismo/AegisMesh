@@ -3,12 +3,22 @@ package config
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/metaforismo/aegismesh/internal/console/tenant"
 	"net"
 	"path/filepath"
+	"slices"
 )
 
 // Console is a separate, authenticated read-mostly operator listener.
 type Console struct {
+	// TokenLogin permits token sessions and bearer authentication; nil means true.
+	TokenLogin *bool `yaml:"token_login" json:"token_login"`
+	// OIDC opts into SSO via a fixed issuer and explicit authorization mappings.
+	OIDC OIDC `yaml:"oidc" json:"oidc"`
+	// Tenants declares the process partitions; omitted means only default.
+	Tenants []string `yaml:"tenants" json:"tenants"`
+	// LocalTenant owns local evidence, runtime status, sensors and rules.
+	LocalTenant string `yaml:"local_tenant" json:"local_tenant"`
 	// Enabled enables the dedicated console listener.
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	// Listen is the validated console bind authority.
@@ -29,6 +39,8 @@ type Console struct {
 
 // Operator configures a named role and token digest; raw credentials are never stored here.
 type Operator struct {
+	// Tenants declares membership; omitted preserves default membership.
+	Tenants []string `yaml:"tenants" json:"tenants"`
 	// Name is a unique validated operator slug.
 	Name string `yaml:"name" json:"name"`
 	// Role is viewer, analyst, or admin.
@@ -37,7 +49,13 @@ type Operator struct {
 	TokenSHA256 string `yaml:"token_sha256" json:"token_sha256"`
 }
 
+// TokenEnabled reports the compatibility-default token authentication policy.
+func (c Console) TokenEnabled() bool { return c.TokenLogin == nil || *c.TokenLogin }
+
 func (c *Console) defaults() {
+	c.Tenants = tenant.Names(c.Tenants)
+	c.LocalTenant = tenant.Local(c.LocalTenant)
+	c.OIDC.defaults()
 	if c.Listen == "" {
 		c.Listen = "127.0.0.1:9120"
 	}
@@ -83,7 +101,11 @@ func (c *Config) ValidateConsole() error {
 		return fail("tls_cert_file and tls_key_file must be set together")
 	}
 
-	if len(consoleConfig.Operators) > 32 || (consoleConfig.Enabled && len(consoleConfig.Operators) == 0) {
+	if err := consoleConfig.validateIdentity(); err != nil {
+		return fail(err.Error())
+	}
+	if len(consoleConfig.Operators) > 32 ||
+		(consoleConfig.Enabled && consoleConfig.TokenEnabled() && len(consoleConfig.Operators) == 0) {
 		return fail("enabled console requires 1..32 operators")
 	}
 
@@ -94,6 +116,19 @@ func (c *Config) ValidateConsole() error {
 			return fail("operator names must be unique slugs")
 		}
 		names[operator.Name] = true
+		members := map[string]bool{}
+		for _, name := range tenant.Membership(operator.Tenants) {
+			if members[name] {
+				return fail("operator tenants must be unique")
+			}
+			members[name] = true
+			if !slices.Contains(tenant.Names(consoleConfig.Tenants), name) {
+				return fail("operator tenant is undeclared")
+			}
+		}
+		if len(operator.Tenants) > tenant.MaxTenants {
+			return fail("operator tenants exceeds 32")
+		}
 		if operator.Role != "viewer" && operator.Role != "analyst" && operator.Role != "admin" {
 			return fail("operator role must be viewer|analyst|admin")
 		}

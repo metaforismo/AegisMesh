@@ -9,6 +9,8 @@ import (
 
 // Token is the persisted, secret-free outstanding enrollment credential metadata.
 type Token struct {
+	// Tenant is the immutable minting partition; absent on legacy snapshots.
+	Tenant string `json:"tenant,omitempty"`
 	// ID is a random hub-authored identifier.
 	ID string `json:"id"`
 	// ExpiresAt is the absolute expiry in Unix seconds.
@@ -19,6 +21,8 @@ type Token struct {
 
 // Minted returns the raw secret exactly once; only its digest is persisted.
 type Minted struct {
+	// Tenant is the active partition of the minting administrator.
+	Tenant string `json:"tenant"`
 	// ID identifies the outstanding credential without exposing its secret.
 	ID string `json:"id"`
 	// Token is the one-time raw credential; callers must protect it.
@@ -67,6 +71,7 @@ func (h *Hub) Mint(ttlSeconds int, note string) (Minted, error) {
 	expiry := h.now().Add(time.Duration(ttlSeconds) * time.Second)
 	h.state.Tokens[id] = tokenRecord{
 		Token: Token{
+			Tenant:    h.tenantID,
 			ID:        id,
 			ExpiresAt: expiry.Unix(),
 			Note:      note,
@@ -77,6 +82,7 @@ func (h *Hub) Mint(ttlSeconds int, note string) (Minted, error) {
 		return Minted{}, err
 	}
 	return Minted{
+		Tenant:    h.tenantID,
 		ID:        id,
 		Token:     secret,
 		ExpiresAt: expiry.UTC().Format(time.RFC3339Nano),
