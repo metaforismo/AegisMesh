@@ -1,9 +1,11 @@
-import { h, clear, mount } from '../lib/dom.js';
+import { h, mount } from '../lib/dom.js';
 import { href, normalizeWindow } from '../lib/route.js';
-import { CLASSIFICATIONS, SEVERITIES, classificationMeta, severityLabel } from '../lib/taxonomy.js';
+import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
 import { formatCount, formatDelta, formatDateTime } from '../lib/format.js';
-import { pageHead, panel, stat, segmented, glyph, sevChip, evidence, barList, table, timeEl, empty, banner, link } from '../ui/components.js';
-import { stackedBarChart } from '../ui/charts.js';
+import { seriesOf } from '../lib/chart.js';
+import { pageHead, panel, stat, segmented, glyph, sevChip, evidence, barList, table, timeEl, empty, banner, link, sparkline } from '../ui/components.js';
+import { stackedBarChart, severityShare, SEVERITY_ORDER } from '../ui/charts.js';
+import { icon } from '../ui/icons.js';
 import { historyBanner } from './shared.js';
 
 const WINDOW_LABELS = [['1h', 'Last hour'], ['24h', 'Last 24 hours'], ['7d', 'Last 7 days']];
@@ -20,21 +22,22 @@ export default {
     const p = ov.previous_totals || {};
     const windowText = WINDOW_LABELS.find(([w]) => w === window)[1].toLowerCase();
 
+    const buckets = Array.isArray(ov.buckets) ? ov.buckets : [];
+    // Sparklines come from the same buckets as the chart. Sources and active
+    // sensors have no per-bucket series in the API, so they get none.
+    const trend = (key) => (buckets.length > 1 ? sparkline(seriesOf(buckets, key), { series: key || '' }) : null);
     const tiles = h('div', { class: 'grid grid--stats' },
-      stat({ label: 'Events', value: formatCount(t.events), delta: formatDelta(t.events, p.events) }),
+      stat({ label: 'Events', value: formatCount(t.events), delta: formatDelta(t.events, p.events), spark: trend('') }),
       ...CLASSIFICATIONS.map((c) => stat({
         label: classificationMeta(c).label, icon: glyph(c),
-        value: formatCount(t[c]), delta: formatDelta(t[c], p[c]),
+        value: formatCount(t[c]), delta: formatDelta(t[c], p[c]), spark: trend(c),
       })),
       stat({ label: 'Distinct sources', value: formatCount(t.sources), delta: formatDelta(t.sources, p.sources) }),
-      stat({ label: 'Sensors with events', value: formatCount(t.sensors_active) }));
+      stat({ label: 'Sensors with events', value: formatCount(t.sensors_active), note: 'This window only' }));
 
     const sev = ov.by_severity || {};
-    const sevItems = [...SEVERITIES].reverse().map((s) => ({
-      label: sevChip(s), value: Number(sev[s]) || 0, valueText: formatCount(sev[s] || 0),
-      href: href('events', { severity: s }),
-    }));
-    sevItems.push({ label: h('span', { class: ['sev', 'sev--none'] }, severityLabel('')), value: Number(sev.none) || 0, valueText: formatCount(sev.none || 0) });
+    // "No finding" links to nothing: the minimum-severity filter cannot select it.
+    const sevItems = [...SEVERITY_ORDER.map((s) => ({ key: s, value: sev[s], href: href('events', { severity: s }) })), { key: 'none', value: sev.none }];
 
     const rules = Array.isArray(ov.top_rules) ? ov.top_rules : [];
     const sources = Array.isArray(ov.top_sources) ? ov.top_sources : [];
@@ -51,10 +54,12 @@ export default {
       tiles,
       panel({
         title: 'Observations over time', meta: `Stacked by classification · generated ${formatDateTime(ov.generated_at)}`,
-        body: (ov.buckets || []).length ? stackedBarChart(ov.buckets, window) : empty('No buckets', 'The server returned no time buckets for this window.'),
+        body: buckets.length
+          ? stackedBarChart(buckets, window, { end: ov.generated_at, onSelect: (range) => ctx.navigate(href('events', range)) })
+          : empty('No buckets', 'The server returned no time buckets for this window.'),
       }),
       h('div', { class: 'grid grid--2' },
-        panel({ title: 'By severity', meta: 'Highest finding per event; most events carry no finding', body: barList(sevItems) }),
+        panel({ title: 'By severity', meta: 'Highest finding per event; most events carry no finding', body: severityShare(sevItems) }),
         panel({
           title: 'Top rules', meta: 'Rules cited by the most events',
           body: rules.length
@@ -93,10 +98,10 @@ export default {
         }),
         panel({
           title: 'Investigations',
-          body: h('div', { class: 'stack' },
-            h('p', { class: 'stat__value' }, formatCount(ov.open_investigations)),
-            h('p', { class: 'muted' }, 'open investigations'),
-            link(href('investigations', { status: 'open' }), 'Review open investigations')),
+          body: h('div', { class: 'inv-summary' },
+            h('p', { class: 'inv-summary__value' }, formatCount(ov.open_investigations)),
+            h('p', { class: 'muted' }, Number(ov.open_investigations) === 1 ? 'open investigation' : 'open investigations'),
+            h('a', { class: ['btn', 'btn--sm'], href: href('investigations', { status: 'open' }) }, 'Review open investigations', icon('chevron-right', { size: 'sm' }))),
         })),
       banner('info', null, h('p', null, 'Counts come from the console’s in-memory index. Use ', h('code', null, 'aegismesh inspect'), ' for evidence older than the index.')),
     );
