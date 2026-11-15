@@ -244,7 +244,7 @@ export default {
       } else {
         const nodes = Array.isArray(nodesRes.nodes) ? nodesRes.nodes : [];
         inventory = panel({
-          title: `${formatCount(nodes.length)} ${status ? labelFor(status).toLowerCase() : ''} nodes`.replace('  ', ' '),
+          title: [formatCount(nodes.length), status ? labelFor(status).toLowerCase() : '', nodes.length === 1 ? 'node' : 'nodes'].filter(Boolean).join(' '),
           meta: 'Liveness is computed by the hub: stale after three missed heartbeats, offline after ten. Revoked is permanent.',
           actions: filter, flush: true,
           body: nodes.length ? nodesTable(nodes) : empty(status ? `No ${status} nodes` : 'No nodes enrolled yet',

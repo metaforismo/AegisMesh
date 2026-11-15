@@ -100,7 +100,7 @@ func fleetError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) fleetMutation(w http.ResponseWriter, r *http.Request, credentials caller, action, target string) bool {
-	if s.record(r, credentials.session.Principal, action, target, "success") != nil {
+	if s.record(r, credentials.session.Principal, action, target, "ok") != nil {
 		fail(w, 503, "unavailable", "fleet state may already be saved; audit failed, inspect before retrying")
 		return false
 	}

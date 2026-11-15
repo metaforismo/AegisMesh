@@ -229,7 +229,7 @@ func (h *Hub) enroll(input protocol.Enrollment, auth protocol.Authentication) (p
 	if err := h.save(); err != nil {
 		return protocol.Node{}, err
 	}
-	if err := h.record("fleet.node.enroll", node.ID, "success"); err != nil {
+	if err := h.record("fleet.node.enroll", node.ID, "ok"); err != nil {
 		return protocol.Node{}, err
 	}
 	return node, nil
