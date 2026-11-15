@@ -42,7 +42,7 @@ export const SCREENS = Object.freeze({
     prefetch: (api, r) => { api.sources(normalizeWindow(r.query.window), r.query.limit === '200' ? 200 : 50); },
   }),
   source: lazy('Source', () => import('./source.js')),
-  sensors: lazy('Sensors', () => import('./sensors.js'), { skeleton: 'cards', prefetch: (api) => { api.sensors(); } }),
+  sensors: lazy('Sensors', () => import('./sensors.js'), { skeleton: 'cards', prefetch: (api) => { api.sensors(); api.overview('24h'); api.node(); } }),
   rules: lazy('Rules', () => import('./rules.js'), { skeleton: 'table', prefetch: (api) => { api.rules(); } }),
   recommendations: lazy('Recommendations', () => import('./recommendations.js'), { skeleton: 'cards' }),
   node: lazy('Node', () => import('./node.js'), { prefetch: (api) => { api.node(); } }),

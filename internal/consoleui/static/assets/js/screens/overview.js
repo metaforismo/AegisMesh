@@ -2,9 +2,9 @@ import { h, mount } from '../lib/dom.js';
 import { href, normalizeWindow } from '../lib/route.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
 import { formatCount, formatDelta, formatDateTime } from '../lib/format.js';
-import { seriesOf } from '../lib/chart.js';
+import { seriesOf, bucketTrace, indexKnownFrom, BY_SENSOR_CAP } from '../lib/chart.js';
 import { pageHead, panel, stat, segmented, glyph, sevChip, evidence, barList, table, timeEl, empty, banner, link, sparkline } from '../ui/components.js';
-import { stackedBarChart, severityShare, SEVERITY_ORDER } from '../ui/charts.js';
+import { stackedBarChart, severityShare, activityTrace, SEVERITY_ORDER } from '../ui/charts.js';
 import { icon } from '../ui/icons.js';
 import { rankByNode, describeOrigin } from '../lib/origin.js';
 import { historyBanner, eventHref, forwardedNote } from './shared.js';
@@ -43,6 +43,19 @@ function byNodePanel(byNode, window, generatedAt) {
   });
 }
 
+// A small activity trace per sensor from by_sensor[].buckets (same starts as
+// the main chart). Older servers send no per-sensor buckets: no trace then.
+function sensorTrace(row, knownFrom) {
+  if (!Array.isArray(row?.buckets)) return null;
+  const tr = bucketTrace(row.buckets);
+  return tr ? activityTrace(tr.bins, { start: tr.start, end: tr.end, knownFrom, height: 20 }) : null;
+}
+
+function sensorsMeta(rows) {
+  if (!rows.some((r) => Array.isArray(r?.buckets))) return null;
+  return rows.length >= BY_SENSOR_CAP ? `Activity over the window; the ${BY_SENSOR_CAP} sensors seen most recently` : 'Activity over the window';
+}
+
 export default {
   title: 'Overview',
   async render(root, ctx) {
@@ -77,6 +90,7 @@ export default {
     const signals = Array.isArray(ov.recent_signals) ? ov.recent_signals : [];
     const sensors = Array.isArray(ov.by_sensor) ? ov.by_sensor : [];
     const hasByNode = Array.isArray(ov.by_node);
+    const knownFrom = indexKnownFrom(node);
 
     mount(root,
       pageHead({
@@ -130,7 +144,12 @@ export default {
       h('div', { class: 'grid grid--2' },
         panel({
           title: 'Events by sensor', flush: false,
-          body: sensors.length ? barList(sensors.map((s) => ({ label: h('span', { class: 'btn-row' }, h('code', null, s.sensor_id), h('span', { class: 'chip' }, s.kind)), value: s.events, valueText: formatCount(s.events), href: href('events', { sensor: s.sensor_id }) }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
+          meta: sensorsMeta(sensors),
+          body: sensors.length ? barList(sensors.map((s) => ({
+            label: h('span', { class: 'btn-row' }, h('code', null, s.sensor_id), h('span', { class: 'chip' }, s.kind)),
+            value: s.events, valueText: formatCount(s.events), href: href('events', { sensor: s.sensor_id }),
+            aside: sensorTrace(s, knownFrom),
+          }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
         }),
         panel({
           title: 'Investigations',
