@@ -9,6 +9,7 @@ import (
 
 func (h *Hub) project(record registration) protocol.Node {
 	node := record.Node
+	node.Tenant = h.tenantID
 	if node.Forwarding != nil {
 		forwarding := *node.Forwarding
 		node.Forwarding = &forwarding

@@ -307,7 +307,7 @@ func TestConsoleRuntimeHTTPFlow(t *testing.T) {
 		}
 	}
 
-	auditBytes, err := os.ReadFile(filepath.Join(cfg.ConsoleStateDir(), "audit.jsonl"))
+	auditBytes, err := os.ReadFile(filepath.Join(cfg.ConsoleStateDir(), "tenants", "default", "audit.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}

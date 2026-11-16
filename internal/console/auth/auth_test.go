@@ -56,10 +56,8 @@ func TestAuthenticate(t *testing.T) {
 			if ok != testCase.want {
 				t.Fatalf("authenticated = %t; want %t", ok, testCase.want)
 			}
-			if ok && principal != (Principal{
-				Name: "alice",
-				Role: "admin",
-			}) {
+			if ok && (principal.Name != "alice" || principal.Role != "admin" || principal.AuthMethod != "token" ||
+				principal.Tenant != "default" || len(principal.Tenants) != 1) {
 				t.Fatalf("principal = %+v", principal)
 			}
 		})
@@ -215,5 +213,31 @@ func TestRoles(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSessionEvictionCannotCrossTenant(t *testing.T) {
+	now := time.Now()
+	manager := newManager(t, func() time.Time { return now })
+	b, _, err := manager.Login(Principal{Name: "B", Role: "viewer", Tenant: "bravo", Tenants: []string{"bravo"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := Principal{Name: "A", Role: "viewer", Tenant: "default", Tenants: []string{"default"}}
+	first, _, err := manager.Login(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range MaxSessions {
+		now = now.Add(time.Second)
+		if _, _, err := manager.Login(a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, ok := manager.Session(first); ok {
+		t.Fatal("A did not evict its oldest session")
+	}
+	if _, ok := manager.Session(b); !ok {
+		t.Fatal("A evicted B's session")
 	}
 }

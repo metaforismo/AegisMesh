@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"crypto/tls"
-	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -62,25 +61,24 @@ func (s *System) buildFleet() error {
 			if cfg.Storage.Encryption != nil && cfg.Storage.Encryption.Enabled {
 				opts.Encryption = &storage.EncryptionOptions{Recipient: cfg.Storage.Encryption.Recipient}
 			}
-			evidence = &hub.EvidenceOptions{
-				Dir: filepath.Join(cfg.FleetStateDir(false), "evidence"), Store: opts,
-				OnAppend: func(id string, envelope event.Envelope) {
-					if s.index != nil {
-						s.index.AddForwarded(envelope, id)
-					}
-				},
-			}
+			evidence = &hub.EvidenceOptions{Store: opts}
 		}
 		registry, err := hub.New(hub.Options{
 			Evidence: evidence,
-			StateDir: cfg.FleetStateDir(false),
-			Meter:    s.meter,
-			Audit: func(action, target, outcome string) error {
+			Tenants:  cfg.Console.Tenants,
+			TenantAppend: func(name, id string, envelope event.Envelope) {
+				if index := s.tenantIndexes[name]; index != nil {
+					index.AddForwarded(envelope, id)
+				}
+			},
+			TenantAudit: func(name, action, target, outcome string) error {
 				if s.consoleSrv != nil {
-					return s.consoleSrv.RecordFleet(action, target, outcome)
+					return s.consoleSrv.RecordFleetTenant(name, action, target, outcome)
 				}
 				return nil
 			},
+			StateDir: cfg.FleetStateDir(false),
+			Meter:    s.meter,
 		})
 		if err != nil {
 			return err

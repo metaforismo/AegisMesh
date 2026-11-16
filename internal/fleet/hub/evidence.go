@@ -17,7 +17,7 @@ import (
 // NodeEvidenceBytes prevents one enrolled node from filling the aggregate budget.
 const NodeEvidenceBytes = 16 << 20
 
-// TotalEvidenceBytes bounds all forwarded segment bytes, including encryption overhead.
+// TotalEvidenceBytes bounds forwarded segment bytes per tenant, including encryption overhead.
 const TotalEvidenceBytes = 256 << 20
 
 // EvidenceBytesPerMinute bounds each node's incoming encoded bytes per fixed minute.
@@ -40,7 +40,7 @@ type EvidenceStore interface {
 
 // EvidenceOptions configures explicit reception, trusted storage and post-append indexing.
 type EvidenceOptions struct {
-	// Dir is the operator-selected parent, never supplied by a node.
+	// Dir is assigned by Hub.New under the tenant state root; standalone receiver tests may inject it.
 	Dir string
 	// Store contains the hub's evidence encryption and retention policy.
 	Store storage.Options

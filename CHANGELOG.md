@@ -1,5 +1,21 @@
 # Changelog
 
+## Local uncommitted additions — 2026-11-15
+
+- SSO via OIDC (experimental): Authorization Code/S256, browser-bound single-use
+  state/nonce, asymmetric library token verification, default-deny role/tenant
+  mapping, secret references, guarded bounded IdP egress, break-glass token policy
+  and credential-capped sessions. Logout stays local.
+- Logical tenant isolation (experimental): declared memberships, one active
+  session tenant, rotated tenant switching, partitioned console/hub state,
+  independent indexes/quotas/audit chains and recoverable default-state migration.
+  Shared process/host/user/keys/config remain explicit boundaries.
+- Non-index static gzip/hash ETag/304 negotiation and no-cache; index stays
+  no-store. Per-sensor overview buckets align with the main series, capped at 64.
+- New meta authentication policy and session auth_method/tenant/memberships for
+  UI consumption. Existing embedded UI rendering remains unchanged.
+
+
 All notable changes to AegisMesh are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows semver (pre-1.0: breaking
 changes bump MINOR).

@@ -8,6 +8,7 @@ import (
 // fleetToken is the operator-facing view of an outstanding enrollment token.
 // It never carries the secret or its digest.
 type fleetToken struct {
+	Tenant    string `json:"tenant"`
 	ID        string `json:"id"`
 	ExpiresAt string `json:"expires_at"`
 	Note      string `json:"note"`
@@ -26,6 +27,7 @@ func (s *Server) fleetTokens(w http.ResponseWriter, r *http.Request, _ caller) {
 	for _, token := range tokens {
 		listed = append(listed, fleetToken{
 			ID:        token.ID,
+			Tenant:    s.tenantID,
 			ExpiresAt: time.Unix(token.ExpiresAt, 0).UTC().Format(time.RFC3339),
 			Note:      token.Note,
 		})

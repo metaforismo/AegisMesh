@@ -25,13 +25,13 @@ func TestStaticManifestAndHeaders(t *testing.T) {
 			path:        "/assets/app.js",
 			status:      200,
 			contentType: "javascript",
-			cache:       "public",
+			cache:       "no-cache",
 		},
 		{
 			path:        "/assets/style.css",
 			status:      200,
 			contentType: "text/css",
-			cache:       "public",
+			cache:       "no-cache",
 		},
 		{
 			path:        "/index.html",

@@ -10,6 +10,112 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
+## 2026-11-15 — console SSO, logical tenant isolation and delivery polish
+
+**PASS — local implementation and verification.** Worktree `feat/console-sso`,
+initially clean at `245ccd0`, stacked on `feat/evidence-forwarding` (PR #79).
+All changes remain uncommitted. No commit, push, branch switch or `gh` command
+was run. Hosted CI, human review, merge, deployment and external-IdP
+interoperability are **NOT RUN**. This ledger records local proof only.
+
+SSO via OIDC (experimental) and logical tenant isolation (experimental) are
+implemented with ADR-0019/0020 and the exact console-api.md additions. Delivery
+polish includes gzip/strong representation ETags/304 and aligned per-sensor
+buckets. Tests, fuzzing, scans and the binary demonstration ran sequentially on
+Darwin arm64 with Go 1.27.4. Disk availability was 8.0 GiB initially and about
+7.3 GiB after build/test caches; no cache or user-data cleanup was performed.
+
+| Command/check | Result | Captured output summary |
+| --- | --- | --- |
+| `make lint test` | PASS | gofmt clean; `go vet ./...` exit 0; `go test -race ./...` all packages OK |
+| `go test -race -count=1 ./internal/console/...` | PASS | console plus auth, audit, investigations, OIDC, stateio and tenant packages OK |
+| `go test -race -count=1 ./internal/fleet/...` | PASS | agent, hub, identity and protocol packages OK |
+| `go test -race -count=1 ./internal/evidenceindex` | PASS | index projection, cursors, origins and sensor-bucket tests OK |
+| `go test -race -count=1 ./internal/runtime` | PASS | runtime/listener/lifecycle/forwarding integration checks OK |
+| `go test -race -count=1 ./internal/config` | PASS | strict config, defaults, identity mappings, secret references, overrides and state-root checks OK |
+| `go test -race -count=1 ./internal/cli` | PASS | CLI checks and reference-only identity reporting OK |
+| `go test -race -count=1 ./internal/console/oidc` | PASS | supplemental configured string-claim, tenant-mapping and name-fallback tests OK |
+| `make fuzz-seed` | PASS | 14 bounded real fuzz targets, 15 seconds each, including new FuzzTenantSlug; 14 PASS results |
+| `make vuln` | PASS | pinned govulncheck v1.7.0: `No vulnerabilities found.` |
+| `make license-check secrets-scan` | PASS | `18 module(s) within policy`; `secrets-scan: ok` (heuristic tracked-file scan) |
+| `make supply-chain-check` | PASS | `supply-chain-check: ok` |
+| `go mod verify` | PASS | `all modules verified` |
+| `git diff --check` | PASS | no whitespace errors |
+| `git ls-files --modified --others --exclude-standard` Go files piped to `awk 'length($0) > 140'` and counted | PASS, observed count 8 | all 8 are unchanged legacy lines (7 config error strings and CSP); no added/edited Go line exceeds 140 |
+| `make ui-test` | PASS | 81 tests, 81 passed, 0 failed, 0 skipped |
+| `go build -o /tmp/aegismesh-sso-manual ./cmd/aegismesh` | PASS | built standalone binary used below |
+| application `go list -deps` | PASS | Google metadata package is absent from the application graph; its module is graph-only |
+| optional golangci-lint | NOT RUN | not installed; Makefile reported the skip explicitly; fmt/vet ran |
+
+Regression runs were repeated after session-eviction and migration/credential
+hardening; the final full race suite and all six focused uncached groups passed.
+The mapping-only supplemental test also passed. Fuzz inputs exercise bounded
+parsers, not physical power loss or production IdP behavior.
+
+**Authentication proof.** The in-process provider performs real HTTP discovery,
+S256 code exchange and signed tokens; tests cover RS256, ES256, EdDSA, public and
+Basic confidential clients, browser-bound state, wrong/replayed state, absent/
+foreign cookies, nonce/audience/issuer/expiry/iat/nbf/azp/sub failures, none/HMAC
+rejection, unknown-kid refresh pacing and real key rotation, missing roles/
+tenants, oversized claims, name sanitization, configured claims/mappings,
+pending-state exhaustion/expiry, listener redirect mismatch, token disabling,
+startup outage/recovery, session rotation and ID-token expiry caps. Provider
+response byte caps, redirect refusal and destination/proxy guards are checked.
+Audit retains issuer/subject; oversized denied names cannot poison the chain.
+
+**Tenant proof.** The registered-route matrix covers every protected route for
+B viewer/analyst/admin operators using bearer tokens and real OIDC cookies.
+A has a real investigation, outstanding enrollment credential, enrolled signed
+machine identity and accepted forwarded evidence. B sees no A data in lists,
+direct IDs, mutations, sources, overview/by_node, local views or audit. Foreign
+IDs use the normal absent response; this is a timing-class design, not a
+constant-time wall-clock measurement. Separate SSE producer indexes prove the
+stream emits only its own tenant's observation. Switching rotates session ID
+and CSRF; nonmembers cannot switch. A quota fixtures leave B investigation,
+credential, node, session and forwarding budgets usable. Native listeners and
+signatures exercise enrollment/forwarding; full byte-quota accounting is
+constructed without writing 256 MiB of fixture data.
+
+Legacy migration preserves exact bytes and resumes injected interruptions after
+legacy rename, ancestor recreation and completed default move. Unexpected
+non-state entries are refused before any rename. Ancestor links are fsynced
+before retiring the durable backup. These are deterministic crash-point tests;
+physical power-loss testing is **NOT RUN**. Console/hub state and audit remain
+separate transactions and require one writer per state root.
+
+**PASS — built binary, separate process provider and curl.** A throwaway stdlib
+Ed25519 IdP process and all proof scripts/config/cookies lived outside the repo
+in private temporary paths. The actual AegisMesh binary ran two declared tenants,
+with one configured token operator each, and a local HTTP sensor. Curl completed
+OIDC discovery/authorization/callback and read an OIDC session with CSRF, tenant
+and membership. A saw stored observations; B's event/source lists and overview
+counts were empty. B received identical 404 bodies for A's event and an absent
+ID, and could not read A's investigation. Audit actor checks stayed scoped.
+A compressible embedded CSS asset returned gzip, a SHA-256 strong ETag,
+no-cache/Vary, then a bodyless 304 with unchanged CSP. Static effective/doctor
+identity summaries were checked; doctor correctly reported occupied ports while
+the demonstration ran, so this is not an overall doctor-health assertion.
+
+The temporary curl driver initially treated curl's omitted empty 304 output file
+as an error; its handling was corrected and the entire demonstration reran with
+exit 0. No product change was needed. Runtime stopped cleanly; console, sensor
+and provider sockets were verified closed. Binary SHA-256:
+`c56c0d79fdf985c339fee30c6874534270f0700ce087cb448c807e0d685575b0`.
+No transcripts, manual credentials or throwaway provider/scripts were added to
+the repository; the reusable signed test provider is test infrastructure only.
+
+**Explicit limits/deviations.** Issuer discovery/auth/token/JWKS must share a
+scheme/authority; all redirects are refused. Confidential clients use HTTP Basic.
+Expiry is strict; future iat/nbf allow 30 seconds. Tenant switching requires a
+cookie session; bearer callers use their first configured membership. Unresolved
+authentication denials use a separate operator-inspected authentication chain
+when multiple tenants are configured, with no cross-tenant console audit view.
+Existing bare-ID investigation links remain local-only. UI rendering was not
+changed; the frontend can consume meta/session additions. Logout remains local;
+no RP-initiated logout, refresh persistence, per-tenant keys, billing, rate plans,
+self-service creation or hard hosted isolation boundary ships. Host/process
+compromise and shared disk/CPU/request/stream admission cross tenants.
+
 ## 2026-11-15 — experimental evidence forwarding, local uncommitted slice
 
 **PASS — local verification.** Worktree `feat/evidence-forwarding`, initially clean at

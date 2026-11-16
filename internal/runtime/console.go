@@ -43,17 +43,30 @@ func (s *System) buildConsole() error {
 	}
 
 	s.index = index
-	if s.fleetHub != nil {
-		index.SetNodeNames(func(id string) string {
-			node, err := s.fleetHub.Node(id)
+	s.tenantIndexes = map[string]*evidenceindex.Index{}
+	for _, name := range s.cfg.Console.Tenants {
+		partition := index
+		if name != s.cfg.Console.LocalTenant {
+			partition, err = evidenceindex.New(s.cfg.Console.IndexMaxEvents, s.meter)
 			if err != nil {
-				return ""
+				return err
 			}
-			return node.Name
-		})
-		if s.fleetHub.EvidenceEnabled() {
-			// Forwarded history is not read: the hub runtime has no decryption identity.
-			index.SetHistory("unavailable")
+		}
+		s.tenantIndexes[name] = partition
+	}
+	if s.fleetHub != nil {
+		for name, partition := range s.tenantIndexes {
+			registry := s.fleetHub.ForTenant(name)
+			partition.SetNodeNames(func(id string) string {
+				node, err := registry.Node(id)
+				if err != nil {
+					return ""
+				}
+				return node.Name
+			})
+			if registry.EvidenceEnabled() {
+				partition.SetHistory("unavailable")
+			}
 		}
 	}
 	if s.cfg.Storage.Encryption != nil && s.cfg.Storage.Encryption.Enabled {
@@ -101,16 +114,18 @@ func (s *System) buildConsole() error {
 	}
 
 	server, err := console.New(console.Options{
-		Config:      s.cfg.Console,
-		FleetHub:    s.fleetHub,
-		FleetStatus: s.FleetStatus,
-		Security:    s.cfg.Security,
-		StateDir:    s.cfg.ConsoleStateDir(),
-		Index:       index,
-		Runtime:     s,
-		Rules:       rules,
-		Meter:       s.meter,
-		UI:          consoleui.FS(),
+		Config:        s.cfg.Console,
+		TenantIndexes: s.tenantIndexes,
+		OIDCSecret:    s.cfg.ResolveOIDCSecret,
+		FleetHub:      s.fleetHub,
+		FleetStatus:   s.FleetStatus,
+		Security:      s.cfg.Security,
+		StateDir:      s.cfg.ConsoleStateDir(),
+		Index:         index,
+		Runtime:       s,
+		Rules:         rules,
+		Meter:         s.meter,
+		UI:            consoleui.FS(),
 	})
 	if err != nil {
 		return err

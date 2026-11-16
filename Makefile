@@ -47,6 +47,7 @@ helm-contract: ## verify Helm chart contract (guarded test; needs local helm v4)
 
 .PHONY: fuzz-seed
 fuzz-seed: ## run bounded real fuzzing without post-discovery minimization
+	go test -run '^$$' -fuzz=FuzzTenantSlug ./internal/console/tenant -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzEvidenceBatch ./internal/fleet/protocol -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzFleetProtocol ./internal/fleet/protocol -fuzztime=15s -fuzzminimizetime=0
 	go test -run '^$$' -fuzz=FuzzObservationProjection ./internal/evidenceindex -fuzztime=15s -fuzzminimizetime=0

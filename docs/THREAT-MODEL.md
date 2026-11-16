@@ -264,7 +264,7 @@ unbounded listing; it does not read evidence payloads. Each stream has
 32 queued summaries and a five-second per-write deadline; a lagging subscriber
 is disconnected. Login state is capped at 4096 remote addresses and ten attempts
 per address/minute; exhaustion denies new remote entries until expiry. Sessions
-are capped at 1024. There is no distributed/edge DDoS protection or SSO.
+are capped at 1024 per tenant (32768 globally), with eviction confined to the same tenant. There is no distributed/edge DDoS protection. OIDC is opt-in; see ADR-0019 below.
 
 Evidence strings are bounded JSON data and findings use catalog-authored prose.
 Event detail preserves the native envelope and recomputes its observation hash;
@@ -296,8 +296,7 @@ closed; there is no automatic history deletion, repair or external anchoring.
 Audit never stores credentials, CSRF/session values or note bodies. It records
 failed logins, denied role/CSRF calls, investigations, audit reads/verifications;
 ordinary evidence reads are deliberately not audited. Console state is plaintext
-regardless of evidence encryption. Single operator trust domain; no remote sensor control, tenant isolation or
-enforcement endpoint exists. Optional fleet enrollment has its own boundary below.
+regardless of evidence encryption. No remote sensor control or enforcement endpoint exists. The optional logical tenant boundary is described below. Optional fleet enrollment has its own boundary below.
 
 
 ## Fleet inventory trust boundaries (ADR-0018)
@@ -360,3 +359,61 @@ Copies are data only. No cross-node correlation, history forwarding, deletion pr
 tenancy isolation or hub-to-node traffic is implemented. Local evidence remains authoritative;
 queue overflow/crash/offline loss leaves missing forwarded evidence on its original node.
 Compromised hubs can falsely acknowledge or suppress submissions but cannot command agents.
+
+## OIDC and logical tenant boundaries (ADR-0019/0020)
+
+SSO via OIDC (experimental) adds TB13, console → configured IdP discovery/JWKS/
+token endpoints, and TB14, browser → authorization callback. Logical tenant
+isolation (experimental) adds TB15, operator session → selected data partition.
+All three edges remain data-only and have no enforcement or sensor authority.
+
+An IdP compromise, stolen IdP account or mis-mapped groups can grant any role and
+membership that the operator explicitly mapped. Default-deny role/tenant mapping,
+stable issuer+subject audit identity, bounded TTL and break-glass tokens limit
+scope; they do not make the IdP trustworthy or instantly revoke existing
+sessions. Name/email is presentation only. Provider-supplied errors, credentials,
+access/refresh tokens and authorization codes never enter storage or audit.
+
+Login CSRF is mitigated by independent random state/nonce/S256 verifier and a
+short-lived HttpOnly SameSite=Lax pre-login cookie bound to server-side state.
+Callbacks consume state once, including failed attempts. Another browser cannot
+inject the callback into its session. Successful authentication and tenant
+switches generate fresh session IDs/CSRF, preventing fixation and leaving old
+cookies unusable. New sessions use SameSite=Strict and actual credential-capped
+expiry. Logout terminates only the local session; the IdP login remains active.
+
+Issuer URL policy runs without networking during validation/doctor. Only console
+Start launches discovery; failures retry in the background without stopping
+sensors. All discovered endpoints must retain the issuer scheme/authority,
+redirects and proxies are refused, and actual resolved sockets pass shared
+egress policy. Metadata/link-local are always denied, private egress needs its
+own opt-in and cleartext is loopback-only. Bounded body/key/token sizes, timeouts,
+key-cache refresh pacing and pending-state/login caps limit amplification. They
+do not provide edge DDoS or total CPU/RSS guarantees.
+
+Tenant confusion is mitigated by one pre-handler partition selection layer,
+configuration-validated names, immutable node enrollment ownership, per-partition
+stores and independently signed cursors. Claims/requests look up existing views;
+they never construct filesystem paths or partitions. Every role, including admin,
+is confined to one active tenant. Local sensors/rules/node metadata belong only
+to local_tenant. Per-partition indexes isolate events, SSE, related-event lookup,
+overview/sources/by_node counters, eviction and evidence references. Unknown and
+foreign IDs use the same store lookup and 404 response; no global existence
+probe runs. Switching invalidates old streams before another event is written.
+
+Each tenant has its own audit hash chain/files; anonymous or denied identities
+without a tenant use a separate authentication chain in multi-tenant configs.
+Per-tenant investigation, token, node and forwarded-byte quotas prevent one
+tenant from consuming a sibling's logical quota; a cap of 32 partitions also
+bounds aggregate quotas. Shared request/stream admission, disk, GC,
+scheduling and OS resources still allow cross-tenant availability/timing
+inference. We claim equivalent absent-object timing classes, not constant-time
+HTTP or elimination of traffic analysis.
+
+Migration uses recoverable fixed-name directory renames, without rewriting
+existing chain bytes. Conflicting migration directories fail closed for operator
+inspection. One process must own each root. Logical isolation operates inside
+one process, one OS user and one data directory, sharing the hub's evidence
+encryption recipient and signing/egress configuration. Host/process compromise
+crosses tenants. No per-tenant keys, billing, rate plans or self-service tenant
+creation are implemented; this is not a hard hosted isolation boundary.

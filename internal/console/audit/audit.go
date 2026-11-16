@@ -35,6 +35,9 @@ var ErrAudit = errors.New("console audit")
 
 // Record contains bounded console-authored metadata and its hash-chain links.
 type Record struct {
+	// Issuer and Subject identify federated identities independently of mutable display names.
+	Issuer  string `json:"issuer,omitempty"`
+	Subject string `json:"subject,omitempty"`
 	// Seq is the monotonically increasing sequence across segments.
 	Seq uint64 `json:"seq"`
 	// Time is the UTC append time in RFC3339Nano format.
@@ -249,7 +252,8 @@ func (auditLog *Log) Append(record Record) (err error) {
 	}
 
 	// Only fixed actions/details and validated principals enter this API.
-	if len(record.Actor) > 64 ||
+	if len(record.Issuer) > 512 || len(record.Subject) > 255 ||
+		len(record.Actor) > 64 ||
 		len(record.Role) > 16 ||
 		len(record.Action) > 64 ||
 		len(record.Target) > 128 ||

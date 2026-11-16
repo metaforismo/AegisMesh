@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/metaforismo/aegismesh/internal/console/audit"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/console/investigations"
+	"github.com/metaforismo/aegismesh/internal/console/oidc"
+	"github.com/metaforismo/aegismesh/internal/console/tenant"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/fleet/hub"
 	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
@@ -30,6 +33,12 @@ const CookieName = "aegismesh_session"
 
 // Options supplies trusted configuration, value snapshots, and bounded UI assets.
 type Options struct {
+	// TenantIndexes supplies runtime-owned indexes for declared remote partitions.
+	TenantIndexes map[string]*evidenceindex.Index
+	// OIDCSecret resolves a private reference without persisting its contents.
+	OIDCSecret func() (string, error)
+	// OIDCTransport is a test-only HTTP seam; production uses guarded direct sockets.
+	OIDCTransport http.RoundTripper
 	// FleetHub provides inventory administration only, without agent control.
 	FleetHub *hub.Hub
 	// FleetStatus snapshots local role and delivery state.
@@ -55,6 +64,9 @@ type Options struct {
 }
 
 type asset struct {
+	gzip        []byte
+	etag        string
+	gzipETag    string
 	body        []byte
 	contentType string
 	cache       string
@@ -62,34 +74,40 @@ type asset struct {
 
 // Server owns the console listener, ephemeral authentication, and operator state.
 type Server struct {
-	fleetHub    *hub.Hub
-	fleetStatus func() protocol.Status
-	assets      map[string]asset
-	cfg         config.Console
-	index       *evidenceindex.Index
-	runtime     Runtime
-	rules       []Rule
-	ui          fs.FS
-	auth        *auth.Manager
-	audit       *audit.Log
-	cases       *investigations.Store
-	httpServer  *http.Server
-	listener    net.Listener
-	mux         *http.ServeMux
-	done        chan struct{}
-	wg          sync.WaitGroup
-	once        sync.Once
-	startOnce   sync.Once
-	requests    observe.LabeledCounter
-	failures    observe.Counter
-	clients     observe.Gauge
-	slots       chan struct{}
-	streams     chan struct{}
-	key         [32]byte
+	unassignedAudit *audit.Log
+	tenantID        string
+	views           map[string]*Server
+	oidc            *oidc.Manager
+	oidcCancel      context.CancelFunc
+	fleetHub        *hub.Hub
+	fleetStatus     func() protocol.Status
+	assets          map[string]asset
+	cfg             config.Console
+	index           *evidenceindex.Index
+	runtime         Runtime
+	rules           []Rule
+	ui              fs.FS
+	auth            *auth.Manager
+	audit           *audit.Log
+	cases           *investigations.Store
+	httpServer      *http.Server
+	listener        net.Listener
+	mux             *http.ServeMux
+	done            chan struct{}
+	wg              sync.WaitGroup
+	once            sync.Once
+	startOnce       sync.Once
+	requests        observe.LabeledCounter
+	failures        observe.Counter
+	clients         observe.Gauge
+	slots           chan struct{}
+	streams         chan struct{}
+	key             [32]byte
 }
 
 // New validates dependencies and opens the dedicated console listener without starting it.
 func New(opts Options) (_ *Server, err error) {
+	opts.Config = opts.Config.WithDefaults()
 	if err := (&config.Config{
 		Console:  opts.Config,
 		Security: opts.Security,
@@ -136,7 +154,8 @@ func New(opts Options) (_ *Server, err error) {
 			server.closeResources()
 		}
 	}()
-	if err = server.openState(opts.StateDir); err != nil {
+	paths, err := tenant.Prepare(opts.StateDir, opts.Config.Tenants)
+	if err != nil {
 		return nil, err
 	}
 
@@ -152,6 +171,44 @@ func New(opts Options) (_ *Server, err error) {
 		return nil, err
 	}
 
+	if opts.Config.OIDC.Enabled {
+		secret := ""
+		if opts.OIDCSecret != nil {
+			secret, err = opts.OIDCSecret()
+			if err != nil {
+				return nil, err
+			}
+		} else if opts.Config.OIDC.ClientSecretEnv != "" || opts.Config.OIDC.ClientSecretFile != "" {
+			return nil, errors.New("console: OIDC secret resolver required")
+		}
+		server.oidc, err = oidc.New(oidc.Options{
+			Config: opts.Config.OIDC, Tenants: opts.Config.Tenants, Secret: secret,
+			Now: opts.Now, Transport: opts.OIDCTransport,
+		})
+		if err != nil {
+			return nil, err
+		}
+		request, _ := http.NewRequest("GET", opts.Config.OIDC.RedirectURI, nil)
+		if request == nil || !server.validHost(request.URL.Host) {
+			return nil, errors.New("console: OIDC redirect_uri must match the console listener")
+		}
+	}
+	if len(opts.Config.Tenants) > 1 {
+		server.unassignedAudit, err = audit.New(filepath.Join(opts.StateDir, "authentication"))
+		if err != nil {
+			return nil, err
+		}
+	}
+	server.views = map[string]*Server{}
+	for _, name := range opts.Config.Tenants {
+		view, err := server.scopedServer(name, opts, paths[name])
+		if err != nil {
+			return nil, err
+		}
+		server.views[name] = view
+	}
+	local := server.views[opts.Config.LocalTenant]
+	server.audit, server.cases = local.audit, local.cases
 	server.routes()
 	server.httpServer = &http.Server{
 		Handler:           server,
@@ -172,7 +229,12 @@ func (s *Server) openState(dir string) error {
 	}
 
 	s.audit = auditLog
-	cases, err := investigations.New(dir)
+	var cases *investigations.Store
+	if len(s.cfg.Tenants) > 1 {
+		cases, err = investigations.NewScoped(dir, s.index)
+	} else {
+		cases, err = investigations.New(dir)
+	}
 	if err != nil {
 		return fmt.Errorf("console investigations: %w", err)
 	}
@@ -211,13 +273,13 @@ func (s *Server) closeResources() {
 		_ = s.listener.Close()
 	}
 
-	if s.cases != nil {
-		_ = s.cases.Close()
+	for _, view := range s.views {
+		view.closeState()
+	}
+	if s.unassignedAudit != nil {
+		_ = s.unassignedAudit.Close()
 	}
 
-	if s.audit != nil {
-		_ = s.audit.Close()
-	}
 }
 
 // Addr returns the actual bound console authority, including an assigned port.
@@ -228,6 +290,15 @@ func (s *Server) Addr() string {
 // Start serves requests in the background once.
 func (s *Server) Start() {
 	s.startOnce.Do(func() {
+		if s.oidc != nil {
+			ctx, cancel := context.WithCancel(context.Background())
+			s.oidcCancel = cancel
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				s.oidc.Run(ctx)
+			}()
+		}
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
@@ -241,12 +312,19 @@ func (s *Server) Close(ctx context.Context) error {
 	var err error
 	s.once.Do(func() {
 		close(s.done)
+		if s.oidcCancel != nil {
+			s.oidcCancel()
+		}
 		err = s.httpServer.Shutdown(ctx)
 		_ = s.httpServer.Close()
 		_ = s.listener.Close()
 		s.wg.Wait()
-		_ = s.cases.Close()
-		_ = s.audit.Close()
+		for _, view := range s.views {
+			view.closeState()
+		}
+		if s.unassignedAudit != nil {
+			_ = s.unassignedAudit.Close()
+		}
 	})
 	return err
 }

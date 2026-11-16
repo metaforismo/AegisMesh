@@ -9,20 +9,34 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"github.com/metaforismo/aegismesh/internal/console/tenant"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/config"
 )
 
-// MaxSessions bounds the in-memory session registry; the earliest expiry is evicted first.
+// MaxSessions bounds sessions per active tenant; eviction never crosses partitions.
 const MaxSessions = 1024
+
+// MaxTotalSessions bounds aggregate session state across the declared partition cap.
+const MaxTotalSessions = MaxSessions * tenant.MaxTenants
 
 // MaxRemotes bounds login-throttle state; new remotes fail closed when it is full.
 const MaxRemotes = 4096
 
-// Principal identifies an operator authenticated against a configured token digest.
+// Principal identifies an operator authenticated by a token digest or verified OIDC claims.
 type Principal struct {
+	// AuthMethod identifies token or oidc authentication.
+	AuthMethod string `json:"auth_method"`
+	// Tenant is the one active isolation partition.
+	Tenant string `json:"tenant"`
+	// Tenants is the bounded membership set.
+	Tenants []string `json:"tenants"`
+	// Issuer and Subject retain stable federated audit identity, never bearer credentials.
+	Issuer  string `json:"-"`
+	Subject string `json:"-"`
 	// Name identifies the configured operator.
 	Name string `json:"name"`
 	// Role is the configured viewer, analyst, or admin role.
@@ -31,6 +45,9 @@ type Principal struct {
 
 // Session contains the principal, independent CSRF token, and absolute expiry.
 type Session struct {
+	// Tenant is the active partition and Tenants is the available membership set.
+	Tenant  string   `json:"tenant"`
+	Tenants []string `json:"tenants"`
 	// Principal identifies the authenticated operator.
 	Principal Principal `json:"principal"`
 	// CSRFToken is independent of the session id and is required for cookie mutations.
@@ -69,7 +86,7 @@ func NewWithClock(operators []config.Operator, ttl time.Duration, now func() tim
 	if now == nil {
 		now = time.Now
 	}
-	if len(operators) < 1 || len(operators) > 32 || ttl < time.Minute || ttl > 24*time.Hour {
+	if len(operators) > 32 || ttl < time.Minute || ttl > 24*time.Hour {
 		return nil, errors.New("auth: invalid operators or TTL")
 	}
 
@@ -89,8 +106,11 @@ func NewWithClock(operators []config.Operator, ttl time.Duration, now func() tim
 		copy(digest[:], digestBytes)
 		manager.operators = append(manager.operators, operator{
 			principal: Principal{
-				Name: operatorConfig.Name,
-				Role: operatorConfig.Role,
+				Name:       operatorConfig.Name,
+				AuthMethod: "token",
+				Tenant:     tenant.Membership(operatorConfig.Tenants)[0],
+				Tenants:    tenant.Membership(operatorConfig.Tenants),
+				Role:       operatorConfig.Role,
 			},
 			digest: digest,
 		})
@@ -138,6 +158,11 @@ func (manager *Manager) Authenticate(token string) (Principal, bool) {
 
 // Login creates independent session and CSRF tokens, reclaiming expired or oldest sessions.
 func (manager *Manager) Login(principal Principal) (string, Session, error) {
+	return manager.LoginUntil(principal, time.Time{})
+}
+
+// LoginUntil creates a session capped by the identity credential's absolute expiry.
+func (manager *Manager) LoginUntil(principal Principal, expiry time.Time) (string, Session, error) {
 	id, err := Token()
 	if err != nil {
 		return "", Session{}, err
@@ -158,22 +183,45 @@ func (manager *Manager) Login(principal Principal) (string, Session, error) {
 		}
 	}
 
-	if len(manager.sessions) >= MaxSessions {
-		oldID := ""
-		var oldest time.Time
-		for id, session := range manager.sessions {
-			if oldID == "" || session.ExpiresAt.Before(oldest) {
-				oldID = id
-				oldest = session.ExpiresAt
-			}
+	if principal.AuthMethod == "" {
+		principal.AuthMethod = "token"
+	}
+	principal.Tenants = tenant.Membership(principal.Tenants)
+	if principal.Tenant == "" {
+		principal.Tenant = principal.Tenants[0]
+	}
+	count := 0
+	oldestID := ""
+	var oldest time.Time
+	for existingID, existing := range manager.sessions {
+		if existing.Principal.Tenant != principal.Tenant {
+			continue
 		}
-		delete(manager.sessions, oldID)
+		count++
+		if oldestID == "" || existing.ExpiresAt.Before(oldest) {
+			oldestID, oldest = existingID, existing.ExpiresAt
+		}
+	}
+	if count >= MaxSessions {
+		delete(manager.sessions, oldestID)
+	}
+	if len(manager.sessions) >= MaxTotalSessions {
+		return "", Session{}, errors.New("auth: global session capacity")
 	}
 
+	end := now.Add(manager.ttl).UTC()
+	if !expiry.IsZero() && expiry.Before(end) {
+		end = expiry
+	}
+	if !end.After(now) {
+		return "", Session{}, errors.New("auth: expired credential")
+	}
 	session := Session{
+		Tenant:    principal.Tenant,
+		Tenants:   slices.Clone(principal.Tenants),
 		Principal: principal,
 		CSRFToken: csrf,
-		ExpiresAt: now.Add(manager.ttl).UTC(),
+		ExpiresAt: end,
 	}
 
 	manager.sessions[id] = session
@@ -251,4 +299,18 @@ func Granted(role, required string) bool {
 // CSRF compares fixed-length CSRF tokens in constant time.
 func CSRF(got, want string) bool {
 	return len(got) == 43 && len(want) == 43 && subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+}
+
+// Switch rotates the session id and CSRF token, invalidating streams of the old tenant.
+func (manager *Manager) Switch(id, name string) (string, Session, error) {
+	manager.mu.Lock()
+	current, ok := manager.sessions[id]
+	if !ok || !manager.now().Before(current.ExpiresAt) || !slices.Contains(current.Principal.Tenants, name) {
+		manager.mu.Unlock()
+		return "", Session{}, errors.New("auth: tenant unavailable")
+	}
+	delete(manager.sessions, id)
+	manager.mu.Unlock()
+	current.Principal.Tenant = name
+	return manager.LoginUntil(current.Principal, current.ExpiresAt)
 }

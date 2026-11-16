@@ -93,7 +93,7 @@ func (f *abuseFixture) heartbeat(t *testing.T, index int) *httptest.ResponseReco
 
 func (f *abuseFixture) registry(t *testing.T) []byte {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join(f.dir, "registry.json"))
+	body, err := os.ReadFile(filepath.Join(f.dir, "tenants", "default", "registry.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestRejectionBurstBoundedAudit(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	// The burst must not have triggered an audit fsync per request.
-	body, err := os.ReadFile(filepath.Join(f.dir, "audit", "audit.jsonl"))
+	body, err := os.ReadFile(filepath.Join(f.dir, "tenants", "default", "audit", "audit.jsonl"))
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
@@ -572,7 +572,10 @@ func TestStatelessRejectionsDoNotAcquireRegistryMutex(t *testing.T) {
 			}
 			done := make(chan struct{})
 			f.h.mu.Lock()
-			go func() { defer close(done); f.h.ServeHTTP(httptest.NewRecorder(), r) }()
+			go func() {
+				defer close(done)
+				f.h.ServeHTTP(httptest.NewRecorder(), r)
+			}()
 			blocked := false
 			select {
 			case <-done:
@@ -594,7 +597,7 @@ func TestBackgroundWriteFailureLatchesUnavailable(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	// A real stale temporary file forces the production atomic writer to refuse IO.
-	if err := os.WriteFile(filepath.Join(f.dir, "registry.json.tmp"), []byte("synthetic stale temp"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(f.dir, "tenants", "default", "registry.json.tmp"), []byte("synthetic stale temp"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	f.seconds.Add(5)
@@ -629,7 +632,7 @@ func TestLegacyReplayWindowWaitsForExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(f.dir, "registry.json"), body, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(f.dir, "tenants", "default", "registry.json"), body, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if h, err := New(Options{StateDir: f.dir, Now: f.now}); Code(err) != "corrupt_state" {

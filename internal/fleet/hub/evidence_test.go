@@ -32,7 +32,7 @@ func evidenceHarness(t *testing.T) (*harness, *evidenceindex.Index, string) {
 	}
 	h := &harness{dir: filepath.Join(t.TempDir(), "hub"), clock: &testClock{}}
 	h.clock.seconds.Store(time.Now().Unix())
-	dir := filepath.Join(h.dir, "evidence")
+	dir := filepath.Join(h.dir, "tenants", "default", "evidence")
 	h.hub, err = hub.New(hub.Options{StateDir: h.dir, Now: h.clock.now, Evidence: &hub.EvidenceOptions{
 		Dir: dir, Store: storage.Options{MaxEvents: 10000}, OnAppend: func(id string, e event.Envelope) { index.AddForwarded(e, id) },
 	}})
@@ -40,7 +40,10 @@ func evidenceHarness(t *testing.T) (*harness, *evidenceindex.Index, string) {
 		t.Fatal(err)
 	}
 	h.server = httptest.NewServer(h.hub)
-	index.SetNodeNames(func(id string) string { node, _ := h.hub.Node(id); return node.Name })
+	index.SetNodeNames(func(id string) string {
+		node, _ := h.hub.Node(id)
+		return node.Name
+	})
 	t.Cleanup(func() {
 		h.server.Close()
 		if err := h.hub.Close(); err != nil {

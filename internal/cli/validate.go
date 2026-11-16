@@ -110,6 +110,7 @@ func printValidateSummary(w io.Writer, cfg *config.Config) {
 }
 
 func renderEffectiveHuman(w io.Writer, cfg *config.Config, rep effectiveReport) {
+	printIdentity(w, cfg)
 	class, base := classifyProviderEndpoint(cfg)
 	fmt.Fprintf(w, "\neffective policy\n")
 	fmt.Fprintf(w, "  provider: %s (%s)\n", cfg.LLM.Provider, class)
@@ -175,16 +176,17 @@ type consoleExposure struct {
 	Operators int    `json:"operators"`
 }
 type effectiveReport struct {
-	Fleet       *config.Fleet    `json:"fleet,omitempty"`
-	Console     consoleExposure  `json:"console"`
-	ConfigPath  string           `json:"config_path"`
-	Provider    string           `json:"provider"`
-	EgressClass string           `json:"egress_class"`
-	BaseURL     string           `json:"base_url,omitempty"`
-	Detection   detectionSummary `json:"detection"`
-	Webhook     *webhookSummary  `json:"webhook,omitempty"`
-	Correlation correlationSum   `json:"correlation"`
-	Sensors     []sensorSummary  `json:"sensors"`
+	ConsoleIdentity consoleIdentity  `json:"console_identity"`
+	Fleet           *config.Fleet    `json:"fleet,omitempty"`
+	Console         consoleExposure  `json:"console"`
+	ConfigPath      string           `json:"config_path"`
+	Provider        string           `json:"provider"`
+	EgressClass     string           `json:"egress_class"`
+	BaseURL         string           `json:"base_url,omitempty"`
+	Detection       detectionSummary `json:"detection"`
+	Webhook         *webhookSummary  `json:"webhook,omitempty"`
+	Correlation     correlationSum   `json:"correlation"`
+	Sensors         []sensorSummary  `json:"sensors"`
 }
 
 // correlationSum mirrors the resolved correlation section for operators.
@@ -229,11 +231,12 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 	class, base := classifyProviderEndpoint(cfg)
 	totalRules := len(detect.KnownRuleIDs())
 	rep := effectiveReport{
-		Console:     consoleExposure{cfg.Console.Enabled, cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)},
-		ConfigPath:  cfg.SourcePath,
-		Provider:    cfg.LLM.Provider,
-		EgressClass: class,
-		BaseURL:     base,
+		ConsoleIdentity: identityReport(cfg),
+		Console:         consoleExposure{cfg.Console.Enabled, cfg.Console.Listen, cfg.Console.TLSCertFile != "", len(cfg.Console.Operators)},
+		ConfigPath:      cfg.SourcePath,
+		Provider:        cfg.LLM.Provider,
+		EgressClass:     class,
+		BaseURL:         base,
 		Detection: detectionSummary{
 			Enabled:       cfg.Detection.IsEnabled(),
 			RulesEnabled:  totalRules - len(cfg.Detection.DisabledRules),

@@ -1,4 +1,4 @@
-// Package console serves a dedicated single-node operator API.
+// Package console serves a dedicated tenant-scoped operator API inside one process.
 // Untrusted requests can read evidence snapshots or annotate operator state, never control sensors.
 package console
 

@@ -13,14 +13,15 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/console/audit"
 	"github.com/metaforismo/aegismesh/internal/console/stateio"
+	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
 	"github.com/metaforismo/aegismesh/internal/observe"
 )
 
-// MaxNodes is the hard registry capacity, including revoked identities.
+// MaxNodes is the hard per-tenant registry capacity, including revoked identities.
 const MaxNodes = 1000
 
-// MaxTokens bounds outstanding enrollment credentials.
+// MaxTokens bounds outstanding enrollment credentials per tenant.
 const MaxTokens = 100
 
 // MaxNoncesPerNode isolates each identity's replay budget, including enrollment retries.
@@ -67,6 +68,13 @@ func Code(err error) string {
 
 // Options injects trusted state, clock, metrics and an optional additional audit sink.
 type Options struct {
+	partition string
+	// Tenants is the validated process partition set; omitted means default.
+	Tenants []string
+	// TenantAudit mirrors machine events only into their owning tenant chain.
+	TenantAudit func(tenant, action, target, outcome string) error
+	// TenantAppend indexes received evidence only inside its immutable registry tenant.
+	TenantAppend func(tenant, node string, envelope event.Envelope)
 	// Evidence opts into forwarded evidence reception; nil keeps the boundary closed.
 	Evidence *EvidenceOptions
 	// StateDir is the trusted private snapshot directory.
@@ -103,6 +111,9 @@ type snapshot struct {
 
 // Hub serializes durable mutations and coalesces soft inventory/replay snapshots.
 type Hub struct {
+	enrollMu         sync.Mutex
+	tenantID         string
+	partitions       map[string]*Hub
 	evidenceReceiver *evidenceReceiver
 	evidenceEvents   observe.LabeledCounter
 	mu               sync.Mutex
@@ -124,14 +135,14 @@ type Hub struct {
 	limits           abuseLimits
 }
 
-// New opens private state and refuses corruption; it does not bind or start a listener.
-func New(opts Options) (*Hub, error) {
+func newSingle(opts Options) (*Hub, error) {
 	root, err := stateio.Open(opts.StateDir)
 	if err != nil {
 		return nil, fmt.Errorf("fleet hub state: %w", err)
 	}
 	h := &Hub{
 		root:            root,
+		tenantID:        opts.partition,
 		now:             opts.Now,
 		additionalAudit: opts.Audit,
 		state: snapshot{
@@ -195,6 +206,11 @@ func New(opts Options) (*Hub, error) {
 // Close releases state handles after the listener has stopped serving.
 func (h *Hub) Close() error {
 	h.closeOnce.Do(func() {
+		for _, child := range h.partitions {
+			if child != h {
+				_ = child.Close()
+			}
+		}
 		close(h.stop)
 		<-h.done
 		h.flushRejections(true)

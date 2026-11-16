@@ -391,7 +391,7 @@ committed, exported, or shared in incident reviews.
 ## Operator console (optional)
 
 The console is disabled by default and owns a separate listener and mux. It is
-single-node, single-tenant and read-mostly. Writes include console sessions,
+read-mostly, with a single default tenant unless configured otherwise. Writes include console sessions,
 operator investigations, audit and optional fleet registry administration; no sensor or policy control
 is exposed. The API contract is [architecture/console-api.md](architecture/console-api.md).
 
@@ -461,8 +461,8 @@ Only `/` serves `index.html`; deep links do not fall back to the index.
 ## Experimental fleet inventory (ADR-0018)
 
 Both roles are off by default. This is experimental fleet inventory with
-authenticated enrollment and heartbeats; it is not multi-tenant, not a managed
-service. Live evidence forwarding is a separate opt-in described below. Configure separate processes/data directories
+authenticated enrollment and heartbeats, with logical tenant isolation
+(experimental) when configured. It is not a hosted service. Live evidence forwarding is a separate opt-in described below. Configure separate processes/data directories
 for hub and agent. Operator configs reject simultaneous roles; package-level
 synthetic integration tests can compose them. The hub cannot command nodes.
 
@@ -576,7 +576,7 @@ and disclosure without probing the hub or generating an identity.
 The queue is fixed at 4,096 events/16 MiB, batches at 1,000 events/4 MiB. Hub quotas are
 five-second spacing, 1,000 events/second, 16 MiB request bytes/minute/node, 16 MiB retained
 segment bytes/node and 256 MiB aggregate forwarded segments. These fixed bounds require no
-new tuning fields. Copies live at `<resolved fleet.hub.state_dir>/evidence/<node id>/`,
+new tuning fields. Copies live at `<resolved fleet.hub.state_dir>/tenants/<tenant>/evidence/<node id>/`,
 with segments capped at 4 MiB (respecting smaller configured caps), a 1 MiB envelope ceiling, inherited storage count/age retention and
 the hub's `storage.encryption` setting. Node encryption is independent and never supplies
 its private read identity to the runtime. See architecture/fleet-protocol.md for conservative
@@ -585,3 +585,105 @@ reservations, dedup/crash windows, capacity refusal and in-flight queue accounti
 No plaintext disk spool is created. Overflow/crash/offline losses leave evidence only on
 the node; hub retention and local retention do not propagate deletions. Redaction is the
 control: a compromised hub learns redacted evidence from every forwarding node.
+
+## SSO via OIDC (experimental) and logical tenant isolation (experimental)
+
+The console remains opt-in. Without these settings there is exactly one tenant,
+`default`, and existing token operators retain their roles and membership.
+The IdP must support Authorization Code, S256 PKCE and RS256, ES256 or EdDSA ID
+tokens. Configure its registered redirect exactly; the scheme must match console
+TLS and the authority must match the actual console listener. Issuer discovery,
+authorization, token and JWKS endpoints must share one scheme/authority in this
+slice; cross-authority providers are unsupported.
+
+```yaml
+console:
+  enabled: true
+  listen: 127.0.0.1:9120
+  token_login: true
+  tenants: [default, bravo]
+  local_tenant: default
+  # Existing operators also need token_sha256; no raw token belongs in configuration.
+  operators:
+    - name: operator
+      role: admin
+      token_sha256: REPLACE_WITH_64_HEX_DIGEST
+      tenants: [default, bravo]
+  oidc:
+    enabled: true
+    display_name: Example identity
+    issuer: https://idp.example.invalid
+    client_id: aegismesh-console
+    redirect_uri: http://127.0.0.1:9120/api/v1/auth/oidc/callback
+    client_secret_env: AEGISMESH_IDP_SECRET
+    # Alternatively client_secret_file: secrets/idp-secret (never both).
+    # Omit both references for a public client using PKCE only.
+    role_claim: groups
+    role_mapping: {observers: viewer, responders: analyst, operators: admin}
+    name_claim: email
+    tenant_claim: organizations
+    tenant_mapping: {organization-a: default, organization-b: bravo}
+    allow_private_egress: false
+```
+
+| Field | Default and validation |
+| --- | --- |
+| `console.token_login` | true; false requires OIDC enabled and disables bearer as well as token-session login |
+| `console.tenants` | `[default]`; at most 32 unique canonical slugs, 3..64 bytes, lowercase ASCII letters/digits/hyphens, starts/ends alphanumeric |
+| `console.local_tenant` | `default`; must be declared; owns all local evidence, node/sensor/rule/agent views |
+| `console.operators[].tenants` | `[default]`; at most 32 declared memberships; first is initially active |
+| `console.oidc.enabled` | false; discovery runs only after console starts |
+| `console.oidc.display_name` | `Single sign-on`; 1..64 printable bytes, rendered as text |
+| `console.oidc.issuer` | empty; required when enabled, exact issuer up to 512 bytes; HTTPS, or HTTP loopback for development; no credentials/query/fragment |
+| `console.oidc.client_id` | empty; required when enabled, 1..256 printable bytes |
+| `console.oidc.client_secret_env` | empty; optional environment variable name, never the value |
+| `console.oidc.client_secret_file` | empty; optional config-relative reference up to 4096 bytes, rooted containment, no final symlink, regular mode 0600, file at most 4096 bytes, value whitespace-trimmed; mutually exclusive with env |
+| `console.oidc.redirect_uri` | empty; required exact callback URL `/api/v1/auth/oidc/callback`, at most 1024 bytes; no query/fragment or encoded path |
+| `console.oidc.role_claim` | `groups`; exact claim name, 1..64 printable bytes; string or array of up to 64 strings of 1..128 bytes |
+| `console.oidc.role_mapping` | empty; enabled OIDC requires 1..128 exact claim-value → viewer/analyst/admin mappings; highest role wins, no match denies |
+| `console.oidc.name_claim` | `email`; 1..64-byte claim name; string at most 256 bytes, fallback sub; sanitized/truncated to 64 printable ASCII bytes |
+| `console.oidc.tenant_claim` | `tenants`; same bounded string/array shape as roles; no declared match denies, even for a single tenant |
+| `console.oidc.tenant_mapping` | empty; exact declared slug matching; when nonempty, at most 128 explicit claim-value → declared-slug entries, unmatched values ignored |
+| `console.oidc.allow_private_egress` | false; explicit RFC1918/ULA permission independent of other egress flags; metadata/link-local always denied |
+
+All new settings have environment overrides under `AEGISMESH_CONSOLE_` using
+uppercase underscore paths, e.g. `TOKEN_LOGIN`, `LOCAL_TENANT`, `OIDC_ENABLED`,
+`OIDC_ISSUER`, `OIDC_CLIENT_SECRET_ENV`, `OIDC_ALLOW_PRIVATE_EGRESS`.
+`TENANTS`, `OPERATORS`, `OIDC_ROLE_MAPPING` and `OIDC_TENANT_MAPPING` accept strict
+JSON (64 KiB maximum). `OPERATORS` replaces the complete operator list and allows
+membership overrides; it still holds only digests. Booleans must parse as
+booleans. The reference names themselves, not resolved secrets, are reported by
+`validate --effective` and `doctor`. No inline `client_secret` field or raw-secret
+override exists. A missing/unreadable confidential-client credential fails local
+construction without exposing its contents. Discovery outages are different:
+the console and sensors run, SSO reports unavailable and retries with 1..60-second
+backoff. Token operators continue to work when enabled.
+
+OIDC pending states are single-use, capped at 128 entries/two minutes and bound
+to a short-lived browser cookie. Session TTL stays 3600 seconds by default,
+60..86400 configurable, capped by actual ID token expiry. JWKS reuse is at most
+five minutes with refresh attempts at most every five seconds per discovery
+snapshot. Provider responses are capped at 256 KiB, ID tokens at 24 KiB and keys
+at 32. Logout is local only; membership changes take effect at next login.
+
+Tenant state lives under `<console-or-hub-state>/tenants/<tenant>/`; hub evidence
+copies live under its tenant's `evidence/<node-id>/`. Legacy roots automatically
+move, without rewriting data, into `tenants/default` through a fixed sibling
+`.tenant-migration` directory. Startup resumes interrupted renames and refuses
+conflicting destinations for operator inspection. Run one process per state
+root. Keep backups before upgrading; do not point an older binary at the new
+layout. Console/hub roots must be disjoint and cannot contain local evidence, configuration
+or agent identity state. Unexpected legacy entries fail before any rename.
+Removing a tenant from configuration leaves its retained state on disk.
+
+Sessions are bounded to 1024 per active tenant/32768 globally, with tenant-local eviction.
+Quotas are independent per tenant: 1000 investigations/32 MiB snapshots,
+100 outstanding tokens, 1000 nodes including tombstones, 256 MiB forwarded
+retention, 64 MiB accounted index bytes and existing audit segment bounds.
+The 32-tenant cap bounds aggregate nodes/investigations to 32000, outstanding
+tokens to 3200, forwarded retention to 8 GiB and accounted index to 2 GiB. These
+are caps, not reservations; disk exhaustion and process overload cross tenants.
+There is no cross-tenant administrator view. Logical isolation shares process,
+OS user, data directory, hub encryption recipient and signing/egress policy;
+host/process compromise crosses tenants. No per-tenant keys, billing, rate plans
+or self-service creation are included. See ADR-0019/0020 and the exact API contract.

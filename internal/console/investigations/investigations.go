@@ -90,9 +90,19 @@ type Patch struct {
 
 // Store owns bounded investigation snapshots persisted by atomic replacement.
 type Store struct {
+	index *evidenceindex.Index
 	mu    sync.Mutex
 	root  *os.Root
 	items map[string]Investigation
+}
+
+// NewScoped confines newly attached references to the tenant's index.
+func NewScoped(dir string, index *evidenceindex.Index) (*Store, error) {
+	store, err := New(dir)
+	if err == nil {
+		store.index = index
+	}
+	return store, err
 }
 
 // New opens private state and fails closed on corrupt snapshots or interrupted writes.
@@ -214,6 +224,11 @@ func (s *Store) save(investigation Investigation) error {
 
 // Create validates and atomically persists a new investigation with a fresh id.
 func (s *Store) Create(input Create, actor string) (Investigation, error) {
+	for _, id := range input.EventIDs {
+		if !s.hasEvent(id) {
+			return Investigation{}, ErrNotFound
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -357,6 +372,9 @@ func (s *Store) Attach(id, eventID string, attach bool) (Investigation, error) {
 	}
 
 	return s.change(id, func(investigation *Investigation) error {
+		if attach && !s.hasEvent(eventID) {
+			return ErrNotFound
+		}
 		for i, attachedID := range investigation.EventIDs {
 			if attachedID == eventID {
 				if !attach {
@@ -364,6 +382,9 @@ func (s *Store) Attach(id, eventID string, attach bool) (Investigation, error) {
 				}
 				return nil
 			}
+		}
+		if !s.hasEvent(eventID) {
+			return ErrNotFound
 		}
 		if attach {
 			if len(investigation.EventIDs) >= 200 {
@@ -378,4 +399,12 @@ func (s *Store) Attach(id, eventID string, attach bool) (Investigation, error) {
 // Close releases the investigation state directory handle.
 func (s *Store) Close() error {
 	return s.root.Close()
+}
+
+func (s *Store) hasEvent(id string) bool {
+	if s.index == nil {
+		return true
+	}
+	_, _, _, _, ok := s.index.GetNode(id, "local")
+	return ok
 }

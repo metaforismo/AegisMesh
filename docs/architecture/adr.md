@@ -747,3 +747,125 @@ roles remain authoritative. Hosted service ownership, billing metering, regional
 placement and service-level/offline guarantees are also proposed, not implemented.
 The Apache-2.0 core and this self-hosted inventory slice do not establish any of
 those managed-service properties.
+
+## ADR-0019 — SSO via OIDC (experimental)
+
+Date: 2026-11-15. Implemented locally, uncommitted on `feat/console-sso`, stacked
+on `feat/evidence-forwarding` (PR #79). Supersedes ADR-0017's original no-SSO/no-
+egress limitation for this explicitly enabled authentication edge only.
+
+**Decision.** Opt-in Authorization Code with S256 PKCE, server-side state/nonce
+and independent browser-binding cookie. Public clients use PKCE; confidential
+clients resolve a bounded mode-0600 config-relative file or named environment
+variable and use HTTP Basic at the token endpoint. No inline secret is accepted.
+Existing high-entropy token operators remain break-glass authentication;
+`token_login: false` disables bearer and token-session authentication only when
+OIDC is configured. Both methods create the same ephemeral session/CSRF format.
+Session expiry never exceeds ID-token expiry or configured TTL. Logout is local.
+
+**Library decision.** A stdlib JOSE implementation would add security-critical
+signature, key and claim parsing without an existing standard library OIDC
+implementation. We select coreos/go-oidc v3.21.0, oauth2 v0.38.0 and go-jose/v4
+v4.1.4. Application code owns only policy, bounded key acquisition, claim
+mapping and browser/session lifecycle. go-oidc verifies signatures/issuer/audience
+with an explicit RS256/ES256/EdDSA allowlist and a go-oidc StaticKeySet populated
+from vetted go-jose JWK parsing. The wrapper additionally requires exact issuer
+(including for Google), sub, nonce, exp, iat, nbf and azp for multiple audiences.
+Thirty-second leeway applies to future iat/nbf; expiry is strict so sessions
+cannot outlive credentials. RSA keys require 2048..8192 bits; ES256 uses P-256.
+No signature skip, HMAC, none algorithm, distributed claim fetch or UserInfo call.
+
+Discovery, authorization, token and JWKS endpoints must share the exact issuer
+scheme and authority. This deliberately excludes providers with cross-authority
+endpoints in this slice. All redirects and environment proxies are refused.
+The shared egress classifier rejects metadata/link-local even with private
+opt-in; private ranges require `console.oidc.allow_private_egress`. HTTP is only
+accepted for loopback development. DNS is checked again at socket connection.
+Responses are bounded to 256 KiB, headers to 16 KiB, network work to five seconds;
+ID tokens to 24 KiB, claim objects to 64 fields, role/tenant values to 64 strings
+of 128 bytes. JWKS has at most 32 public keys, five-minute maximum reuse and at
+most one fetch attempt every five seconds on a snapshot, including unknown kids.
+Unknown rotated kids may therefore be refused briefly rather than cause a storm.
+Discovery runs only after console Start, retries 1s..60s with exponential backoff
+and refreshes every fifteen minutes after success. Failures affect SSO, not
+sensor startup or token authentication. Pending state stores at most 128 attempts
+for two minutes and is consumed on any callback attempt for that state.
+
+Authorization is explicit and default-deny: role_mapping maps exact values to
+viewer/analyst/admin, highest role wins; tenant membership resolves only already-
+declared partitions. Names default to email, fall back to sub, are bounded and
+sanitized to 64 printable ASCII bytes. Audit retains the verified issuer/subject
+pair independently of that mutable name. Unmapped identities are denied/audited.
+The fixed error redirect never reflects provider prose. No return-to URL,
+refresh token persistence, provider logout or dynamic client registration ships.
+
+**Risks.** A compromised IdP or wrong operator group mapping can authorize an
+attacker inside mapped tenants. Existing sessions do not poll for membership
+changes; TTL or restart bounds revocation latency. The IdP learns console login
+activity. The OIDC path has no authority over sensors, config or enforcement.
+
+## ADR-0020 — logical tenant isolation (experimental)
+
+Date: 2026-11-15. Local uncommitted implementation on `feat/console-sso`.
+
+**Alternatives and ownership.** Adding tenant filters independently to handlers
+would leave aggregate counters, SSE, ID references and quotas easy to miss. A
+single shared store with filtered views also couples eviction and quota pressure.
+We instead construct separate index, investigation, audit and hub-registry
+partitions at startup, and select their view once in route dispatch. Handlers
+receive that view through unbound route methods. No request or claim constructs
+a path: membership can only select an existing configuration-validated view.
+Machine routing selects a known node's immutable registry or an outstanding
+minted token's registry; full signature/token validation still occurs inside it.
+Unknown-key enrollment is serialized across partitions to prevent a concurrent
+A/B enrollment from binding the same key twice. Hub registries never dial nodes.
+
+**Decision.** At most 32 canonical 3..64-byte lowercase letter/digit/hyphen
+slugs are declared in `console.tenants`. Omission means exactly `default`;
+`local_tenant` defaults to `default`. Token operators default to `default` or
+explicitly list memberships. OIDC requires a matching tenant_claim (default
+`tenants`), optionally translated through tenant_mapping; no mapped membership
+means denial. A session acts in one tenant; no admin override/all view exists.
+Tenant switching rotates session ID and CSRF without extending expiry, records
+only the departing tenant's action and invalidates the old stream credentials.
+
+Local evidence, sensors, rules, node metadata and agent telemetry belong to
+local_tenant. Fleet enrollment credentials, nodes, forwarded evidence, indexes,
+investigations and audit chains belong to their registry tenant. Separate stores
+mean foreign and absent IDs use identical normal lookup/error paths, without a
+global existence query. Cursors have independent partition keys. SSE subscribes
+only to the selected index, and checks invalidation before each event/heartbeat.
+Authentication failures without a resolved tenant use an operator-inspected
+`authentication/` audit chain when multiple tenants are declared.
+
+Existing roots migrate through an atomic rename to the fixed sibling
+`.tenant-migration`, recreation of the private root/tenants directories, then an
+atomic rename to `tenants/default`. Directory fsyncs order these changes; startup
+resumes after interruption and refuses conflicting destinations without deleting
+data. Existing audit bytes and hashes are untouched. Console and hub migrations
+are independent, not one cross-directory transaction. New state is under
+`<console-or-hub-state>/tenants/<declared-slug>/`; forwarded copies are in that
+hub partition's `evidence/<validated-node-id>/`. Local authoritative evidence and
+agent private identity layout are unchanged. State roots cannot contain local
+evidence/configuration/agent identity or overlap one another. Unexpected legacy
+entries are refused before any rename to preserve an accidentally selected directory. Run one process per state root; concurrent
+migration/writers are unsupported. Removing a tenant declaration does not delete
+its retained directory or make its data visible elsewhere.
+
+Quotas are independent per tenant: 1000 investigations (32 MiB snapshot),
+100 outstanding credentials, 1000 nodes including tombstones, 256 MiB forwarded
+retention and 64 MiB accounted index. Existing per-node budgets stay unchanged.
+The validated 32-partition cap provides aggregate upper bounds of 32000 nodes/
+investigations, 3200 tokens, 8 GiB forwarded retention and 2 GiB accounted index.
+Session eviction is tenant-scoped (1024 per tenant, 32768 globally); request/stream admission remains process-bounded. These are upper
+bounds rather than disk reservations; a full disk or process overload affects
+all partitions. No new external database or module is needed for tenancy.
+
+**Honest scope.** Logical isolation inside one process, one OS user and one data
+directory. Tenants share the hub's evidence encryption recipient and signing/
+egress configuration. A host or process compromise crosses tenants. This is not
+a hard hosted isolation boundary. There are no per-tenant keys, billing, rate
+plans, independent deployments or self-service tenant creation. Timing classes
+for foreign IDs and absent IDs match, but constant-time HTTP response latency and
+absence of shared-resource inference are not claimed. Old bare-ID investigation
+references remain local-only; cross-node annotation semantics are deferred.

@@ -52,6 +52,7 @@ type System struct {
 	storageFailed atomic.Bool
 	consoleSrv    *console.Server
 	index         *evidenceindex.Index
+	tenantIndexes map[string]*evidenceindex.Index
 	builtAt       time.Time
 	cfg           *config.Config
 	store         *storage.Store

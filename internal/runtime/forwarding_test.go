@@ -114,7 +114,7 @@ func TestRuntimeForwardedEvidenceEncryptionAndConsole(t *testing.T) {
 				if !strings.Contains(string(detail.body), "hub_payload_hash_consistency") {
 					t.Fatalf("integrity scope: %s", detail.body)
 				}
-				dir := filepath.Join(hubConfig.FleetStateDir(false), "evidence", id)
+				dir := filepath.Join(hubConfig.FleetStateDir(false), "tenants", "default", "evidence", id)
 				opts := storage.ReaderOptions{}
 				if mode == "encrypted-hub" {
 					keyPath := filepath.Join(t.TempDir(), "read.agekey")
@@ -136,7 +136,10 @@ func TestRuntimeForwardedEvidenceEncryptionAndConsole(t *testing.T) {
 					t.Fatal(err)
 				}
 				count := 0
-				_, err = reader.ForEachVerified(func(e event.Envelope) error { count++; return e.VerifyIntegrity() }, nil)
+				_, err = reader.ForEachVerified(func(e event.Envelope) error {
+					count++
+					return e.VerifyIntegrity()
+				}, nil)
 				if err != nil || count != 1 {
 					t.Fatalf("inspect-compatible verification: %d %v", count, err)
 				}

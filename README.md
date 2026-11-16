@@ -183,7 +183,7 @@ performed. See [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## Console
 
-An optional single-node, single-tenant operator API runs inside the binary on
+An optional operator API runs inside the binary on
 its own authenticated listener, disabled by default. `aegismesh console token`
 generates an operator credential and digest snippet; `aegismesh demo --console`
 keeps the synthetic scenario available on an OS-assigned loopback console until
@@ -194,8 +194,12 @@ modules: no build step, no third-party code) and is served at `/` only when
 The console reads a bounded in-memory evidence index and supports operator
 investigations plus an audited viewer/analyst/admin token model. It cannot
 control sensors or change evidence/configuration. Encrypted storage stays
-live-only: no private identity is loaded into the runtime. SSO and multi-tenancy
-are absent. Optional fleet inventory is described below. See
+live-only: no private identity is loaded into the runtime. This branch adds opt-in
+**SSO via OIDC (experimental)** and **logical tenant isolation (experimental)**.
+Token login remains enabled for break-glass access by default. Every session has
+one active tenant; administrators have no cross-tenant view. Tenant state and
+quotas are separate, but the process, OS user and encryption recipient are shared.
+Local logout does not terminate the IdP session. Optional fleet inventory is described below. See
 [configuration](docs/configuration.md#operator-console-optional),
 the [API contract](docs/architecture/console-api.md) and the
 [design system](docs/design-system.md).
@@ -205,7 +209,7 @@ the [API contract](docs/architecture/console-api.md) and the
 The same binary can run an opt-in inventory hub or outbound reporting agent.
 Local Ed25519 identities, one-time enrollment and signed heartbeats provide
 experimental fleet inventory with authenticated enrollment and heartbeats. The
-hub cannot command nodes. This is not multi-tenant or a managed service. Experimental
+hub cannot command nodes. This is not a hosted service; logical tenant isolation is experimental. Experimental
 best-effort forwarding with counted loss; local store authoritative. Evidence disclosure
 and reception each require a separate opt-in, both off by default. Both roles default off and the machine listener is separate
 from console/admin/sensors. Start with [fleet configuration](docs/configuration.md#experimental-fleet-inventory-adr-0018),

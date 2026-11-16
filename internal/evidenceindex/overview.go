@@ -57,6 +57,8 @@ type Bucket struct {
 
 // SensorCount counts retained observations for one sensor.
 type SensorCount struct {
+	// Buckets has the same classification shape and boundaries as the main series.
+	Buckets []Bucket `json:"buckets"`
 	// SensorID is the configured sensor identifier.
 	SensorID string `json:"sensor_id"`
 	// Kind is its sensor protocol.
@@ -286,11 +288,28 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 			severity = "none"
 		}
 		overview.BySeverity[severity]++
-		sensorCount := sensors[summary.Sensor.ID]
-		sensorCount.SensorID = summary.Sensor.ID
-		sensorCount.Kind = summary.Sensor.Kind
-		sensorCount.Events++
-		sensors[summary.Sensor.ID] = sensorCount
+		sensorCount, exists := sensors[summary.Sensor.ID]
+		if exists || len(sensors) < 64 {
+			if !exists {
+				sensorCount.Buckets = make([]Bucket, len(overview.Buckets))
+				for i, bucket := range overview.Buckets {
+					sensorCount.Buckets[i].Start = bucket.Start
+				}
+			}
+			sensorBucket := &sensorCount.Buckets[min(bucketCount-1, int(timestamp.Sub(from)/step))]
+			switch summary.Classification {
+			case "interaction":
+				sensorBucket.Interaction++
+			case "canary_invocation":
+				sensorBucket.CanaryInvocation++
+			case "correlation_signal":
+				sensorBucket.CorrelationSignal++
+			}
+			sensorCount.SensorID = summary.Sensor.ID
+			sensorCount.Kind = summary.Sensor.Kind
+			sensorCount.Events++
+			sensors[summary.Sensor.ID] = sensorCount
+		}
 		for _, id := range summary.RuleIDs {
 			ruleCount := rules[id]
 			ruleCount.RuleID = id
