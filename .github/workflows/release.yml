@@ -136,7 +136,8 @@ jobs:
           mkdir -p dist
           out="dist/sbom-aegismesh-${GOOS}-${GOARCH}.cdx.json"
           GOTOOLCHAIN=local ./scripts/sbom.sh "$out"
-          GOTOOLCHAIN=local GOFLAGS=-mod=readonly go run ./tools/sbomcheck "$out"
+          # The validator runs on the runner, not on the SBOM's target platform.
+          GOOS= GOARCH= GOTOOLCHAIN=local GOFLAGS=-mod=readonly go run ./tools/sbomcheck "$out"
           test -s "$out"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

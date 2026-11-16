@@ -6,6 +6,14 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release SBOM generation for targets other than the build host. The generator
+  was started with `go run` under the target's `GOOS`/`GOARCH`, so it was
+  cross-compiled and could not execute; the tag-triggered release workflow
+  failed at the first cross-platform SBOM and published nothing. The generator
+  is now built for the host and run with the target's build constraints.
+
 ## [v0.2.0] — 2026-11-16
 
 This release adds a fourth (SSH) sensor, deterministic dry-run recommendations, optional evidence
