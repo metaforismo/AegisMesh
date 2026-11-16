@@ -5,20 +5,9 @@ human and agentic attackers.**
 
 AegisMesh deploys bounded HTTP, TCP, authentication-only SSH, and MCP decoys and
 records every interaction as redacted, integrity-checked evidence on your own
-machine. Evidence remains plaintext by default, with optional native age/X25519
-at-rest encryption for operators who explicitly enable it. Private identities
-are supplied only for local reads; keep backups. Encryption protects the storage
-medium, with visible file metadata, and does not protect a compromised host or
-stolen identity. It runs offline by
-default and never executes attacker input. Response
+machine. It runs offline by default and never executes attacker input. Response
 recommendations are deterministic, local, and dry-run only; the shipped runtime
 never acts on real assets.
-
-Encrypted CLI reads can inspect a running node through the latest authenticated
-v3 checkpoint, with explicit open/interrupted-segment notices. Use
-`--require-sealed` when completeness is required; see
-[format and rollback limits](docs/evidence-encryption.md). The console still
-loads no private identity and cannot backfill encrypted history.
 
 > AegisMesh is an independent implementation in the deception-technology problem space. It contains no code
 > or text from other honeypot projects. Inspiration and differences are documented in
@@ -26,32 +15,15 @@ loads no private identity and cannot backfill encrypted history.
 
 ## Status
 
-The v0.1.0 foundation shipped three sensors, CLI, evidence storage, admin
-endpoints, and the extension contract. Current `master` adds a fourth,
-authentication-only SSH sensor and deterministic local dry-run recommendations;
-this remains an early platform and carries no production-readiness claim. See
-[docs/ROADMAP.md](docs/ROADMAP.md).
-The finite v0.2 PR train and stop condition are in
-[docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md). Everything below is verified by
-the commands shown; see [docs/verification.md](docs/verification.md).
+This is **v0.2.0**, an early platform with no production-readiness claim. Build it from source: no
+container image, signed binary or provenance attestation has been published, and the landing page under
+`site/` is a static file that is not hosted anywhere (see [docs/RELEASE.md](docs/RELEASE.md)).
+The capabilities described here are backed by the checks recorded in
+[docs/verification.md](docs/verification.md); what was not run or not verified is listed there too. Changes since v0.1.0
+are in [CHANGELOG.md](CHANGELOG.md), and the plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-The SSH sensor completes synthetic password or public-key authentication,
-records only bounded metadata, and rejects every channel and global request.
-It exposes no shell, PTY, SFTP, forwarding, filesystem, or command path; see
-[ADR-0010](docs/architecture/adr.md).
-
-Every sensor kind also supports the opt-in `process_isolation: true` setting.
-The default is exact in-process execution. Isolation launches the same
-audited AegisMesh binary as a hidden worker with a fixed argument, minimal
-environment, private temporary working directory, and a typed canonical
-bounded stdio protocol. The parent materializes configured body files before
-launch and sends no paths, credentials, or provider settings to the worker.
-Here, provider settings means destinations, models, and credential references;
-an enabled local fallback's bounded static prompt remains part of its sensor
-specification.
-This is fault/process containment, not a network, filesystem, CPU, memory, or
-malware sandbox: the worker retains the same OS identity and container
-namespace, and the setting adds no egress.
+Optional capabilities below are **off by default**. Those marked *experimental* have been exercised only
+with the checks recorded in the verification ledger and carry the limits stated next to them.
 
 ## Five-minute demo
 
@@ -67,18 +39,22 @@ make build
 
 # the same deterministic result as typed JSON
 ./bin/aegismesh demo --json
+
+# the same scenario behind the operator console on an OS-assigned loopback port (Ctrl-C to stop)
+./bin/aegismesh demo --console
 ```
 
-The command accepts no config, path, port, credential, API key or destination.
+`demo` accepts no config, path, port, credential, API key or destination.
 It uses synthetic data and OS-assigned loopback ports, verifies every recorded
 observation hash, produces one dry-run recommendation, then stops and removes
 its private temporary workspace. It requires no cloud service, `curl`, `nc`,
 privileged port or external network access. `make demo` invokes the same path.
+`demo --console` keeps the scenario available until Ctrl-C and prints the console
+URL and a fresh token once.
 
 For a persistent workspace and manual protocol exploration:
 
 ```bash
-
 # 1) scaffold a safe local workspace (synthetic data only)
 ./bin/aegismesh init --dir /tmp/aegismesh-demo
 
@@ -116,27 +92,106 @@ curl -s -X POST http://127.0.0.1:8090/mcp \
 Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 [deploy README](deploy/compose/README.md)).
 
-## Current verified core
+## What ships
 
 | Area | What ships |
 |---|---|
-| Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST); optional fixed-worker process isolation for all four kinds |
-| Responses | Static config rules + deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
-| Evidence | Versioned native envelope, integrity checks, rotation/retention, optional native age/X25519 at-rest encryption, plus opt-in local ECS-compatible export that preserves the native envelope |
-| Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, with no enforcement or new egress |
-| Demo | One-command synthetic HTTP/TCP/MCP/SSH scenario on OS-assigned loopback ports with integrity-verified evidence, a dry-run proposal and complete cleanup |
+| Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST). The SSH sensor completes synthetic authentication, records bounded metadata, rejects every channel and global request, and exposes no shell, PTY, SFTP, forwarding or filesystem ([ADR-0010](docs/architecture/adr.md)) |
+| Process isolation | Opt-in `process_isolation: true` per sensor runs a fixed same-binary worker with a minimal environment and a bounded stdio protocol. Fault containment only: the worker keeps the runtime's OS identity and namespaces; it is not a network, filesystem, CPU, memory or malware sandbox |
+| Responses | Static config rules and a deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
+| Detection | Deterministic prompt-injection and abuse rules, plus opt-in correlation signals (COR-001..COR-004); signals are observations, never verdicts. `aegismesh rules` lists and tests them |
+| Evidence | Versioned native envelope, integrity hashes, redaction before storage, rotation/retention, opt-in local ECS-compatible export that preserves the native envelope |
+| Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, no enforcement, no new egress |
+| Extensions and webhooks | Explicitly configured, digest-verified observer processes may return only an event-linked acknowledgement; opt-in HMAC-signed webhook delivery with a bounded queue and counted drops |
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
-| Safety | Loopback + unprivileged-port defaults validated by `doctor`; strict schema validation; byte/time caps everywhere; no attacker-, provider-, or extension-output-derived execution; only fixed same-binary sensor workers and explicitly configured verified observer processes are spawned |
-| Extensions | Explicitly configured, digest-verified out-of-process observers receive bounded stored observations and may return only an exact event-linked acknowledgement; they cannot influence evidence, policy or responses |
+| Packaging | Dockerfile, Compose demo and a contract-tested Helm chart. The chart is not verified in a real cluster ([docs/deploy/kubernetes.md](docs/deploy/kubernetes.md)) |
 | Migration | Clean-room `aegismesh migrate beelzebub` importer: dry-run default, never touches sources, exact unsupported-field report |
+
+## Optional capabilities
+
+### Operator console
+
+An authenticated web console and HTTP API inside the same binary. **Opt-in** (`console.enabled`, default
+off), on its own listener (default `127.0.0.1:9120`). Operators sign in with named viewer, analyst or
+admin tokens (`aegismesh console token` generates one). It shows a bounded in-memory evidence index
+(default 50,000 events), a live stream, investigations and a hash-chained audit trail. The UI is plain
+HTML, CSS and ES modules embedded in the binary: no build step, no third-party code, evidence rendered
+as text only.
+
+**Limits:** it cannot control sensors or change policy, configuration or evidence. It is single-node
+unless the experimental features below are enabled. With evidence encryption on, the console shows only
+evidence observed since process start. Investigations and audit are plaintext. The UI has been checked
+in Chromium only. See [configuration](docs/configuration.md#operator-console-optional), the
+[API contract](docs/architecture/console-api.md) and the [design system](docs/design-system.md).
+
+### Evidence encryption at rest
+
+Native age/X25519 encryption of stored evidence. **Opt-in**: evidence stays plaintext unless you
+configure a public recipient. The private identity is supplied only for local reads (`--identity`),
+never to the runtime. Encrypted segments carry authenticated checkpoints, so `inspect` and `recommend`
+can read a running node through its last checkpoint with an explicit incompleteness notice;
+`--require-sealed` demands a complete, sealed history. Not labelled experimental.
+
+**Limits:** it protects the storage medium, not a compromised host or a stolen identity; file names,
+sizes and timing stay visible; there is no key recovery, so keep backups; a truncated tail can look like
+an open segment unless you use `--require-sealed`. See
+[docs/evidence-encryption.md](docs/evidence-encryption.md).
+
+### Fleet inventory (experimental)
+
+The same binary can run as an inventory **hub** or an outbound reporting **agent**. **Opt-in**, both
+roles off by default, on a separate machine listener (default `127.0.0.1:9130`). Agents enroll once with a
+one-time token and send heartbeats signed with their own Ed25519 key; the console lists nodes and their
+self-reported health.
+
+**Limits:** the hub can never command, configure or dial a node. Status is self-reported, not attested.
+It is not a managed service, and hub state is plaintext. See
+[fleet configuration](docs/configuration.md#experimental-fleet-inventory-adr-0018), the
+[operator API](docs/architecture/console-api.md#experimental-fleet-inventory-additions-adr-0018) and the
+[wire protocol](docs/architecture/fleet-protocol.md).
+
+### Evidence forwarding (experimental)
+
+An enrolled agent can forward copies of its redacted evidence to a hub, so one console lists and counts
+observations by node. **Opt-in on both ends** (disclosure on the agent, reception on the hub; both off
+by default).
+
+**Limits:** best effort with counted loss. The agent queue is memory-only (4,096 events / 16 MiB,
+oldest dropped) and there is no on-disk spool, no historical forwarding and no cross-node correlation.
+The node's local store stays authoritative. The hub checks payload hashes, which show consistency, not
+provenance. See [forwarding configuration](docs/configuration.md#experimental-evidence-forwarding-adr-0018-amendment)
+and the [protocol](docs/architecture/fleet-protocol.md).
+
+### Single sign-on and tenants (experimental)
+
+**SSO via OpenID Connect** signs operators in with Authorization Code and PKCE and maps identity claims
+to the same roles. **Logical tenant isolation** splits console indexes, investigations, audit and fleet
+registries into up to 32 declared tenants; a session acts in one tenant at a time. **Opt-in**: without
+configuration there is one `default` tenant and token login only.
+
+**Limits:** OIDC has been exercised only against local test providers, never a real identity provider.
+Token login stays enabled unless `token_login: false`; logout is local and does not end the provider
+session. Tenants are logical only: one process, OS user, data directory and encryption recipient are
+shared, so host or process compromise crosses tenants. See
+[SSO and tenants configuration](docs/configuration.md#sso-via-oidc-experimental-and-logical-tenant-isolation-experimental)
+and [ADR-0019/0020](docs/architecture/adr.md).
+
+## Not shipped
+
+Telnet and database sensors; OTLP or automatic SIEM export; autonomous response or enforcement; a
+durable (on-disk) forwarding spool; cross-node correlation; hard tenant separation (per-tenant keys or
+processes); a hosted control plane or managed service; verified real-cluster Kubernetes support; a
+published image, signed binaries or provenance attestations; a hosted landing page. See
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Security posture
 
 Read [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md). Highlights:
 
 - Decoys are non-production by definition; default bind is loopback on unprivileged ports.
-- Inbound bytes and LLM output are data only — there is **no code path to shell execution, filesystem
-  paths, or configuration mutation** from either.
+- Inbound bytes, LLM output and extension output are data only: there is **no code path to shell
+  execution, filesystem paths, or configuration mutation** from any of them. Only fixed same-binary
+  sensor workers and explicitly configured, verified observer processes are ever spawned.
 - Events are observations, not proof of compromise. The data model enforces this distinction.
 - Report vulnerabilities per [SECURITY.md](SECURITY.md).
 
@@ -144,11 +199,12 @@ Read [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md). Highlights:
 
 ```text
 cmd/aegismesh                   entrypoint
-internal/*                      sensors, runtime, storage, cli, sensor workers, extensions, migration
+internal/*                      sensors, runtime, storage, console, fleet, cli, sensor workers, extensions, migration
 docs/                           brief, threat model, ADRs, roadmap, verification
 deploy/                         Dockerfile, compose demo, Helm chart
 examples/demo/                  demo config + scripted walkthrough
 scripts/                        build/demo/scans helpers
+site/                           static landing page and design-system reference (not hosted)
 ```
 
 ## Documentation
@@ -157,61 +213,23 @@ scripts/                        build/demo/scans helpers
 |---|---|
 | [docs/configuration.md](docs/configuration.md) | full config reference (schema, precedence, env overrides) |
 | [docs/cli.md](docs/cli.md) | every command and flag |
+| [docs/architecture/console-api.md](docs/architecture/console-api.md) | operator console API contract |
+| [docs/architecture/fleet-protocol.md](docs/architecture/fleet-protocol.md) | fleet and forwarding wire protocol, quotas and limits |
+| [docs/architecture/performance.md](docs/architecture/performance.md) | measured backend performance, `make bench`, unmeasured cases |
 | [docs/ecs-export.md](docs/ecs-export.md) | stable ECS-compatible evidence mapping and limits |
 | [docs/evidence-encryption.md](docs/evidence-encryption.md) | age/X25519 at-rest encryption, identity handling, rotation and recovery limits |
-| [docs/DELIVERY-PLAN.md](docs/DELIVERY-PLAN.md) | finite v0.2 PR train, acceptance gates and completion predicate |
+| [docs/design-system.md](docs/design-system.md) | console UI and site design system |
 | [docs/canary-model.md](docs/canary-model.md) | MCP canary/operator model |
 | [docs/migration-beelzebub.md](docs/migration-beelzebub.md) | importer field mappings, exact supported/approximated/unsupported |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | symptom → cause → fix |
 | [docs/FAQ.md](docs/FAQ.md) | positioning, evidence, provider questions |
-| [deploy/helm/aegismesh/README.md](deploy/helm/aegismesh/README.md) | Helm chart operator runbook — current Kubernetes packaging path |
+| [deploy/helm/aegismesh/README.md](deploy/helm/aegismesh/README.md) | Helm chart operator runbook, current Kubernetes packaging path |
 | [docs/deploy/kubernetes.md](docs/deploy/kubernetes.md) | Kubernetes verified-vs-untested boundary map and support preconditions |
+| [docs/verification.md](docs/verification.md) | what was run, with results; what was not run |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | current state, invariants and next priorities for maintainers |
 
 ## Contributing & governance
 
 Apache-2.0 licensed (see [LICENSE](LICENSE), [NOTICE](NOTICE)). Start with
 [CONTRIBUTING.md](CONTRIBUTING.md), the [release process](docs/RELEASE.md), and the
 [license/supply-chain policy](docs/license-policy.md). Agents: read [AGENTS.md](AGENTS.md) first.
-
-## Status of unreleased work
-
-Local `master` at `484bd65` contains #72-#76: toolchain fixes, evidence
-encryption, console API, embedded UI and experimental fleet inventory (verified
-from local Git ancestry). The v3 checkpoint amendment is uncommitted work on
-`feat/encrypted-live-read`. No v3 hosted CI, publication or deployment was
-performed. See [docs/HANDOFF.md](docs/HANDOFF.md).
-
-## Console
-
-An optional operator API runs inside the binary on
-its own authenticated listener, disabled by default. `aegismesh console token`
-generates an operator credential and digest snippet; `aegismesh demo --console`
-keeps the synthetic scenario available on an OS-assigned loopback console until
-Ctrl-C. The operator UI is embedded in the binary (plain HTML, CSS and ES
-modules: no build step, no third-party code) and is served at `/` only when
-`console.enabled` is true.
-
-The console reads a bounded in-memory evidence index and supports operator
-investigations plus an audited viewer/analyst/admin token model. It cannot
-control sensors or change evidence/configuration. Encrypted storage stays
-live-only: no private identity is loaded into the runtime. This branch adds opt-in
-**SSO via OIDC (experimental)** and **logical tenant isolation (experimental)**.
-Token login remains enabled for break-glass access by default. Every session has
-one active tenant; administrators have no cross-tenant view. Tenant state and
-quotas are separate, but the process, OS user and encryption recipient are shared.
-Local logout does not terminate the IdP session. Optional fleet inventory is described below. See
-[configuration](docs/configuration.md#operator-console-optional),
-the [API contract](docs/architecture/console-api.md) and the
-[design system](docs/design-system.md).
-
-## Fleet (experimental)
-
-The same binary can run an opt-in inventory hub or outbound reporting agent.
-Local Ed25519 identities, one-time enrollment and signed heartbeats provide
-experimental fleet inventory with authenticated enrollment and heartbeats. The
-hub cannot command nodes. This is not a hosted service; logical tenant isolation is experimental. Experimental
-best-effort forwarding with counted loss; local store authoritative. Evidence disclosure
-and reception each require a separate opt-in, both off by default. Both roles default off and the machine listener is separate
-from console/admin/sensors. Start with [fleet configuration](docs/configuration.md#experimental-fleet-inventory-adr-0018),
-the [operator API](docs/architecture/console-api.md#experimental-fleet-inventory-additions-adr-0018)
-and [wire protocol](docs/architecture/fleet-protocol.md).
