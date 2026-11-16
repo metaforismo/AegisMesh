@@ -13,7 +13,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
 )
 
-// ServeHTTP accepts only versioned enrollment and heartbeat submissions on a separate listener.
+// ServeHTTP accepts only versioned enrollment, heartbeat and evidence submissions on a separate listener.
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -22,7 +22,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.reject(w, failure("rate_limited"))
 		return
 	}
-	if r.Method != http.MethodPost || (r.URL.Path != protocol.EnrollPath && r.URL.Path != protocol.HeartbeatPath) {
+	if r.Method != http.MethodPost || (r.URL.Path != protocol.EnrollPath &&
+		r.URL.Path != protocol.HeartbeatPath && r.URL.Path != protocol.EvidencePath) {
 		h.reject(w, failure("not_found"))
 		return
 	}
@@ -36,11 +37,12 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.reject(w, failure("unauthenticated"))
 		return
 	}
-	if r.ContentLength > protocol.MaxBodyBytes {
+	limit := int64(protocol.BodyLimit(r.URL.Path))
+	if r.ContentLength > limit {
 		h.reject(w, failure("body_too_large"))
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, protocol.MaxBodyBytes))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
 		h.reject(w, failure("body_too_large"))
 		return
@@ -57,6 +59,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var enrollInput protocol.Enrollment
 	var heartbeatInput protocol.Heartbeat
+	var evidenceInput protocol.EvidenceBatch
 	var publicKey string
 	if r.URL.Path == protocol.EnrollPath {
 		if protocol.Decode(body, &enrollInput) != nil || !protocol.NameValid(enrollInput.Name) ||
@@ -67,7 +70,12 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		publicKey = enrollInput.PublicKey
 	} else {
-		if protocol.Decode(body, &heartbeatInput) != nil || !heartbeatInput.Valid() {
+		if r.URL.Path == protocol.EvidencePath {
+			evidenceInput, err = protocol.DecodeBatch(body)
+		} else if protocol.Decode(body, &heartbeatInput) != nil || !heartbeatInput.Valid() {
+			err = protocol.ErrInvalid
+		}
+		if err != nil {
 			h.reject(w, failure("invalid_argument"))
 			return
 		}
@@ -81,6 +89,16 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(key) != ed25519.PublicKeySize || protocol.ID(key) != auth.NodeID ||
 		!ed25519.Verify(key, []byte(canonical), auth.Signature) {
 		h.reject(w, failure("unauthenticated"))
+		return
+	}
+	if r.URL.Path == protocol.EvidencePath {
+		ack, err := h.evidence(auth, evidenceInput, len(body))
+		if err != nil {
+			h.reject(w, err)
+			return
+		}
+		h.requests.Inc("accepted")
+		_ = json.NewEncoder(w).Encode(ack)
 		return
 	}
 	h.mu.Lock()
@@ -122,6 +140,8 @@ func (h *Hub) respond(w http.ResponseWriter, err error) {
 			seconds = typed.retryAfter
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	case "evidence_disabled":
+		status = http.StatusConflict
 	case "revoked":
 		status = http.StatusForbidden
 	case "not_found":
@@ -257,6 +277,16 @@ func (h *Hub) heartbeat(input protocol.Heartbeat, auth protocol.Authentication) 
 	}
 	if err := h.remember(auth); err != nil {
 		return protocol.Node{}, err
+	}
+	if input.Forwarding != nil {
+		forwarding := *input.Forwarding
+		forwarding.GapsTotal = 0
+		forwarding.LastForwardedAt = ""
+		if record.Node.Forwarding != nil {
+			forwarding.GapsTotal = record.Node.Forwarding.GapsTotal
+			forwarding.LastForwardedAt = record.Node.Forwarding.LastForwardedAt
+		}
+		record.Node.Forwarding = &forwarding
 	}
 	record.Heartbeat = input
 	record.Node.LastSeenAt = h.now().UTC().Format(time.RFC3339Nano)

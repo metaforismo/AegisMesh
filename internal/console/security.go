@@ -146,7 +146,7 @@ func (s *Server) route(pattern, role, group string, handler func(http.ResponseWr
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		s.requests.Inc(group)
 		switch group {
-		case "meta", "session", "event", "sensors", "rules", "node":
+		case "meta", "session", "sensors", "rules", "node":
 			if _, ok := query(w, r); !ok {
 				return
 			}

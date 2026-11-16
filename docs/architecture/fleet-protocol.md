@@ -1,7 +1,7 @@
 # Experimental fleet protocol v1
 
 This is experimental fleet inventory with authenticated enrollment and heartbeats.
-It is not multi-tenant, is not a managed service, and forwards no evidence.
+It is not multi-tenant or a managed service. Explicit opt-in evidence forwarding is described below.
 Agents initiate every connection. The hub cannot command nodes, including a node
 whose administrator has enabled the agent. There is no command, configuration,
 file, code, upgrade or enforcement response field or endpoint.
@@ -9,7 +9,7 @@ file, code, upgrade or enforcement response field or endpoint.
 ## Transport and versioning
 
 A hub can run with zero sensors. The machine API has its own listener, default `127.0.0.1:9130`. It never shares a
-mux with console, admin or sensors. Both methods below are POST with exactly
+mux with console, admin or sensors. All machine submissions are POST with exactly
 `Content-Type: application/json`. TLS 1.2 or newer is mandatory beyond loopback;
 HTTP on loopback is for local development only. Agents verify hostname and the
 system trust roots, optionally augmented by `hub_ca_file`. Proxies and redirects
@@ -39,7 +39,7 @@ Sign the following ASCII bytes joined by single LF bytes, **without a final LF**
 AEGISMESH-FLEET/1
 <node id>
 POST
-<exact path: /fleet/v1/enroll or /fleet/v1/heartbeat>
+<exact path: /fleet/v1/enroll, /fleet/v1/heartbeat or /fleet/v1/evidence>
 <lowercase hex SHA-256 of the exact transmitted body bytes>
 <timestamp header>
 <nonce header>
@@ -50,7 +50,7 @@ encoded/alternate paths, duplicate headers, uppercase hex and noncanonical
 numbers are rejected. Node ID is included in addition to the requested tuple to
 bind the signing envelope explicitly to its identity. Timestamp skew is at most
 120 seconds in either direction. Each node has its own 64-entry nonce window
-(shared by enrollment and heartbeats), retained until the signed timestamp plus
+(shared by enrollment, heartbeats and evidence batches), retained until the signed timestamp plus
 120 seconds. Only that node's expired entries are pruned on acceptance; live
 entries are never evicted. Saturation returns `capacity` only for that node and
 cannot consume another identity's budget. The total is at most 64000 entries.
@@ -122,13 +122,13 @@ online below three intervals, stale at three, offline at ten. Revocation takes
 precedence. Agent success records its local acknowledgement time. Delivery runs
 independently of sensors/storage, retries with exponential equal jitter from
 1..2 seconds initially up to 150..300 seconds, and resets to the configured
-interval on success. Failure does not enqueue historical heartbeats or evidence.
+interval on success. Failure does not enqueue historical heartbeats; evidence has its own bounded queue below.
 A restart reuses the local identity and performs signed idempotent enrollment.
 An unknown identity without a token remains unenrolled and reports a safe error.
 
 ## Limits, durability, errors and audit
 
-Requests and responses are at most 32 KiB. Strict JSON rejects null, unknown and
+Inventory requests and all responses are at most 32 KiB; evidence requests are at most 4 MiB. Strict JSON rejects null, unknown and
 duplicate fields, invalid UTF-8, extra documents, depth above 32 and arrays or
 objects above 256 entries. The listener bounds ordinary work to eight handlers,
 headers to 8 KiB, header time to five seconds, read/write to ten seconds and idle
@@ -184,6 +184,7 @@ Errors have `{"error":{"code":"..."}}`, without echoed request data:
 | 400 | `invalid_argument` |
 | 401 | `unauthenticated`, `invalid_token`, `clock_skew`, `replay` |
 | 403 | `revoked` |
+| 409 | `evidence_disabled` |
 | 404 | `not_found` |
 | 413 | `body_too_large` |
 | 429 | `rate_limited` (with `Retry-After`) |
@@ -211,3 +212,118 @@ fails closed. Registry and audit are separate transactions; a failed post-save
 audit response may mean state is already saved. Inspect before retrying.
 Metrics have fixed outcome labels only, never node IDs:
 `aegismesh_fleet_agent_attempts_total` and `aegismesh_fleet_hub_requests_total`.
+
+## Experimental evidence forwarding (2026-11-15 amendment)
+
+This slice implements **best-effort forwarding with counted loss; local store authoritative**.
+Both `fleet.agent.forward_evidence.enabled` and `fleet.hub.accept_evidence.enabled`
+default false. Enabling forwarding explicitly discloses redacted evidence to the hub,
+including correlation signals. The runtime offers only envelopes whose local authoritative
+append succeeded. It never reads historical evidence or holds a private decryption identity.
+Local encryption therefore does not prevent live forwarding; plaintext is sent within TLS
+outside loopback. Redaction is the confidentiality control at that boundary.
+
+### `POST /fleet/v1/evidence`
+
+The existing canonical signing domain, headers, exact method/path/body hash, skew,
+per-node nonce window and revocation checks apply. Evidence has a separate **4 MiB**
+body cap; inventory remains 32 KiB. Example framing (envelopes abbreviated):
+
+```json
+{"stream_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","first":4,"last":5,"events":[{},{}]}
+```
+
+`stream_id` is a fresh random 128-bit lowercase hex value per agent process.
+`first`/`last` are inclusive uint64 forwarding positions, starting at one;
+`last-first == len(events)-1`. At most **1,000 events** per batch. Every envelope
+retains its native bytes and payload hash, without origin fields inserted.
+Unknown/duplicate outer fields, null framing, invalid UTF-8, inconsistent ranges,
+extra documents or malformed JSON reject the whole batch with `invalid_argument`.
+Individual malformed/oversized/invalid-hash envelopes are skipped and counted.
+Envelope validation checks required fields, schema, strict nested metadata, JSON
+container bounds (depth 32, 256 entries), UTF-8, lowercase IDs/hashes, nonzero
+sequence, recognized kind/classification, bounded metadata/rules and timestamp
+from 2020-01-01 through hub time +120 seconds. Native envelopes are at most 1 MiB;
+instance ≤128 bytes, sensor ID ≤64, listen ≤256, redaction rules ≤64 ×128 bytes.
+Observation content is display data only and cannot change behavior.
+
+Success: `200 {"node_id":"…","accepted":2,"invalid":0,"duplicates":0}`.
+Counts sum to the submitted range length. Invalid envelopes are final acknowledged
+loss on the agent; request errors retain the pending range. A fresh signed retry
+is idempotent within each node's last **4,096 accepted event IDs**, in memory.
+Repeating the exact signed request is a replay (401); it is not a delivery retry.
+Duplicate IDs across nodes never collide in storage or index metadata. Deduplication
+is bounded and process-local: an older ID or a retry after hub restart may append again.
+No exactly-once, crash-durable acknowledgement or provenance claim is made.
+Append/flush/retention errors return `unavailable`; flush reaches the OS, not fsync.
+Partial appends can exist after an error and are covered by the bounded retry window.
+
+Reception disabled returns **409 `evidence_disabled`** after authentication and
+revocation checks. The agent reports that fixed category and retries every
+**5–6 minutes**, independently of heartbeats. Other failures use equal-jitter
+exponential backoff (initial 1–2 s, capped 150–300 s). Successful/idle cycles
+wait five seconds. A dedicated transport isolates evidence from heartbeat
+connection capacity. Hub response data is only strictly bounded acknowledgement
+and fixed local status selection; it cannot command a node.
+
+### Queue, quotas and retention
+
+The in-memory agent ring holds at most **4,096 events / 16 MiB encoded bytes**.
+Overflow evicts oldest queued envelopes and counts each eviction. Enqueue performs
+bounded serialization and a short memory-only critical section; it waits on no
+network, disk or queue capacity. Disabled enqueue is O(1), without allocation.
+One in-flight batch may retain up to another 4 MiB while overflow evicts its queued
+references. An evicted in-flight event can still arrive; `dropped_total` counts
+queue evictions and invalid acknowledgements, not a proof of permanent loss.
+Forwarding sequence gaps are recorded by the hub per process stream; the first
+received range also exposes an already-dropped prefix. A trailing dropped suffix,
+process crash or a forged stream reset cannot be inferred as a gap without a later
+range. Counters and stream changes are node self-reports, not loss attestation.
+
+There is **no on-disk spool**. A plaintext spool would defeat local encryption,
+and the runtime holds no read identity. Events observed while the hub is unreachable
+for longer than the queue covers, or queued at a crash, are not forwarded and remain
+only on the node. Orderly stop cancels delivery; remaining pending events also remain
+only on the node. No historical replay or deletion propagation is implemented.
+
+Per cryptographic node: **five-second request spacing**, **1,000 events per fixed
+second**, **16 MiB encoded request bytes per fixed minute**, and **16 MiB retained
+segment bytes**. Requests exceeding a quota receive 429 `rate_limited` with
+`Retry-After`; the agent uses its local jittered schedule. Concurrent evidence work
+for the same identity fails quickly instead of occupying all handler slots.
+The registry lock is released before validation/appending/indexing. Separate nodes
+have separate ingestion locks and replay/rate/dedup budgets.
+
+The aggregate forwarded-segment cap is **256 MiB**, enforced with atomic reservations
+including a conservative encryption/rotation allowance (2× valid new envelope bytes +4 KiB per new event
++4 KiB, reconciled to actual flushed segment sizes). Reservations can temporarily
+refuse a batch before the physical cap is reached. One identity can consume at most
+16 MiB of it; many colluding identities can exhaust the shared cap. Closed oldest
+segments are evicted within that node to make space; the active segment is retained.
+Count/age retention also runs after batches using the hub storage policy. Global
+capacity refusal does not evict other nodes' evidence. Dormant copies remain until
+that node next submits or the operator manages local retention; no deletion API exists.
+These finite fixed limits are intentional experimental defaults, not tuning fields.
+
+Copies live in `<fleet.hub state dir>/evidence/<validated cryptographic node id>/`.
+Only canonical authenticated IDs select a child beneath that trusted parent; node
+names and envelope fields never select paths. Hub `storage.encryption` applies,
+with the same persistent encryption guard, native rotation/checkpoints and inspect
+reader. Forwarded segment size is capped at 4 MiB, respecting smaller configured caps, to bound rotation slack; the
+stored-envelope limit is 1 MiB. Other storage count/age settings are inherited.
+The disposable console index is fed after append and keeps origin separately.
+Forwarded history is not backfilled on restart, including plaintext copies.
+
+Heartbeat adds optional `forwarding` with `enabled`, `forwarded_total`,
+`dropped_total`, `last_forwarded_at`, `gaps_total` and optional `queued_events`,
+`queued_bytes`, `last_error`. Old inventory-only agents remain readable without it.
+The node view preserves hub-authored last receive time and gap count instead of
+trusting those reported fields. Registry gap/stream updates have the existing
+coalesced crash window. Metrics add fixed outcomes only:
+`aegismesh_fleet_forwarding_total{label}` (agent accepted/failed/dropped),
+`aegismesh_fleet_evidence_events_total{label}` (hub accepted/invalid/duplicate).
+No node ID, event ID, source or attacker string becomes a metric label.
+
+Smaller configured segment caps also enforce a conservative raw-size +1 KiB
+fit allowance per envelope; envelopes that cannot meet it are counted invalid,
+so an operator-selected small segment cannot cause endless retries of an event.

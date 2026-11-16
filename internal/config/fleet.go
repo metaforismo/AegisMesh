@@ -17,12 +17,14 @@ import (
 type Fleet struct {
 	// Hub configures the dedicated inbound machine API.
 	Hub FleetHub `yaml:"hub" json:"hub"`
-	// Agent configures signed outbound status reporting only.
+	// Agent configures signed outbound status and separately consented evidence reporting.
 	Agent FleetAgent `yaml:"agent" json:"agent"`
 }
 
 // FleetHub never dials agents and provides no remote control capability.
 type FleetHub struct {
+	// AcceptEvidence explicitly opts into receiving redacted node evidence.
+	AcceptEvidence EvidenceConsent `yaml:"accept_evidence" json:"accept_evidence"`
 	// Enabled opts into inventory enrollment and heartbeat reception.
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	// Listen defaults to the dedicated loopback authority 127.0.0.1:9130.
@@ -37,6 +39,8 @@ type FleetHub struct {
 
 // FleetAgent holds references, never an inline enrollment credential.
 type FleetAgent struct {
+	// ForwardEvidence explicitly consents to disclosure of redacted evidence to the hub.
+	ForwardEvidence EvidenceConsent `yaml:"forward_evidence" json:"forward_evidence"`
 	// Enabled opts into bounded outbound inventory reporting.
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	// HubURL is an origin-only http(s) URL checked by shared egress classification.
@@ -55,6 +59,12 @@ type FleetAgent struct {
 	AllowPrivateEgress bool `yaml:"allow_private_egress" json:"allow_private_egress"`
 	// HeartbeatIntervalSeconds defaults to 30 and must be within 10..300.
 	HeartbeatIntervalSeconds int `yaml:"heartbeat_interval_seconds" json:"heartbeat_interval_seconds"`
+}
+
+// EvidenceConsent is an off-by-default evidence confidentiality boundary.
+type EvidenceConsent struct {
+	// Enabled explicitly opts into experimental best-effort forwarding with counted loss.
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 func (c *Config) fleetDefaults() {
@@ -85,9 +95,11 @@ func (c *Config) fleetEnv() error {
 		}
 	}
 	boolsByName := map[string]*bool{
-		"HUB_ENABLED":                &c.Fleet.Hub.Enabled,
-		"AGENT_ENABLED":              &c.Fleet.Agent.Enabled,
-		"AGENT_ALLOW_PRIVATE_EGRESS": &c.Fleet.Agent.AllowPrivateEgress,
+		"HUB_ACCEPT_EVIDENCE_ENABLED":    &c.Fleet.Hub.AcceptEvidence.Enabled,
+		"AGENT_FORWARD_EVIDENCE_ENABLED": &c.Fleet.Agent.ForwardEvidence.Enabled,
+		"HUB_ENABLED":                    &c.Fleet.Hub.Enabled,
+		"AGENT_ENABLED":                  &c.Fleet.Agent.Enabled,
+		"AGENT_ALLOW_PRIVATE_EGRESS":     &c.Fleet.Agent.AllowPrivateEgress,
 	}
 	for name, target := range boolsByName {
 		if value, exists := os.LookupEnv("AEGISMESH_FLEET_" + name); exists {
@@ -139,6 +151,12 @@ func (c *Config) ValidateFleet() error {
 	agentConfig := c.Fleet.Agent
 	fail := func(message string) error {
 		return fmt.Errorf("%w: fleet: %s", errConfig, message)
+	}
+	if hubConfig.AcceptEvidence.Enabled && !hubConfig.Enabled {
+		return fail("hub.accept_evidence.enabled requires hub.enabled")
+	}
+	if agentConfig.ForwardEvidence.Enabled && !agentConfig.Enabled {
+		return fail("agent.forward_evidence.enabled requires agent.enabled")
 	}
 	if hubConfig.Enabled && agentConfig.Enabled {
 		return fail("hub and agent roles cannot both be enabled in an operator config; compose tests in process")

@@ -1,4 +1,4 @@
-// Package protocol defines the inventory-only fleet wire contract.
+// Package protocol defines the outbound-only fleet inventory and evidence wire contract.
 // All incoming bytes are untrusted data; no field selects behavior or a filesystem path.
 package protocol
 
@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// MaxBodyBytes bounds every machine request and response.
+// MaxBodyBytes bounds inventory requests and every machine response.
 const MaxBodyBytes = 32 << 10
 
 // EnrollPath is the versioned proof-of-possession enrollment endpoint.
@@ -72,8 +72,8 @@ func Random(size int) (string, error) {
 
 // Canonical returns the exact domain-separated ASCII signing string, without a final newline.
 func Canonical(method, path string, body []byte, auth Authentication) (string, error) {
-	if method != http.MethodPost || (path != EnrollPath && path != HeartbeatPath) ||
-		!Hex(auth.NodeID, 16) || !Hex(auth.Nonce, 16) || len(body) > MaxBodyBytes {
+	if method != http.MethodPost || (path != EnrollPath && path != HeartbeatPath && path != EvidencePath) ||
+		!Hex(auth.NodeID, 16) || !Hex(auth.Nonce, 16) || len(body) > BodyLimit(path) {
 		return "", ErrInvalid
 	}
 	seconds, err := strconv.ParseInt(auth.Timestamp, 10, 64)

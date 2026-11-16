@@ -205,8 +205,9 @@ the [API contract](docs/architecture/console-api.md) and the
 The same binary can run an opt-in inventory hub or outbound reporting agent.
 Local Ed25519 identities, one-time enrollment and signed heartbeats provide
 experimental fleet inventory with authenticated enrollment and heartbeats. The
-hub cannot command nodes. This is not multi-tenant, not a managed service, and
-forwards no evidence. Both roles default off and the machine listener is separate
+hub cannot command nodes. This is not multi-tenant or a managed service. Experimental
+best-effort forwarding with counted loss; local store authoritative. Evidence disclosure
+and reception each require a separate opt-in, both off by default. Both roles default off and the machine listener is separate
 from console/admin/sensors. Start with [fleet configuration](docs/configuration.md#experimental-fleet-inventory-adr-0018),
 the [operator API](docs/architecture/console-api.md#experimental-fleet-inventory-additions-adr-0018)
 and [wire protocol](docs/architecture/fleet-protocol.md).

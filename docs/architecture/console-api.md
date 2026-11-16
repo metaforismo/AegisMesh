@@ -1,6 +1,6 @@
 # Console API v1 — contract
 
-Status: **implemented contract for the single-node operator console**. This is
+Status: **implemented contract for the single-tenant operator console**. This is
 the only interface between the Go console server (`internal/console`) and the
 embedded web UI (`internal/consoleui`). Change this document in the same commit
 as any behavior change.
@@ -209,7 +209,7 @@ Authenticated (`viewer` and above unless noted):
 
 ### `GET /api/v1/events` filters
 
-All optional and AND-combined: `classification`, `sensor` (id), `kind`,
+All optional and AND-combined: `node` (cryptographic id or `local`), `classification`, `sensor` (id), `kind`,
 `source` (exact), `rule` (rule id), `severity` (minimum:
 `info|low|medium|high|critical`), `since`, `until` (RFC 3339), `q`
 (case-insensitive substring over `summary`, `source` and rule ids, ≤128 chars),
@@ -219,7 +219,7 @@ All optional and AND-combined: `classification`, `sensor` (id), `kind`,
 
 Server-Sent Events. `event: observation` with `data: <EventSummary JSON>` for
 each newly stored envelope; `event: heartbeat` with `data: {"time":"…"}` every
-15 s. The stream takes no filters; clients filter locally. A browser
+15 s. The stream accepts optional `node=<id>|local`; other filters remain client-side. A browser
 `EventSource` cannot read the status of a failed stream, so on close the UI
 calls `GET /api/v1/session` to tell an expired session from an outage. A slow client is disconnected rather than buffered without bound. At most
 16 concurrent streams (503 beyond).
@@ -290,7 +290,7 @@ written to the audit trail.
   (`history: "unavailable"`).
 - The audit chain proves internal consistency of the audit file, not writer
   identity; an attacker with filesystem write access can rewrite it wholesale.
-- Single node, single tenant. Fleet, SSO and tenant isolation are not shipped.
+- Single tenant. Fleet inventory and opt-in evidence reception are experimental; SSO and tenant isolation are not shipped.
 
 ### Summary and cursor projection
 
@@ -314,11 +314,11 @@ These routes use the existing console listener, authentication, role hierarchy,
 Host checks, cookie CSRF/Origin checks, request bounds, errors and audit. They do
 not share the machine-facing hub mux. No route controls a sensor. This is
 experimental fleet inventory with authenticated enrollment and heartbeats; it
-is not multi-tenant, not a managed service, and forwards no evidence.
+is not multi-tenant or a managed service. Evidence reception is an additional off-by-default consent boundary.
 
 | Method and path | Minimum role | Response |
 | --- | --- | --- |
-| `GET /api/v1/fleet` | viewer | `{hub:{enabled,listen,tls},agent:{enabled,hub_url,node_id,enrolled,last_heartbeat_at,last_error}}` |
+| `GET /api/v1/fleet` | viewer | `{hub:{enabled,listen,tls,accept_evidence},agent:{enabled,hub_url,node_id,enrolled,last_heartbeat_at,last_error,forwarding}}` |
 | `GET /api/v1/fleet/nodes?status=` | viewer | `{nodes:[FleetNode]}` sorted by ID; optional status online/stale/offline/revoked |
 | `GET /api/v1/fleet/nodes/{id}` | viewer | `FleetNode`, 404 if absent |
 | `POST /api/v1/fleet/enrollment-tokens` | admin | 201 `{id,token,expires_at}`; raw token returned only here |
@@ -332,9 +332,9 @@ RFC3339Nano string. Token listing exposes neither raw token nor digest. All
 other mutations accept no body. Unknown/duplicate query keys are rejected;
 only the node-list route accepts `status`.
 
-`FleetNode` has exactly `{id,name,status,enrolled_at,last_seen_at,version,
+`FleetNode` retains `{id,name,status,enrolled_at,last_seen_at,version,
 uptime_seconds,sensors,counters,bus_dropped_events,storage_healthy,
-public_key_fingerprint}`. `version` is `{version,commit,go}`, `sensors` is
+public_key_fingerprint}` and optional `forwarding` described below. `version` is `{version,commit,go}`, `sensors` is
 `[{id,kind,state}]`, and counters are uint64
 `{interaction,canary_invocation,correlation_signal}`. Sensor addresses and
 evidence are absent. Timestamps are UTC RFC3339Nano, empty before the first
@@ -361,3 +361,43 @@ inventory reads remain unaudited.
 
 The [machine protocol](fleet-protocol.md) defines signing, skew/replay protection,
 limits and errors. There is no hub-to-agent command or configuration API.
+
+
+## Experimental forwarded evidence additions (2026-11-15)
+
+Best-effort forwarding with counted loss; local store authoritative. Existing field names,
+local envelope shapes, authentication and role grants remain compatible. The UI is unchanged.
+
+| Endpoint/type | Additive contract |
+| --- | --- |
+| `EventSummary` | Optional `node: {id:string,name:string}`, absent for local observations. ID is authenticated origin; name comes from the current registry. |
+| `GET /api/v1/events` | `node=<32 lowercase hex id>` selects that origin; `node=local` selects local observations; omitted combines all. Node is included in the cursor scope. |
+| `GET /api/v1/events/{id}` | Optional `node=<id>|local` disambiguates IDs. Without it, local is preferred; a unique remote ID resolves, multiple remote matches return 404. Detail adds optional top-level `node`, also present on `summary`. Native `envelope` is unchanged. |
+| Forwarded detail `integrity` | Existing `{verified,algorithm,error}` plus `scope:"hub_payload_hash_consistency"` and `description:"Verified on the hub against the envelope payload hash; consistency, not provenance."` |
+| `GET /api/v1/events/stream` | Optional `node=<id>|local` filter; `observation` emits the optional summary `node`. Heartbeat shape unchanged. |
+| `GET /api/v1/overview` | Accepting hubs add `by_node:[{id,name,events}]`, sorted by ID, within the selected overview window and retained index. `id:"local"`, `name:""` denotes local observations. Empty accepting index yields `[]`; disabled reception omits the field. |
+| `FleetNode` | Optional `forwarding:{enabled,forwarded_total,dropped_total,last_forwarded_at,gaps_total}`. Optional queue/error fields may also be present as below. Absent for old agents before any forwarding report/submission. |
+| `GET /api/v1/fleet` | `hub.accept_evidence:boolean`; `agent.forwarding` always present with the shape below, even when disabled. |
+
+Forwarding counters are JSON uint64 numbers. Required fields when `forwarding` exists:
+`enabled:boolean`, `forwarded_total:uint64`, `dropped_total:uint64`,
+`last_forwarded_at:string` (UTC RFC3339Nano or empty), `gaps_total:uint64`.
+Optional fields omitted at zero/empty: `queued_events:int`, `queued_bytes:int`,
+`last_error:string` (fixed local categories, including `evidence_disabled`).
+FleetNode counters/queue/error are heartbeat self-reports; its last receive time and gaps
+are hub-authored. Agent status last-forward time is the local successful acknowledgement time.
+Dropped counts include queue evictions (an in-flight eviction may still arrive) and invalid
+acknowledgements. A trailing loss or crash cannot be inferred without a subsequent sequence.
+
+All changed GET routes require viewer (also analyst/admin). Unauthenticated requests are
+401; existing invalid credential, Host, session and body checks still apply. No new operator
+write route exists. A node filter cannot grant access; every console operator shares this
+single-tenant fleet view. Recommendations continue to use local evidence only; no cross-node
+correlation is implemented. Related events resolve within an origin. Legacy investigation
+annotations use bare event IDs and resolve local observations only; node-scoped annotations
+are not implemented. A forwarded event cannot inherit a local investigation by colliding with its ID.
+
+Forwarded index history is live-only after restart, including plaintext copies. Retention
+and bounded-index eviction are independent; index entries can outlive hub retention until
+index eviction. `index.history` reports `unavailable` on accepting hubs. Inspect the native
+per-node copies locally for retained history, with explicit read identities when encrypted.

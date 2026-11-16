@@ -123,7 +123,7 @@ packaging; pinned CI/release definitions and documentation.
 
 Does not ship yet: Telnet/database sensors, OTLP or automatic SIEM connectors,
 autonomous response connectors or enforcement,
-distributed evidence aggregation, multi-tenancy, hosted SaaS/control plane, SSO,
+durable offline evidence guarantees, multi-tenancy, hosted SaaS/control plane, SSO,
 or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
 
 Evidence encryption is present in the supplied master baseline. This local,
@@ -163,8 +163,10 @@ admin tokens establish identity; signed requests, expiry/replay checks and
 permanent revocation protect the inventory boundary. Neither status signatures
 nor online state attest host integrity. The hub cannot command nodes.
 
-This is not multi-tenant, not a managed service, and forwards no evidence.
-Evidence batching/spooling, rotation, attestation, SSO, upgrades and commercial
+This is not multi-tenant or a managed service. Experimental live evidence batching
+is implemented locally on `feat/evidence-forwarding`: best-effort forwarding with counted loss;
+local store authoritative. Separate agent disclosure and hub reception consent default off.
+Durable spooling, key rotation, attestation, SSO, upgrades and commercial
 service boundaries remain proposed, not implemented. See ADR-0018, the fleet
 protocol and current verification ledger; local proof is separate from review,
 hosted CI, merge, deployment and operational acceptance.

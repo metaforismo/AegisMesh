@@ -67,6 +67,8 @@ func Code(err error) string {
 
 // Options injects trusted state, clock, metrics and an optional additional audit sink.
 type Options struct {
+	// Evidence opts into forwarded evidence reception; nil keeps the boundary closed.
+	Evidence *EvidenceOptions
 	// StateDir is the trusted private snapshot directory.
 	StateDir string
 	// Now supplies liveness, expiry, abuse and flush decisions; nil uses time.Now.
@@ -79,6 +81,8 @@ type Options struct {
 }
 
 type registration struct {
+	StreamID        string             `json:"stream_id,omitempty"`
+	ForwardSequence uint64             `json:"forward_sequence,omitempty"`
 	PublicKey       string             `json:"public_key"`
 	IntervalSeconds int                `json:"interval_seconds"`
 	Node            protocol.Node      `json:"node"`
@@ -99,23 +103,25 @@ type snapshot struct {
 
 // Hub serializes durable mutations and coalesces soft inventory/replay snapshots.
 type Hub struct {
-	mu              sync.Mutex
-	root            *os.Root
-	state           snapshot
-	now             func() time.Time
-	audit           *audit.Log
-	additionalAudit func(string, string, string) error
-	requests        observe.LabeledCounter
-	failed          atomic.Bool
-	replay          map[string]map[string]int64
-	lastEnrollment  map[string]time.Time
-	dirty           bool
-	lastFlush       time.Time
-	stop            chan struct{}
-	done            chan struct{}
-	closeOnce       sync.Once
-	closeErr        error
-	limits          abuseLimits
+	evidenceReceiver *evidenceReceiver
+	evidenceEvents   observe.LabeledCounter
+	mu               sync.Mutex
+	root             *os.Root
+	state            snapshot
+	now              func() time.Time
+	audit            *audit.Log
+	additionalAudit  func(string, string, string) error
+	requests         observe.LabeledCounter
+	failed           atomic.Bool
+	replay           map[string]map[string]int64
+	lastEnrollment   map[string]time.Time
+	dirty            bool
+	lastFlush        time.Time
+	stop             chan struct{}
+	done             chan struct{}
+	closeOnce        sync.Once
+	closeErr         error
+	limits           abuseLimits
 }
 
 // New opens private state and refuses corruption; it does not bind or start a listener.
@@ -142,7 +148,8 @@ func New(opts Options) (*Hub, error) {
 	if meter == nil {
 		meter = observe.NewRegistry()
 	}
-	h.requests = meter.CounterVec("aegismesh_fleet_hub_requests_total", "Fleet outcomes by fixed code", 12)
+	h.evidenceEvents = meter.CounterVec("aegismesh_fleet_evidence_events_total", "Fixed evidence event outcomes", 3)
+	h.requests = meter.CounterVec("aegismesh_fleet_hub_requests_total", "Fleet outcomes by fixed code", 13)
 	body, err := stateio.Read(root, "registry.json", stateio.MaxStateBytes)
 	if err == nil {
 		if decodeState(body, &h.state) != nil || !h.validState() {
@@ -171,6 +178,12 @@ func New(opts Options) (*Hub, error) {
 		}
 		h.replay[id][nonce] = expiry
 	}
+	h.evidenceReceiver, err = newReceiver(opts.Evidence)
+	if err != nil {
+		_ = h.audit.Close()
+		_ = root.Close()
+		return nil, err
+	}
 	h.lastEnrollment = make(map[string]time.Time)
 	h.lastFlush = h.now()
 	h.limits.init(h.now())
@@ -196,7 +209,7 @@ func (h *Hub) Close() error {
 			failedErr = failure("unavailable")
 		}
 		h.failed.Store(true)
-		h.closeErr = errors.Join(flushErr, failedErr, h.audit.Close(), h.root.Close())
+		h.closeErr = errors.Join(flushErr, failedErr, h.evidenceReceiver.close(), h.audit.Close(), h.root.Close())
 	})
 	return h.closeErr
 }

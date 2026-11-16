@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"crypto/tls"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/fleet/agent"
 	"github.com/metaforismo/aegismesh/internal/fleet/hub"
 	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
+	"github.com/metaforismo/aegismesh/internal/storage"
 	"github.com/metaforismo/aegismesh/internal/version"
 )
 
@@ -37,6 +39,9 @@ func (s *fleetSink) Append(ctx context.Context, envelope event.Envelope) error {
 	case "correlation_signal":
 		s.system.fleetCounts.correlation.Add(1)
 	}
+	if s.system.fleetAgent != nil {
+		s.system.fleetAgent.Enqueue(envelope)
+	}
 	return nil
 }
 
@@ -48,7 +53,26 @@ func (s *System) buildFleet() error {
 				return &hub.Error{Code: "invalid hub TLS certificate/key"}
 			}
 		}
+		var evidence *hub.EvidenceOptions
+		if cfg.Fleet.Hub.AcceptEvidence.Enabled {
+			opts := storage.Options{
+				MaxFileBytes: cfg.Storage.MaxFileBytes, MaxEventBytes: cfg.Storage.MaxEventBytes,
+				MaxEvents: cfg.Storage.Retention.MaxEvents, MaxAgeDays: cfg.Storage.Retention.MaxAgeDays,
+			}
+			if cfg.Storage.Encryption != nil && cfg.Storage.Encryption.Enabled {
+				opts.Encryption = &storage.EncryptionOptions{Recipient: cfg.Storage.Encryption.Recipient}
+			}
+			evidence = &hub.EvidenceOptions{
+				Dir: filepath.Join(cfg.FleetStateDir(false), "evidence"), Store: opts,
+				OnAppend: func(id string, envelope event.Envelope) {
+					if s.index != nil {
+						s.index.AddForwarded(envelope, id)
+					}
+				},
+			}
+		}
 		registry, err := hub.New(hub.Options{
+			Evidence: evidence,
 			StateDir: cfg.FleetStateDir(false),
 			Meter:    s.meter,
 			Audit: func(action, target, outcome string) error {
@@ -69,16 +93,17 @@ func (s *System) buildFleet() error {
 			return err
 		}
 		reporter, err := agent.New(agent.Options{
-			HubURL:       cfg.Fleet.Agent.HubURL,
-			StateDir:     cfg.FleetStateDir(true),
-			Name:         cfg.FleetNodeName(),
-			Token:        token,
-			CAFile:       cfg.Fleet.Agent.HubCAFile,
-			AllowPrivate: cfg.Fleet.Agent.AllowPrivateEgress,
-			Interval:     time.Duration(cfg.Fleet.Agent.HeartbeatIntervalSeconds) * time.Second,
-			Snapshot:     s.fleetHeartbeat,
-			Meter:        s.meter,
-			Log:          s.log,
+			ForwardEvidence: cfg.Fleet.Agent.ForwardEvidence.Enabled,
+			HubURL:          cfg.Fleet.Agent.HubURL,
+			StateDir:        cfg.FleetStateDir(true),
+			Name:            cfg.FleetNodeName(),
+			Token:           token,
+			CAFile:          cfg.Fleet.Agent.HubCAFile,
+			AllowPrivate:    cfg.Fleet.Agent.AllowPrivateEgress,
+			Interval:        time.Duration(cfg.Fleet.Agent.HeartbeatIntervalSeconds) * time.Second,
+			Snapshot:        s.fleetHeartbeat,
+			Meter:           s.meter,
+			Log:             s.log,
 		})
 		if err != nil {
 			return err
@@ -126,9 +151,10 @@ func (s *System) fleetHeartbeat() protocol.Heartbeat {
 func (s *System) FleetStatus() protocol.Status {
 	status := protocol.Status{
 		Hub: protocol.HubStatus{
-			Enabled: s.cfg.Fleet.Hub.Enabled,
-			Listen:  s.cfg.Fleet.Hub.Listen,
-			TLS:     s.cfg.Fleet.Hub.TLSCertFile != "",
+			AcceptEvidence: s.cfg.Fleet.Hub.AcceptEvidence.Enabled,
+			Enabled:        s.cfg.Fleet.Hub.Enabled,
+			Listen:         s.cfg.Fleet.Hub.Listen,
+			TLS:            s.cfg.Fleet.Hub.TLSCertFile != "",
 		},
 		Agent: protocol.AgentStatus{
 			Enabled: s.cfg.Fleet.Agent.Enabled,

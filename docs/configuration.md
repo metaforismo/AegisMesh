@@ -462,7 +462,7 @@ Only `/` serves `index.html`; deep links do not fall back to the index.
 
 Both roles are off by default. This is experimental fleet inventory with
 authenticated enrollment and heartbeats; it is not multi-tenant, not a managed
-service, and forwards no evidence. Configure separate processes/data directories
+service. Live evidence forwarding is a separate opt-in described below. Configure separate processes/data directories
 for hub and agent. Operator configs reject simultaneous roles; package-level
 synthetic integration tests can compose them. The hub cannot command nodes.
 
@@ -537,3 +537,51 @@ state flushes every five seconds and on shutdown; durable changes save immediate
 A crash can lose the latest unflushed interval and reopen its nonces within the
 signed timestamp window. See [fleet protocol](architecture/fleet-protocol.md) for
 precise crash/replay, scheduler/IO, shared-NAT and audit-failure limitations.
+
+## Experimental evidence forwarding (ADR-0018 amendment)
+
+**Experimental; best-effort forwarding with counted loss; local store authoritative.**
+The two consent switches are independent, strictly decoded booleans and default false:
+
+```yaml
+# Agent config: explicit disclosure of already redacted live evidence to its fixed hub.
+fleet:
+  agent:
+    enabled: true
+    hub_url: https://hub.example.test:9130
+    node_name: edge-node
+    forward_evidence:
+      enabled: true
+```
+
+```yaml
+# Separate hub config; sensor-less hubs are supported.
+fleet:
+  hub:
+    enabled: true
+    accept_evidence:
+      enabled: true
+```
+
+The agent excerpt also requires the existing enrollment credential reference for a new
+identity; public/private non-loopback destinations require TLS and the existing egress
+opt-in where applicable. The hub excerpt uses its default loopback listener; use an explicit
+certificate/key and public-bind consent for non-loopback exposure. No insecure TLS option exists.
+Enabling a consent flag without its parent role is invalid. Unknown nested fields fail loading.
+`AEGISMESH_FLEET_AGENT_FORWARD_EVIDENCE_ENABLED` and
+`AEGISMESH_FLEET_HUB_ACCEPT_EVIDENCE_ENABLED` override the respective booleans.
+`validate --effective --json` shows both, including off defaults, and `doctor` reports consent
+and disclosure without probing the hub or generating an identity.
+
+The queue is fixed at 4,096 events/16 MiB, batches at 1,000 events/4 MiB. Hub quotas are
+five-second spacing, 1,000 events/second, 16 MiB request bytes/minute/node, 16 MiB retained
+segment bytes/node and 256 MiB aggregate forwarded segments. These fixed bounds require no
+new tuning fields. Copies live at `<resolved fleet.hub.state_dir>/evidence/<node id>/`,
+with segments capped at 4 MiB (respecting smaller configured caps), a 1 MiB envelope ceiling, inherited storage count/age retention and
+the hub's `storage.encryption` setting. Node encryption is independent and never supplies
+its private read identity to the runtime. See architecture/fleet-protocol.md for conservative
+reservations, dedup/crash windows, capacity refusal and in-flight queue accounting.
+
+No plaintext disk spool is created. Overflow/crash/offline losses leave evidence only on
+the node; hub retention and local retention do not propagate deletions. Redaction is the
+control: a compromised hub learns redacted evidence from every forwarding node.

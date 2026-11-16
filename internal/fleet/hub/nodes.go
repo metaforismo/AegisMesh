@@ -9,6 +9,10 @@ import (
 
 func (h *Hub) project(record registration) protocol.Node {
 	node := record.Node
+	if node.Forwarding != nil {
+		forwarding := *node.Forwarding
+		node.Forwarding = &forwarding
+	}
 	node.Sensors = append([]protocol.Sensor{}, node.Sensors...)
 	if node.Status == "revoked" {
 		return node

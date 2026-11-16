@@ -43,6 +43,19 @@ func (s *System) buildConsole() error {
 	}
 
 	s.index = index
+	if s.fleetHub != nil {
+		index.SetNodeNames(func(id string) string {
+			node, err := s.fleetHub.Node(id)
+			if err != nil {
+				return ""
+			}
+			return node.Name
+		})
+		if s.fleetHub.EvidenceEnabled() {
+			// Forwarded history is not read: the hub runtime has no decryption identity.
+			index.SetHistory("unavailable")
+		}
+	}
 	if s.cfg.Storage.Encryption != nil && s.cfg.Storage.Encryption.Enabled {
 		index.SetHistory("unavailable")
 	} else {

@@ -1,6 +1,9 @@
 package protocol
 
-import "regexp"
+import (
+	"regexp"
+	"time"
+)
 
 // Enrollment binds a one-time credential and proposed identity to a signed request.
 type Enrollment struct {
@@ -46,6 +49,8 @@ type Counters struct {
 
 // Heartbeat is the bounded self-reported status projection.
 type Heartbeat struct {
+	// Forwarding is optional for compatibility with inventory-only agents.
+	Forwarding *Forwarding `json:"forwarding,omitempty"`
 	// Name is the immutable enrolled node slug.
 	Name string `json:"name"`
 	// Version identifies the reporting application build.
@@ -72,6 +77,8 @@ type Heartbeat struct {
 
 // Node is the operator inventory view with read-time liveness.
 type Node struct {
+	// Forwarding combines reported counters with hub-authored gap accounting.
+	Forwarding *Forwarding `json:"forwarding,omitempty"`
 	// ID is the stable node or configured sensor identifier.
 	ID string `json:"id"`
 	// Name is the immutable enrolled node slug.
@@ -100,6 +107,8 @@ type Node struct {
 
 // AgentStatus exposes only safe local delivery state.
 type AgentStatus struct {
+	// Forwarding reports local consent, counters and pending delivery state.
+	Forwarding Forwarding `json:"forwarding"`
 	// Enabled reports whether this role is enabled locally.
 	Enabled bool `json:"enabled"`
 	// HubURL is the fixed trusted destination origin without credential references.
@@ -116,6 +125,8 @@ type AgentStatus struct {
 
 // HubStatus describes the configured dedicated inventory listener.
 type HubStatus struct {
+	// AcceptEvidence reports explicit hub evidence reception consent.
+	AcceptEvidence bool `json:"accept_evidence"`
 	// Enabled reports whether this role is enabled locally.
 	Enabled bool `json:"enabled"`
 	// Listen is the dedicated hub authority, including the assigned test port.
@@ -141,6 +152,18 @@ func NameValid(name string) bool {
 
 // Valid checks inventory size, enum and string bounds before persistence.
 func (h Heartbeat) Valid() bool {
+	if h.Forwarding != nil {
+		f := h.Forwarding
+		if f.QueuedEvents < 0 || f.QueuedEvents > 4096 || f.QueuedBytes < 0 || f.QueuedBytes > 16<<20 ||
+			len(f.LastError) > 64 || len(f.LastForwardedAt) > 40 {
+			return false
+		}
+		if f.LastForwardedAt != "" {
+			if _, err := time.Parse(time.RFC3339Nano, f.LastForwardedAt); err != nil {
+				return false
+			}
+		}
+	}
 	if !NameValid(h.Name) || h.UptimeSeconds < 0 || len(h.Sensors) > 64 ||
 		h.SensorsWanted != len(h.Sensors) || h.SensorsStarted < 0 || h.SensorsStarted > h.SensorsWanted {
 		return false

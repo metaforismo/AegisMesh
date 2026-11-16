@@ -8,6 +8,14 @@ changes bump MINOR).
 
 ### Added
 
+- Experimental opt-in evidence forwarding on `feat/evidence-forwarding` (local, uncommitted):
+  best-effort forwarding with counted loss; local store authoritative. Signed live batches,
+  bounded memory-only oldest-drop queue, per-node replay/dedup/rate/retention limits and an
+  aggregate hub segment budget; native copies inherit hub evidence encryption. Console adds
+  authenticated origin metadata, node filters on event reads/SSE, per-node overview counts
+  and forwarding status/counters. No historical forwarding, durable spool, cross-node
+  correlation, deletion propagation, tenant isolation or hub-to-node command channel.
+
 - Local v3 encrypted live-read amendment on `feat/encrypted-live-read`
   (uncommitted): authenticated checkpoints after new frames at the existing
   flush cadence, verified prefix reads for inspect/recommend, typed stderr/JSON
@@ -24,7 +32,7 @@ changes bump MINOR).
   permanent key revocation and console inventory administration. Dedicated hub
   listener, TLS beyond loopback, shared egress classification with a dedicated
   private-network opt-in, independent jittered delivery and fixed-label metrics.
-  Not multi-tenant, not a managed service; forwards no evidence and cannot
+  Not multi-tenant or a managed service; evidence forwarding was added separately above. Cannot
   command nodes. Present in the local master baseline through merge #76.
 
 - First operator console (merged baseline #74 and #75): disabled-by-default,

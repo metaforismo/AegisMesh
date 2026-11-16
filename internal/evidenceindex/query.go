@@ -19,6 +19,8 @@ var ErrQuery = errors.New("invalid index query")
 
 // Filter contains validated selection criteria and trusted cursor scope; limits do not affect cursor identity.
 type Filter struct {
+	// Node selects an authenticated node ID, or local observations.
+	Node string
 	// CursorScope is assigned by the trusted caller to isolate pagination by endpoint.
 	CursorScope string
 	// Classification selects one recognized observation classification.
@@ -49,6 +51,7 @@ type Filter struct {
 func ParseFilter(values url.Values) (Filter, error) {
 	filter := Filter{Limit: 50}
 	allowed := map[string]bool{
+		"node":           true,
 		"classification": true,
 		"sensor":         true,
 		"kind":           true,
@@ -68,6 +71,10 @@ func ParseFilter(values url.Values) (Filter, error) {
 		}
 	}
 
+	filter.Node = values.Get("node")
+	if filter.Node != "" && filter.Node != "local" && !ValidID(filter.Node) {
+		return filter, ErrQuery
+	}
 	filter.Classification = values.Get("classification")
 	filter.Sensor = values.Get("sensor")
 	filter.Kind = values.Get("kind")
@@ -124,7 +131,14 @@ func ParseFilter(values url.Values) (Filter, error) {
 	return filter, nil
 }
 
+// Matches selects live summaries using the same validated filters as paginated queries.
+func (filter Filter) Matches(summary Summary) bool { return filter.matches(summary) }
+
 func (filter Filter) matches(summary Summary) bool {
+	if filter.Node == "local" && summary.Node != nil ||
+		filter.Node != "" && filter.Node != "local" && (summary.Node == nil || summary.Node.ID != filter.Node) {
+		return false
+	}
 	if (filter.Classification != "" && filter.Classification != summary.Classification) ||
 		(filter.Sensor != "" && filter.Sensor != summary.Sensor.ID) ||
 		(filter.Kind != "" && filter.Kind != summary.Sensor.Kind) ||
