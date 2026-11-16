@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/metaforismo/aegismesh/internal/event"
@@ -18,12 +20,14 @@ const MaxBytes = 64 << 20
 const MaxStreams = 16
 
 type entry struct {
-	summary  Summary
-	envelope event.Envelope
-	findings []Finding
-	related  []string
-	ordinal  uint64
-	bytes    int
+	summary    Summary
+	envelope   event.Envelope
+	findings   []Finding
+	related    []string
+	ordinal    uint64
+	search     string
+	selections []selection
+	bytes      int
 }
 
 // Index owns chronological projections with count, byte, and subscriber bounds.
@@ -34,6 +38,8 @@ type Index struct {
 	items           *list.List
 	ids             map[string]*list.Element
 	next            uint64
+	ordinals        map[uint64]*list.Element
+	selectors       [selectorCount]map[string]*list.List
 	history         string
 	key             [32]byte
 	subscribers     map[chan Summary]struct{}
@@ -65,6 +71,11 @@ func New(capacity int, meter observe.Meter) (*Index, error) {
 		history:     "complete",
 		subscribers: map[chan Summary]struct{}{},
 		size:        meter.Gauge("aegismesh_console_index_events", "Indexed console envelopes"),
+	}
+
+	index.ordinals = make(map[uint64]*list.Element)
+	for i := range index.selectors {
+		index.selectors[i] = make(map[string]*list.List)
 	}
 
 	if _, err := rand.Read(index.key[:]); err != nil {
@@ -140,8 +151,9 @@ func (index *Index) add(envelope event.Envelope, node string) {
 		summary.Node = &Node{ID: node}
 	}
 	key := originKey(envelope.ID, node)
-	item := entry{
+	item := &entry{
 		summary:  summary,
+		search:   searchText(summary),
 		envelope: clone(envelope),
 		findings: findings,
 		related:  related,
@@ -160,7 +172,7 @@ func (index *Index) add(envelope event.Envelope, node string) {
 	// Native timestamps can precede an intervening correlation append.
 	// Keep query order chronological; ordinal disambiguates equal timestamps.
 	previous := index.items.Back()
-	for previous != nil && previous.Value.(entry).envelope.Time.After(envelope.Time) {
+	for previous != nil && previous.Value.(*entry).envelope.Time.After(envelope.Time) {
 		previous = previous.Prev()
 	}
 
@@ -170,11 +182,16 @@ func (index *Index) add(envelope event.Envelope, node string) {
 		index.ids[key] = index.items.InsertAfter(item, previous)
 	}
 
+	index.ordinals[item.ordinal] = index.ids[key]
+	index.selectEntry(item)
+
 	index.bytes += item.bytes
 	for index.items.Len() > index.capacity || index.bytes > MaxBytes {
 		element := index.items.Front()
-		old := element.Value.(entry)
+		old := element.Value.(*entry)
 		delete(index.ids, originKey(old.summary.ID, origin(old.summary)))
+		delete(index.ordinals, old.ordinal)
+		index.unselectEntry(old)
 		index.items.Remove(element)
 		index.bytes -= old.bytes
 		if index.history != "unavailable" {
@@ -213,7 +230,7 @@ func (index *Index) Stats() Stats {
 	}
 
 	if element := index.items.Front(); element != nil {
-		stats.Oldest = element.Value.(entry).summary.Time
+		stats.Oldest = element.Value.(*entry).summary.Time
 	}
 
 	return stats
@@ -244,27 +261,63 @@ func (index *Index) Query(filter Filter) (Page, error) {
 	index.mu.RLock()
 	defer index.mu.RUnlock()
 
-	var last entry
-	for element := index.items.Back(); element != nil; element = element.Prev() {
-		item := element.Value.(entry)
-		if !filter.matches(item.summary) {
+	candidates := index.candidates(filter)
+	if candidates == nil {
+		return page, nil
+	}
+	all := filter.selectsAll()
+	if all {
+		page.TotalMatched = candidates.Len()
+	}
+	element := candidates.Back()
+	// The cursor's ordinal is process-local and authenticated. A retained anchor
+	// allows deep unfiltered pages to start directly at their predecessor.
+	if all && filter.Cursor != "" {
+		if anchor := index.ordinals[before.Before]; anchor != nil && anchor.Value.(*entry).envelope.Time.Equal(before.Time) {
+			element = anchor.Prev()
+		}
+	}
+	needle := strings.ToLower(filter.Q)
+	// The validated limit is at most 200. Gather immutable references first so
+	// selective filters allocate exactly the returned page, with no growth copies.
+	var selected [200]*entry
+	count := 0
+	var last *entry
+	for ; element != nil; element = element.Prev() {
+		item := element.Value.(*entry)
+		if !filter.Since.IsZero() && item.envelope.Time.Before(filter.Since) {
+			break
+		}
+		if !filter.Until.IsZero() && item.envelope.Time.After(filter.Until) {
 			continue
 		}
-		page.TotalMatched++
-		if filter.Cursor != "" &&
-			(item.envelope.Time.After(before.Time) ||
-				item.envelope.Time.Equal(before.Time) &&
-					item.ordinal >= before.Before) {
+		if !all {
+			if !filter.matchesAt(item.summary, item.envelope.Time, item.search, needle) {
+				continue
+			}
+			page.TotalMatched++
+		}
+		if filter.Cursor != "" && (item.envelope.Time.After(before.Time) || item.envelope.Time.Equal(before.Time) && item.ordinal >= before.Before) {
 			continue
 		}
-		if len(page.Events) < filter.Limit {
-			page.Events = append(page.Events, index.resolved(item.summary))
+		if count < filter.Limit {
+			selected[count] = item
+			count++
 			last = item
 		} else if page.NextCursor == "" {
 			page.NextCursor = index.encodeCursor(last.envelope.Time, last.ordinal, filter)
+			if all {
+				break
+			}
 		}
 	}
 
+	if count > 0 {
+		page.Events = make([]Summary, count)
+		for i, item := range selected[:count] {
+			page.Events[i] = index.resolved(item.summary)
+		}
+	}
 	return page, nil
 }
 
@@ -280,7 +333,7 @@ func (index *Index) GetNode(id, node string) (Summary, event.Envelope, []Finding
 	element := index.ids[originKey(id, node)]
 	if element == nil && node == "" {
 		for candidate := index.items.Back(); candidate != nil; candidate = candidate.Prev() {
-			if candidate.Value.(entry).summary.ID == id {
+			if candidate.Value.(*entry).summary.ID == id {
 				if element != nil {
 					return Summary{}, event.Envelope{}, nil, nil, false
 				}
@@ -292,26 +345,37 @@ func (index *Index) GetNode(id, node string) (Summary, event.Envelope, []Finding
 		return Summary{}, event.Envelope{}, nil, nil, false
 	}
 
-	item := element.Value.(entry)
-	related := []Summary{}
-	for element := index.items.Back(); element != nil && len(related) < 200; element = element.Prev() {
-		other := element.Value.(entry)
-		if origin(other.summary) != origin(item.summary) {
-			continue
-		}
-		match := false
-		if item.summary.Classification == event.ClassificationCorrelationSignal {
-			for _, id := range item.related {
-				match = match || id == other.summary.ID
+	item := element.Value.(*entry)
+	matches := []*entry{}
+	if item.summary.Classification == event.ClassificationCorrelationSignal {
+		seen := map[string]bool{}
+		for _, id := range item.related {
+			if other := index.ids[originKey(id, origin(item.summary))]; other != nil && !seen[id] {
+				matches = append(matches, other.Value.(*entry))
+				seen[id] = true
 			}
-		} else if other.summary.Classification == event.ClassificationCorrelationSignal {
+		}
+	} else if signals := index.selectors[byClassification][event.ClassificationCorrelationSignal]; signals != nil {
+		for element := signals.Back(); element != nil; element = element.Prev() {
+			other := element.Value.(*entry)
+			if origin(other.summary) != origin(item.summary) {
+				continue
+			}
 			for _, id := range other.related {
-				match = match || id == item.summary.ID
+				if id == item.summary.ID {
+					matches = append(matches, other)
+					break
+				}
+			}
+			if len(matches) == 200 {
+				break
 			}
 		}
-		if match {
-			related = append(related, index.resolved(other.summary))
-		}
+	}
+	sort.Slice(matches, func(i, j int) bool { return newer(matches[i], matches[j]) })
+	related := make([]Summary, 0, min(len(matches), 200))
+	for _, other := range matches[:min(len(matches), 200)] {
+		related = append(related, index.resolved(other.summary))
 	}
 
 	return index.resolved(item.summary), clone(item.envelope), append([]Finding{}, item.findings...), related, true
@@ -324,7 +388,7 @@ func (index *Index) Summaries() []Summary {
 
 	summaries := make([]Summary, 0, index.items.Len())
 	for element := index.items.Back(); element != nil; element = element.Prev() {
-		summaries = append(summaries, index.resolved(element.Value.(entry).summary))
+		summaries = append(summaries, index.resolved(element.Value.(*entry).summary))
 	}
 
 	return summaries
@@ -337,7 +401,7 @@ func (index *Index) Envelopes(max int) []event.Envelope {
 
 	envelopes := []event.Envelope{}
 	for element := index.items.Back(); element != nil && len(envelopes) < max; element = element.Prev() {
-		item := element.Value.(entry)
+		item := element.Value.(*entry)
 		if item.summary.Node == nil {
 			envelopes = append(envelopes, clone(item.envelope))
 		}

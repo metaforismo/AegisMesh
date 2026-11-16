@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"context"
 	"crypto/tls"
 	"sync/atomic"
 	"time"
@@ -18,30 +17,6 @@ type fleetCounts struct {
 	interaction atomic.Uint64
 	canary      atomic.Uint64
 	correlation atomic.Uint64
-}
-
-type fleetSink struct {
-	primary event.Sink
-	system  *System
-}
-
-func (s *fleetSink) Append(ctx context.Context, envelope event.Envelope) error {
-	if err := s.primary.Append(ctx, envelope); err != nil {
-		s.system.storageFailed.Store(true)
-		return err
-	}
-	switch string(envelope.Classification) {
-	case "interaction":
-		s.system.fleetCounts.interaction.Add(1)
-	case "canary_invocation":
-		s.system.fleetCounts.canary.Add(1)
-	case "correlation_signal":
-		s.system.fleetCounts.correlation.Add(1)
-	}
-	if s.system.fleetAgent != nil {
-		s.system.fleetAgent.Enqueue(envelope)
-	}
-	return nil
 }
 
 func (s *System) buildFleet() error {

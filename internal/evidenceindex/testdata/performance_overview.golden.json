@@ -1,0 +1,4763 @@
+{
+  "1h": {
+    "window": "1h",
+    "generated_at": "2026-11-15T12:00:00.123456789Z",
+    "totals": {
+      "events": 13,
+      "interaction": 5,
+      "canary_invocation": 4,
+      "correlation_signal": 4,
+      "sources": 2,
+      "sensors_active": 3
+    },
+    "previous_totals": {
+      "events": 6,
+      "interaction": 2,
+      "canary_invocation": 2,
+      "correlation_signal": 2,
+      "sources": 1,
+      "sensors_active": 3
+    },
+    "buckets": [
+      {
+        "start": "2026-11-15T11:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-15T11:01:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:02:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:03:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:04:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:05:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:06:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:07:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:08:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:09:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:10:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:11:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:12:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:13:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:14:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:15:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:16:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:17:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:18:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:19:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:20:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:21:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:22:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:23:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:24:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:25:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:26:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:27:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:28:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:29:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:31:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:32:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:33:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:34:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:35:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:36:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:37:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:38:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:39:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:40:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:41:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:42:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:43:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:44:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:45:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:46:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:47:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:48:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:49:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:50:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:51:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:52:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:53:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:54:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:55:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:56:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:57:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:58:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T11:59:00.123456789Z",
+        "interaction": 4,
+        "canary_invocation": 3,
+        "correlation_signal": 3
+      }
+    ],
+    "by_sensor": [
+      {
+        "buckets": [
+          {
+            "start": "2026-11-15T11:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:01:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:02:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:03:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:04:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:05:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:06:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:07:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:08:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:09:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:10:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:11:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:12:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:13:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:14:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:15:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:16:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:17:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:18:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:19:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:20:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:21:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:22:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:23:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:24:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:25:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:26:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:27:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:28:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:29:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:31:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:32:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:33:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:34:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:35:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:36:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:37:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:38:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:39:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:40:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:41:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:42:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:43:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:44:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:45:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:46:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:47:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:48:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:49:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:50:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:51:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:52:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:53:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:54:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:55:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:56:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:57:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:58:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:59:00.123456789Z",
+            "interaction": 4,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          }
+        ],
+        "sensor_id": "sensor-0",
+        "kind": "http",
+        "events": 5
+      },
+      {
+        "buckets": [
+          {
+            "start": "2026-11-15T11:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:01:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:02:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:03:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:04:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:05:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:06:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:07:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:08:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:09:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:10:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:11:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:12:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:13:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:14:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:15:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:16:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:17:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:18:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:19:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:20:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:21:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:22:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:23:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:24:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:25:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:26:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:27:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:28:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:29:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:31:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:32:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:33:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:34:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:35:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:36:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:37:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:38:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:39:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:40:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:41:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:42:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:43:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:44:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:45:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:46:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:47:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:48:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:49:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:50:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:51:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:52:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:53:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:54:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:55:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:56:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:57:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:58:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:59:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 3,
+            "correlation_signal": 0
+          }
+        ],
+        "sensor_id": "sensor-1",
+        "kind": "http",
+        "events": 4
+      },
+      {
+        "buckets": [
+          {
+            "start": "2026-11-15T11:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-15T11:01:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:02:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:03:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:04:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:05:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:06:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:07:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:08:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:09:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:10:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:11:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:12:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:13:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:14:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:15:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:16:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:17:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:18:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:19:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:20:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:21:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:22:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:23:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:24:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:25:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:26:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:27:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:28:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:29:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:31:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:32:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:33:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:34:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:35:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:36:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:37:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:38:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:39:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:40:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:41:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:42:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:43:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:44:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:45:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:46:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:47:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:48:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:49:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:50:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:51:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:52:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:53:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:54:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:55:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:56:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:57:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:58:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:59:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 3
+          }
+        ],
+        "sensor_id": "sensor-2",
+        "kind": "http",
+        "events": 4
+      }
+    ],
+    "by_severity": {
+      "critical": 0,
+      "high": 8,
+      "info": 0,
+      "low": 0,
+      "medium": 0,
+      "none": 5
+    },
+    "top_rules": [
+      {
+        "rule_id": "PI-001",
+        "events": 8,
+        "severity": "high"
+      },
+      {
+        "rule_id": "COR-001",
+        "events": 4,
+        "severity": ""
+      }
+    ],
+    "top_sources": [
+      {
+        "source": "203.0.113.7",
+        "events": 12,
+        "first_seen": "2026-11-15T11:00:00.123456789Z",
+        "last_seen": "2026-11-15T12:00:00.123456788Z",
+        "sensors": [
+          "sensor-0",
+          "sensor-1",
+          "sensor-2"
+        ],
+        "kinds": [
+          "http"
+        ],
+        "canary_invocations": 4,
+        "signals": 4,
+        "max_severity": "high"
+      },
+      {
+        "source": "203.0.113.8",
+        "events": 1,
+        "first_seen": "2026-11-15T11:59:00.123456789Z",
+        "last_seen": "2026-11-15T11:59:00.123456789Z",
+        "sensors": [
+          "sensor-0"
+        ],
+        "kinds": [
+          "mcp"
+        ],
+        "canary_invocations": 0,
+        "signals": 0,
+        "max_severity": ""
+      }
+    ],
+    "recent_signals": [
+      {
+        "id": "00000000000000000000000000000038",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 56,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "00000000000000000000000000000023",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 35,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "0000000000000000000000000000000e",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 14,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "0000000000000000000000000000000b",
+        "time": "2026-11-15T11:00:00.123456789Z",
+        "seq": 11,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      }
+    ],
+    "open_investigations": 0
+  },
+  "1h-nodes": [
+    {
+      "id": "abababababababababababababababab",
+      "name": "synthetic-ab",
+      "events": 6
+    },
+    {
+      "id": "local",
+      "name": "",
+      "events": 7
+    }
+  ],
+  "24h": {
+    "window": "24h",
+    "generated_at": "2026-11-15T12:00:00.123456789Z",
+    "totals": {
+      "events": 25,
+      "interaction": 9,
+      "canary_invocation": 8,
+      "correlation_signal": 8,
+      "sources": 2,
+      "sensors_active": 3
+    },
+    "previous_totals": {
+      "events": 6,
+      "interaction": 2,
+      "canary_invocation": 2,
+      "correlation_signal": 2,
+      "sources": 1,
+      "sensors_active": 3
+    },
+    "buckets": [
+      {
+        "start": "2026-11-14T12:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-14T12:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T13:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T13:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T14:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T14:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T15:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T16:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T16:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T17:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T17:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T18:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T19:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T19:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T20:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T20:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T21:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T22:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T22:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T23:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T23:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T00:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T01:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T01:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T02:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T02:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T03:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T04:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T04:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T05:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T05:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T06:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T07:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T07:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T08:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T08:30:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T09:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T09:30:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-15T10:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-15T10:30:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-15T11:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-15T11:30:00.123456789Z",
+        "interaction": 4,
+        "canary_invocation": 3,
+        "correlation_signal": 3
+      }
+    ],
+    "by_sensor": [
+      {
+        "buckets": [
+          {
+            "start": "2026-11-14T12:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T12:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T13:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T13:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T14:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T14:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T16:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T16:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T17:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T17:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T19:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T19:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T20:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T20:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T22:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T22:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T23:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T23:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T01:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T01:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T02:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T02:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T04:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T04:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T05:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T05:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T07:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T07:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T08:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T08:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:30:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T10:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T10:30:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:30:00.123456789Z",
+            "interaction": 4,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          }
+        ],
+        "sensor_id": "sensor-0",
+        "kind": "http",
+        "events": 9
+      },
+      {
+        "buckets": [
+          {
+            "start": "2026-11-14T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T12:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T13:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T13:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T14:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T14:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T16:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T16:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T17:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T17:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T19:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T19:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T20:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T20:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T22:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T22:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T23:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T23:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T01:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T01:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T02:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T02:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T04:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T04:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T05:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T05:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T07:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T07:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T08:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T08:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T10:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T10:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T11:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 3,
+            "correlation_signal": 0
+          }
+        ],
+        "sensor_id": "sensor-1",
+        "kind": "http",
+        "events": 8
+      },
+      {
+        "buckets": [
+          {
+            "start": "2026-11-14T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-14T12:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T13:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T13:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T14:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T14:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T16:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T16:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T17:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T17:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T19:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T19:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T20:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T20:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T22:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T22:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T23:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T23:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T01:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T01:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T02:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T02:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T04:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T04:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T05:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T05:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T07:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T07:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T08:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T08:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-15T10:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-15T10:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-15T11:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-15T11:30:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 3
+          }
+        ],
+        "sensor_id": "sensor-2",
+        "kind": "http",
+        "events": 8
+      }
+    ],
+    "by_severity": {
+      "critical": 0,
+      "high": 16,
+      "info": 0,
+      "low": 0,
+      "medium": 0,
+      "none": 9
+    },
+    "top_rules": [
+      {
+        "rule_id": "PI-001",
+        "events": 16,
+        "severity": "high"
+      },
+      {
+        "rule_id": "COR-001",
+        "events": 8,
+        "severity": ""
+      }
+    ],
+    "top_sources": [
+      {
+        "source": "203.0.113.7",
+        "events": 24,
+        "first_seen": "2026-11-14T12:00:00.123456789Z",
+        "last_seen": "2026-11-15T12:00:00.123456788Z",
+        "sensors": [
+          "sensor-0",
+          "sensor-1",
+          "sensor-2"
+        ],
+        "kinds": [
+          "http"
+        ],
+        "canary_invocations": 8,
+        "signals": 8,
+        "max_severity": "high"
+      },
+      {
+        "source": "203.0.113.8",
+        "events": 1,
+        "first_seen": "2026-11-15T11:59:00.123456789Z",
+        "last_seen": "2026-11-15T11:59:00.123456789Z",
+        "sensors": [
+          "sensor-0"
+        ],
+        "kinds": [
+          "mcp"
+        ],
+        "canary_invocations": 0,
+        "signals": 0,
+        "max_severity": ""
+      }
+    ],
+    "recent_signals": [
+      {
+        "id": "00000000000000000000000000000038",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 56,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "00000000000000000000000000000023",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 35,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "0000000000000000000000000000000e",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 14,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "0000000000000000000000000000000b",
+        "time": "2026-11-15T11:00:00.123456789Z",
+        "seq": 11,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "00000000000000000000000000000008",
+        "time": "2026-11-15T11:00:00.123456788Z",
+        "seq": 8,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "00000000000000000000000000000005",
+        "time": "2026-11-15T10:00:00.123456789Z",
+        "seq": 5,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "00000000000000000000000000000002",
+        "time": "2026-11-15T10:00:00.123456788Z",
+        "seq": 2,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "00000000000000000000000000000020",
+        "time": "2026-11-14T12:00:00.123456789Z",
+        "seq": 32,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      }
+    ],
+    "open_investigations": 0
+  },
+  "24h-nodes": [
+    {
+      "id": "abababababababababababababababab",
+      "name": "synthetic-ab",
+      "events": 11
+    },
+    {
+      "id": "local",
+      "name": "",
+      "events": 14
+    }
+  ],
+  "7d": {
+    "window": "7d",
+    "generated_at": "2026-11-15T12:00:00.123456789Z",
+    "totals": {
+      "events": 37,
+      "interaction": 13,
+      "canary_invocation": 12,
+      "correlation_signal": 12,
+      "sources": 2,
+      "sensors_active": 3
+    },
+    "previous_totals": {
+      "events": 6,
+      "interaction": 2,
+      "canary_invocation": 2,
+      "correlation_signal": 2,
+      "sources": 1,
+      "sensors_active": 3
+    },
+    "buckets": [
+      {
+        "start": "2026-11-08T12:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-08T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-08T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-08T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T09:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T12:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-09T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T09:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T12:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-10T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T09:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T12:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-11T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T09:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T12:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-12T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-13T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-13T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-13T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-13T09:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-13T12:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-13T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-13T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-13T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T09:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-14T12:00:00.123456789Z",
+        "interaction": 1,
+        "canary_invocation": 1,
+        "correlation_signal": 1
+      },
+      {
+        "start": "2026-11-14T15:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T18:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-14T21:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T00:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T03:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T06:00:00.123456789Z",
+        "interaction": 0,
+        "canary_invocation": 0,
+        "correlation_signal": 0
+      },
+      {
+        "start": "2026-11-15T09:00:00.123456789Z",
+        "interaction": 8,
+        "canary_invocation": 7,
+        "correlation_signal": 7
+      }
+    ],
+    "by_sensor": [
+      {
+        "buckets": [
+          {
+            "start": "2026-11-08T12:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T09:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T12:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T09:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T12:00:00.123456789Z",
+            "interaction": 1,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:00:00.123456789Z",
+            "interaction": 8,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          }
+        ],
+        "sensor_id": "sensor-0",
+        "kind": "http",
+        "events": 13
+      },
+      {
+        "buckets": [
+          {
+            "start": "2026-11-08T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 1,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 7,
+            "correlation_signal": 0
+          }
+        ],
+        "sensor_id": "sensor-1",
+        "kind": "http",
+        "events": 12
+      },
+      {
+        "buckets": [
+          {
+            "start": "2026-11-08T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-08T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-08T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-09T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-10T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-11T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-12T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-13T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-13T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-13T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-14T12:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 1
+          },
+          {
+            "start": "2026-11-14T15:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T18:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-14T21:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T00:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T03:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T06:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 0
+          },
+          {
+            "start": "2026-11-15T09:00:00.123456789Z",
+            "interaction": 0,
+            "canary_invocation": 0,
+            "correlation_signal": 7
+          }
+        ],
+        "sensor_id": "sensor-2",
+        "kind": "http",
+        "events": 12
+      }
+    ],
+    "by_severity": {
+      "critical": 0,
+      "high": 24,
+      "info": 0,
+      "low": 0,
+      "medium": 0,
+      "none": 13
+    },
+    "top_rules": [
+      {
+        "rule_id": "PI-001",
+        "events": 24,
+        "severity": "high"
+      },
+      {
+        "rule_id": "COR-001",
+        "events": 12,
+        "severity": ""
+      }
+    ],
+    "top_sources": [
+      {
+        "source": "203.0.113.7",
+        "events": 36,
+        "first_seen": "2026-11-08T12:00:00.123456789Z",
+        "last_seen": "2026-11-15T12:00:00.123456788Z",
+        "sensors": [
+          "sensor-0",
+          "sensor-1",
+          "sensor-2"
+        ],
+        "kinds": [
+          "http"
+        ],
+        "canary_invocations": 12,
+        "signals": 12,
+        "max_severity": "high"
+      },
+      {
+        "source": "203.0.113.8",
+        "events": 1,
+        "first_seen": "2026-11-15T11:59:00.123456789Z",
+        "last_seen": "2026-11-15T11:59:00.123456789Z",
+        "sensors": [
+          "sensor-0"
+        ],
+        "kinds": [
+          "mcp"
+        ],
+        "canary_invocations": 0,
+        "signals": 0,
+        "max_severity": ""
+      }
+    ],
+    "recent_signals": [
+      {
+        "id": "00000000000000000000000000000038",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 56,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "00000000000000000000000000000023",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 35,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "0000000000000000000000000000000e",
+        "time": "2026-11-15T12:00:00.123456788Z",
+        "seq": 14,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "0000000000000000000000000000000b",
+        "time": "2026-11-15T11:00:00.123456789Z",
+        "seq": 11,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "00000000000000000000000000000008",
+        "time": "2026-11-15T11:00:00.123456788Z",
+        "seq": 8,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "00000000000000000000000000000005",
+        "time": "2026-11-15T10:00:00.123456789Z",
+        "seq": 5,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "00000000000000000000000000000002",
+        "time": "2026-11-15T10:00:00.123456788Z",
+        "seq": 2,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "00000000000000000000000000000020",
+        "time": "2026-11-14T12:00:00.123456789Z",
+        "seq": 32,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "node": {
+          "id": "abababababababababababababababab",
+          "name": "synthetic-ab"
+        },
+        "id": "0000000000000000000000000000001d",
+        "time": "2026-11-14T12:00:00.123456788Z",
+        "seq": 29,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      },
+      {
+        "id": "0000000000000000000000000000001a",
+        "time": "2026-11-13T12:00:00.123456789Z",
+        "seq": 26,
+        "sensor": {
+          "id": "sensor-2",
+          "kind": "http",
+          "listen": ""
+        },
+        "classification": "correlation_signal",
+        "source": "203.0.113.7",
+        "summary": "COR-001 · Synthetic signal",
+        "severity": "",
+        "rule_ids": [
+          "COR-001"
+        ],
+        "action": ""
+      }
+    ],
+    "open_investigations": 0
+  },
+  "7d-nodes": [
+    {
+      "id": "abababababababababababababababab",
+      "name": "synthetic-ab",
+      "events": 18
+    },
+    {
+      "id": "local",
+      "name": "",
+      "events": 19
+    }
+  ],
+  "source": {
+    "source": "203.0.113.7",
+    "events": 45,
+    "first_seen": "2026-11-01T12:00:00.123456788Z",
+    "last_seen": "2026-11-15T12:00:00.123456788Z",
+    "sensors": [
+      "sensor-0",
+      "sensor-1",
+      "sensor-2"
+    ],
+    "kinds": [
+      "http"
+    ],
+    "canary_invocations": 15,
+    "signals": 15,
+    "max_severity": "high"
+  },
+  "sources": [
+    {
+      "source": "203.0.113.7",
+      "events": 45,
+      "first_seen": "2026-11-01T12:00:00.123456788Z",
+      "last_seen": "2026-11-15T12:00:00.123456788Z",
+      "sensors": [
+        "sensor-0",
+        "sensor-1",
+        "sensor-2"
+      ],
+      "kinds": [
+        "http"
+      ],
+      "canary_invocations": 15,
+      "signals": 15,
+      "max_severity": "high"
+    },
+    {
+      "source": "203.0.113.8",
+      "events": 1,
+      "first_seen": "2026-11-15T11:59:00.123456789Z",
+      "last_seen": "2026-11-15T11:59:00.123456789Z",
+      "sensors": [
+        "sensor-0"
+      ],
+      "kinds": [
+        "mcp"
+      ],
+      "canary_invocations": 0,
+      "signals": 0,
+      "max_severity": ""
+    }
+  ]
+}

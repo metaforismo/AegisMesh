@@ -32,6 +32,15 @@ lint: ## gofmt check + go vet (+ golangci-lint when available)
 	go vet ./...
 	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run || echo "golangci-lint not installed; skipped (vet+fmt ran)"
 
+BENCH_COUNT ?= 1
+BENCH_TIME ?= 100ms
+
+.PHONY: bench
+bench: ## run synthetic backend benchmarks sequentially (100ms; not a CI gate)
+	@set -e; for pkg in evidenceindex console storage runtime fleet/hub; do \
+		go test -run '^$$' -bench . -benchmem -benchtime=$(BENCH_TIME) -count=$(BENCH_COUNT) ./internal/$$pkg; \
+	done
+
 .PHONY: ui-test
 ui-test: ## run console UI tests (Node.js >= 20, no npm install)
 	node --test 'internal/consoleui/webtest/*.test.mjs'

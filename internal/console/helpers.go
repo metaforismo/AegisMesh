@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
+	"github.com/metaforismo/aegismesh/internal/strictjson"
 )
 
 func query(w http.ResponseWriter, r *http.Request, allowed ...string) (url.Values, bool) {
@@ -71,7 +72,7 @@ func strictBody(w http.ResponseWriter, r *http.Request, values any) bool {
 
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	body, err := io.ReadAll(r.Body)
-	if err != nil || !validObject(body) {
+	if err != nil || !strictjson.ValidObject(body) {
 		fail(w, 400, "invalid_argument", "invalid JSON object (64 KiB maximum; duplicate keys rejected)")
 		return false
 	}

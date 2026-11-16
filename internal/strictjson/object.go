@@ -1,4 +1,5 @@
-package console
+// Package strictjson validates bounded JSON object structure at ingestion seams.
+package strictjson
 
 import (
 	"bytes"
@@ -8,8 +9,8 @@ import (
 	"unicode/utf8"
 )
 
-// Reject duplicate keys and deep containers before decoding into request types.
-func validObject(body []byte) bool {
+// ValidObject rejects duplicate keys, deep containers and excessive members before typed decoding.
+func ValidObject(body []byte) bool {
 	if !utf8.Valid(body) {
 		return false
 	}
