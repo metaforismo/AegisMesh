@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,16 +50,17 @@ type Store struct {
 	encryptor *segmentEncryptor
 	now       func() time.Time
 
-	mu            sync.Mutex
-	f             *os.File
-	w             *bufio.Writer
-	path          string
-	size          int64
-	segmentEvents uint64
-	firstEventAt  time.Time
-	appended      uint64
-	digest        hash.Hash
-	sealed        bool
+	mu               sync.Mutex
+	f                *os.File
+	w                *bufio.Writer
+	path             string
+	size             int64
+	segmentEvents    uint64
+	checkpointEvents uint64
+	firstEventAt     time.Time
+	appended         uint64
+	digest           hash.Hash
+	sealed           bool
 }
 
 const (
@@ -151,7 +151,8 @@ func ensureEncryptionGuard(path string) error {
 	if !before.Mode().IsRegular() || before.Mode().Perm()&0o077 != 0 {
 		return fmt.Errorf("%w: encryption guard must be an owner-only regular file", errStore)
 	}
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // fixed path inside the configured data directory
+	// Fixed path inside the configured data directory.
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("%w: open encryption guard: %v", errStore, err)
 	}
@@ -187,27 +188,44 @@ func segmentExtension(encrypted bool) string {
 }
 
 func (s *Store) sealLocked() error {
+	return s.completeLocked(sealKind)
+}
+
+func (s *Store) completeLocked(kind byte) error {
 	if s.encryptor == nil || s.sealed || s.w == nil {
 		return nil
 	}
-	footer := make([]byte, 8, 8+sha256.Size)
-	binary.BigEndian.PutUint64(footer, s.segmentEvents)
-	footer = s.digest.Sum(footer)
-	frame, err := s.encryptor.frame(footer)
+	if kind == checkpointKind && s.checkpointEvents == s.segmentEvents {
+		return nil
+	}
+	plain := completionPlaintext(kind, s.segmentEvents, s.digest.Sum(nil))
+	frame, err := s.encryptor.frame(plain)
 	if err != nil {
 		return err
 	}
-	record := append(make([]byte, frameLengthBytes), frame...)
-	if len(record) > encryptedFooterReserve {
-		return fmt.Errorf("%w: encrypted footer exceeds reserved space", errStore)
+	recordSize := frameLengthBytes + len(frame)
+	if recordSize > encryptedFooterReserve {
+		return fmt.Errorf("%w: encrypted completion exceeds reserved space", errStore)
 	}
+	// Preserve seal space even when flushes, rather than events, fill a segment.
+	if kind == checkpointKind && s.size+int64(recordSize)+encryptedFooterReserve > s.opts.MaxFileBytes {
+		return s.sealLocked()
+	}
+	record := make([]byte, frameLengthBytes, recordSize)
+	if kind == sealKind {
+		for i := range record {
+			record[i] = 0xff
+		}
+	}
+	record = append(record, frame...)
 	if n, err := s.w.Write(record); err != nil {
-		return fmt.Errorf("%w: write encrypted footer: %v", errStore, err)
+		return fmt.Errorf("%w: write encrypted completion: %v", errStore, err)
 	} else if n != len(record) {
-		return fmt.Errorf("%w: write encrypted footer: %v", errStore, io.ErrShortWrite)
+		return fmt.Errorf("%w: write encrypted completion: %v", errStore, io.ErrShortWrite)
 	}
 	s.size += int64(len(record))
-	s.sealed = true
+	s.checkpointEvents = s.segmentEvents
+	s.sealed = kind == sealKind
 	return nil
 }
 
@@ -261,6 +279,8 @@ func (s *Store) rotateLocked() error {
 		s.path = name
 		s.size = size
 		s.segmentEvents = 0
+		s.checkpointEvents = 0
+		s.firstEventAt = time.Time{}
 		s.digest = sha256.New()
 		s.sealed = false
 		return nil
@@ -276,7 +296,8 @@ func (s *Store) Append(_ context.Context, e event.Envelope) error {
 		return fmt.Errorf("%w: marshal: %v", errStore, err)
 	}
 	if len(plaintext) > s.opts.MaxEventBytes {
-		return fmt.Errorf("%w: encoded event (%d bytes) exceeds max_event_bytes %d", errStore, len(plaintext), s.opts.MaxEventBytes)
+		return fmt.Errorf("%w: encoded event (%d bytes) exceeds max_event_bytes %d",
+			errStore, len(plaintext), s.opts.MaxEventBytes)
 	}
 
 	record := plaintext
@@ -298,7 +319,8 @@ func (s *Store) Append(_ context.Context, e event.Envelope) error {
 	// Reject frames that cannot fit even a fresh segment before sealing/rotating
 	// anything. Rejected traffic must not force tiny segments or empty successors.
 	if s.encryptor != nil && int64(len(encryptedSegmentMagic)+len(record)+encryptedFooterReserve) > s.opts.MaxFileBytes {
-		return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
+		return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; "+
+			"raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
 	}
 	if s.sealed {
 		if err := s.rotateLocked(); err != nil {
@@ -310,14 +332,16 @@ func (s *Store) Append(_ context.Context, e event.Envelope) error {
 		reserve = encryptedFooterReserve
 	}
 	if s.size+int64(len(record))+reserve > s.opts.MaxFileBytes && s.segmentEvents == 0 {
-		return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
+		return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; "+
+			"raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
 	}
 	if s.segmentEvents > 0 && s.size+int64(len(record))+reserve > s.opts.MaxFileBytes {
 		if err := s.rotateLocked(); err != nil {
 			return err
 		}
 		if s.size+int64(len(record))+reserve > s.opts.MaxFileBytes {
-			return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
+			return fmt.Errorf("%w: encoded event (%d bytes on disk) exceeds segment size %d; "+
+				"raise storage.max_file_bytes or lower max_event_bytes", errStore, len(record), s.opts.MaxFileBytes)
 		}
 	}
 
@@ -341,8 +365,8 @@ func (s *Store) Append(_ context.Context, e event.Envelope) error {
 }
 
 // Flush pushes buffered bytes to the OS (it does not fsync). Encrypted segments
-// seal only after maxEncryptedSegmentAge from their first event; the next append
-// then starts a new segment. Empty segments never seal because of elapsed time.
+// checkpoint new frames, or seal at the age/space bound. The next append after
+// sealing starts a new segment. Empty segments never seal because of elapsed time.
 func (s *Store) Flush() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -353,6 +377,9 @@ func (s *Store) Flush() error {
 		if err := s.sealLocked(); err != nil {
 			return err
 		}
+	}
+	if err := s.completeLocked(checkpointKind); err != nil {
+		return err
 	}
 	if err := s.w.Flush(); err != nil {
 		return fmt.Errorf("%w: flush: %v", errStore, err)
@@ -494,7 +521,8 @@ func (s *Store) ApplyRetention(ctx context.Context) (removed []string, err error
 				n = int(s.segmentEvents)
 			} else {
 				n, err = CountSegment(sg.Path)
-				if err != nil {
+				var open *OpenSegmentError
+				if err != nil && !errors.As(err, &open) {
 					return removed, err
 				}
 			}
@@ -543,7 +571,8 @@ func openRegularSegment(path string) (*os.File, error) {
 	if !before.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: read segment %s: not a regular file", errStore, filepath.Base(path))
 	}
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // path comes from the bounded evidence directory or an explicit local operator argument
+	// Path comes from evidence discovery or an explicit local operator argument.
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec
 	if err != nil {
 		return nil, fmt.Errorf("%w: read segment %s: %v", errStore, filepath.Base(path), err)
 	}
@@ -561,6 +590,7 @@ func openRegularSegment(path string) (*os.File, error) {
 
 // CountSegment counts records without materializing or decrypting them.
 // For encrypted segments it checks framing/completion, not ciphertext authenticity.
+// An open v3 segment returns its checkpoint count and an OpenSegmentError.
 func CountSegment(path string) (int, error) {
 	encrypted := strings.HasSuffix(filepath.Base(path), encryptedSegmentExt)
 	if encrypted {
@@ -575,7 +605,8 @@ func CountSegment(path string) (int, error) {
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
-	if magic, _ := reader.Peek(len(encryptedSegmentMagic)); bytes.Equal(magic, []byte(encryptedSegmentMagic)) {
+	if magic, _ := reader.Peek(len(encryptedSegmentMagic)); bytes.Equal(magic, []byte(encryptedSegmentMagic)) ||
+		bytes.Equal(magic, []byte(encryptedSegmentV2Magic)) {
 		return 0, fmt.Errorf("%w: encrypted evidence has a plaintext filename %s", errStore, filepath.Base(path))
 	}
 	scanner := bufio.NewScanner(reader)
@@ -599,7 +630,8 @@ func forEachLine(path string, fn func(string) error) error {
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
-	if magic, _ := reader.Peek(len(encryptedSegmentMagic)); bytes.Equal(magic, []byte(encryptedSegmentMagic)) {
+	if magic, _ := reader.Peek(len(encryptedSegmentMagic)); bytes.Equal(magic, []byte(encryptedSegmentMagic)) ||
+		bytes.Equal(magic, []byte(encryptedSegmentV2Magic)) {
 		return fmt.Errorf("%w: encrypted evidence has a plaintext filename %s", errStore, filepath.Base(path))
 	}
 	scanner := bufio.NewScanner(reader)
@@ -615,20 +647,24 @@ func forEachLine(path string, fn func(string) error) error {
 	return nil
 }
 
+// ReaderOptions supplies local identities and an optional completeness requirement.
 type ReaderOptions struct {
 	IdentityFiles []string
+	RequireSealed bool
 }
 
 // Reader iterates envelopes across all segments in a directory without
 // creating anything (read-only inspection path).
 type Reader struct {
-	dir        string
-	identities identitySet
+	dir           string
+	identities    identitySet
+	requireSealed bool
 }
 
 // NewReader opens a read-only view over an evidence directory.
 func NewReader(dir string) (*Reader, error) { return NewReaderWithOptions(dir, ReaderOptions{}) }
 
+// NewReaderWithOptions opens a read-only view with explicit local read policy.
 func NewReaderWithOptions(dir string, opts ReaderOptions) (*Reader, error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return nil, fmt.Errorf("%w: %s is not a readable evidence directory", errStore, dir)
@@ -637,7 +673,7 @@ func NewReaderWithOptions(dir string, opts ReaderOptions) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{dir: dir, identities: identities}, nil
+	return &Reader{dir: dir, identities: identities, requireSealed: opts.RequireSealed}, nil
 }
 
 func (s *Store) Reader() *Reader { return &Reader{dir: s.opts.Dir} }
@@ -727,16 +763,34 @@ func (r *Reader) IsProtectedPath(path string) (bool, error) {
 // ForEach calls fn for decoded envelopes in order. Malformed plaintext JSON
 // is reported via onCorrupt and skipped. Encrypted JSON, framing, completion,
 // I/O, authentication and identity failures stop the read. Callback results
-// are provisional until the entire read succeeds.
+// are provisional until the entire read succeeds. This legacy API requires seals;
+// use ForEachVerified to accept prefixes with explicit incompleteness notices.
 func (r *Reader) ForEach(fn func(event.Envelope) error, onCorrupt func(line string, err error)) error {
+	_, err := r.forEach(fn, onCorrupt, true)
+	return err
+}
+
+// ForEachVerified returns authenticated prefixes and explicit open-segment notices.
+// RequireSealed makes any open segment terminal. Results remain provisional until
+// the directory read succeeds; no frames beyond a verified checkpoint are emitted.
+func (r *Reader) ForEachVerified(fn func(event.Envelope) error,
+	onCorrupt func(line string, err error),
+) ([]OpenSegmentError, error) {
+	return r.forEach(fn, onCorrupt, r.requireSealed)
+}
+
+func (r *Reader) forEach(fn func(event.Envelope) error, onCorrupt func(string, error),
+	requireSealed bool,
+) ([]OpenSegmentError, error) {
+	var notices []OpenSegmentError
 	segs, err := r.segments()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := r.rejectIdentitySegmentAliases(segs); err != nil {
-		return err
+		return nil, err
 	}
-	for _, segment := range segs {
+	for i, segment := range segs {
 		consume := func(raw []byte) error {
 			if len(bytes.TrimSpace(raw)) == 0 {
 				if segment.Encrypted {
@@ -758,13 +812,21 @@ func (r *Reader) ForEach(fn func(event.Envelope) error, onCorrupt func(line stri
 		}
 		if segment.Encrypted {
 			if err := forEachEncryptedFrame(segment.Path, r.identities, consume); err != nil {
-				return err
+				var open *OpenSegmentError
+				if !errors.As(err, &open) {
+					return nil, err
+				}
+				open.Interrupted = i != len(segs)-1
+				if requireSealed {
+					return nil, open
+				}
+				notices = append(notices, *open)
 			}
 			continue
 		}
 		if err := forEachLine(segment.Path, func(line string) error { return consume([]byte(line)) }); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return notices, nil
 }

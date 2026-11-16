@@ -20,8 +20,14 @@ existence and writability, port availability, admin reachability when
 running, provider and webhook readiness without network contact,
 correlation configuration health (off by default; warns if
 `disabled_rules` is set while the engine stays disabled).
-Non-zero exit if any check fails. `--probe-provider` / `--probe-webhook`
+Human mode exits non-zero if any check fails. `--probe-provider` / `--probe-webhook`
 are explicit opt-ins that perform one bounded network probe each.
+
+Doctor's existing JSON mode returns exit 0 when it successfully renders a report;
+read `overall` and individual check statuses for health, including storage scan
+failures. Human mode returns exit 1 for blocking failures. Interrupted-segment
+warnings alone do not fail either mode. This differs from the explicit strict
+read policy of inspect/recommend.
 
 ## aegismesh healthcheck
 
@@ -138,21 +144,36 @@ segments require at least one matching `--identity FILE`; repeat the flag during
 key rotation. Identity files are native X25519 only, bounded and owner-only. See
 [evidence-encryption.md](evidence-encryption.md).
 
-Encrypted evidence reads require a complete authenticated v2 footer. An exact
-`inspect show --id` match does not bypass validation of later history. List,
-show, export and recommend emit no successful output after a later encrypted
-read failure. Active segments remain unreadable through ordinary flushes. They
-seal on size rotation, close or the first flush at five minutes from their first
-event (normally up to five more seconds; stalled maintenance can take longer).
-Full-directory reads still fail if a new active successor exists. Stop the runtime
-or inspect a separate snapshot of sealed segments for a complete read. Interrupted
-segments are preserved and fail closed on restart;
-see [recovery semantics](evidence-encryption.md). `--identity` accepts file
-references only; inline private values are rejected without echoing them.
+Encrypted v3 reads return only the last authenticated checkpoint/seal prefix.
+List/show/export and recommend succeed with an open segment, printing one line
+on stderr naming it, the verified event count and ignored trailing bytes, and
+warning that later events may exist. List/show and recommend JSON add
+`open_segments` entries (`segment`, `verified_events`, `trailing_bytes`,
+`interrupted`). Export stays NDJSON, with status only on stderr. Counts describe
+the segment prefix before filtering/limits. An older unsealed file is a loud
+**interrupted segment** warning; `doctor` reports it structurally without keys.
+The newest file is normally open, but may also be a crash with no successor yet.
+
+Add **`--require-sealed`** to `inspect list|show|export` or `recommend` to require
+completion. Exit codes: **0** successful requested read (possibly incomplete,
+with notices), **1** read/output failure including strict open-segment rejection,
+**2** invalid arguments. Strict failure emits no successful stdout or replacement
+export. An exact show match still validates later history. Without a checkpoint,
+or on a complete corrupt record, mismatched control, unsupported version or bytes
+after a seal, reads fail closed. A torn v3 tail after a valid checkpoint is ignored
+explicitly. Historical v2 still requires its seal; no migration is performed.
+
+Checkpoints appear at the existing flush cadence (normally five seconds) only
+when new frames arrived. Size/age/close and checkpoint space exhaustion seal
+segments. See [layout, rollback limits and recovery](evidence-encryption.md).
+Truncating even a formerly sealed v3 file to a prior checkpoint is indistinguishable
+from an open file; `--require-sealed` is necessary for full completion assurance.
+`--identity` accepts file references only; inline private values are rejected
+without echoing them. The console still cannot load encrypted history.
 
 ## aegismesh recommend
 
-    recommend --data-dir DIR [--identity FILE ...] [--limit N] [--rule RULE_ID]
+    recommend --data-dir DIR [--identity FILE ...] [--require-sealed] [--limit N] [--rule RULE_ID]
               [--sensor ID]
               [--classification interaction|canary_invocation|correlation_signal]
               [--json]

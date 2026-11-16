@@ -6,25 +6,14 @@ Updated: 2026-11-15. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 ## Authoritative baseline
 
 - Repository: `metaforismo/AegisMesh`
-- Default branch: `master`, last recorded head `01579d3`.
-- Re-check this value before relying on it. Public repository state is mutable.
-
-The work of 2026-11-14 and 2026-11-15 is committed and pushed as a stack of open,
-unmerged pull requests against `master`. Merge order is the stack order; each
-PR is based on the one above it.
-
-| Order | PR | Branch | Adds | Hosted CI on PR head |
-|---|---|---|---|---|
-| 1 | #72 | `security/go-toolchain-vuln-fixes` | Go 1.27.4 and `x/crypto` v0.59.0 for the SSH vulnerability fixes | PASS, 6 of 6 jobs |
-| 2 | #73 | `feat/evidence-at-rest-encryption` | Opt-in age/X25519 evidence encryption | PASS, 6 of 6 jobs |
-| 3 | #74 | `feat/console-api` | Disabled-by-default operator console API | PASS, 6 of 6 jobs |
-| 4 | #75 | `feat/console-ui-embed` | Embedded console UI, design system and landing page | PASS, 6 of 6 jobs (includes the Node UI tests step) |
-| 5 | PR #76 | `feat/fleet-enrollment` | Experimental fleet inventory: enrollment, signed heartbeats, operator routes and Fleet screen | NOT RUN |
-
-None of these is merged. Human review and merge are pending for all five. No
-release, tag, image, signature, deployment or repository-setting change has
-happened. Dependabot PRs #68 and #70 are superseded by #72 but still open; #71
-(pinned Action bumps) is untriaged.
+- Local `master` and the starting head of `feat/encrypted-live-read`: `484bd65`.
+- Local Git ancestry contains the merges of #72 (toolchain), #73 (encryption),
+  #74 (console API), #75 (embedded UI) and #76 (experimental fleet inventory).
+- The v3 checkpoint/live-read amendment is local and uncommitted. No commit,
+  push, branch switch, GitHub CLI, publication or deployment was performed for
+  this task. Hosted checks and current remote issue state were not queried.
+- Earlier hosted-CI/browser receipts remain historical evidence for their
+  named heads, not evidence for this uncommitted amendment.
 
 Manual browser verification on 2026-11-15 is recorded in `docs/verification.md`
 (console against the real server, and fleet with two real processes on
@@ -51,16 +40,19 @@ deception and evidence platform. It ships:
 - Docker/Compose and contract-tested Helm packaging;
 - pinned CI/release definitions, vulnerability checks and CycloneDX SBOM paths.
 
-After the stack above merges, `master` additionally contains:
+The supplied master baseline additionally contains:
 
-- optional age/X25519 evidence-at-rest encryption (#73; ADR-0016,
-  `docs/evidence-encryption.md`). Authenticated v2 segment footers detect
-  record-boundary truncation and order changes. Sealing occurs only on size
-  rotation, close or a flush at five minutes from the first event. Active
-  segments stay unreadable until sealed, so full-directory inspection needs no
-  unsealed successor (stop the runtime or inspect a sealed-only snapshot).
-  Crash-incomplete segments fail closed and need deliberate operator recovery;
-  there is no automatic repair, plaintext downgrade or key escrow.
+- optional age/X25519 evidence-at-rest encryption (ADR-0016,
+  `docs/evidence-encryption.md`) in the supplied master baseline. Local
+  uncommitted `feat/encrypted-live-read` adds v3 authenticated busy-flush
+  checkpoints and prefix reads with explicit open/interrupted notices, a
+  `--require-sealed` CLI policy and structural doctor warnings. Checkpoints and
+  seals cost 250 bytes each, count toward the segment cap and never load private
+  identities into runtime/console. Restart preserves old prefixes and opens a
+  new file. V2 stays seal-only, with no migration. Full truncation assurance
+  requires strict mode: removing a seal to a checkpoint looks like an open file.
+  See the dated verification entry for local commands and live traffic proof;
+  v3 is not committed, pushed, merged or released.
 - a disabled-by-default, single-node, single-tenant operator console API (#74;
   ADR-0017, `architecture/console-api.md`): token roles, Host/Origin/CSRF
   protections, SSE, investigations, hash-chained audit, `console token` and
@@ -154,11 +146,11 @@ require separate authorization and threat models.
 
 ## Known boundaries
 
-- Evidence is plaintext by default. Encryption is opt-in and, until #73 merges,
-  not in `master`.
+- Evidence is plaintext by default. Encryption is opt-in in the supplied master
+  baseline; the v3 checkpoint amendment is local and uncommitted.
 - There is no Telnet/database sensor, decoy-listener TLS, multi-tenancy,
   autonomous response path or hosted control plane. The console API, UI and
-  fleet inventory exist only in the unmerged stack above.
+  fleet inventory are in the local master baseline described above.
 - The console is single-node and single-tenant, with no SSO.
 - Fleet inventory forwards no evidence; evidence-spool, key rotation,
   mTLS/attestation, a local configuration workflow, upgrade, tenancy and SSO
@@ -200,11 +192,11 @@ branches and opening PRs does not imply approval to merge.
 
 ## Next priorities
 
-1. Merge the stack in order (#72, #73, #74, #75, fleet PR) after review and
-   green hosted CI.
-2. Triage #71; close #68 and #70 once #72 has merged.
+1. Review the local v3 amendment, then obtain hosted CI before any separately
+   authorized publication or merge.
+2. Refresh dependency issue/PR state before triage; remote status was not queried here.
 3. Evidence forwarding agent to hub (design in ADR-0018, not implemented).
-4. Live `inspect` of the unsealed active encrypted segment.
+4. Review the local v3 live-read amendment and its rollback/completion limits.
 5. SSO/OIDC and per-tenant isolation for the console.
 6. OTLP/SIEM export.
 7. Real-cluster Kubernetes evidence.

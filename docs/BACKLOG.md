@@ -10,19 +10,13 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## Current baseline
 
-- Default branch: `master`, last recorded head `01579d3`. None of the work
-  below is merged.
-- The 2026-11-14/15 work is a stack of open, unmerged PRs against `master`, in
-  merge order: #72 `security/go-toolchain-vuln-fixes` (Go 1.27.4, x/crypto
-  v0.59.0); #73 `feat/evidence-at-rest-encryption`; #74 `feat/console-api`;
-  #75 `feat/console-ui-embed` (embedded UI, design system, landing page). Each
-  is stacked on the previous one and has hosted CI PASS (6 of 6 jobs) on its
-  head. Human review and merge are pending.
-- Current worktree: `feat/fleet-enrollment`, stacked on #75 (experimental fleet
-  inventory). PR #76; hosted CI NOT RUN.
-- No release, tag, image, signature, deployment or repository-setting change
-  happened. Dependabot PRs #68 and #70 are superseded by #72 but still open;
-  #71 (pinned Action bumps) is untriaged.
+- Local `master` is `484bd65`, verified through local Git ancestry, with the
+  merges of #72-#76 (toolchain, encryption, console API/UI and fleet inventory).
+- Current worktree: `feat/encrypted-live-read`, initially clean at that baseline.
+  V3 checkpoint changes remain uncommitted; no remote operations or hosted-CI
+  checks were run. Earlier CI/review references below are historical receipts.
+- No release, tag, image, signature, deployment or repository-setting change is
+  part of this task; refresh remote dependency issue state before further triage.
 - Manual browser checks of the console and of two-process fleet enrollment on
   loopback are recorded in `docs/verification.md`.
 - PR #58 is closed/unmerged; its recovered draft and historical checks are not
@@ -95,45 +89,30 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 ## P1 — v0.2 completion and important architectural gaps
 
-### P1-1 — optional evidence-at-rest encryption — IMPLEMENTED (PR #73, unmerged)
+### P1-1 — optional evidence-at-rest encryption — baseline implemented; v3 local amendment
 
-- **Evidence:** this change adds native age/X25519 `.jsonl.age` segments,
-  explicit read identities, rotation/recovery semantics and a persistent
-  anti-downgrade guard while preserving plaintext as the default for data
-  directories that have never enabled encryption.
-- **Affected:** `internal/storage`, storage configuration and validation,
-  runtime construction, `inspect`/`recommend` read paths, CLI contracts,
-  examples, threat model, ADRs, release/license policy and verification.
-- **Security/egress:** local confidentiality only. Enabling encryption must fail
-  closed and must never silently downgrade writes to plaintext. No key service,
-  remote KMS or other new destination is approved.
-- **Dependencies:** exact-version maintenance/license/vulnerability review of
-  `filippo.io/age`; an ADR defining X25519-only recipients/identities, restart,
-  rotation, recovery and mixed plaintext/encrypted history semantics.
-- **Acceptance:**
-  - disabled mode preserves current filenames and bytes;
-  - enabled mode creates only authenticated age/X25519 segments;
-  - invalid or empty recipients fail before runtime readiness;
-  - private identities are explicit read-time references, bounded, never logged
-    and never accepted inline in checked-in configuration;
-  - encrypted segments fail on missing identity, wrong identity, corruption and
-    truncation rather than being skipped or interpreted as plaintext;
-  - restart opens a new encrypted stream instead of appending to an incomplete
-    previous stream;
-  - rotation and count/age retention work across plaintext and encrypted
-    segments without deleting the active segment;
-  - existing plaintext remains explicitly plaintext until separately migrated;
-  - verified export and recommendations preserve their fail-closed output rules.
-- **Verify:** table-driven config and key parser tests; storage restart,
-  wrong-key, corruption, truncation, rotation and retention integration tests;
-  exact CLI omitted/empty/whitespace/padded/repeated/comma/positional matrices;
-  affected-package race tests; `make lint test`; applicable fuzz; `go mod
-  verify`; license, secret, vulnerability and SBOM gates.
-- **Status:** **IMPLEMENTED — PR #73, unmerged**. Branch
-  `feat/evidence-at-rest-encryption`, stacked on #72. Hosted CI PASS on the PR
-  head (6 of 6 jobs); human review and merge pending. Local gate results are in
-  `docs/verification.md`. The closed unmerged PR #58 supplies draft material
-  only and is not acceptance evidence.
+- **Scope:** public-recipient-only native age/X25519 writes and explicit local
+  read identities; plaintext remains default in new directories, with a persistent
+  anti-downgrade guard once encryption is enabled.
+- **V3 result:** authenticated prefix checkpoints at existing busy flush cadence,
+  no idle checkpoints, bounded control records counted against file size, seals
+  on size/age/close or checkpoint space exhaustion, restart to a new file.
+  CLI reads prefixes with stderr/JSON notices; older open files warn as interrupted
+  and doctor reports structural status without keys. `--require-sealed` restores
+  strict output failure. Console still cannot backfill encrypted history.
+- **Compatibility:** plaintext/v2/v3 history; sealed v2 works, unfinished v2 fails
+  with v3 guidance; no in-place migration, repair or new configuration knob.
+- **Security boundary:** no new dependencies, egress, commands or enforcement.
+  Complete corrupt records fail closed. Open prefixes permit tail rollback;
+  even a removed seal truncated to a checkpoint appears open in permissive mode.
+  Use strict reads for completion. Public-recipient holders can forge whole files.
+- **Evidence:** record-sequence tables, every-byte crash truncation, key/alias
+  failures, injected-clock age/flush/rotation/restart, mixed retention, snapshot
+  mutation, CLI staging/golden tests and v2/v3 encrypted-frame fuzz seeds.
+  Gate and live runtime receipts are in `docs/verification.md`.
+- **Status:** encryption exists in the supplied master baseline. V3 is local
+  uncommitted work on `feat/encrypted-live-read`; no commit, push, hosted-CI,
+  merge or release action is part of this task.
 
 ### P1-2 — final v0.2 release-readiness audit — TODO (blocked)
 

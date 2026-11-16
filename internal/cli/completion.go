@@ -61,7 +61,7 @@ _aegismesh_completions() {
           --identity) COMPREPLY=( $(compgen -f -- "$cur") ) ;;
           --classification) COMPREPLY=( $(compgen -W "interaction canary_invocation correlation_signal" -- "$cur") ) ;;
           --profile) COMPREPLY=( $(compgen -W "ecs" -- "$cur") ) ;;
-          *) COMPREPLY=( $(compgen -W "--data-dir --identity --limit --sensor --kind --finding --classification --verify --id --out --profile --json" -- "$cur") ) ;;
+          *) COMPREPLY=( $(compgen -W "--data-dir --identity --require-sealed --limit --sensor --kind --finding --classification --verify --id --out --profile --json" -- "$cur") ) ;;
         esac
       fi ;;
     recommend)
@@ -70,7 +70,7 @@ _aegismesh_completions() {
         --identity) COMPREPLY=( $(compgen -f -- "$cur") ) ;;
         --classification) COMPREPLY=( $(compgen -W "interaction canary_invocation correlation_signal" -- "$cur") ) ;;
         --rule) COMPREPLY=( $(compgen -W "PI-001 PI-002 EXF-001 ESC-001 OBS-001 RES-001 COR-001 COR-002 COR-003 COR-004" -- "$cur") ) ;;
-        *) COMPREPLY=( $(compgen -W "--data-dir --identity --limit --rule --sensor --classification --json" -- "$cur") ) ;;
+        *) COMPREPLY=( $(compgen -W "--data-dir --identity --require-sealed --limit --rule --sensor --classification --json" -- "$cur") ) ;;
       esac ;;
     migrate)
       if [ "$COMP_CWORD" -eq 2 ]; then COMPREPLY=( $(compgen -W "beelzebub" -- "$cur") )
@@ -105,6 +105,7 @@ _aegismesh() {
           '1:subcommand:(list show export)' \
           '--data-dir[evidence directory]:directory:_directories' \
           '*--identity[native age/X25519 identity file]:file:_files' \
+          '--require-sealed[reject open segments]' \
           '--limit[maximum events]:number:' \
           '--sensor[sensor id]:sensor id:' \
           '--kind[sensor kind]:kind:(http tcp mcp ssh)' \
@@ -118,6 +119,7 @@ _aegismesh() {
         recommend) _arguments \
           '--data-dir[evidence directory]:directory:_directories' \
           '*--identity[native age/X25519 identity file]:file:_files' \
+          '--require-sealed[reject open segments]' \
           '--limit[maximum recommendations]:number:' \
           '--rule[exact rule id]:rule id:' \
           '--sensor[exact sensor id]:sensor id:' \
@@ -160,5 +162,6 @@ complete -c aegismesh -l config -r -d 'config file'
 complete -c aegismesh -l data-dir -r -d 'evidence directory'
 complete -c aegismesh -n '__fish_seen_subcommand_from inspect' -l identity -r -d 'native age/X25519 identity file'
 complete -c aegismesh -l json -d 'JSON output'
+complete -c aegismesh -n '__fish_seen_subcommand_from inspect recommend' -l require-sealed -d 'reject open segments'
 complete -c aegismesh -l dry-run -d 'bind and stop immediately'
 `

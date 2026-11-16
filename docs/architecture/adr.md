@@ -451,7 +451,8 @@ execution boundary. Protocol changes require a new protocol version and ADR.
 
 ## ADR-0016: Evidence encryption is optional native age/X25519 with an irreversible per-directory mode guard
 
-**Status:** Accepted for the v0.2 encryption slice; merge verification pending.
+**Status:** Accepted; v3 live-read amendment implemented locally, uncommitted.
+Local verification is recorded in `docs/verification.md`; no v3 merge/release claim.
 
 **Context.** The native JSONL store is intentionally local-first, but plaintext
 evidence can contain sensitive attacker-controlled context. AegisMesh needs an
@@ -459,68 +460,78 @@ optional confidentiality layer without inventing cryptography, adding a key
 service, changing the default offline posture, or allowing a configuration
 mistake to silently resume plaintext writes after encryption was enabled.
 
-**Decision.** `internal/storage` accepts one public native age X25519 recipient
-for writes. Encrypted segments use `.jsonl.age` and contain a repository-owned,
-bounded framing header followed by length-prefixed independent standard age
-ciphertexts, one per native event envelope. An authenticated v2 footer binds
-the count and SHA-256 of the ordered framed
-ciphertexts. Periodic flush pushes buffers to the OS without sealing or `fsync`.
-Only size rotation, close, or a flush at the fixed five-minute segment age seals
-it; age starts at the first event and empty segments never age out. After sealing,
-only a subsequent append opens another segment. The five-minute constant balances
-read delay against age-driven file/retention cost (at most 288 seals/day under
-steady traffic; size rotation and restarts add files). There is no directory scan
-or per-event `fsync` in append/flush. EOF without the footer, including
-record-boundary truncation, is an error. The framing is not a new cipher; age
-owns key wrapping, encryption and authentication. Reads accept only explicit
-local X25519 identity files through `inspect`/`recommend`, with bounded file
-count/size, permission and regular-file checks. Each frame is consumed to EOF
-before its plaintext is released to the caller. Missing/wrong identities,
-authentication failures, corruption and truncation are terminal storage errors.
+**Decision (amended 2026-11-15, encrypted live reads).** The runtime holds only
+one native public age/X25519 recipient. New `.jsonl.age` writes use
+`aegismesh.ageframes/v3\n`; historical sealed v2 remains readable, unsealed v2
+fails closed with v3 guidance, and v1/unknown versions are rejected. No in-place
+migration or automatic rewrite occurs. See `docs/evidence-encryption.md` for
+the exact binary layout: unchanged event frames, distinct checkpoint/seal markers,
+and encrypted 42-byte controls binding version, kind, event count and running
+SHA-256 over ordered event length/ciphertext records. Marker and encrypted kind
+must agree. Age owns encryption and authentication; no new cipher is designed.
 
-The existing plaintext path remains unchanged when encryption is omitted in a
-new data directory. Once encrypted mode successfully initializes, an owner-only
-mode guard makes later plaintext store construction fail closed; the existence
-of encrypted history independently enforces the same rule. Old plaintext is not
-rewritten or represented as encrypted. Restart always creates a new segment and
-key rotation is performed by changing the public recipient while supplying old
-and new read identities during the retention window.
+Every flush following new frames writes a checkpoint, unless age/space requires
+a seal. Idle flushes write no checkpoints. Controls are bounded by 1 KiB including
+framing, count toward `max_file_bytes`, and measure 250 bytes with pinned native
+X25519 (about 4.12 MiB/day at five-second busy flush cadence). Size rotation,
+close, a five-minute age from the first event checked at flush, or insufficient
+checkpoint-plus-seal space seals the file. Empty files do not age out; only a
+subsequent append opens a successor. There is no directory scan in append/flush,
+and flush publishes to the OS without `fsync` or power-loss durability.
 
-The stored-envelope maximum is shared by writer and reader so configuration
-cannot create evidence that the local reader cannot consume. Segment and
-identity opens reject special-file and replacement races at the read boundary.
+The read boundary accepts explicit bounded owner-only native X25519 identity
+files only. It authenticates a file-size snapshot, then replays through the last
+valid checkpoint/seal with bounded per-frame memory and revalidation. A successful
+permissive read returns only that prefix and explicit typed open-segment status;
+complete corrupt records and mismatched checkpoints fail closed even after a
+valid checkpoint. Incomplete tails are excluded. CLI list/show/recommend JSON
+carries `open_segments`; every accepted open file gets one stderr notice, while
+exports preserve their NDJSON format. CLI output remains buffered/staged until
+all reads succeed. `--require-sealed` restores strict exit-1 completeness checks;
+legacy `Reader.ForEach` stays strict, while `ForEachVerified` returns notices.
 
-**Consequences.** AegisMesh gains local at-rest confidentiality without runtime
-egress, KMS, passphrases, plugins or command execution. Operators own identity
-backup and rotation; losing required private identities is unrecoverable.
-Filenames, sizes, times, exports and host metadata remain visible. The mode guard
-prevents accidental sequential downgrade but is not host attestation, a
-filesystem sandbox, or protection from a privileged local writer. A data
-directory remains a single-runtime operational resource. An active segment cannot
-be verified until sealing, normally within five minutes from its first event plus
-the next five-second flush; stalled maintenance can take longer. Full-directory
-inspection still fails if a new active successor exists. Stop the runtime or use
-a separate snapshot of sealed segments; live-read/active-file skipping is absent.
-Retention runs every ten minutes, scanning files sequentially; it is a periodic
-whole-segment cap, not a hard disk quota. Retention holds the store mutex while
-scanning and can delay appends/flushes. Flush does not promise power-loss durability.
+An older open file in the existing mtime/name discovery order is an **interrupted
+segment**, reported loudly by reads and as a doctor warning. Newest-only openness
+is normal; it cannot alone prove whether a runtime is alive. Doctor and retention
+scan structural framing/marker kinds without identities or authenticity claims.
+Retention counts interrupted prefixes through their last structurally complete
+checkpoint and may expire the whole file, but never deletes the active file.
+Malformed framing or v2 incompleteness still blocks count retention. Retention
+runs on the separate ten-minute cadence and can delay writes while holding the
+store mutex; it is not a hard disk quota.
 
-**Recovery and mixed history.** An unfinished segment survives restart unchanged
-and blocks successful full-history reads until an operator explicitly handles
-the damaged copy; there is no automatic salvage command. Retention uses common
-oldest-mtime/filename ordering for both suffixes, counts framing without private
-keys, and never deletes the current segment. Existing plaintext stays plaintext.
-Callbacks are provisional until the complete read succeeds; all CLI reads buffer
-or stage output through the final footer, including `inspect show` exact matches.
+The plaintext path remains unchanged in new directories without encryption.
+The owner-only persistent mode guard and existence of encrypted history refuse
+later plaintext writes. Existing plaintext stays plaintext. Restart always opens
+a new file and preserves prior files; key rotation changes the public recipient
+while operators retain old read identities. Runtime/console never load private
+identities. The console's encrypted-history-unavailable behavior is unchanged.
 
-A single age stream per segment was considered. It would require decryption keys
-for exact retention counts or a separate count index. Independent frames with
-an encrypted completion footer keep the writer public-key-only, bound per-event
-memory, and make crash incompleteness explicit without a second metadata store.
-No new primitive is designed; age supplies ciphertext authentication. Frame or
-whole-segment forgery by a public-recipient holder, file deletion, compromised
-runtime memory, and stolen identities remain outside the confidentiality claim.
-The v1 draft was never released; it is intentionally unsupported.
+**Security consequences and decision flaw.** Checkpoints authenticate prefixes.
+A storage-medium writer can roll an open file back to an earlier checkpoint
+without detection, in addition to deleting/replacing whole files. The requested
+claim that all sealed files retain full truncation detection under permissive
+reads is impossible: removing the seal back to a prior checkpoint produces an
+indistinguishable open v3 file. The read reports incompleteness; **strict
+`--require-sealed` is needed to detect that loss of completion**. A trusted
+external monotonic completion ledger could distinguish these cases, but is not
+part of this change. A present/required seal binds the full event count/order;
+records after it fail. Sealed v2 has no checkpoint fallback.
+
+Anyone possessing the public recipient can still forge whole segments: this is
+consistency, not writer provenance or chain of custody. Metadata and plaintext
+exports remain visible. Compromised runtime hosts and stolen identities defeat
+confidentiality; identity loss is unrecoverable. The mode guard is not host
+attestation or isolation. This feature adds no egress, subprocess, command,
+extension authority or enforcement action.
+
+**Alternatives and synthesis.** Buffering a full pending flush in memory would
+simplify callbacks but make memory depend on traffic/segment size. Staging to a
+temporary file would add plaintext lifecycle and disk pressure. A two-pass read
+through a fixed-size descriptor is selected: it costs a second decryption of the
+verified prefix but bounds memory and keeps incomplete events out of callbacks.
+A single age stream would still require private keys for structural event counts;
+independent frames retain public-recipient-only writes and keyless retention.
 
 ## ADR-0017 — single-node read-mostly operator console
 

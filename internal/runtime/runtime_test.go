@@ -229,6 +229,14 @@ func TestBuildEncryptsEvidenceWithConfiguredRecipient(t *testing.T) {
 	if err := reader.ForEach(func(event.Envelope) error { return nil }, nil); err == nil || !strings.Contains(err.Error(), "not sealed") {
 		t.Fatalf("runtime flush unexpectedly sealed evidence: %v", err)
 	}
+	verified := 0
+	notices, err := reader.ForEachVerified(func(got event.Envelope) error {
+		verified++
+		return got.VerifyIntegrity()
+	}, nil)
+	if err != nil || verified != 1 || len(notices) != 1 || notices[0].VerifiedEvents != 1 {
+		t.Fatalf("runtime live read: seen=%d notices=%+v err=%v", verified, notices, err)
+	}
 	if err := sys.store.Close(); err != nil {
 		t.Fatal(err)
 	}

@@ -14,6 +14,12 @@ default and never executes attacker input. Response
 recommendations are deterministic, local, and dry-run only; the shipped runtime
 never acts on real assets.
 
+Encrypted CLI reads can inspect a running node through the latest authenticated
+v3 checkpoint, with explicit open/interrupted-segment notices. Use
+`--require-sealed` when completeness is required; see
+[format and rollback limits](docs/evidence-encryption.md). The console still
+loads no private identity and cannot backfill encrypted history.
+
 > AegisMesh is an independent implementation in the deception-technology problem space. It contains no code
 > or text from other honeypot projects. Inspiration and differences are documented in
 > [docs/research/competitive-landscape.md](docs/research/competitive-landscape.md).
@@ -169,12 +175,11 @@ Apache-2.0 licensed (see [LICENSE](LICENSE), [NOTICE](NOTICE)). Start with
 
 ## Status of unreleased work
 
-The at-rest encryption, console and fleet sections of this README describe work
-in open, unmerged pull requests: #73 (encryption), #74 (console API), #75
-(embedded console UI) and the fleet branch (PR #76), stacked in that order on
-#72 (Go 1.27.4 toolchain fixes). Hosted CI passes on #72-#75; the fleet branch
-has not run hosted CI. None of it is in `master` or in a release yet. See
-[docs/HANDOFF.md](docs/HANDOFF.md).
+Local `master` at `484bd65` contains #72-#76: toolchain fixes, evidence
+encryption, console API, embedded UI and experimental fleet inventory (verified
+from local Git ancestry). The v3 checkpoint amendment is uncommitted work on
+`feat/encrypted-live-read`. No v3 hosted CI, publication or deployment was
+performed. See [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## Console
 

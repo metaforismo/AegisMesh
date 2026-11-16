@@ -18,6 +18,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/egress"
+	"github.com/metaforismo/aegismesh/internal/storage"
 )
 
 // check is one doctor finding.
@@ -106,6 +107,19 @@ func (c *doctorCmd) Run(ctx context.Context, args []string) error {
 		add("ok", "storage-crypto", "age/X25519 evidence encryption enabled (.jsonl.age); runtime holds only the public recipient", "")
 	} else {
 		add("info", "storage-crypto", "off in configuration — new data directories use plaintext JSONL; previously encrypted directories fail closed", "enable storage.encryption only after backing up the private identity")
+	}
+
+	unsealed, scanErr := storage.UnsealedSegments(dataDir)
+	if scanErr != nil {
+		add("fail", "storage-segments", scanErr.Error(), "preserve evidence and inspect with the required identities")
+	}
+	for _, segment := range unsealed {
+		status, label := "info", "open segment"
+		if segment.Interrupted {
+			status, label = "warn", "interrupted segment"
+		}
+		add(status, "storage-segments", fmt.Sprintf("%s %s; structural checkpoint only; authenticity not checked",
+			label, segment.Segment), "inspect with identities; later events may exist")
 	}
 
 	// Port availability per sensor + admin.

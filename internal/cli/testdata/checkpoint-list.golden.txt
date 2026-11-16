@@ -1,0 +1,21 @@
+{
+  "corrupt_lines": 0,
+  "events": [
+    {
+      "time": "00:00:00.000",
+      "id": "00000000000000000000000000000001",
+      "classification": "interaction",
+      "sensor": "http-decoy-1",
+      "kind": "http"
+    }
+  ],
+  "open_segments": [
+    {
+      "segment": "events-current.jsonl.age",
+      "verified_events": 1,
+      "trailing_bytes": 0,
+      "interrupted": false
+    }
+  ]
+}
+storage: open segment events-current.jsonl.age not sealed; 1 events verified through the last checkpoint; 0 trailing bytes ignored; later events may exist

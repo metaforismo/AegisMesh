@@ -3,7 +3,6 @@ package storage
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,12 +16,13 @@ import (
 )
 
 const (
-	encryptedSegmentExt    = ".jsonl.age"
-	encryptedSegmentMagic  = "aegismesh.ageframes/v2\n"
-	encryptedFooterReserve = 1024
-	frameLengthBytes       = 4
+	encryptedSegmentExt     = ".jsonl.age"
+	encryptedSegmentMagic   = "aegismesh.ageframes/v3\n"
+	encryptedSegmentV2Magic = "aegismesh.ageframes/v2\n"
+	encryptedFooterReserve  = 1024
+	frameLengthBytes        = 4
 
-	// Age-driven sealing bounds read delay without rotating on every runtime flush.
+	// Age-driven sealing bounds segment lifetime without rotating on every runtime flush.
 	// Measured from the first event; empty segments do not age out.
 	maxEncryptedSegmentAge = 5 * time.Minute
 )
@@ -47,6 +47,7 @@ func encryptedReadError(segment string, frame int, reason string) error {
 	return &EncryptionError{Segment: segment, Frame: frame, Reason: reason}
 }
 
+// EncryptionOptions configures public-recipient-only writes.
 type EncryptionOptions struct {
 	Recipient string
 }
@@ -141,6 +142,28 @@ func writeEncryptedSegmentHeader(dst io.Writer) (int, error) {
 	return n, nil
 }
 
+// OpenSegmentError identifies an authenticated but incomplete v3 prefix.
+// TrailingBytes are excluded from the returned events. Interrupted means a newer
+// segment exists; it is an operational crash warning, not proof of its cause.
+type OpenSegmentError struct {
+	Segment        string `json:"segment"`
+	VerifiedEvents uint64 `json:"verified_events"`
+	TrailingBytes  int64  `json:"trailing_bytes"`
+	Interrupted    bool   `json:"interrupted"`
+}
+
+func (e *OpenSegmentError) Error() string {
+	label := "open segment"
+	if e.Interrupted {
+		label = "WARNING: interrupted segment"
+	}
+	return fmt.Sprintf("storage: %s %s not sealed; %d events verified through the last checkpoint; "+
+		"%d trailing bytes ignored; later events may exist",
+		label, e.Segment, e.VerifiedEvents, e.TrailingBytes)
+}
+
+func (e *OpenSegmentError) Unwrap() error { return errStore }
+
 func forEachEncryptedFrame(path string, identities identitySet, fn func([]byte) error) error {
 	if len(identities.values) == 0 {
 		return encryptedReadError(filepath.Base(path), 0, "requires at least one identity file")
@@ -150,59 +173,33 @@ func forEachEncryptedFrame(path string, identities identitySet, fn func([]byte) 
 		return err
 	}
 	defer f.Close()
-
-	return readEncryptedFrames(bufio.NewReader(f), filepath.Base(path), identities, fn)
+	info, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("%w: stat encrypted snapshot: %v", errStore, err)
+	}
+	return readEncryptedFrames(f, info.Size(), filepath.Base(path), identities, fn)
 }
 
-func readEncryptedFrames(reader *bufio.Reader, segment string, identities identitySet, fn func([]byte) error) error {
-	if err := readEncryptedSegmentHeader(reader, segment); err != nil {
+// Two passes keep memory bounded by one frame. The initial size is a live-read
+// snapshot boundary; subsequent appends cannot extend this read indefinitely.
+func readEncryptedFrames(src io.ReaderAt, size int64, segment string, ids identitySet, fn func([]byte) error) error {
+	snapshot := func(n int64) *bufio.Reader {
+		return bufio.NewReader(io.NewSectionReader(src, 0, n))
+	}
+	result, err := scanEncryptedFrames(snapshot(size), segment, ids, true, nil)
+	var open *OpenSegmentError
+	if err != nil && !errors.As(err, &open) {
 		return err
 	}
-	digest := sha256.New()
-	for frameNumber := 1; ; frameNumber++ {
-		length, footer, err := readEncryptedFrameLength(reader, segment, frameNumber)
-		if err != nil {
-			return err
-		}
-		if footer {
-			length, nested, err := readEncryptedFrameLength(reader, segment, frameNumber)
-			if err != nil {
-				return err
-			}
-			if nested || length > encryptedFooterReserve-frameLengthBytes*2 {
-				return encryptedReadError(segment, 0, "has invalid footer")
-			}
-			plaintext, err := decryptFrame(reader, length, identities, segment, frameNumber)
-			if err != nil {
-				return err
-			}
-			expected := make([]byte, 8, 8+sha256.Size)
-			binary.BigEndian.PutUint64(expected, uint64(frameNumber-1))
-			expected = digest.Sum(expected)
-			if !bytes.Equal(plaintext, expected) {
-				return encryptedReadError(segment, 0, "footer does not match event count and order")
-			}
-			if _, err := reader.ReadByte(); !errors.Is(err, io.EOF) {
-				return encryptedReadError(segment, 0, "has trailing data or read failure")
-			}
-			return nil
-		}
-		ciphertext := make([]byte, int(length))
-		if _, err := io.ReadFull(reader, ciphertext); err != nil {
-			return encryptedReadError(segment, frameNumber, "is truncated")
-		}
-		var prefix [frameLengthBytes]byte
-		binary.BigEndian.PutUint32(prefix[:], length)
-		_, _ = digest.Write(prefix[:])
-		_, _ = digest.Write(ciphertext)
-		plaintext, err := decryptFrame(bytes.NewReader(ciphertext), length, identities, segment, frameNumber)
-		if err != nil {
-			return err
-		}
-		if err := fn(plaintext); err != nil {
-			return err
-		}
+	replay, replayErr := scanEncryptedFrames(snapshot(result.end), segment, ids, true, fn)
+	var replayOpen *OpenSegmentError
+	if replayErr != nil && !errors.As(replayErr, &replayOpen) {
+		return replayErr
 	}
+	if replay != result || (replayOpen != nil && (open == nil || replayOpen.TrailingBytes != 0)) {
+		return encryptedReadError(segment, 0, "changed while reading the verified prefix")
+	}
+	return err
 }
 
 func decryptFrame(reader io.Reader, length uint32, identities identitySet, segment string, frameNumber int) ([]byte, error) {
@@ -220,7 +217,8 @@ func decryptFrame(reader io.Reader, length uint32, identities identitySet, segme
 		return nil, encryptedReadError(segment, frameNumber, "authentication failed")
 	}
 	if len(plaintext) > agekey.MaxEncryptedEventBytes {
-		return nil, encryptedReadError(segment, frameNumber, fmt.Sprintf("plaintext exceeds %d bytes", agekey.MaxEncryptedEventBytes))
+		return nil, encryptedReadError(segment, frameNumber,
+			fmt.Sprintf("plaintext exceeds %d bytes", agekey.MaxEncryptedEventBytes))
 	}
 	if frame.N != 0 {
 		return nil, encryptedReadError(segment, frameNumber, "is truncated or contains trailing data")
@@ -234,68 +232,15 @@ func countEncryptedFrames(path string) (int, error) {
 		return 0, err
 	}
 	defer f.Close()
-	return countEncryptedFramesReader(bufio.NewReader(f), filepath.Base(path))
+	info, err := f.Stat()
+	if err != nil {
+		return 0, fmt.Errorf("%w: stat encrypted snapshot: %v", errStore, err)
+	}
+	reader := bufio.NewReader(io.NewSectionReader(f, 0, info.Size()))
+	return countEncryptedFramesReader(reader, filepath.Base(path))
 }
 
 func countEncryptedFramesReader(reader *bufio.Reader, segment string) (int, error) {
-	if err := readEncryptedSegmentHeader(reader, segment); err != nil {
-		return 0, err
-	}
-	count := 0
-	for frameNumber := 1; ; frameNumber++ {
-		length, done, err := readEncryptedFrameLength(reader, segment, frameNumber)
-		if err != nil {
-			return 0, err
-		}
-		if done {
-			length, nested, err := readEncryptedFrameLength(reader, segment, frameNumber)
-			if err != nil {
-				return 0, err
-			}
-			if nested || length > encryptedFooterReserve-frameLengthBytes*2 {
-				return 0, encryptedReadError(segment, 0, "has invalid footer")
-			}
-			if _, err := io.CopyN(io.Discard, reader, int64(length)); err != nil {
-				return 0, encryptedReadError(segment, 0, "footer is truncated")
-			}
-			if _, err := reader.ReadByte(); !errors.Is(err, io.EOF) {
-				return 0, encryptedReadError(segment, 0, "has trailing data or read failure")
-			}
-			return count, nil
-		}
-		if _, err := io.CopyN(io.Discard, reader, int64(length)); err != nil {
-			return 0, encryptedReadError(segment, frameNumber, "is truncated")
-		}
-		count++
-	}
-}
-
-func readEncryptedSegmentHeader(reader *bufio.Reader, segment string) error {
-	magic := make([]byte, len(encryptedSegmentMagic))
-	if _, err := io.ReadFull(reader, magic); err != nil {
-		return encryptedReadError(segment, 0, "has a truncated header")
-	}
-	if string(magic) != encryptedSegmentMagic {
-		return encryptedReadError(segment, 0, "has an unsupported framing header")
-	}
-	return nil
-}
-
-func readEncryptedFrameLength(reader *bufio.Reader, segment string, frameNumber int) (uint32, bool, error) {
-	var prefix [frameLengthBytes]byte
-	n, err := io.ReadFull(reader, prefix[:])
-	if errors.Is(err, io.EOF) && n == 0 {
-		return 0, false, encryptedReadError(segment, 0, "is not sealed (missing footer)")
-	}
-	if err != nil {
-		return 0, false, encryptedReadError(segment, frameNumber, "has a truncated length prefix")
-	}
-	length := binary.BigEndian.Uint32(prefix[:])
-	if length == 0 {
-		return 0, true, nil
-	}
-	if length > agekey.MaxEncryptedFrameBytes {
-		return 0, false, encryptedReadError(segment, frameNumber, fmt.Sprintf("has invalid length %d", length))
-	}
-	return length, false, nil
+	result, err := scanEncryptedFrames(reader, segment, identitySet{}, false, nil)
+	return int(result.events), err
 }

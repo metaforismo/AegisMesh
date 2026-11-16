@@ -10,6 +10,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/recommend"
+	"github.com/metaforismo/aegismesh/internal/storage"
 )
 
 type recommendCmd struct {
@@ -21,7 +22,7 @@ func newRecommendCmd(env *Env) *recommendCmd { return &recommendCmd{env: env} }
 func (c *recommendCmd) Name() string { return "recommend" }
 
 func (c *recommendCmd) Usage() string {
-	return "recommend --data-dir DIR [--identity FILE ...] [--limit N] [--rule RULE_ID] [--sensor ID] [--classification CLASS] [--json]"
+	return "recommend --data-dir DIR [--identity FILE ...] [--require-sealed] [--limit N] [--rule RULE_ID] [--sensor ID] [--classification CLASS] [--json]"
 }
 
 func (c *recommendCmd) Help() string {
@@ -35,7 +36,10 @@ Every evidence line is read and verified before output is written. Recommendatio
 are proposed review signals, not incidents and never perform enforcement, network
 requests, process execution, credential changes, or other production mutation.
 The native event observation is never copied into output; each recommendation
-contains exact event IDs and verified observation payload hashes instead.`
+contains exact event IDs and verified observation payload hashes instead.
+Open v3 segments return only their checkpoint prefix and an incompleteness notice.
+Use --require-sealed for completeness. Exit codes: 0 success (possibly incomplete),
+1 read/output failure, 2 invalid arguments.`
 }
 
 func (c *recommendCmd) Run(_ context.Context, args []string) error {
@@ -45,6 +49,7 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
 	var sensorID strictValueFlag
 	var classification strictValueFlag
 	var jsonOut strictBoolFlag
+	var requireSealed strictBoolFlag
 	var identities identityFilesFlag
 
 	fs := newFlagSet(c.Name())
@@ -53,6 +58,7 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
 	fs.Var(&ruleID, "rule", "filter by exact rule id")
 	fs.Var(&sensorID, "sensor", "filter by exact sensor id")
 	fs.Var(&classification, "classification", "filter by evidence class")
+	fs.Var(&requireSealed, "require-sealed", "reject segments without a final seal")
 	fs.Var(&jsonOut, "json", "emit machine-readable JSON output")
 	fs.Var(&identities, "identity", "native age/X25519 identity file (repeatable)")
 
@@ -99,13 +105,13 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
 		return Usagef("%v", err)
 	}
 
-	reader, err := identities.openReader(dataDir.values[0])
+	reader, err := identities.openReader(dataDir.values[0], requireSealed.Value())
 	if err != nil {
 		return err
 	}
 	events := make([]event.Envelope, 0, recommend.MaxEvidence)
 	corrupt := 0
-	err = reader.ForEach(func(e event.Envelope) error {
+	notices, err := reader.ForEachVerified(func(e event.Envelope) error {
 		if len(events) >= recommend.MaxEvidence {
 			return fmt.Errorf("evidence read failed closed: more than %d events", recommend.MaxEvidence)
 		}
@@ -128,9 +134,13 @@ func (c *recommendCmd) Run(_ context.Context, args []string) error {
 		return fmt.Errorf("recommendation generation failed closed: %w", err)
 	}
 
+	reportOpenSegments(c.env.Err, notices)
 	var output bytes.Buffer
 	if jsonOut.Value() {
-		if err := writeJSON(&output, report); err != nil {
+		if err := writeJSON(&output, struct {
+			recommend.Report
+			OpenSegments []storage.OpenSegmentError `json:"open_segments,omitempty"`
+		}{report, notices}); err != nil {
 			return err
 		}
 	} else {

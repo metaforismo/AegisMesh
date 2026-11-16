@@ -454,8 +454,8 @@ Retention still lists/sorts all segments and scans their frames every ten minute
 it holds the store mutex, so a large pass can delay writes/flushes. Size rotation
 is proportional to accepted bytes, retention can overshoot between passes, and a
 damaged closed segment blocks count retention. These are documented limits, not
-a hard disk quota or an absolute daily file cap. Active evidence is unreadable
-until sealed, normally within five minutes of the first event plus the next
+a hard disk quota or an absolute daily file cap. Under the earlier v2-only implementation (superseded by the 2026-11-15
+v3 amendment below), active evidence was unreadable until sealed, normally within five minutes of the first event plus the next
 five-second flush (longer if maintenance stalls). Full-directory inspection can
 still fail on a new active successor: stop the runtime or inspect a separate
 sealed-only snapshot. Documentation, configuration reference, ADR-0016, threat
@@ -716,3 +716,106 @@ Optional evidence-at-rest encryption is not complete until the exact PR head has
 
 Release publication and real-cluster operation remain separate `NOT RUN` actions
 unless explicitly authorized at action time.
+
+## 2026-11-15 — v3 encrypted checkpoint/live-read amendment (local, uncommitted)
+
+**Scope and baseline.** `feat/encrypted-live-read` started clean at local master
+`484bd65`; local ancestry includes merges #72-#76. New encrypted writes are v3;
+plaintext and sealed v2 remain readable, while unfinished v2 fails closed with
+v3 guidance. No commit, push, branch switch, `gh`, hosted-CI query, merge,
+release or deployment was performed. `go.mod`/`go.sum` and dependencies are
+unchanged. The Makefile selected Go 1.27.4 from `go.mod`; direct Go commands
+used `GOTOOLCHAIN=go$(awk '/^go / {print $2; exit}' go.mod)`. Suites ran one after
+another, with `-p 1` for the focused race command. Available disk remained about
+8.4–8.5 GiB during verification. No transcript or helper script was added to the repo;
+only this summary and the intentional CLI golden fixture are retained here.
+
+| Command / proof | Result and captured output summary |
+| --- | --- |
+| `make lint test` (final code) | **PASS**, exit 0. `go vet ./...`, fmt check and `go test -race ./...`; 41 package results `ok`. `golangci-lint not installed; skipped (vet+fmt ran)`; optional golangci analysis **NOT RUN**. |
+| `go test -race -count=1 -p 1 ./internal/storage ./internal/cli ./internal/runtime ./internal/recommend` | **PASS**, exit 0. Final uncached output: storage `8.768s`, cli `3.509s`, runtime `14.001s`, recommend `1.282s`; no race reports. |
+| `make fuzz-seed` | **PASS**, exit 0. All 12 bounded 15-second targets passed. V2/v3 `FuzzEncryptedFrameStructure`: 2,224,879 executions, 15 new interesting inputs, no failures. The target remains in Makefile and CI lists. |
+| `make vuln` | **PASS**, exit 0. Pinned govulncheck v1.7.0: `No vulnerabilities found.` |
+| `make license-check secrets-scan` | **PASS**, exit 0. `license-check: ok — 14 module(s) within policy`; `secrets-scan: ok` (the existing scanner covers tracked files). New source/golden files contain synthetic fixtures and generated identities only, no retained private values. |
+| `make build` | **PASS**, exit 0. Built `bin/aegismesh`, version `484bd65-dirty`, commit `484bd65`, build timestamp `2026-11-15T21:12:12Z`. |
+| Built-binary live/graceful/crash/restart proof below | **PASS**, exit 0 from the temporary driver. Real runtime, native generated identity and HTTP listener on an ephemeral unprivileged loopback port; no provider/network egress. Temporary evidence/keys removed after the run, processes reaped. |
+| `git diff --check` | **PASS**, exit 0, no output. |
+| Hosted CI, publication, deployment | **NOT RUN**, outside the authorized task. Local gates are not hosted or production proof. |
+
+**Behavioral evidence.** `TestCheckpointRecordSequences` covers sealed/open
+records, complete/torn trailing frames and controls, multiple checkpoints,
+count/digest/kind mismatch, corrupt frames/control records, reordering, records
+after seals, duplicate seals, unsupported versions, invalid lengths, sealed v2
+and unsealed v2. A literal wire vector in `TestCheckpointPlaintextWireContract`
+checks the exact 42-byte format independently of writer/reader agreement.
+`TestCheckpointCrashEveryByte` truncates a small segment at every
+byte offset: no panic, no callback beyond the last verified checkpoint, every
+incomplete accepted prefix carries typed status; complete corruption is terminal.
+`TestCheckpointSnapshotChangesFailClosed` rejects a file shortened between
+validation and replay and proves the captured-size boundary excludes later data.
+
+Writer tests use the injected clock for idle/busy flushes, exact five-minute
+sealing, repeated flushes after sealing and successor age reset. Space/rotation
+and close tests check all files stay within `max_file_bytes`; restart tests
+preserve the old bytes and read the interrupted prefix. Mixed-directory tests
+cover plaintext, v2, v3, structural count retention and active-file protection.
+CLI tests cover list/show/export/recommend prefixes, strict stdout/destination
+protection, complete reads after close, stderr/JSON notices, interrupted doctor
+warnings (retained even when the newest successor has no checkpoint), and
+`checkpoint-list.golden.txt`. An intermediate added assertion failed because it
+expected exit 1 from doctor's existing JSON mode. That mode actually returns
+exit 0 with `overall: "fail"`; the corrected regression checks that report and
+separately proves human doctor exits 1 for a blocking scan failure. This existing
+contract is preserved and documented in `docs/cli.md`. Existing runtime and console tests
+remain green; the console still reports encrypted history unavailable and loads
+no private identity.
+
+**Manual transcript summary.** Commands used the built binary with a temporary
+config/data directory and owner-only native identity. `inspect list` used
+`--json --limit 1000`; the count assertions inspected its actual event/status
+objects. HTTP requests continued while the live reads ran.
+
+1. Live `inspect list --data-dir DIR --identity KEY --json --limit 1000`:
+   exit **0**, **56 events**, one open-segment notice and one `open_segments`
+   entry naming `events-20261115T211242.273686000Z.jsonl.age`; verified count 56.
+   Its line ended `0 trailing bytes ignored; later events may exist`.
+2. While still running, the same command plus `--require-sealed`: exit **1**,
+   empty stdout and the named not-sealed error.
+3. Stop with SIGTERM, then strict list: exit **0**, **58 events**, no
+   incompleteness field/notice. Count matched every successful synthetic request.
+4. Start a second run, receive traffic through a checkpoint, then `kill -9`:
+   newest segment `events-20261115T211247.478872000Z.jsonl.age` remained readable.
+   List exited **0** with **114 total events** (58 sealed + **56 checkpointed**),
+   reporting **8192 ignored tail bytes**. Its newest-only status was open, since
+   an unsealed newest file cannot alone distinguish a live writer from a crash.
+5. Restart and receive traffic through the successor's first flush: list exited
+   **0**, **171 events**, and printed `WARNING: interrupted segment` for the
+   unchanged second-run file, still exactly **56 verified events / 8192 ignored
+   bytes**, plus a separate notice for the open newest successor.
+6. Stop the successor gracefully. Strict list still exited **1** with empty
+   stdout because of the interrupted predecessor. `doctor --config FILE --json`
+   exited **0** with a `storage-segments` **warn** naming that interrupted file:
+   `structural checkpoint only; authenticity not checked`.
+
+**Measured overhead and deviations.** `TestCheckpointOverhead` checks **250
+bytes** for both checkpoint and seal: 42 plaintext + 200 age envelope + 8 framing.
+A busy five-second cadence costs about **4.12 MiB/day** in checkpoints. Idle
+flushes add none. A flush seals rather than consuming reserved seal space when
+a checkpoint would not fit; this preserves the configured size cap without
+adding a cadence knob. The legacy storage `ForEach` API stays strict;
+`ForEachVerified` returns typed notices, and CLI callers opt into that API.
+Flush still means buffered publication to the OS, without `fsync` or a power-loss
+promise. The read path uses bounded-memory two-pass authentication/replay rather
+than buffering a segment in memory or staging additional plaintext on disk.
+
+**Decision flaw and residual risks.** A checkpoint cannot prove later bytes
+existed. Open tails can be rolled back to an earlier checkpoint. In addition,
+a formerly sealed v3 file truncated to a prior checkpoint is indistinguishable
+from an open file: the requested unconditional sealed-truncation guarantee is
+impossible in permissive mode. `--require-sealed` detects missing completion;
+trusted external monotonic completion state is not implemented. A present/required
+seal still binds the full sequence, and trailing records fail closed. Whole-file
+deletion/replacement and whole-segment forgery by anyone with the public recipient
+remain outside the guarantee. Reads are per-file size snapshots, not an atomic
+directory snapshot; callbacks are provisional until the final result. See the
+ADR-0016 amendment, threat model and encryption guide for the same boundaries.

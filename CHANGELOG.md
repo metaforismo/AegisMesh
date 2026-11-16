@@ -8,6 +8,16 @@ changes bump MINOR).
 
 ### Added
 
+- Local v3 encrypted live-read amendment on `feat/encrypted-live-read`
+  (uncommitted): authenticated checkpoints after new frames at the existing
+  flush cadence, verified prefix reads for inspect/recommend, typed stderr/JSON
+  incompleteness notices, `--require-sealed`, and keyless interrupted-segment
+  doctor warnings. Each checkpoint/seal costs 250 bytes with pinned age/X25519;
+  idle flushes add none. V2 remains seal-only; no migration or private runtime
+  identity. Tail rollback is possible, including removal of a former seal back
+  to a checkpoint; strict reads are required for full completion assurance.
+
+
 - Experimental fleet inventory with authenticated enrollment and heartbeats:
   opt-in same-binary hub/agent roles, private local Ed25519 identities, one-use
   expiring enrollment tokens, persistent bounded nonce replay protection,
@@ -15,10 +25,9 @@ changes bump MINOR).
   listener, TLS beyond loopback, shared egress classification with a dedicated
   private-network opt-in, independent jittered delivery and fixed-label metrics.
   Not multi-tenant, not a managed service; forwards no evidence and cannot
-  command nodes. On `feat/fleet-enrollment`; PR #76, unmerged, hosted CI not
-  yet run.
+  command nodes. Present in the local master baseline through merge #76.
 
-- First operator console (PRs #74 and #75, open and unmerged): disabled-by-default,
+- First operator console (merged baseline #74 and #75): disabled-by-default,
   authenticated single-node HTTP API, token operator roles, ephemeral sessions/
   CSRF, bounded evidence index/live SSE, atomic operator investigations and
   hash-chained private audit. The same listener serves an embedded operator UI
@@ -28,8 +37,7 @@ changes bump MINOR).
   `console hash` and opt-in `demo --console`. Encrypted evidence remains live-only;
   no SSO, tenant isolation or sensor control is included in that console slice.
 
-- Optional native age/X25519 evidence-at-rest encryption (PR #73, open and
-  unmerged) writes independently
+- Optional native age/X25519 evidence-at-rest encryption (merged baseline #73) writes independently
   authenticated `.jsonl.age` frames, supports explicit read identities during
   key rotation, preserves mixed-history retention, and fails closed on wrong
   keys, corruption, truncation, unsafe key/segment aliases, or accidental
@@ -51,9 +59,10 @@ changes bump MINOR).
 
 ### Fixed
 
-- Encrypted v2 segments require authenticated completion footers, rejecting
-  truncation at complete-frame boundaries and changed record order. Flush seals
-  encrypted segments; subsequent writes start a new segment. Exact-match
+- Historical encrypted v2 segments require authenticated completion footers,
+  rejecting truncation at complete-frame boundaries and changed record order.
+  New v3 segments use busy-flush checkpoints and size/age/close/space seals;
+  subsequent writes after a seal start a new segment. Exact-match
   `inspect show` validates later input before emitting output. Malformed
   authenticated event JSON fails closed instead of being skipped.
 
