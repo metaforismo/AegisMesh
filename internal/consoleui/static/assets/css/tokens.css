@@ -23,7 +23,7 @@
   --text-md: 0.875rem;    /* 14px  UI body */
   --text-lg: 1rem;        /* 16px  section titles */
   --text-xl: 1.25rem;     /* 20px  page titles */
-  --text-2xl: 1.625rem;   /* 26px  stat values */
+  --text-2xl: 1.75rem;    /* 28px  stat values */
   --text-3xl: 2.25rem;    /* 36px  landing headings */
   --text-4xl: 3.25rem;    /* 52px  landing hero */
 
@@ -37,8 +37,10 @@
   --weight-semibold: 600;
   --weight-bold: 700;
 
-  --tracking-tight: -0.015em;
+  --tracking-tight: -0.011em;
+  --tracking-figure: -0.022em;      /* large numerals: tighter, they read as one shape */
   --tracking-display: -0.03em;
+  --tracking-label: 0.01em;         /* 11–12px labels breathe slightly */
 
   /* ---- Space (4px grid) ------------------------------------------------ */
   --space-0: 0;
@@ -57,21 +59,38 @@
   /* ---- Shape ----------------------------------------------------------- */
   /* Radii encode hierarchy: containers are squarer than the controls in them. */
   --radius-xs: 2px;    /* chips, chart bar ends */
-  --radius-sm: 4px;    /* inputs, buttons */
-  --radius-md: 6px;    /* panels, cards */
-  --radius-lg: 10px;   /* dialogs, drawers */
+  --radius-sm: 5px;    /* inputs, buttons */
+  --radius-md: 8px;    /* panels, cards */
+  --radius-lg: 12px;   /* dialogs, drawers, palette */
   --radius-pill: 999px;
 
   --border-width: 1px;
   --focus-width: 2px;
 
+  /* ---- Icons ----------------------------------------------------------- */
+  /* One 16-unit grid, 1.5 stroke, round caps. Sizes are the rendered box. */
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
+  --icon-stroke: 1.5;
+
   /* ---- Motion ---------------------------------------------------------- */
-  --duration-instant: 80ms;
-  --duration-fast: 140ms;
-  --duration-base: 220ms;
-  --duration-slow: 320ms;
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
+  /* Durations. UI stays under 300ms; only first-impression and decay
+     timings are longer. All drop to 0 under prefers-reduced-motion. */
+  --duration-instant: 100ms;  /* press feedback, hover color */
+  --duration-fast: 160ms;     /* tooltips, small popovers, toasts out */
+  --duration-base: 220ms;     /* dialogs, drawers, route content */
+  --duration-slow: 300ms;     /* toasts in, larger surfaces */
+  --duration-chart: 420ms;    /* chart entry (one per load) */
+  --duration-decay: 1800ms;   /* live-row highlight fading out */
+  --stagger: 18ms;            /* step between items in an entry wave */
+  /* Easings. Strong ease-out for anything entering or responding; ease-in-out
+     only for things that move while on screen; never ease-in. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-color: ease;
 
   /* ---- Layering -------------------------------------------------------- */
   --z-base: 0;
@@ -82,27 +101,29 @@
   --z-toast: 60;
 
   /* ---- Layout ---------------------------------------------------------- */
-  --nav-width: 13.5rem;
+  --nav-width: 14rem;
+  --topbar-h: 3.25rem;
   --content-max: 90rem;
   --prose-max: 68ch;
 
   /* ---- Color: light (default) ----------------------------------------- */
   /* Neutrals are a cool blue-graphite: calm for long sessions, no pure black. */
-  --color-canvas: #eef1f5;          /* app background */
+  --color-canvas: #edf0f4;          /* app background */
   --color-surface: #ffffff;         /* panels, tables */
   --color-surface-2: #f6f8fa;       /* table headers, insets */
-  --color-surface-3: #e7ebf0;       /* hover, pressed */
-  --color-border: #d3d9e1;
-  --color-border-strong: #7d8899;   /* control edges: 3.59:1 surface, 3.17:1 canvas (WCAG 1.4.11) */
-  --color-ink: #17202b;             /* primary text:   16.43:1 surface, 14.50:1 canvas */
-  --color-ink-2: #3d4a5b;           /* secondary text:  9.02:1 surface,  7.96:1 canvas */
-  --color-ink-3: #5c6879;           /* muted text:      5.66:1 surface,  4.99:1 canvas */
+  --color-surface-3: #e8ecf1;       /* hover, pressed */
+  --color-border: #d8dee6;          /* hairlines */
+  --color-border-strong: #7d8899;   /* control edges: 3.59:1 surface, 3.14:1 canvas (WCAG 1.4.11) */
+  --color-ink: #17202b;             /* primary text:   16.43:1 surface, 14.38:1 canvas */
+  --color-ink-2: #3d4a5b;           /* secondary text:  9.02:1 surface,  7.89:1 canvas */
+  --color-ink-3: #5c6879;           /* muted text:      5.66:1 surface,  4.95:1 canvas */
   --color-ink-inverse: #ffffff;
 
   --color-accent: #2e4fc9;          /* cobalt: 6.82:1 surface; white on it 6.82:1 */
   --color-accent-hover: #233fa8;
   --color-accent-soft: #e5eafb;
   --color-accent-ink: #ffffff;
+  --color-accent-line: #b9c6f2;     /* accent hairline: selected rows, crosshair */
   --color-focus: #2e4fc9;
 
   /* Evidence: attacker-controlled text is always set apart on this inset. */
@@ -142,24 +163,37 @@
   --class-canary: #eb6834;
   --class-signal: #1baf7a;
 
-  --chart-grid: #e3e7ed;
+  --chart-grid: #e6eaef;
   --chart-axis: #a9b3c1;            /* decorative baseline; ticks carry the values */
+  --chart-crosshair: #5c6879;
+
+  /* Ambient mesh motif (shell, login, landing): faint, never content. */
+  --mesh-dot: rgb(23 32 43 / 0.09);
+  --mesh-line: rgb(46 79 201 / 0.10);
 
   /* ---- Elevation ------------------------------------------------------- */
-  --shadow-1: 0 1px 0 rgb(23 32 43 / 0.04);
-  --shadow-2: 0 2px 6px rgb(23 32 43 / 0.08), 0 1px 2px rgb(23 32 43 / 0.06);
-  --shadow-3: 0 12px 32px rgb(23 32 43 / 0.16), 0 2px 6px rgb(23 32 43 / 0.08);
-  --scrim: rgb(15 20 27 / 0.42);
+  /* Three planes. Panels sit on the canvas (1), popovers and tooltips float
+     over content (2), dialogs, drawers and the palette cover it (3). Light
+     depth is shadow-led; dark depth is surface-led with an inner highlight,
+     because shadows vanish on dark canvases. */
+  --elev-1: 0 1px 2px rgb(23 32 43 / 0.05), 0 1px 1px rgb(23 32 43 / 0.03);
+  --elev-2: 0 6px 16px -4px rgb(23 32 43 / 0.14), 0 2px 4px -1px rgb(23 32 43 / 0.06);
+  --elev-3: 0 24px 56px -12px rgb(23 32 43 / 0.28), 0 8px 20px -8px rgb(23 32 43 / 0.12);
+  --highlight: inset 0 1px 0 rgb(255 255 255 / 0.85);
+  --shadow-1: var(--elev-1);
+  --shadow-2: var(--elev-2);
+  --shadow-3: var(--elev-3);
+  --scrim: rgb(15 20 27 / 0.38);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --color-canvas: #0e131a;
+    --color-canvas: #0d1218;
     --color-surface: #151b24;
     --color-surface-2: #1a212c;
     --color-surface-3: #232c39;
-    --color-border: #2b3544;
+    --color-border: #263040;
     --color-border-strong: #617088;
     --color-ink: #e7ebf1;             /* 14.46:1 surface */
     --color-ink-2: #b8c1ce;           /*  9.52:1 surface */
@@ -169,6 +203,7 @@
     --color-accent-hover: #adbdff;
     --color-accent-soft: #1f2a4d;
     --color-accent-ink: #0e131a;
+    --color-accent-line: #3a4b8c;
     --color-focus: #8ea5ff;
     --color-evidence-bg: #1b1a2b;
     --color-evidence-border: #34304f;
@@ -190,26 +225,29 @@
     --sev-track: #2b3544;
     /* Dark classification slots, validated vs the surface actually used
        (#151b24): all six checks pass, worst adjacent CVD ΔE 9.4, all >= 3:1. */
-    /* Validated vs #151b24: all checks pass (see the media block above). */
-  --class-interaction: #3987e5;
+    --class-interaction: #3987e5;
     --class-canary: #d95926;
     --class-signal: #199e70;
-    --chart-grid: #222b37;
+    --chart-grid: #212a36;
     --chart-axis: #45526a;
-    --shadow-1: 0 1px 0 rgb(0 0 0 / 0.3);
-    --shadow-2: 0 2px 8px rgb(0 0 0 / 0.4);
-    --shadow-3: 0 16px 40px rgb(0 0 0 / 0.55);
-    --scrim: rgb(0 0 0 / 0.6);
+    --chart-crosshair: #909bab;
+    --mesh-dot: rgb(231 235 241 / 0.07);
+    --mesh-line: rgb(142 165 255 / 0.10);
+    --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
+    --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
+    --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);
+    --highlight: inset 0 1px 0 rgb(255 255 255 / 0.045);
+    --scrim: rgb(4 7 11 / 0.62);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-canvas: #0e131a;
+  --color-canvas: #0d1218;
   --color-surface: #151b24;
   --color-surface-2: #1a212c;
   --color-surface-3: #232c39;
-  --color-border: #2b3544;
+  --color-border: #263040;
   --color-border-strong: #617088;
   --color-ink: #e7ebf1;             /* 14.46:1 surface */
   --color-ink-2: #b8c1ce;           /*  9.52:1 surface */
@@ -219,6 +257,7 @@
   --color-accent-hover: #adbdff;
   --color-accent-soft: #1f2a4d;
   --color-accent-ink: #0e131a;
+  --color-accent-line: #3a4b8c;
   --color-focus: #8ea5ff;
   --color-evidence-bg: #1b1a2b;
   --color-evidence-border: #34304f;
@@ -241,12 +280,16 @@
   --class-interaction: #3987e5;
   --class-canary: #d95926;
   --class-signal: #199e70;
-  --chart-grid: #222b37;
+  --chart-grid: #212a36;
   --chart-axis: #45526a;
-  --shadow-1: 0 1px 0 rgb(0 0 0 / 0.3);
-  --shadow-2: 0 2px 8px rgb(0 0 0 / 0.4);
-  --shadow-3: 0 16px 40px rgb(0 0 0 / 0.55);
-  --scrim: rgb(0 0 0 / 0.6);
+  --chart-crosshair: #909bab;
+  --mesh-dot: rgb(231 235 241 / 0.07);
+  --mesh-line: rgb(142 165 255 / 0.10);
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
+  --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
+  --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);
+  --highlight: inset 0 1px 0 rgb(255 255 255 / 0.045);
+  --scrim: rgb(4 7 11 / 0.62);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -255,5 +298,8 @@
     --duration-fast: 0ms;
     --duration-base: 0ms;
     --duration-slow: 0ms;
+    --duration-chart: 0ms;
+    --duration-decay: 0ms;
+    --stagger: 0ms;
   }
 }

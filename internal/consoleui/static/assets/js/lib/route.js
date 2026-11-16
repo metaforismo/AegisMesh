@@ -192,3 +192,26 @@ export function matchesEventFilters(ev, filters) {
   }
   return true;
 }
+
+// Identity of the view a route renders, ignoring query keys that only change
+// an overlay (e.g. the event drawer's `event`). Two routes with the same key
+// update in place instead of re-rendering the screen.
+export function viewKey(route, ignore = []) {
+  const q = route?.query || {};
+  const keys = Object.keys(q).filter((k) => !ignore.includes(k) && q[k] !== '').sort();
+  const params = route?.params || {};
+  const p = Object.keys(params).sort().map((k) => `${k}=${params[k]}`).join('&');
+  return `${route?.name || ''}|${p}|${keys.map((k) => `${k}=${q[k]}`).join('&')}`;
+}
+
+// Rebuild a route hash with some query keys changed ('' or null removes).
+export function withQuery(route, patch) {
+  const q = { ...(route?.query || {}) };
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (v === null || v === undefined || v === '') delete q[k];
+    else q[k] = v;
+  }
+  const path = route?.path ? `#/${route.path}` : '#/';
+  const qs = toQuery(q);
+  return qs ? `${path}?${qs}` : path;
+}

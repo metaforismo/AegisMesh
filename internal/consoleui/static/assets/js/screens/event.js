@@ -1,15 +1,16 @@
-import { h, clear, mount } from '../lib/dom.js';
+import { h, mount } from '../lib/dom.js';
 import { href, isOpaqueId } from '../lib/route.js';
 import { formatDateTime } from '../lib/format.js';
 import { jsonTokens, tokensToText } from '../lib/json.js';
-import { pageHead, panel, kv, sevChip, clsChip, evidence, seal, table, empty, link, chip, toast, labelFor, banner } from '../ui/components.js';
+import { pageHead, panel, kv, sevChip, clsChip, evidence, seal, table, empty, link, chip, toast, labelFor, banner, copyable } from '../ui/components.js';
+import { icon } from '../ui/icons.js';
 import { eventTable, ruleChips, statusBadge, attachDialog } from './shared.js';
 
 function jsonViewer(value) {
   const { tokens, truncated } = jsonTokens(value);
   const code = h('pre', { class: 'code', tabindex: '0', 'aria-label': 'Stored envelope JSON' },
     tokens.map((t) => (t.type === 'ws' ? t.text : h('span', { class: `json-${t.type}` }, t.text))));
-  const copy = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, 'Copy JSON');
+  const copy = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, icon('copy'), 'Copy JSON');
   copy.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(truncated ? JSON.stringify(value, null, 2) : tokensToText(tokens));
@@ -21,11 +22,11 @@ function jsonViewer(value) {
   return { code, copy, truncated };
 }
 
-export default {
-  title: 'Event',
-  async render(root, ctx) {
-    const id = ctx.route.params.id;
-    const d = await ctx.api.event(id, { signal: ctx.signal });
+// Renders one event's detail into `root`. Used by the full page and by the
+// side panel on the events list (`inDrawer`: no back link, the panel's own
+// header carries navigation).
+export async function renderEventDetail(root, ctx, id, { inDrawer = false, signal = ctx.signal } = {}) {
+    const d = await ctx.api.event(id, { signal });
     const s = d.summary || {};
     const integrity = d.integrity || {};
     const findings = Array.isArray(d.findings) ? d.findings : [];
@@ -49,7 +50,7 @@ export default {
 
     mount(root,
       pageHead({
-        eyebrow: h('a', { href: '#/events' }, '← Events'),
+        eyebrow: inDrawer ? null : h('a', { href: '#/events' }, icon('arrow-left', { size: 'xs' }), 'Events'),
         title: h('span', { class: 'event-title' }, evidence(s.summary || '(no summary)')),
         subtitle: h('span', { class: 'btn-row' }, clsChip(s.classification), sevChip(s.severity),
           seal(Boolean(integrity.verified), integrity.verified ? `Payload ${integrity.algorithm || 'hash'} verified` : 'Integrity check failed')),
@@ -60,7 +61,7 @@ export default {
         panel({
           title: 'Observation',
           body: kv([
-            ['Event id', h('code', null, s.id)],
+            ['Event id', copyable(s.id, { label: 'event id' })],
             ['Time', formatDateTime(s.time)],
             ['Sequence', String(s.seq ?? '—')],
             ['Sensor', h('span', { class: 'btn-row' }, link(href('events', { sensor: s.sensor?.id }), h('code', null, s.sensor?.id ?? '—')), s.sensor?.kind ? chip(s.sensor.kind) : null)],
@@ -101,5 +102,12 @@ export default {
         actions: viewer.copy,
         body: [viewer.truncated ? banner('warn', 'Envelope display truncated', 'The envelope is too large to render fully. Use aegismesh inspect for the complete record.') : null, viewer.code],
       }));
+    return d;
+}
+
+export default {
+  title: 'Event',
+  async render(root, ctx) {
+    await renderEventDetail(root, ctx, ctx.route.params.id);
   },
 };
