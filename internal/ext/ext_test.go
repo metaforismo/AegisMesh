@@ -362,8 +362,11 @@ func TestHostHandshakeFailures(t *testing.T) {
 		hsMS    int
 		wantErr string
 	}{
-		{"exits immediately", []string{"./false-ext"}, 2000, "handshake"},
-		{"echoes wrong frame type", []string{"./cat-ext"}, 2000, "bad handshake"},
+		// These two fail as soon as the child answers or exits, so the generous
+		// bound only matters on a loaded machine, where 2 s was not enough for
+		// the child to start and the case reported a timeout instead.
+		{"exits immediately", []string{"./false-ext"}, 15000, "handshake"},
+		{"echoes wrong frame type", []string{"./cat-ext"}, 15000, "bad handshake"},
 		{"never responds", []string{"./sleep-ext"}, 300, "timed out"},
 	}
 	for _, tc := range cases {

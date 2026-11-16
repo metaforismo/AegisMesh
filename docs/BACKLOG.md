@@ -122,7 +122,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 - **Status:** **PASS** — merged as PR #73 (`6d46429`) and PR #77 (`7b96af1`), hosted
   CI green on both heads.
 
-### P1-2 — final v0.2 release-readiness audit — AUDIT PERFORMED; GATES AND TAG PENDING
+### P1-2 — final v0.2 release-readiness audit — PASS (tag `v0.2.0` follows the merge of this audit)
 
 - **Evidence:** the finite delivery plan requires every v0.2 slice plus a final
   audit. All slices are merged. The documentation and claims audit was performed
@@ -139,8 +139,8 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
   |---|---|
   | Every delivery-plan slice (1-8) merged, PR and merge commit recorded | MET — `DELIVERY-PLAN.md` |
   | Clean `master` | MET at audit start: the audit branch was cut from `7ae0356` with a clean tree |
-  | Full race/fuzz/Helm/license/secret/vulnerability/SBOM gates on the exact commit | PENDING — the maintainer records them in the "Gates on `7ae0356`" table of `docs/verification.md`; hosted CI on earlier PR heads is not a substitute |
-  | No unresolved P0/P1/P2 milestone item | NOT MET as written — P1-3 (#71 open) and P2-1, P2-2, P2-3 (partial design), P2-4 remain open. P2-4 is already recorded as a later milestone; the maintainer decides whether the others are deferred to the next milestone (DELIVERY-PLAN completion predicate 7) or closed before tagging |
+  | Full race/fuzz/Helm/license/secret/vulnerability/SBOM gates on the exact commit | MET — recorded in the "Gates on `7ae0356`" table of `docs/verification.md`; one load-sensitive test failed once and is fixed in the release-preparation change |
+  | No unresolved P0/P1/P2 milestone item | DEFERRED — P1-3 (#71, pinned Action updates awaiting review), P2-1, P2-2 and P2-3 are moved to the milestone after v0.2.0 at tagging time (2026-11-16); P2-4 was already a later milestone. None of them changes shipped runtime behavior |
   | Documentation and threat model match runtime | AUDITED — status-word sweep, link and cross-number checks done; `THREAT-MODEL.md` and the API/protocol contracts were checked for status and numbers, not re-derived from source; no independent human review |
   | Release, tag, signing, image and cluster actions explicitly `NOT RUN` unless authorized | MET — none performed |
   | Verification vocabulary separates `PASS`, `FAIL`, `BLOCKED`, `NOT RUN` | MET — see the verification entry |
@@ -148,7 +148,7 @@ tests, documentation truth-sync and captured evidence. Status vocabulary is
 
 - **Verify:** commands in `docs/DELIVERY-PLAN.md` and `docs/verification.md`.
 - **Status:** audit performed 2026-11-16; gates on `7ae0356` recorded in
-  docs/verification.md; tag pending maintainer action.
+  docs/verification.md; the tag is created from the merge of the audit change.
 
 ### P1-3 — automated dependency PR triage — PARTIAL
 
@@ -463,8 +463,8 @@ verification history with exact commands and regressions:
 
 - **PASS:** hosted CI (six jobs) on the head of every merged PR #72-#82; local
   gates recorded per change in `docs/verification.md`.
-- **PENDING (maintainer):** the gate table on the exact `master` commit `7ae0356`
-  in the 2026-11-16 audit entry of `docs/verification.md`.
+- **PASS:** every gate on the exact `master` commit `7ae0356`, recorded in
+  `docs/verification.md`; hosted CI on the tagged merge commit is the final check.
 - **BLOCKED:** `make sbom sbom-check` inside a linked git worktree (the pinned
   generator cannot resolve the main-module version there); run in an ordinary
   clone or rely on hosted CI.

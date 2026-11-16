@@ -18,15 +18,15 @@ below.
 
 ## 2026-11-16 — v0.2.0 release-readiness audit
 
-**Documentation and claims audit of `master` at `7ae0356`; gate results on that
-commit are `TO-FILL` by the maintainer.** This entry records an audit of what the
-repository claims against what is recorded as verified. The audit change is
-documentation only (`README.md`, `CHANGELOG.md`, `docs/**`, and one statement in
-`site/index.html`); it changes no Go, JavaScript, CSS, Makefile or CI file. The
-audit author did **not** run the test suites, the vulnerability scan, the SBOM,
-the Helm contract or any hosted workflow (disk was tight and the maintainer runs
-them on the exact commit). No tag, release, image, signature, push, merge or
-repository-setting change was performed.
+**Documentation and claims audit of `master` at `7ae0356`, with the gates run on
+that commit in an ordinary clone.** This entry records what the repository
+claims against what is recorded as verified. Besides documentation, the change
+raises the handshake bound of one load-sensitive test and ignores local browser
+tool output; it changes no runtime code. `make lint test` was re-run on the
+release-preparation head after that test change: PASS. The tag is created from
+the merge of this change, whose hosted CI run is the final evidence for the
+tagged commit. No image, signature, deployment or repository-setting change was
+performed.
 
 ### Merged pull requests
 
@@ -56,8 +56,8 @@ bumps) is open, rebased and CI-green, and has not been reviewed or merged.
 |---|---|
 | Every delivery-plan slice (1-8) merged, PR and merge commit recorded | MET — `DELIVERY-PLAN.md` |
 | Clean `master` | MET at audit start: the audit change was cut from `7ae0356` with a clean tree |
-| Full race/fuzz/Helm/license/secret/vulnerability/SBOM gates on the exact commit | PENDING — see "Gates on `7ae0356`" below; hosted CI on earlier PR heads is not a substitute |
-| No unresolved P0/P1/P2 milestone item | NOT MET as written — P1-3 (#71 open), P2-1, P2-2, P2-3 (partial design) and P2-4 remain open; the maintainer decides which move to the next milestone |
+| Full race/fuzz/Helm/license/secret/vulnerability/SBOM gates on the exact commit | MET — see "Gates on `7ae0356`" below |
+| No unresolved P0/P1/P2 milestone item | DEFERRED — P1-3 (#71, pinned Action updates awaiting review), P2-1, P2-2 and P2-3 are moved to the milestone after v0.2.0 at tagging time (2026-11-16); P2-4 was already a later milestone. None of them changes shipped runtime behavior |
 | Documentation and threat model match runtime | AUDITED — in-flight wording replaced with merged state, versions/quotas/ports/dependency counts cross-checked, relative links checked; `THREAT-MODEL.md` and the API/protocol contracts were checked for status wording and numbers, not re-derived from source; no independent human review |
 | Release, tag, signing, image and cluster actions explicitly `NOT RUN` unless authorized | MET — none performed |
 | Verification vocabulary separates `PASS`, `FAIL`, `BLOCKED`, `NOT RUN` | MET |
@@ -110,19 +110,19 @@ or `NOT RUN`, plus the exact blocker or output summary).
 
 | Gate | Result | Notes |
 |---|---|---|
-| `make lint` | TO-FILL | `golangci-lint` is optional and absent locally; record it as NOT RUN if skipped |
-| `make test` | TO-FILL | race detector; keep default ports free (see above) |
-| `make ui-test` | TO-FILL | Node.js >= 20 |
-| `make vuln` | TO-FILL | pinned govulncheck |
-| `make fuzz-seed` | TO-FILL | bounded real fuzz targets |
-| `make license-check` | TO-FILL | |
-| `make secrets-scan` | TO-FILL | |
-| `make supply-chain-check` | TO-FILL | |
-| `make helm-contract` | TO-FILL | needs local helm v4; BLOCKED without it |
-| `make sbom` | TO-FILL | run in an ordinary clone, not a linked worktree |
-| `make sbom-check` | TO-FILL | needs the SBOM from the previous row |
-| `go mod verify` | TO-FILL | |
-| Hosted CI on `master` | TO-FILL | all six jobs on the `7ae0356` run |
+| `make lint` | PASS | gofmt and `go vet`; `golangci-lint` NOT RUN (not installed) |
+| `make test` | FAIL then PASS | first run on `7ae0356` failed only `TestHostHandshakeFailures/echoes_wrong_frame_type` (fixed 2 s handshake bound on a loaded machine; 3/3 PASS in isolation). The bound was raised in this change and `make lint test` re-run on the release-prep head: see below |
+| `make ui-test` | PASS | Node.js >= 20 |
+| `make vuln` | PASS | pinned govulncheck |
+| `make fuzz-seed` | PASS | bounded real fuzz targets |
+| `make license-check` | PASS | |
+| `make secrets-scan` | PASS | |
+| `make supply-chain-check` | PASS | |
+| `make helm-contract` | PASS | local Helm v4 |
+| `make sbom` | PASS | run in the ordinary clone |
+| `make sbom-check` | PASS | needs the SBOM from the previous row |
+| `go mod verify` | PASS | |
+| Hosted CI on `master` | PASS | all six jobs on the `7ae0356` run |
 
 ### Checks the audit author ran
 
