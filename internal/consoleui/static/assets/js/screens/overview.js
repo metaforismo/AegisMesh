@@ -2,13 +2,59 @@ import { h, mount } from '../lib/dom.js';
 import { href, normalizeWindow } from '../lib/route.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
 import { formatCount, formatDelta, formatDateTime } from '../lib/format.js';
-import { seriesOf } from '../lib/chart.js';
+import { seriesOf, bucketTrace, indexKnownFrom, BY_SENSOR_CAP } from '../lib/chart.js';
 import { pageHead, panel, stat, segmented, glyph, sevChip, evidence, barList, table, timeEl, empty, banner, link, sparkline } from '../ui/components.js';
-import { stackedBarChart, severityShare, SEVERITY_ORDER } from '../ui/charts.js';
+import { stackedBarChart, severityShare, activityTrace, SEVERITY_ORDER } from '../ui/charts.js';
 import { icon } from '../ui/icons.js';
-import { historyBanner } from './shared.js';
+import { rankByNode, describeOrigin } from '../lib/origin.js';
+import { historyBanner, eventHref, forwardedNote } from './shared.js';
 
 const WINDOW_LABELS = [['1h', 'Last hour'], ['24h', 'Last 24 hours'], ['7d', 'Last 7 days']];
+const WINDOW_MS = { '1h': 3600e3, '24h': 86400e3, '7d': 7 * 86400e3 };
+
+// Start of the overview window, so a drill-down lists the same events the
+// count was made from.
+function windowStart(generatedAt, window) {
+  const end = Date.parse(generatedAt);
+  if (!Number.isFinite(end)) return '';
+  return new Date(end - WINDOW_MS[window]).toISOString().replace('.000Z', 'Z');
+}
+
+// Present only on a hub that accepts forwarded evidence. Ranked here: the
+// API sends the rows sorted by id.
+function byNodePanel(byNode, window, generatedAt) {
+  const rows = rankByNode(byNode);
+  const since = windowStart(generatedAt, window);
+  return panel({
+    title: 'By node', meta: 'Where this window’s events were observed: this node, or an enrolled node that forwarded them',
+    actions: link(href('fleet'), 'Fleet'),
+    body: rows.length
+      ? barList(rows.map((r) => {
+        const o = describeOrigin(r);
+        return {
+          label: o.local
+            ? h('span', { class: 'origin origin--local' }, 'This node')
+            : h('span', { class: 'origin' }, h('code', null, o.name), o.short ? h('span', { class: ['muted', 'origin__id'] }, o.short) : null),
+          value: r.events, valueText: formatCount(r.events),
+          href: href('events', { node: r.id, since }),
+        };
+      }))
+      : empty('No events in this window', 'Neither this node nor any forwarding node stored an event in this window.'),
+  });
+}
+
+// A small activity trace per sensor from by_sensor[].buckets (same starts as
+// the main chart). Older servers send no per-sensor buckets: no trace then.
+function sensorTrace(row, knownFrom) {
+  if (!Array.isArray(row?.buckets)) return null;
+  const tr = bucketTrace(row.buckets);
+  return tr ? activityTrace(tr.bins, { start: tr.start, end: tr.end, knownFrom, height: 20 }) : null;
+}
+
+function sensorsMeta(rows) {
+  if (!rows.some((r) => Array.isArray(r?.buckets))) return null;
+  return rows.length >= BY_SENSOR_CAP ? `Activity over the window; the ${BY_SENSOR_CAP} sensors seen most recently` : 'Activity over the window';
+}
 
 export default {
   title: 'Overview',
@@ -43,6 +89,8 @@ export default {
     const sources = Array.isArray(ov.top_sources) ? ov.top_sources : [];
     const signals = Array.isArray(ov.recent_signals) ? ov.recent_signals : [];
     const sensors = Array.isArray(ov.by_sensor) ? ov.by_sensor : [];
+    const hasByNode = Array.isArray(ov.by_node);
+    const knownFrom = indexKnownFrom(node);
 
     mount(root,
       pageHead({
@@ -50,7 +98,8 @@ export default {
         subtitle: `What the sensors observed in the ${windowText}, compared with the window before it. Events are observations, not incidents.`,
         actions: segmented({ label: 'Time window', options: WINDOW_LABELS.map(([w]) => [w, w]), value: window, onChange: (w) => ctx.navigate(href('overview', { window: w })) }),
       }),
-      historyBanner(node),
+      historyBanner(node, { accepting: hasByNode }),
+      hasByNode ? forwardedNote('counts') : null,
       tiles,
       panel({
         title: 'Observations over time', meta: `Stacked by classification · generated ${formatDateTime(ov.generated_at)}`,
@@ -88,13 +137,19 @@ export default {
             glyph('correlation_signal'),
             h('p', { class: 'timeline__time' }, timeEl(s.time)),
             h('div', { class: 'timeline__body' },
-              link(href('events', s.id), evidence(s.summary, { max: 90 })),
+              link(eventHref(s), evidence(s.summary, { max: 90 })),
               sevChip(s.severity))))) : empty('No signals', 'No correlation rule fired in this window.'),
         })),
+      hasByNode ? byNodePanel(ov.by_node, window, ov.generated_at) : null,
       h('div', { class: 'grid grid--2' },
         panel({
           title: 'Events by sensor', flush: false,
-          body: sensors.length ? barList(sensors.map((s) => ({ label: h('span', { class: 'btn-row' }, h('code', null, s.sensor_id), h('span', { class: 'chip' }, s.kind)), value: s.events, valueText: formatCount(s.events), href: href('events', { sensor: s.sensor_id }) }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
+          meta: sensorsMeta(sensors),
+          body: sensors.length ? barList(sensors.map((s) => ({
+            label: h('span', { class: 'btn-row' }, h('code', null, s.sensor_id), h('span', { class: 'chip' }, s.kind)),
+            value: s.events, valueText: formatCount(s.events), href: href('events', { sensor: s.sensor_id }),
+            aside: sensorTrace(s, knownFrom),
+          }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
         }),
         panel({
           title: 'Investigations',

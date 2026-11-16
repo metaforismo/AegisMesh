@@ -165,3 +165,69 @@ export function waveDelays(n, total = 240) {
   }
   return out;
 }
+
+// ---- Per-sensor series (overview.by_sensor[].buckets) -------------------------
+
+// The contract caps by_sensor at this many entries; a sensor missing from a
+// full list may simply be past the cap.
+export const BY_SENSOR_CAP = 64;
+
+const zeroBucket = (b) => ({ start: b?.start, interaction: 0, canary_invocation: 0, correlation_signal: 0 });
+
+// One sensor's bucket series from an overview response.
+//   { status: 'ok', buckets, events }  the server's series (or, for a sensor
+//                                      with no events in the window, zeros
+//                                      on the main series' starts)
+//   { status: 'unsupported' }          an older server without per-sensor
+//                                      buckets, or a sensor beyond the cap:
+//                                      the caller falls back to listing events
+export function sensorBuckets(overview, sensorId) {
+  const list = Array.isArray(overview?.by_sensor) ? overview.by_sensor : null;
+  if (!list) return { status: 'unsupported' };
+  if (list.some((s) => !Array.isArray(s?.buckets))) return { status: 'unsupported' };
+  const row = list.find((s) => s?.sensor_id === sensorId);
+  if (row) return { status: 'ok', buckets: row.buckets, events: Number(row.events) || 0 };
+  const main = Array.isArray(overview?.buckets) ? overview.buckets : [];
+  // Absent from a full list: it may have events past the cap. Absent from an
+  // empty list: an older server says nothing either way unless main exists.
+  if (list.length >= BY_SENSOR_CAP || !main.length) return { status: 'unsupported' };
+  return { status: 'ok', buckets: main.map(zeroBucket), events: 0 };
+}
+
+// Bucket series → activity trace geometry. Each bucket covers [start, next
+// start); the last one is as long as the one before it (or ends at `end`
+// when there is only one). Returns null when the starts cannot be read.
+export function bucketTrace(buckets, { end } = {}) {
+  const list = Array.isArray(buckets) ? buckets : [];
+  if (!list.length) return null;
+  const starts = list.map((b) => Date.parse(b?.start));
+  if (starts.some((t) => !Number.isFinite(t))) return null;
+  const start = starts[0];
+  let stop;
+  if (list.length > 1) {
+    const step = starts[list.length - 1] - starts[list.length - 2];
+    stop = starts[list.length - 1] + step;
+  } else {
+    stop = Date.parse(end);
+  }
+  if (!Number.isFinite(stop) || stop <= start) return null;
+  const bins = seriesOf(list, '');
+  return { bins, start, end: stop, total: bins.reduce((a, b) => a + b, 0) };
+}
+
+// Earliest time the console's index can speak for, from GET /node.
+// - complete: the index holds all retained evidence, so quiet bins are quiet.
+// - unavailable (evidence-at-rest encryption, or forwarded copies): the index
+//   holds what arrived since the process started; earlier bins are unknown.
+// - truncated: the index dropped its oldest entries; bins older than the
+//   oldest indexed event are unknown.
+// Unknown bins are drawn dashed, never as zero.
+export function indexKnownFrom(node) {
+  const index = node?.index;
+  if (!index || index.history === 'complete') return -Infinity;
+  const started = Date.parse(node?.started_at);
+  const oldest = Date.parse(index.oldest);
+  if (index.history === 'unavailable' && Number.isFinite(started)) return started;
+  if (Number.isFinite(oldest)) return oldest;
+  return Number.isFinite(started) ? started : -Infinity;
+}

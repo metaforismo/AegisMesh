@@ -19,7 +19,10 @@ import { h, clear } from './lib/dom.js';
 import { createSwr, abortable } from './lib/swr.js';
 import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
 import { createShell, applyTheme, cycleTheme, isApple, NAV } from './ui/shell.js';
-import { errorState, installPeek } from './ui/components.js';
+import { errorState, installPeek, toast } from './ui/components.js';
+import { loginErrorCode, loginErrorMessage } from './lib/auth.js';
+import { tenantInfo, switchTargets, routeAfterSwitch, switchBody } from './lib/tenant.js';
+import { notFoundInTenant } from './screens/shared.js';
 import { skeleton } from './ui/skeletons.js';
 import { SCREENS, notFoundScreen, forbiddenScreen } from './screens/index.js';
 
@@ -56,11 +59,11 @@ const rawApi = createApi({ onUnauthenticated: () => endSession('Your session end
 // (arguments before the options object). The audit trail is deliberately
 // absent: reading it is an audited action and must only happen on request.
 const CACHEABLE = {
-  overview: 1, events: 3, event: 1, sources: 2, source: 3, sensors: 0, rules: 0, recommendations: 1,
+  overview: 1, events: 3, event: 2, sources: 2, source: 3, sensors: 0, rules: 0, recommendations: 1,
   node: 0, investigations: 1, investigation: 1, fleet: 0, fleetNodes: 1, fleetNode: 1,
 };
 const CURSOR_ARG = { events: 1, source: 1 }; // later pages are never cached
-const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'audit', 'verifyAudit', 'enrollmentTokens']);
+const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'switchTenant', 'audit', 'verifyAudit', 'enrollmentTokens']);
 
 const nav = { back: false, used: new Set() };
 const swr = createSwr({
@@ -228,6 +231,53 @@ function onLogin(session) {
   else location.hash = target;
 }
 
+// Move the session to another member tenant. The live view is torn down
+// first, so nothing from the departing tenant (a stream, a late response)
+// lands on screen; the server closes the old session's streams anyway.
+// Then: new session and CSRF token, an empty read cache, a rebuilt shell,
+// and either the same view in the new tenant or the overview when the view
+// named an object that cannot exist there.
+let switchingTenant = false;
+async function switchTenant(target) {
+  if (switchingTenant || !state.session) return;
+  const body = switchBody(state.session, target);
+  if (!body) return;
+  switchingTenant = true;
+  const from = tenantInfo(state.session).active;
+  teardownScreen();
+  progress.start();
+  let session;
+  try {
+    session = await rawApi.switchTenant(body.tenant);
+  } catch (err) {
+    progress.done();
+    switchingTenant = false;
+    if (err instanceof ApiError && err.status === 401) {
+      endSession('Your session ended. Sign in again to continue.');
+      return;
+    }
+    toast('error', `Could not switch to tenant ${target}: ${err?.message || 'request failed'}. You are still in ${from}.`);
+    render({ soft: true });
+    return;
+  }
+  progress.done();
+  swr.invalidate();
+  state.session = session;
+  state.shell = null;
+  state.firstRender = true; // a context change, not a navigation: no transition
+  const { hash, reason } = routeAfterSwitch(parseHash(location.hash), location.hash);
+  if (hash !== location.hash) history.replaceState(null, '', hash);
+  switchingTenant = false;
+  await render();
+  const now = tenantInfo(state.session).active || target;
+  const why = {
+    object: ` The page you were on belonged to ${from}, so you are on the overview.`,
+    cleared: ` The open event and origin filter belonged to ${from}, so they were cleared.`,
+  }[reason] || '';
+  toast('ok', `Now in tenant ${now}.${why}`);
+  state.shell?.main.querySelector('#page-title')?.focus({ preventScroll: true });
+}
+
 async function openPalette() {
   if (!state.session) return;
   const { togglePalette } = await loadPalette();
@@ -239,6 +289,10 @@ async function openPalette() {
       { label: 'Follow live events', icon: 'live', hint: 'Events in live mode', keywords: ['stream', 'tail'], run: (p) => p.navigate('#/events?live=1') },
       { label: 'Switch color theme', icon: 'sun', hint: 'System, light, dark', keywords: ['dark', 'light', 'appearance'], run: () => cycleTheme() },
       { label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: ['keys', 'help'], run: () => toggleShortcuts() },
+      ...switchTargets(state.session).map((t) => ({
+        label: `Switch tenant: ${t}`, icon: 'tenant', hint: `Act in tenant ${t}`, keywords: ['tenant', 'switch', t],
+        run: () => switchTenant(t),
+      })),
       { label: 'Sign out', icon: 'sign-out', hint: 'End this session', keywords: ['logout', 'log out'], run: () => logout() },
     ],
   });
@@ -261,24 +315,32 @@ async function render({ soft = false } = {}) {
       return;
     }
     state.shell = null;
+    // An OIDC failure comes back as #/login?error=<code>. Read it once, then
+    // drop it from the address bar so a reload or a shared link is clean.
+    const loginError = loginErrorCode(route.query);
+    if (route.query && Object.keys(route.query).length) history.replaceState(null, '', '#/login');
     clear(appRoot);
     document.title = 'Sign in · AegisMesh';
     const controller = new AbortController();
     state.controller = controller;
     const { default: loginScreen } = await loadLogin();
     if (controller.signal.aborted || state.session) return;
-    loginScreen.render(appRoot, { api: rawApi, meta: state.meta, notice: state.notice, onLogin, signal: controller.signal });
+    loginScreen.render(appRoot, { api: rawApi, meta: state.meta, notice: state.notice, loginError, onLogin, signal: controller.signal });
     return;
   }
 
   if (route.name === 'login') {
+    // Already signed in (say, a second single sign-on attempt failed in this
+    // browser): keep the session and say what happened, once.
+    const code = loginErrorCode(route.query);
+    if (code) toast('error', `${loginErrorMessage(code).title}. You are still signed in.`);
     location.replace('#/overview');
     return;
   }
 
   if (!state.shell) {
     teardownScreen();
-    state.shell = createShell({ session: state.session, meta: state.meta, onLogout: logout, onSearch: openPalette });
+    state.shell = createShell({ session: state.session, meta: state.meta, onLogout: logout, onSearch: openPalette, onSwitchTenant: switchTenant });
     clear(appRoot);
     appRoot.appendChild(state.shell.root);
     const prefetchFrom = (e) => {
@@ -364,7 +426,13 @@ async function render({ soft = false } = {}) {
     if (err?.name === 'AbortError' || controller.signal.aborted) return;
     if (err instanceof ApiError && err.status === 401) return; // endSession already ran.
     state.firstRender = false;
-    swapView(main, h('div', { class: 'view' }, h('div', { class: 'panel' }, errorState(err, () => render({ soft: true })))), { animate: false, dir });
+    // Another tenant's objects answer 404 exactly like absent ones; with
+    // tenants in play the empty state says which tenant was searched.
+    const info = tenantInfo(state.session);
+    const body = err instanceof ApiError && err.code === 'not_found' && info.show
+      ? notFoundInTenant(info)
+      : errorState(err, () => render({ soft: true }));
+    swapView(main, h('div', { class: 'view' }, h('div', { class: 'panel' }, body)), { animate: false, dir });
   }
 }
 

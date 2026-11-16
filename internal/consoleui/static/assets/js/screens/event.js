@@ -4,7 +4,30 @@ import { formatDateTime } from '../lib/format.js';
 import { jsonTokens, tokensToText } from '../lib/json.js';
 import { pageHead, panel, kv, sevChip, clsChip, evidence, seal, table, empty, link, chip, toast, labelFor, banner, copyable } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
-import { eventTable, ruleChips, statusBadge, attachDialog } from './shared.js';
+import { describeOrigin, normalizeNodeFilter, LOCAL } from '../lib/origin.js';
+import { eventTable, ruleChips, statusBadge, attachDialog, originLabel, originContext } from './shared.js';
+
+// The integrity scope the hub reports for forwarded evidence. The UI words
+// it itself and never shows a server-supplied description as interface text.
+const HUB_SCOPE = 'hub_payload_hash_consistency';
+
+function integrityView(integrity, forwarded) {
+  const verified = integrity.verified === true;
+  const scope = typeof integrity.scope === 'string' ? integrity.scope : '';
+  const algo = integrity.algorithm || 'hash';
+  if (scope === HUB_SCOPE) {
+    return {
+      seal: seal(verified, verified ? `Payload ${algo} consistent on this hub` : 'Hub integrity check failed'),
+      note: verified
+        ? 'The hub recomputed the payload hash of the forwarded envelope and it matches. That is consistency, not provenance: it shows the copy was not altered after hashing, not that the content is what the sensor saw. The node id is the origin the hub authenticated when the copy arrived.'
+        : 'The hub recomputed the payload hash of the forwarded envelope and it does not match. Treat this copy as untrustworthy and compare it with the node’s own store.',
+    };
+  }
+  return {
+    seal: seal(verified, verified ? `Payload ${algo} verified` : 'Integrity check failed'),
+    note: scope ? `Integrity scope reported by the server: ${scope}.` : (forwarded ? 'Forwarded copy: the server did not report an integrity scope.' : ''),
+  };
+}
 
 function jsonViewer(value) {
   const { tokens, truncated } = jsonTokens(value);
@@ -25,17 +48,27 @@ function jsonViewer(value) {
 // Renders one event's detail into `root`. Used by the full page and by the
 // side panel on the events list (`inDrawer`: no back link, the panel's own
 // header carries navigation).
-export async function renderEventDetail(root, ctx, id, { inDrawer = false, signal = ctx.signal } = {}) {
-    const d = await ctx.api.event(id, { signal });
+export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = false, signal = ctx.signal } = {}) {
+    const [d, origin] = await Promise.all([
+      ctx.api.event(id, normalizeNodeFilter(node), { signal }),
+      originContext(ctx, signal),
+    ]);
     const s = d.summary || {};
     const integrity = d.integrity || {};
+    const nodeRef = d.node || s.node || null;
+    const o = describeOrigin(nodeRef);
+    const forwarded = !o.local;
+    const showOrigin = forwarded || origin.accepting;
+    const iv = integrityView(integrity, forwarded);
     const findings = Array.isArray(d.findings) ? d.findings : [];
     const related = Array.isArray(d.related) ? d.related : [];
     const invs = Array.isArray(d.investigations) ? d.investigations : [];
     const viewer = jsonViewer(d.envelope ?? null);
     const isSignal = s.classification === 'correlation_signal';
 
-    const attach = ctx.can('analyst') ? h('button', { class: 'btn', type: 'button' }, 'Add to investigation') : null;
+    // Investigations annotate bare event ids, which resolve to local
+    // observations only; a forwarded copy cannot be attached.
+    const attach = ctx.can('analyst') && !forwarded ? h('button', { class: 'btn', type: 'button' }, 'Add to investigation') : null;
     attach?.addEventListener('click', async () => {
       try {
         const inv = await attachDialog(ctx, id);
@@ -52,15 +85,19 @@ export async function renderEventDetail(root, ctx, id, { inDrawer = false, signa
       pageHead({
         eyebrow: inDrawer ? null : h('a', { href: '#/events' }, icon('arrow-left', { size: 'xs' }), 'Events'),
         title: h('span', { class: 'event-title' }, evidence(s.summary || '(no summary)')),
-        subtitle: h('span', { class: 'btn-row' }, clsChip(s.classification), sevChip(s.severity),
-          seal(Boolean(integrity.verified), integrity.verified ? `Payload ${integrity.algorithm || 'hash'} verified` : 'Integrity check failed')),
+        subtitle: h('span', { class: 'btn-row' }, clsChip(s.classification), sevChip(s.severity), iv.seal,
+          forwarded ? h('span', { class: 'chip' }, 'Forwarded') : null),
         actions: attach,
       }),
-      integrity.verified ? null : banner('danger', 'Payload hash does not match', h('p', null, 'The stored payload does not match its recorded hash. Treat this envelope as untrustworthy. ', integrity.error ? evidence(integrity.error) : null)),
+      integrity.verified ? null : banner('danger', 'Payload hash does not match', h('p', null, forwarded ? 'The forwarded payload does not match its recorded hash. Treat this copy as untrustworthy and compare it with the node’s own store. ' : 'The stored payload does not match its recorded hash. Treat this envelope as untrustworthy. ', integrity.error ? evidence(integrity.error) : null)),
+      forwarded ? banner('info', 'Forwarded by another node',
+        h('p', null, 'Observed by ', originLabel(nodeRef), ' and forwarded to this hub. Forwarding is best effort; that node’s own store is the authoritative record. The hub cannot command the node or fetch anything from it.')) : null,
       h('div', { class: 'grid grid--2' },
         panel({
           title: 'Observation',
           body: kv([
+            ...(showOrigin ? [['Origin', h('span', { class: 'btn-row' }, originLabel(nodeRef),
+              o.linkable ? link(href('events', { node: o.id }), 'Events from this node') : (o.local ? link(href('events', { node: LOCAL }), 'Events from this node') : null))]] : []),
             ['Event id', copyable(s.id, { label: 'event id' })],
             ['Time', formatDateTime(s.time)],
             ['Sequence', String(s.seq ?? '—')],
@@ -69,11 +106,14 @@ export async function renderEventDetail(root, ctx, id, { inDrawer = false, signa
             ['Source', s.source ? link(href('sources', s.source), evidence(s.source)) : h('span', { class: 'muted' }, 'unknown')],
             ['Detection action', s.action ? chip(s.action, { mono: true }) : ''],
             ['Rules', ruleChips(s.rule_ids)],
+            ...(iv.note ? [['Integrity', h('span', { class: 'kv-note' }, iv.note)]] : []),
           ]),
         }),
         panel({
           title: 'Investigations', meta: 'Cases that cite this event',
-          body: invs.length
+          body: forwarded
+            ? empty('Not available for forwarded evidence', 'Investigations hold this node’s own observations only. Node-scoped annotations are not implemented; investigate on the forwarding node, or note the event id there.')
+            : invs.length
             ? h('ul', { class: 'plain-list' }, invs.map((i) => h('li', { class: 'btn-row' },
               isOpaqueId(i.id) ? link(href('investigations', i.id), i.title) : i.title, statusBadge(i.status))))
             : empty('Not in any investigation', ctx.can('analyst') ? 'Use “Add to investigation” to collect it as evidence.' : 'An analyst can attach it to an investigation.'),
@@ -95,10 +135,12 @@ export async function renderEventDetail(root, ctx, id, { inDrawer = false, signa
         title: isSignal ? 'Source events' : 'Signals citing this event',
         meta: isSignal ? 'The observations this correlation signal was derived from' : 'Correlation signals that list this event as a source',
         flush: true,
-        body: related.length ? eventTable(related, { caption: 'Related events' }) : empty(isSignal ? 'No source events indexed' : 'No signal cites this event', isSignal ? 'The source events may have aged out of the index.' : ''),
+        body: related.length ? eventTable(related, { caption: 'Related events', origin: origin.accepting || 'auto' }) : empty(isSignal ? 'No source events indexed' : 'No signal cites this event', isSignal ? 'The source events may have aged out of the index.' : ''),
       }),
       panel({
-        title: 'Stored envelope', meta: 'The complete aegismesh.event/v1 envelope, unmodified. Every string in it is untrusted.',
+        title: 'Stored envelope', meta: forwarded
+          ? 'The aegismesh.event/v1 envelope as the node forwarded it, unmodified. Every string in it is untrusted.'
+          : 'The complete aegismesh.event/v1 envelope, unmodified. Every string in it is untrusted.',
         actions: viewer.copy,
         body: [viewer.truncated ? banner('warn', 'Envelope display truncated', 'The envelope is too large to render fully. Use aegismesh inspect for the complete record.') : null, viewer.code],
       }));
@@ -108,6 +150,6 @@ export async function renderEventDetail(root, ctx, id, { inDrawer = false, signa
 export default {
   title: 'Event',
   async render(root, ctx) {
-    await renderEventDetail(root, ctx, ctx.route.params.id);
+    await renderEventDetail(root, ctx, ctx.route.params.id, { node: ctx.route.query.node });
   },
 };

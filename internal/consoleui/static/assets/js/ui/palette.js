@@ -11,10 +11,11 @@ import { rankItems, highlightRuns } from '../lib/palette.js';
 import { moveIndex } from '../lib/keys.js';
 import { roleAtLeast, capitalize } from '../lib/taxonomy.js';
 import { icon } from './icons.js';
+import { nodeFilterTargets } from '../lib/origin.js';
 import { NAV, isApple } from './shell.js';
 
-const GROUP_ORDER = ['Go to', 'Actions', 'Investigations', 'Sensors', 'Sources'];
-const PER_GROUP_EMPTY = { 'Go to': 20, Actions: 10, Investigations: 5, Sensors: 6, Sources: 5 };
+const GROUP_ORDER = ['Go to', 'Actions', 'Investigations', 'Nodes', 'Sensors', 'Sources'];
+const PER_GROUP_EMPTY = { 'Go to': 20, Actions: 10, Investigations: 5, Nodes: 5, Sensors: 6, Sources: 5 };
 
 function screenItems(role) {
   const out = [];
@@ -31,10 +32,19 @@ function screenItems(role) {
 async function dataItems(api, signal) {
   const out = [];
   let failed = 0;
-  const [sensors, sources, invs] = await Promise.allSettled([
+  // Node filter targets exist only on a hub that accepts forwarded
+  // evidence; a node without a hub is not a failure.
+  const nodesOf = async () => {
+    const fleet = await api.fleet({ signal }).catch(() => null);
+    if (fleet?.hub?.accept_evidence !== true) return [];
+    const res = await api.fleetNodes('', { signal }).catch(() => null);
+    return nodeFilterTargets(fleet, res?.nodes);
+  };
+  const [sensors, sources, invs, nodes] = await Promise.allSettled([
     api.sensors({ signal }),
     api.sources('24h', 50, { signal }),
     api.investigations('', { signal }),
+    api.fleet ? nodesOf() : Promise.resolve([]),
   ]);
   if (sensors.status === 'fulfilled') {
     for (const s of sensors.value?.sensors || []) {
@@ -54,6 +64,11 @@ async function dataItems(api, signal) {
       out.push({ group: 'Investigations', label: String(i.title || '(untitled)'), hint: capitalize(i.status || ''), icon: 'investigations', run: (p) => p.navigate(href('investigations', i.id)) });
     }
   } else failed++;
+  if (nodes.status === 'fulfilled') {
+    for (const n of nodes.value) {
+      out.push({ group: 'Nodes', label: n.label, hint: n.hint, icon: 'fleet', keywords: n.keywords, run: (p) => p.navigate(href('events', { node: n.node })) });
+    }
+  }
   return { items: out, failed };
 }
 

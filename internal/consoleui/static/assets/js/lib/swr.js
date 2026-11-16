@@ -14,6 +14,10 @@
 
 export function createSwr({ freshMs = 10000, staleMs = 120000, maxEntries = 64, now = () => Date.now(), onUpdate = () => {} } = {}) {
   const entries = new Map(); // key → { value, time, inflight, text }
+  // Bumped by invalidate(). A request that started before an invalidation
+  // (a hover prefetch, say, just before a write or a tenant switch) must not
+  // put its now-stale answer back into the cache when it lands.
+  let generation = 0;
 
   function store(key, value) {
     let text = '';
@@ -33,14 +37,16 @@ export function createSwr({ freshMs = 10000, staleMs = 120000, maxEntries = 64, 
   function load(key, fetcher, { background = false } = {}) {
     const e = entries.get(key);
     if (e?.inflight) return e.inflight;
+    const gen = generation;
     const p = Promise.resolve().then(fetcher).then(
       (value) => {
+        if (gen !== generation) return value;
         const changed = store(key, value);
         if (background && changed) onUpdate(key);
         return value;
       },
       (err) => {
-        const cur = entries.get(key);
+        const cur = gen === generation ? entries.get(key) : null;
         if (cur) {
           cur.inflight = null;
           if (!('value' in cur)) entries.delete(key);
@@ -71,6 +77,7 @@ export function createSwr({ freshMs = 10000, staleMs = 120000, maxEntries = 64, 
       load(key, fetcher).catch(() => {});
     },
     invalidate() {
+      generation++;
       entries.clear();
     },
     has(key) {

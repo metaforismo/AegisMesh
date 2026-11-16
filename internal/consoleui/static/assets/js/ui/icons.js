@@ -54,6 +54,10 @@ const PATHS = {
   clock: `${circle(8, 8, 6.25)}M8 4.5V8l2.25 1.5`,
   link: 'M6.6 9.4l2.8-2.8M7.2 4.6l1.1-1.1a2.75 2.75 0 0 1 3.9 3.9l-1.1 1.1M8.8 11.4l-1.1 1.1a2.75 2.75 0 0 1-3.9-3.9l1.1-1.1',
   'corner-down': 'M3 3v5.5a1.5 1.5 0 0 0 1.5 1.5H13M10 7l3 3-3 3',
+  // Tenant: stacked planes (one process, separate logical views).
+  tenant: 'M8 2.25l5.75 2.9L8 8.05 2.25 5.15zM2.25 8.1L8 11l5.75-2.9M2.25 11L8 13.9l5.75-2.9',
+  key: `${circle(5, 10.5, 2.75)}M7 8.5l6.25-6.25M10.5 5l1.75 1.75M12.25 3.25l1.25 1.25`,
+  'sign-in': 'M10 2.5h2.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10M5.75 5l3 3-3 3M8.75 8H1.75',
 };
 
 export const ICON_NAMES = Object.freeze(Object.keys(PATHS));

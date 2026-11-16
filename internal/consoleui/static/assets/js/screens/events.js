@@ -7,7 +7,9 @@ import { createBatcher } from '../lib/batch.js';
 import { moveIndex, isTypingTarget } from '../lib/keys.js';
 import { pageHead, panel, selectField, inputField, empty, banner, pager, labelFor, errorState } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
-import { eventTableView, historyBanner } from './shared.js';
+import { eventKey, parseEventKey, normalizeNodeFilter, nodeFilterOptions, originVisible, isNodeId } from '../lib/origin.js';
+import { eventTableView, historyBanner, forwardedNote, notFoundInTenant } from './shared.js';
+import { tenantInfo } from '../lib/tenant.js';
 import { renderEventDetail } from './event.js';
 
 const PAGE = 50;
@@ -18,12 +20,24 @@ const MAX_ROWS = 300;
 const PER_FRAME = 40;
 
 const FILTER_LABELS = {
-  classification: 'classification', sensor: 'sensor', kind: 'kind', source: 'source', rule: 'rule',
+  node: 'node', classification: 'classification', sensor: 'sensor', kind: 'kind', source: 'source', rule: 'rule',
   severity: 'severity', since: 'since', until: 'until', q: 'search',
 };
 
-function filterForm(filters, sensors, onApply) {
+// Query for the side panel: the event id plus, for forwarded evidence, its
+// origin (`event_node`; `node` is already the list's filter).
+const drawerQuery = (key) => {
+  const { id, node } = parseEventKey(key);
+  return { event: id, event_node: node };
+};
+const pageHref = (key) => {
+  const { id, node } = parseEventKey(key);
+  return node ? href('events', id, { node }) : href('events', id);
+};
+
+function filterForm(filters, sensors, onApply, { showOrigin = false, nodes = [] } = {}) {
   const form = h('form', { class: 'filters', 'aria-label': 'Event filters' },
+    showOrigin ? selectField({ label: 'Node', name: 'node', value: filters.node || '', options: nodeFilterOptions(nodes, filters.node) }) : null,
     selectField({ label: 'Classification', name: 'classification', value: filters.classification || '', options: [['', 'Any'], ...CLASSIFICATIONS.map((c) => [c, classificationMeta(c).label])] }),
     selectField({ label: 'Minimum severity', name: 'severity', value: filters.severity || '', options: [['', 'Any (incl. no finding)'], ...SEVERITIES.map((s) => [s, `${severityLabel(s)} or higher`])] }),
     selectField({ label: 'Sensor', name: 'sensor', value: filters.sensor || '', options: [['', 'Any'], ...sensors.map((s) => [s.id, `${s.id} (${s.kind})`]), ...(filters.sensor && !sensors.some((s) => s.id === filters.sensor) ? [[filters.sensor, filters.sensor]] : [])] }),
@@ -45,6 +59,7 @@ function filterForm(filters, sensors, onApply) {
     e.preventDefault();
     const el = form.elements;
     onApply({
+      node: el.node ? el.node.value : (filters.node || ''),
       classification: el.classification.value, severity: el.severity.value, sensor: el.sensor.value, kind: el.kind.value,
       source: el.source.value.trim(), rule: el.rule.value.trim(), q: el.q.value,
       since: localInputToRfc3339(el.since.value), until: localInputToRfc3339(el.until.value),
@@ -88,7 +103,7 @@ function createDrawer({ onRequestClose, onStep, onFull }) {
       prev.disabled = index <= 0;
       next.disabled = index < 0 || index >= count - 1;
       position.textContent = index >= 0 ? `${formatCount(index + 1)} of ${formatCount(count)}` : 'not in the loaded list';
-      full.setAttribute('href', href('events', id));
+      full.setAttribute('href', pageHref(id));
     },
   };
 }
@@ -98,10 +113,17 @@ export default {
   async render(root, ctx) {
     const { filters, rejected } = normalizeEventFilters(ctx.route.query);
     const liveRequested = ctx.route.query.live === '1';
-    const [page, sensorsRes, node] = await Promise.all([
+    // Fleet status decides whether rows carry an origin; the node list (hub
+    // only) fills the Node filter. Neither failing blocks the list.
+    const fleetP = ctx.api.fleet ? ctx.api.fleet({ signal: ctx.signal }).catch(() => null) : Promise.resolve(null);
+    const nodesP = fleetP.then((f) => (f?.hub?.enabled && f.hub.accept_evidence === true && ctx.api.fleetNodes
+      ? ctx.api.fleetNodes('', { signal: ctx.signal }).catch(() => null)
+      : null));
+    const [page, sensorsRes, node, fleet, nodesRes] = await Promise.all([
       ctx.api.events(filters, '', PAGE, { signal: ctx.signal }),
       ctx.api.sensors({ signal: ctx.signal }).catch(() => ({ sensors: [] })),
       ctx.api.node({ signal: ctx.signal }).catch(() => null),
+      fleetP, nodesP,
     ]);
 
     let route = ctx.route;
@@ -109,15 +131,17 @@ export default {
     let cursor = page.next_cursor || '';
     let total = Number(page.total_matched) || firstRows.length;
     let trimmed = 0;
-    const seen = new Set(firstRows.map((e) => e.id));
+    const showOrigin = originVisible({ fleet, events: firstRows, filter: filters.node });
+    const fleetNodes = Array.isArray(nodesRes?.nodes) ? nodesRes.nodes : [];
+    const seen = new Set(firstRows.map(eventKey));
     const held = new RingBuffer(LIVE_CAP);
     let paused = false;
     let hoverHold = false;
     let unread = 0;
     const cleanups = [];
 
-    const rowHref = (ev) => withQuery(route, { event: ev.id });
-    const view = eventTableView(firstRows, { caption: 'Matching events', rowHref });
+    const rowHref = (ev) => withQuery(route, drawerQuery(eventKey(ev)));
+    const view = eventTableView(firstRows, { caption: 'Matching events', rowHref, origin: showOrigin });
     const tableSlot = h('div', { class: 'events-table' });
     const pagerSlot = h('div');
     const titleCount = h('span', null, formatCount(total));
@@ -132,8 +156,8 @@ export default {
           shown: view.size, total, hasMore: Boolean(cursor),
           onMore: async () => {
             const next = await ctx.api.events(filters, cursor, PAGE, { signal: ctx.signal });
-            const fresh = (next.events || []).filter((ev) => !seen.has(ev.id));
-            for (const ev of fresh) seen.add(ev.id);
+            const fresh = (next.events || []).filter((ev) => !seen.has(eventKey(ev)));
+            for (const ev of fresh) seen.add(eventKey(ev));
             view.append(fresh);
             cursor = next.next_cursor || '';
             paintPager();
@@ -174,9 +198,9 @@ export default {
 
     // events: newest first.
     const insert = (events) => {
-      const fresh = events.filter((ev) => !seen.has(ev.id));
+      const fresh = events.filter((ev) => !seen.has(eventKey(ev)));
       if (!fresh.length) return;
-      for (const ev of fresh) seen.add(ev.id);
+      for (const ev of fresh) seen.add(eventKey(ev));
       // Read layout once, before any write in this frame.
       const away = document.hidden || listTop() < topbar() - 4;
       const wasEmpty = view.size === 0;
@@ -276,6 +300,9 @@ export default {
     let stream = null;
     if (liveRequested) {
       stream = createLiveStream({
+        // The server narrows the stream by origin; every other filter is
+        // re-applied in the browser.
+        url: filters.node ? `/api/v1/events/stream?node=${encodeURIComponent(filters.node)}` : undefined,
         checkSession: async () => Boolean(await ctx.api.session()),
         onEvent: (ev) => batcher.push(ev),
         onState: (state, d) => {
@@ -299,13 +326,13 @@ export default {
     const syncDrawerNav = () => drawer?.setNav({ index: view.indexOf(drawerId), count: view.size, id: drawerId });
     const requestClose = () => {
       if (pushedOpen) history.back();
-      else location.replace(withQuery(route, { event: '' }));
+      else location.replace(withQuery(route, { event: '', event_node: '' }));
     };
     const step = (delta) => {
       const i = view.indexOf(drawerId);
       const j = moveIndex(i, delta, view.size);
       if (j < 0 || j === i) return;
-      location.replace(withQuery(route, { event: view.ids[j] }));
+      location.replace(withQuery(route, drawerQuery(view.ids[j])));
     };
 
     const openDrawer = async (id) => {
@@ -313,7 +340,7 @@ export default {
         drawer = createDrawer({
           onRequestClose: requestClose,
           onStep: step,
-          onFull: (e) => { e.preventDefault(); location.hash = href('events', drawerId); },
+          onFull: (e) => { e.preventDefault(); location.hash = pageHref(drawerId); },
         });
       }
       if (!drawer.dialog.open) {
@@ -331,14 +358,16 @@ export default {
       drawer.body.setAttribute('aria-busy', 'true');
       try {
         const next = h('div');
-        await renderEventDetail(next, ctx, id, { inDrawer: true, signal });
+        const ref = parseEventKey(id);
+        await renderEventDetail(next, ctx, ref.id, { node: ref.node, inDrawer: true, signal });
         if (signal.aborted) return;
         next.querySelector('#page-title')?.setAttribute('id', 'drawer-event-title');
         mount(drawer.body, ...next.childNodes);
         drawer.scroll.scrollTop = 0;
       } catch (err) {
         if (signal.aborted || err?.name === 'AbortError') return;
-        mount(drawer.body, h('div', { class: 'panel' }, errorState(err)));
+        const tenants = tenantInfo(ctx.session);
+        mount(drawer.body, h('div', { class: 'panel' }, err?.code === 'not_found' && tenants.show ? notFoundInTenant(tenants) : errorState(err)));
       } finally {
         if (!signal.aborted) drawer.body.removeAttribute('aria-busy');
       }
@@ -367,7 +396,8 @@ export default {
     const syncRoute = (r) => {
       route = r;
       const id = r.query.event;
-      if (isEventId(id)) openDrawer(id);
+      const origin = normalizeNodeFilter(r.query.event_node);
+      if (isEventId(id)) openDrawer(isNodeId(origin) ? eventKey({ id, node: { id: origin } }) : id);
       else closeDrawer();
     };
 
@@ -388,7 +418,7 @@ export default {
       const k = e.key;
       if (drawer?.dialog.open) {
         if (k === 'j' || k === 'k') { e.preventDefault(); step(k === 'j' ? 1 : -1); }
-        else if (k === 'o') { e.preventDefault(); location.hash = href('events', drawerId); }
+        else if (k === 'o') { e.preventDefault(); location.hash = pageHref(drawerId); }
         return;
       }
       if (document.querySelector('dialog[open]')) return;
@@ -415,13 +445,16 @@ export default {
         subtitle: 'Every stored observation, newest first. Text in tinted monospace is attacker-supplied evidence, shown exactly as received.',
         actions: liveToggle,
       }),
-      historyBanner(node),
+      historyBanner(node, { accepting: fleet?.hub?.accept_evidence === true }),
+      fleet?.hub?.accept_evidence === true ? forwardedNote('list') : null,
       rejected.length ? banner('warn', 'Some filters were ignored', `These link parameters were not valid and were dropped: ${[...new Set(rejected)].map((k) => FILTER_LABELS[k]).join(', ')}.`) : null,
-      panel({ title: 'Filters', body: filterForm(filters, sensorsRes.sensors || [], applyFilters), meta: active.length ? `${active.length} active` : 'None active' }),
+      panel({ title: 'Filters', body: filterForm(filters, sensorsRes.sensors || [], applyFilters, { showOrigin, nodes: fleetNodes }), meta: active.length ? `${active.length} active` : 'None active' }),
       liveBar,
       panel({
         title: h('span', null, titleCount, ' matching'),
-        meta: liveRequested ? 'Live: the stream is unfiltered, so these filters are re-applied in the browser.' : 'Newest first. Server-side filters apply. j and k move between rows.',
+        meta: liveRequested
+          ? (filters.node ? 'Live: the server narrows the stream to this origin; the other filters are re-applied in the browser.' : 'Live: the stream is unfiltered, so these filters are re-applied in the browser.')
+          : 'Newest first. Server-side filters apply. j and k move between rows.',
         flush: true, body: tableSlot, foot: pagerSlot,
       }));
 

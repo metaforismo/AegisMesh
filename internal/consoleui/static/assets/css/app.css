@@ -57,6 +57,9 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 .bullets { padding-left: var(--space-5); font-size: var(--text-sm); }
 .bullets li + li { margin-top: var(--space-1); }
 .hash { color: var(--color-ink-3); font-size: var(--text-xs); overflow-wrap: anywhere; }
+/* In a table the hash is already shortened: keep it on one line instead of
+   letting the wide detail column squeeze it into a vertical strip. */
+.table .hash { white-space: nowrap; overflow-wrap: normal; }
 
 .chart-figure { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; }
 .chart-figure__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
@@ -355,6 +358,35 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 .token-value,
 .fingerprint { font-size: var(--text-sm); letter-spacing: 0.02em; user-select: all; }
 
+/* ---- Evidence origin and forwarding (experimental) ---------------------- */
+
+.origin { display: inline-flex; align-items: baseline; gap: var(--space-2); white-space: nowrap; }
+.origin--local { color: var(--color-ink-2); }
+a.origin { text-decoration: none; }
+a.origin .origin__name { color: var(--color-accent); }
+@media (hover: hover) {
+  a.origin:hover .origin__name { text-decoration: underline; }
+}
+.origin__id { font-family: var(--font-mono); font-size: var(--text-2xs); }
+/* Dense tables: the short id sits under the name, long names truncate (the
+   full name and id are in the title), and source keys give up a little
+   width, so the extra column still fits a 1440px page without sideways
+   scrolling. */
+.origin--stack { flex-direction: column; align-items: flex-start; gap: 0; }
+.origin--stack .origin__name { display: block; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+.table--origin .nowrap .evidence { max-width: 9rem; }
+.origin-note { display: flex; align-items: flex-start; gap: var(--space-2); max-width: 96ch; color: var(--color-ink-2); font-size: var(--text-xs); }
+.origin-note .icon { flex: none; margin-top: 1px; color: var(--color-ink-3); }
+.kv-note { color: var(--color-ink-2); font-size: var(--text-sm); }
+.fwd { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); max-width: 100%; min-width: 0; }
+.fwd .badge { max-width: 100%; white-space: normal; }
+/* A scroll container captures position: sticky, so its header sticks to the
+   wrapper itself: the top-bar offset would push it over the first row. */
+.table-wrap.table-wrap--scroll { overflow-x: auto; --sticky-top: 0px; }
+.fleet-loss { padding: var(--space-3) var(--space-4) 0; }
+.fleet-loss .icon { color: var(--color-warn); }
+.fwd__loss { color: var(--color-ink-2); font-size: var(--text-2xs); max-width: 32ch; white-space: normal; }
+
 @media (max-width: 45rem) {
   /* Stacked table cards: keep badges and chips at their natural width. */
   .table--stack td > * { justify-self: start; }
@@ -392,3 +424,72 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 .strip-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-2); font-size: var(--text-xs); color: var(--color-ink-2); }
 .sensor-trace { display: flex; flex-direction: column; gap: var(--space-1); }
 .sensor-trace__note { color: var(--color-ink-3); font-size: var(--text-2xs); }
+
+/* ---- Tenant and account (top bar) ------------------------------------- */
+
+.top-tenant {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 12rem;
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.top-tenant--static { background: var(--color-surface-2); }
+.top-tenant__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink); }
+button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
+
+@media (max-width: 30rem) {
+  .top-tenant { max-width: 6.5rem; }
+}
+
+/* ---- Sign-in: single sign-on, divider, token fallback ------------------ */
+
+.login__sso-block { display: flex; flex-direction: column; gap: var(--space-2); }
+.login__sso { gap: var(--space-2); }
+.login__sso.is-busy { pointer-events: none; opacity: 0.8; }
+.login__sso-note { text-align: center; }
+.login__error .banner { margin: 0; }
+
+.login__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+}
+
+.login__divider::before,
+.login__divider::after { content: ""; flex: 1; border-top: var(--border-width) solid var(--color-border); }
+
+.login__alt { display: flex; flex-direction: column; }
+.login__alt-summary {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  list-style: none;
+}
+
+.login__alt-summary::-webkit-details-marker { display: none; }
+.login__alt[open] .login__alt-summary { margin-bottom: var(--space-3); color: var(--color-ink-2); }
+
+/* ---- Audit: identity claims from an OIDC provider ---------------------- */
+
+.audit-detail { display: flex; flex-direction: column; gap: var(--space-1); }
+.audit-claims { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px var(--space-2); font-size: var(--text-xs); }
+.audit-claims dt { color: var(--color-ink-3); }
+.audit-claims dd { min-width: 0; }

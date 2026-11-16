@@ -3,6 +3,7 @@
 // and filter values against the contract's vocabularies before use.
 
 import { CLASSIFICATIONS, SENSOR_KINDS, SEVERITIES, WINDOWS, INVESTIGATION_STATUSES, AUDIT_ACTIONS, severityRank } from './taxonomy.js';
+import { isNodeFilter, matchesNodeFilter } from './origin.js';
 
 const EVENT_ID = /^[0-9a-f]{32}$/;
 const OPAQUE_ID = /^[A-Za-z0-9_.-]{1,128}$/;
@@ -127,9 +128,12 @@ export function isRfc3339(value) {
   return typeof value === 'string' && RFC3339.test(value) && !Number.isNaN(Date.parse(value));
 }
 
-export const EVENT_FILTER_KEYS = Object.freeze(['classification', 'sensor', 'kind', 'source', 'rule', 'severity', 'since', 'until', 'q']);
+// `node` selects one origin: "local" or an enrolled node's id (forwarded
+// evidence on a hub). The other keys predate forwarding.
+export const EVENT_FILTER_KEYS = Object.freeze(['node', 'classification', 'sensor', 'kind', 'source', 'rule', 'severity', 'since', 'until', 'q']);
 
 const FILTER_VALIDATORS = {
+  node: isNodeFilter,
   classification: (v) => CLASSIFICATIONS.includes(v),
   sensor: (v) => SENSOR_ID.test(v),
   kind: (v) => SENSOR_KINDS.includes(v),
@@ -168,13 +172,15 @@ export function normalizeAuditFilters(query) {
   return out;
 }
 
-// Client-side twin of the server's /events filter, for the unfiltered SSE
-// stream. Semantics follow the contract: exact matches, minimum severity,
+// Client-side twin of the server's /events filter, for the SSE stream (the
+// server filters the stream by node only). Semantics follow the contract:
+// origin ("local" = no `node` on the event), exact matches, minimum severity,
 // inclusive time bounds, and case-insensitive substring q over summary,
 // source and rule ids.
 export function matchesEventFilters(ev, filters) {
   if (!ev || typeof ev !== 'object') return false;
   const f = filters || {};
+  if (f.node && !matchesNodeFilter(ev, f.node)) return false;
   if (f.classification && ev.classification !== f.classification) return false;
   if (f.sensor && ev.sensor?.id !== f.sensor) return false;
   if (f.kind && ev.sensor?.kind !== f.kind) return false;
