@@ -48,8 +48,8 @@ fallback may be substituted without amending ADR-0010.
 
 ## Evidence encryption dependency review (2026-11-14)
 
-Reviewer: Codex implementation review; human PR review pending.
-The introducing PR is #73 (open, unmerged); this record is its dependency review.
+Reviewer: Codex implementation review; independent human review is not recorded
+here. The introducing PR is #73 (merged); this record is its dependency review.
 [Upstream releases](https://github.com/FiloSottile/age/releases) and the Go
 module proxy both select **age v1.3.2**, requiring Go >=1.25; the current Go
 **1.27.4**, x/crypto **v0.59.0**, and x/sys **v0.50.0** are preserved.
@@ -134,8 +134,8 @@ proposes a digest update.
 
 ## OIDC dependency review (2026-11-15, ADR-0019)
 
-Local source/license review: Codex in this uncommitted change; independent
-human review remains open. Versions and upstream licenses are pinned above. Primary references:
+Source/license review: Codex in the introducing change (#80, merged); independent
+human review is not recorded. Versions and upstream licenses are pinned above. Primary references:
 [go-oidc](https://pkg.go.dev/github.com/coreos/go-oidc/v3@v3.21.0/oidc),
 [oauth2](https://pkg.go.dev/golang.org/x/oauth2@v0.38.0),
 [go-jose](https://pkg.go.dev/github.com/go-jose/go-jose/v4@v4.1.4).

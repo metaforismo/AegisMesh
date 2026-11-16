@@ -1,14 +1,9 @@
 # AegisMesh roadmap
 
-Current local branch (`feat/console-sso`, uncommitted): **SSO via OIDC
-(experimental)** and **logical tenant isolation (experimental)** are implemented
-as specified in ADR-0019/0020 and `architecture/console-api.md`. Current evidence
-is in `verification.md`; the dated branch amendment below defines scope and limits.
-
-
-Updated: 2026-11-15. Checked items are implemented **and verified** in this
-repository. Intent, research and product direction remain unchecked until an
-implementation and its acceptance gates are complete.
+Updated: 2026-11-16. Checked items are implemented **and verified** in this
+repository and merged to `master` (`7ae0356`, to be tagged v0.2.0). Intent,
+research and product direction remain unchecked until an implementation and its
+acceptance gates are complete.
 
 ## Batch 1 — foundation
 
@@ -49,14 +44,13 @@ implementation and its acceptance gates are complete.
    that preserves the complete native envelope and adds no connector or egress.
 4. [x] **Dry-run recommendations.** Deterministic evidence-linked proposals for
    operator review with no enforcement, asset mutation or runtime feedback path.
-5. [x] **Optional evidence-at-rest encryption — in supplied master baseline.**
-   Native age/X25519, explicit key rotation and persistent plaintext downgrade
-   guard. Local uncommitted v3 work adds authenticated busy-flush checkpoints,
-   live CLI prefix reads, interrupted-segment/doctor warnings and
-   `--require-sealed`. Historical v2 stays seal-only. See ADR-0016 for the
-   unavoidable rollback limit: a removed seal back to a checkpoint looks open
-   unless strict completion is required. Local gates are in `docs/verification.md`;
-   v3 hosted CI, merge and release are separate, not performed here.
+5. [x] **Optional evidence-at-rest encryption.** Merged in #73 and #77. Native
+   age/X25519, explicit key rotation and a persistent plaintext downgrade guard.
+   New segments use container v3 with authenticated busy-flush checkpoints, live
+   CLI prefix reads, interrupted-segment/doctor warnings and `--require-sealed`;
+   historical v2 stays seal-only. See ADR-0016 for the unavoidable rollback
+   limit: a removed seal back to a checkpoint looks open unless strict completion
+   is required.
 6. [x] **Observe-only extension boundary.** Strict manifests and exact
    event-linked acknowledgements; extension output cannot affect evidence,
    policy, responses, paths, configuration or enforcement.
@@ -67,35 +61,69 @@ implementation and its acceptance gates are complete.
    same-binary worker, challenge-bound bounded IPC and parent-authoritative
    evidence. This is fault containment, not a resource, network, filesystem,
    syscall or malware sandbox.
-9. [ ] **v0.2 release-readiness audit.** Complete only after item 5 is merged
-   and the final `master` commit passes the full race, fuzz, Helm, license,
-   secret, vulnerability and SBOM gates with documentation truth-synced.
+9. [ ] **v0.2 release-readiness audit.** The documentation and claims audit was
+   performed on 2026-11-16 (see `verification.md`). This item completes when the
+   maintainer records the gate results for `7ae0356`, including hosted CI on
+   `master`, and creates the tag; neither is done by the audit itself.
 
 The finite acceptance contract is in [DELIVERY-PLAN.md](DELIVERY-PLAN.md), the
 live queue is in [BACKLOG.md](BACKLOG.md), and current evidence is in
 [verification.md](verification.md).
 
+## Shipped in v0.2.0 beyond the original plan
+
+All merged to `master`. Fleet, forwarding, SSO and tenancy are **experimental**;
+the console and its embedded UI are new and verified in Chromium only.
+
+- [x] **Operator console and embedded UI** (#74, #75, #78, #81). Disabled by
+  default; fixed v1 API, token roles, bounded index, audited investigations,
+  evidence origin and tenant/SSO screens. No sensor control. ADR-0017.
+- [x] **Fleet inventory — experimental** (#76). Hub/agent roles, Ed25519
+  identities, one-time enrollment, signed heartbeats, permanent revocation. The
+  hub permanently has no command, configuration, file or code channel to nodes.
+  ADR-0018.
+- [x] **Evidence forwarding — experimental** (#79). Opt-in on both ends,
+  best effort with counted loss, memory-only queue, local store authoritative.
+- [x] **SSO via OIDC — experimental** and **logical tenant isolation —
+  experimental** (#80). Exercised only against local test providers; one shared
+  process, OS user, data directory and encryption recipient. ADR-0019/0020.
+- [x] **Measured performance pass** (#82). `make bench` and
+  `architecture/performance.md`; synthetic measurements, not capacity claims.
+- [x] **Go 1.27.4 and `x/crypto` v0.59.0** (#72).
+
+## Next after v0.2.0 — not commitments
+
+Ordered by current intent, not by date. Each item needs its own design review;
+none is implemented.
+
+1. Review PR #71 (pinned GitHub Action bumps); keep dependency triage current.
+2. Verify OIDC against real identity providers before any interoperability claim.
+3. Durable encrypted forwarding spool with explicit offline guarantees.
+4. Cross-node correlation on the hub, preserving the no-control-channel rule.
+5. Hard tenant separation (per-tenant keys and/or processes) before any claim
+   stronger than logical isolation.
+6. Console performance follow-ups (shared SSE encoding, overview latency under an
+   accepting hub, remaining measured items) in [BACKLOG.md](BACKLOG.md).
+7. OTLP and SIEM export, as explicit opt-in egress.
+8. Real-cluster Kubernetes evidence for image, persistence, upgrades, rollback,
+   NetworkPolicy and failure paths before any cluster-support claim.
+9. Additional AI-agent deception sensors (multi-step synthetic MCP
+   environments) and bounded protocol sensors where they add defensive value;
+   Telnet and database emulation remain research rather than implied parity.
+10. Continuous adversarial simulation that probes only operator-owned decoys in
+    CI and never becomes an offensive execution framework.
+11. Local-first clustering and TTP summaries over redacted evidence, with model
+    output kept non-behavioral.
+12. Publish the static landing page under `site/` (needs approval).
+
 ## Later product direction — not shipped commitments
 
-- A managed AegisMesh SaaS/control plane around the Apache-2.0 core: fleet
-  inventory, authenticated enrollment, tenant isolation, searchable retention,
-  SSO/RBAC, audit administration, usage metering and managed upgrades.
-- Distributed evidence aggregation with per-node quotas, attestation, offline
-  buffering and deterministic reconciliation. The inventory hub permanently has
-  no command/configuration/file/code channel to nodes.
-- First operator console: **implemented in open PRs #74 (API) and #75 (embedded
-  UI), unmerged** for P3-2. Fixed v1 API, token roles, bounded index, audited
-  investigations and an embedded zero-dependency UI (no build step). Hosted CI
-  passes on both heads; human review and merge remain open. See the console contract and verification
-  ledger; this is single-node/single-tenant with no sensor control.
-- Continuous adversarial simulation that probes only operator-owned decoys in
-  CI and never becomes an offensive execution framework.
-- Local-first clustering and TTP summaries over redacted evidence, with model
-  output kept non-behavioral.
-- Additional bounded protocol sensors where they add real defensive value;
-  Telnet and database emulation remain research rather than implied parity.
-- Real-cluster Kubernetes evidence for image, persistence, upgrades, rollback,
-  NetworkPolicy and failure paths before any cluster-support claim.
+- A managed AegisMesh SaaS/control plane around the Apache-2.0 core: hosted
+  fleet management, hard tenant isolation, searchable retention, usage
+  metering and managed upgrades. Nothing of this ships today.
+- Distributed evidence aggregation with attestation, offline buffering and
+  deterministic reconciliation. The inventory hub permanently has no
+  command/configuration/file/code channel to nodes.
 
 ## Commercial and open-source boundary
 
@@ -103,8 +131,8 @@ AegisMesh is intended to be commercially usable and sellable without turning
 its defensive core into a crippled teaser. The runtime, evidence format and
 single-node defensive capabilities remain Apache-2.0 and self-hostable. A future
 SaaS may charge for managed operation, collaboration, hosted retention and
-control-plane services. That direction does **not** imply that multi-tenancy,
-billing, public APIs or hosted operation ship today.
+control-plane services. That direction does **not** imply that hard
+multi-tenancy, billing, public APIs or hosted operation ship today.
 
 ## Permanent non-goals
 
@@ -115,57 +143,3 @@ billing, public APIs or hosted operation ship today.
 - Treating a decoy activation or recommendation as proof of an incident.
 - Production-readiness, false-positive or compliance-certification claims
   without explicit independent evidence.
-
-
-## Fleet foundation — `feat/fleet-enrollment`, PR #76, 2026-11-15
-
-P3-1 now has experimental fleet inventory with authenticated enrollment and
-heartbeats; ADR-0018 settles data/control-plane ownership for this bounded slice.
-It is not multi-tenant or a managed service. Evidence forwarding has a local experimental amendment below. The hub
-cannot command nodes. Local and manual verification is in `verification.md`;
-inventory merge #76 is in local ancestry. The current evidence amendment has no hosted-CI/review/merge receipt.
-P2-3 hosted tenancy/residency/billing design
-remains incomplete. Durable evidence spooling, key rotation, attestation, SSO and
-upgrades are proposed, not implemented, and require separate review. Any future
-configuration workflow must preserve the permanent no hub-to-agent control
-channel invariant. No arbitrary remote-runner stub is reserved.
-
-
-## Experimental evidence forwarding — local amendment, 2026-11-15
-
-Implemented locally and uncommitted on `feat/evidence-forwarding`, stacked on PR #77:
-opt-in signed live batches, bounded oldest-drop queue, per-node quotas and encrypted/native
-hub copies, origin-tagged console lists/detail/SSE and overview. Experimental; best-effort
-forwarding with counted loss; local store authoritative. No cross-node correlation,
-historical forwarding, deletion propagation, durable spool, tenancy or hub-to-node traffic.
-Verification is recorded separately in verification.md; no merge, deployment or hosted-CI claim.
-
-
-## Console identity and isolation — local branch, 2026-11-15
-
-`feat/console-sso`, stacked on `feat/evidence-forwarding` (PR #79), adds
-**SSO via OIDC (experimental)** and **logical tenant isolation (experimental)**.
-These are local uncommitted changes, not a merge, deployment, hosted CI or
-operational acceptance claim. ADR-0019/0020 and console-api.md define the exact
-contract; verification.md records executed checks and their limits.
-
-OIDC is opt-in Authorization Code/S256, state/nonce/browser binding, library-owned
-asymmetric token verification, explicit role and tenant mappings, bounded egress
-and credential-capped sessions. Existing tokens remain break-glass by default;
-`token_login: false` requires OIDC. Discovery outages retry without stopping
-sensors. Logout remains local. No refresh-token persistence or provider logout.
-
-One declared active tenant covers index queries, sources/overview/by_node,
-SSE, investigations, audit, fleet registries, enrollment tokens and forwarded
-evidence. Local runtime views belong to local_tenant. Per-tenant quotas and
-recoverable legacy migration isolate logical state pressure; no admin all view.
-At most 32 tenants share a process, OS user, data directory, hub encryption
-recipient and signing/egress settings. Host/process compromise and shared disk/
-CPU exhaustion cross tenants. Per-tenant keys, billing, rate plans, self-service
-creation and a hard hosted isolation boundary remain outside scope.
-
-Delivery polish includes bounded startup gzip, representation-specific strong
-ETags/304/no-cache for non-index assets and aligned per-sensor overview buckets
-(up to 64 sensor IDs). The existing UI is unchanged; it can consume the documented
-meta/session additions. Remaining work includes external-IdP interoperability,
-human review and independent deployment evidence; no release action is authorized.

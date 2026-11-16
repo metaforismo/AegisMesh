@@ -1,8 +1,9 @@
 # Release process
 
-The pipeline below is a release-readiness contract. This slice validates its
-structure and local artifact path, but does not create a tag, attestation, or
-GitHub release. Those external writes require separate action-time approval.
+The pipeline below is a release-readiness contract. Its structure and local
+artifact path have been validated, but no tag, attestation or GitHub release has
+been created for v0.2.0. Those external writes require separate action-time
+approval.
 
 ## Versioning
 

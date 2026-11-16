@@ -414,7 +414,7 @@ configuration; names and digests must both be unique. `viewer` reads evidence,
 `analyst` also writes investigations, and `admin` also reads/verifies audit.
 There is no built-in/default password. Tokens do not expire automatically;
 rotate configuration and restart to replace/revoke them. Sessions expire and are
-lost on restart. They are bounded to 1024, with oldest-expiring eviction.
+lost on restart. They are bounded to 1024 per tenant (32768 globally), with oldest-expiring eviction.
 
 `AEGISMESH_CONSOLE_ENABLED` and `AEGISMESH_CONSOLE_LISTEN` override the matching
 fields. Credentials, TLS and limits stay in the file. Relative `state_dir` and
