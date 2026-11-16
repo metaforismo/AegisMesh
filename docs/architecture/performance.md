@@ -1,8 +1,8 @@
 # Performance characteristics
 
 Measurements began on 2026-11-15; verification and the SSE refresh completed on
-2026-11-16 CET for `perf/console-hot-paths`, based on `feat/console-sso`
-(`338eea7`). Machine: Apple M3, eight logical CPUs, Darwin arm64, macOS 26.5.2
+2026-11-16 CET for the performance pass merged as #82, measured from the tree at
+`338eea7` (the SSO change, #80). Machine: Apple M3, eight logical CPUs, Darwin arm64, macOS 26.5.2
 (25F84), Go 1.27.4. RAM, thermal/power state and other processes' load were not
 available. Disk went from 7.7 to 7.1 GiB free. Suites and benchmarks ran
 sequentially. These are synthetic local measurements, not deployment capacity.

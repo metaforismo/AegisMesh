@@ -1,37 +1,30 @@
 # HANDOFF — current verified state
 
-Current local branch (`feat/console-sso`, uncommitted): **SSO via OIDC
-(experimental)** and **logical tenant isolation (experimental)** are implemented
-as specified in ADR-0019/0020 and `architecture/console-api.md`. Current evidence
-is in `verification.md`; the dated branch amendment below defines scope and limits.
-
-
-Updated: 2026-11-15. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
+Updated: 2026-11-16. Read `AGENTS.md`, then `docs/BACKLOG.md`, then
 `docs/ROADMAP.md` before changing code.
 
 ## Authoritative baseline
 
-- Repository: `metaforismo/AegisMesh`
-- Current worktree: `feat/evidence-forwarding`, initially clean at `25645c0`
-  (encrypted live-read, stacked PR #77). Its parent baseline contains merge #76 at `484bd65`.
-- Local Git ancestry contains the merges of #72 (toolchain), #73 (encryption),
-  #74 (console API), #75 (embedded UI) and #76 (experimental fleet inventory).
-- The v3 checkpoint/live-read amendment is committed in the starting head. Evidence forwarding
-  remains local and uncommitted. No commit,
-  push, branch switch, GitHub CLI, publication or deployment was performed for
-  this task. Hosted checks and current remote issue state were not queried.
-- Earlier hosted-CI/browser receipts remain historical evidence for their
-  named heads, not evidence for this uncommitted amendment.
-
-Manual browser verification on 2026-11-15 is recorded in `docs/verification.md`
-(console against the real server, and fleet with two real processes on
-loopback). Fleet revocation was verified by a two-process run and automated
-tests, not re-run in the browser.
+- Repository: `metaforismo/AegisMesh`, default branch `master`.
+- Baseline: `master` at `7ae0356` (merge of PR #81), **to be tagged v0.2.0 by a
+  maintainer**. No tag, GitHub release, container image, binary signature or
+  provenance attestation exists for v0.2.0 yet.
+- Every change listed under "What ships" is merged into `master`, each through a
+  pull request whose head passed the six hosted CI jobs.
+- Gate results on the exact baseline commit are recorded by the maintainer in the
+  `2026-11-16 — v0.2.0 release-readiness audit` entry of `docs/verification.md`.
+- Dependabot PRs #68 and #70 are closed as superseded by #72. PR #71 (pinned
+  GitHub Action bumps) is open, rebased and CI-green, and has not been reviewed
+  or merged.
+- Older dated entries in `docs/verification.md` and the `*-history-*` archives
+  describe the state when they were written (for example "uncommitted" or "open
+  PR"); the merge status of every PR is in this file and the audit entry.
 
 ## What ships
 
-Already merged in `master`, AegisMesh is an early, defensive, local-first
-deception and evidence platform. It ships:
+AegisMesh is an early, defensive, local-first deception and evidence platform.
+
+Single-node core:
 
 - bounded HTTP, TCP, MCP and authentication-only SSH sensors;
 - strict configuration, loopback and unprivileged defaults, redaction and
@@ -44,36 +37,64 @@ deception and evidence platform. It ships:
 - deterministic evidence-linked dry-run recommendations for operator review;
 - a one-command synthetic four-sensor demo;
 - signed opt-in webhooks and verified observe-only subprocess extensions;
-- optional same-binary process workers for every sensor kind;
+- optional same-binary process workers for every sensor kind (PR #54);
 - Docker/Compose and contract-tested Helm packaging;
-- pinned CI/release definitions, vulnerability checks and CycloneDX SBOM paths.
+- pinned CI/release definitions, vulnerability checks and CycloneDX SBOM paths;
+- Go 1.27.4 and `golang.org/x/crypto` v0.59.0 (#72).
 
-The supplied master baseline additionally contains:
+Added since the original v0.2 plan (all merged):
 
-- optional age/X25519 evidence-at-rest encryption (ADR-0016,
-  `docs/evidence-encryption.md`) in the supplied master baseline. Local
-  uncommitted `feat/encrypted-live-read` adds v3 authenticated busy-flush
-  checkpoints and prefix reads with explicit open/interrupted notices, a
-  `--require-sealed` CLI policy and structural doctor warnings. Checkpoints and
-  seals cost 250 bytes each, count toward the segment cap and never load private
-  identities into runtime/console. Restart preserves old prefixes and opens a
-  new file. V2 stays seal-only, with no migration. Full truncation assurance
-  requires strict mode: removing a seal to a checkpoint looks like an open file.
-  See the dated verification entry for local commands and live traffic proof;
-  v3 is not committed, pushed, merged or released.
-- a disabled-by-default, single-node, single-tenant operator console API (#74;
-  ADR-0017, `architecture/console-api.md`): token roles, Host/Origin/CSRF
-  protections, SSE, investigations, hash-chained audit, `console token` and
-  `console hash`, and opt-in `demo --console`;
-- an embedded zero-dependency console UI, design system and landing page (#75),
-  served only when `console.enabled` is true;
-- experimental fleet inventory (this branch; ADR-0018,
-  `architecture/fleet-protocol.md`): `identity` owns a private fixed seed,
+- **Evidence encryption (#73, #77).** Optional age/X25519 (ADR-0016,
+  `docs/evidence-encryption.md`). New encrypted segments use container v3:
+  authenticated checkpoints at the existing busy-flush cadence, prefix reads for
+  `inspect`/`recommend` with explicit open/interrupted notices, `--require-sealed`
+  for strict completeness, and keyless structural doctor warnings. Checkpoints and
+  seals cost 250 bytes each and count toward the segment cap. Sealed v2 stays
+  readable; unfinished v2 fails closed; there is no in-place migration. Full
+  truncation assurance requires strict mode: removing a seal back to a checkpoint
+  looks like an open file.
+- **Operator console (#74, #75, #78, #81).** Disabled-by-default, authenticated
+  API (ADR-0017, `architecture/console-api.md`): token roles, Host/Origin/CSRF
+  protections, SSE, investigations, hash-chained audit, `console token`,
+  `console hash` and `demo --console`. The embedded UI, design system and static
+  landing page (`site/`, not published) are served only when `console.enabled` is
+  true. Polish added elevation, icons, sparklines, an event drawer, a command
+  palette, motion rules, evidence origin, SSO sign-in and tenant switching.
+- **Fleet inventory, experimental (#76).** ADR-0018,
+  `architecture/fleet-protocol.md`: `identity` owns a private fixed seed,
   `protocol` owns exact signed envelopes, `hub` owns atomic registry, token and
-  replay state plus a separate listener, and `agent` owns a fixed egress-checked
+  replay state plus a separate listener, `agent` owns a fixed egress-checked
   transport and an independent jittered loop. Permanent key revocation and
-  bounded replay state survive restart. Hub state and audit are plaintext.
-  Status is self-reported, not attested.
+  bounded replay state survive restart. Hub state and audit are plaintext. Status
+  is self-reported, not attested.
+- **Evidence forwarding, experimental (#79).** Agent to hub, best effort with
+  counted loss, local store authoritative. Disclosure (agent) and reception (hub)
+  are separate opt-ins, both off by default. Process-only oldest-drop queue (4,096
+  events / 16 MiB) fed after successful local append, including direct correlation
+  signals; independent signed batch delivery; hub hostile validation, bounded
+  deduplication (4,096 IDs per node), per-node quotas and a 256 MiB per-tenant
+  aggregate budget; native per-node copies inherit hub encryption. No private read
+  identity, disk spool, historical forwarding, cross-node correlation or deletion
+  propagation.
+- **SSO via OIDC and logical tenant isolation, both experimental (#80).**
+  ADR-0019/0020. OIDC is opt-in Authorization Code/S256 with state/nonce/browser
+  binding, library-owned asymmetric token verification, explicit role and tenant
+  mappings, bounded egress and credential-capped sessions. Operator tokens remain
+  a break-glass login by default; `token_login: false` requires OIDC. Discovery
+  outages retry without stopping sensors. Logout is local; there is no refresh
+  persistence or provider logout. One declared active tenant covers index queries,
+  sources/overview/by_node, SSE, investigations, audit, fleet registries,
+  enrollment tokens and forwarded evidence; local runtime views belong to
+  `local_tenant`. At most 32 tenants share a process, OS user, data directory, hub
+  encryption recipient and signing/egress settings. State lives under
+  `tenants/<slug>/`; legacy state migrates into `tenants/default` with a
+  resumable, recoverable migration. Non-index static assets are gzip-compressed
+  with strong ETags; per-sensor overview buckets are capped at 64 sensor IDs.
+  New dependencies: go-oidc v3.21.0, oauth2 v0.38.0, go-jose v4.1.4.
+- **Measured performance pass (#82).** Secondary indexes and overview snapshots in
+  the console evidence index, `make bench`, and
+  `docs/architecture/performance.md`. Synthetic local measurements only; no
+  capacity claim.
 
 No activation or recommendation proves an incident. Nothing shipped can execute
 attacker/model/extension instructions or autonomously mutate real assets.
@@ -90,48 +111,43 @@ This contains first-party sensor crashes; it is not a network, filesystem, CPU,
 memory, syscall or malware sandbox. Workers retain the runtime UID and host or
 container namespaces. v0.2 does not automatically restart them.
 
-## Exact remaining v0.2 work
-
-1. **Merge the PR stack in order** (#72, #73, #74, #75, then the fleet PR once
-   it exists), each after human review and green hosted CI on its exact head.
-2. **Final release-readiness audit.** Re-run every required gate on the
-   resulting `master`, reconcile all product/security/deployment claims, and
-   leave release publication, tags, signing and real-cluster operation
-   explicitly unexecuted unless separately approved. Blocked on the stack
-   merging.
-3. **Dependency PR triage.** Triage #71; close #68 and #70 after #72 merges. Do
-   not merge a Docker-only Go major-version bump as if it were a complete
-   supported-toolchain upgrade.
-
-`docs/BACKLOG.md` is the authoritative current queue. The previous cumulative
-queue and verification ledger are preserved in timestamped history files.
-
 ## Product direction
 
 The intended commercial model is an Apache-2.0, self-hostable defensive core
-plus a future managed SaaS/control plane. Plausible hosted value includes fleet
-management, authenticated enrollment, tenant isolation, SSO/RBAC, collaborative
-investigation, searchable retention, audit administration, managed upgrades and
-support. A local inventory foundation is implemented on the fleet branch (PR
-pending); managed-service and multi-tenant capabilities remain proposed and
-require separate authorization and threat models.
+plus a possible future managed SaaS/control plane. Plausible hosted value includes
+fleet management, hard tenant isolation, collaborative investigation, searchable
+retention, audit administration, managed upgrades and support. Experimental fleet
+inventory, forwarding, SSO and logical tenants exist locally; managed-service
+and hard multi-tenant capabilities remain proposed and require separate
+authorization and threat models.
 
 ## Non-obvious invariants
 
-- Authoritative storage append succeeds before webhook, extension or correlation
-  offers. A failed append suppresses fan-out.
+- Untrusted data never becomes behavior: network bytes, config files, model output
+  and extension artifacts never reach `os/exec`, filesystem path selection,
+  configuration mutation or enforcement (AGENTS.md rule 2).
+- Authoritative storage append succeeds before webhook, extension, correlation or
+  forwarding offers. A failed append suppresses fan-out.
 - The console evidence index is fed only after a successful storage append
   (`runtime.indexedSink`: storage first, then index). Bus and direct correlation
   persistence share it. The index is count- and byte-bounded and disposable.
 - The console never changes sensors, policy or evidence. Its durable writes are
-  operator investigations and the audit trail.
+  operator investigations and the audit trail (plus fleet registry administration
+  when the hub role is enabled).
 - The fleet hub cannot command nodes, now or through a reserved stub, and
-  receives redacted evidence only with separate opt-in reception. It never dials agents.
+  receives redacted evidence only with separate opt-in reception. It never dials
+  agents.
+- The local store is authoritative for forwarded evidence. Hub copies are
+  consistency-checked, not provenance-attested, and are never fed back to a node.
+- Tenants are logical isolation only: one process, OS user, data directory and
+  encryption recipient. Do not describe them as a security boundary against a
+  compromised host or process.
 - The UI has no build step and no third-party code, and renders evidence as text
   only.
 - Derived correlation signals append directly to storage and never re-enter
-  `Bus.Submit`; they do not currently reach webhooks or extensions. Adding that
-  delivery is new egress and needs explicit approval.
+  `Bus.Submit`; they do not currently reach webhooks or extensions (they do reach
+  the opt-in forwarding queue). Adding webhook/extension delivery is new egress
+  and needs explicit approval.
 - Provider and extension output are untrusted data. Neither can select commands,
   paths, configuration, evidence meaning or enforcement.
 - Native evidence is the source contract. ECS export and recommendations are
@@ -148,40 +164,48 @@ require separate authorization and threat models.
   fleet hub state, remain plaintext.
 - Console and fleet registry/audit writes are separate durability transactions.
   Inspect state before retrying a 503 that says the investigation was already
-  saved.
+  saved. One writer per state root.
 - Fleet operator config requires separate processes and state directories for
   hub and agent roles; package tests compose the roles.
 
 ## Known boundaries
 
-- Evidence is plaintext by default. Encryption is opt-in in the supplied master
-  baseline; the v3 checkpoint amendment is local and uncommitted.
-- There is no Telnet/database sensor, decoy-listener TLS, multi-tenancy,
-  autonomous response path or hosted control plane. The console API, UI and
-  fleet inventory are in the local master baseline described above.
-- The original console slice was single-tenant/token-only; this branch adds ADR-0019/0020 below.
-- Fleet evidence forwarding is experimental and opt-in locally; durable evidence-spool, key rotation,
-  mTLS/attestation, a local configuration workflow and upgrade
-  designs in ADR-0018 remain proposals. SSO/logical isolation are specified in ADR-0019/0020. `fleet status`
-  and `demo --fleet` were omitted; the console status API supplies live
-  delivery state.
-- Helm is verified packaging, not verified real-cluster support.
-- No v0.2 tag, GitHub release, published image, binary signature or executed
-  provenance statement exists.
-- Direct SBOM generation is blocked inside linked worktrees; the ordinary-clone
-  fallback is recorded in `docs/verification.md`.
+- Evidence is plaintext by default. Encryption is opt-in and protects the medium,
+  not a compromised host; rollback to an earlier checkpoint is detectable only
+  with `--require-sealed`.
+- There is no Telnet/database sensor, decoy-listener TLS, hard tenant boundary,
+  autonomous response path or hosted control plane.
+- Forwarding has no durable spool, historical forwarding, cross-node correlation
+  or deletion propagation; forwarded history on the hub is not re-indexed after a
+  restart. Key rotation, mTLS/attestation, a local configuration workflow and
+  upgrade designs in ADR-0018 remain proposals. `fleet status` and `demo --fleet`
+  were omitted; the console status API supplies live delivery state.
+- OIDC has been exercised only against local test providers, never a real
+  external identity provider.
+- The UI has been verified in Chromium only.
+- Helm is verified packaging, not verified real-cluster support; no real-cluster
+  Kubernetes run exists.
+- No v0.2.0 tag, GitHub release, published image, binary signature or executed
+  provenance statement exists. The landing page is not published.
+- `golangci-lint` is not installed locally; the Makefile reports the skip and runs
+  `gofmt` and `go vet`.
+- Direct SBOM generation is blocked inside linked git worktrees (the pinned
+  generator cannot resolve the main-module version); use an ordinary clone or
+  hosted CI. See `docs/verification.md`.
+- Some CLI doctor tests expect the default sensor ports to be free (backlog P1).
 
 ## Commands that matter
 
 ```text
-make lint test
-make ui-test
-make fuzz-seed
-make helm-contract
-make supply-chain-check
-make sbom sbom-check
-make vuln
+make lint test            # gofmt + vet (+ golangci-lint if installed) and race tests
+make ui-test              # console UI and site tests (Node.js >= 20, no npm install)
+make bench                # opt-in synthetic backend benchmarks; not a CI gate
+make fuzz-seed            # bounded real fuzz targets
+make vuln                 # pinned govulncheck
+make sbom sbom-check      # CycloneDX generation and validation
 make license-check secrets-scan
+make supply-chain-check
+make helm-contract        # needs local helm v4
 go mod verify
 git diff --check
 ```
@@ -194,67 +218,26 @@ runs, dependency/license review and exact CLI argument matrices.
 
 Merges, releases, tags, signing credentials, image publication, deployments,
 repository settings, site publication, real-cluster deployment and any new
-runtime destination or signal egress all remain unexecuted. Each needs explicit
-approval from the repository owner; nothing here authorizes any of them. Pushing
-branches and opening PRs does not imply approval to merge.
+runtime destination or signal egress all remain unexecuted until the repository
+owner approves each one at action time; nothing here authorizes any of them.
+Pushing branches and opening PRs does not imply approval to merge.
 
-## Next priorities
+## Next priorities after v0.2.0
 
-1. Review the local v3 amendment, then obtain hosted CI before any separately
-   authorized publication or merge.
-2. Refresh dependency issue/PR state before triage; remote status was not queried here.
-3. Review the local evidence-forwarding implementation and its verification ledger; durable offline spooling is not implemented.
-4. Review the local v3 live-read amendment and its rollback/completion limits.
-5. SSO/OIDC and per-tenant isolation for the console.
-6. OTLP/SIEM export.
-7. Real-cluster Kubernetes evidence.
-8. Additional AI-deception sensors (multi-step synthetic MCP environments).
-9. Final v0.2 release-readiness audit and tag (needs approval).
+1. Create the v0.2.0 tag after the maintainer fills the gate table in
+   `docs/verification.md` (needs approval; no release, image or signature is
+   implied by the tag).
+2. Review PR #71 (pinned GitHub Action bumps) and refresh dependency issue state.
+3. Verify OIDC against real identity providers.
+4. Durable encrypted forwarding spool and offline guarantees.
+5. Cross-node correlation on the hub.
+6. Hard tenant separation (per-tenant keys and/or processes).
+7. Performance follow-ups from `docs/BACKLOG.md`: SSE encode-once and overview
+   latency under an accepting hub, then the other measured items.
+8. OTLP/SIEM export.
+9. Real-cluster Kubernetes evidence.
+10. Additional AI-agent deception sensors (multi-step synthetic MCP environments).
+11. Publish the landing page (needs approval).
 
-
-## Evidence-forwarding handoff — 2026-11-15
-
-Current work is uncommitted on `feat/evidence-forwarding`, based on `25645c0`
-(encrypted live-read, PR #77). No commit/push/branch switch/gh operation is authorized.
-Experimental; best-effort forwarding with counted loss; local store authoritative.
-The hub cannot command nodes. Agent disclosure and hub reception are separately off by default.
-
-Runtime appends feed the process-only queue after successful local storage, including direct
-correlation signals. The independent worker signs `/fleet/v1/evidence`; hub hostile validation,
-bounded deduplication and per-node quotas precede native per-node copies and live indexing.
-Node encryption does not inhibit forwarding; hub encryption independently protects its copies.
-No private runtime read identity, disk spool, history forwarding, cross-node correlation,
-deletion propagation or tenancy exists. Console forwarded history is live-only after restart.
-See the amended protocol/console API contracts for exact fields, quotas and consistency wording.
-All local command/manual/benchmark receipts belong in verification.md; hosted CI and deployment
-are not inferred. No UI changes are included; UI work should consume the additive API contract.
-
-
-## Console identity and isolation — local branch, 2026-11-15
-
-`feat/console-sso`, stacked on `feat/evidence-forwarding` (PR #79), adds
-**SSO via OIDC (experimental)** and **logical tenant isolation (experimental)**.
-These are local uncommitted changes, not a merge, deployment, hosted CI or
-operational acceptance claim. ADR-0019/0020 and console-api.md define the exact
-contract; verification.md records executed checks and their limits.
-
-OIDC is opt-in Authorization Code/S256, state/nonce/browser binding, library-owned
-asymmetric token verification, explicit role and tenant mappings, bounded egress
-and credential-capped sessions. Existing tokens remain break-glass by default;
-`token_login: false` requires OIDC. Discovery outages retry without stopping
-sensors. Logout remains local. No refresh-token persistence or provider logout.
-
-One declared active tenant covers index queries, sources/overview/by_node,
-SSE, investigations, audit, fleet registries, enrollment tokens and forwarded
-evidence. Local runtime views belong to local_tenant. Per-tenant quotas and
-recoverable legacy migration isolate logical state pressure; no admin all view.
-At most 32 tenants share a process, OS user, data directory, hub encryption
-recipient and signing/egress settings. Host/process compromise and shared disk/
-CPU exhaustion cross tenants. Per-tenant keys, billing, rate plans, self-service
-creation and a hard hosted isolation boundary remain outside scope.
-
-Delivery polish includes bounded startup gzip, representation-specific strong
-ETags/304/no-cache for non-index assets and aligned per-sensor overview buckets
-(up to 64 sensor IDs). The existing UI is unchanged; it can consume the documented
-meta/session additions. Remaining work includes external-IdP interoperability,
-human review and independent deployment evidence; no release action is authorized.
+`docs/BACKLOG.md` is the authoritative current queue. The previous cumulative
+queue and verification ledger are preserved in timestamped history files.

@@ -10,7 +10,132 @@ checkout, permission or environment was unavailable; **NOT RUN** means the
 check or external action was deliberately not executed. Evidence from hosted CI
 does not turn an unavailable local command into a local PASS.
 
-## 2026-11-16 — measured backend performance and architecture pass
+Dated entries are records of the state when they were written. Words such as
+"uncommitted", "candidate", "local" or "open, unmerged" in them describe that
+moment and are not rewritten; headings carry "(merged as #NN)" where a PR has
+since merged. Current merge status is in the 2026-11-16 audit entry directly
+below.
+
+## 2026-11-16 — v0.2.0 release-readiness audit
+
+**Documentation and claims audit of `master` at `7ae0356`, with the gates run on
+that commit in an ordinary clone.** This entry records what the repository
+claims against what is recorded as verified. Besides documentation, the change
+raises the handshake bound of one load-sensitive test and ignores local browser
+tool output; it changes no runtime code. `make lint test` was re-run on the
+release-preparation head after that test change: PASS. The tag is created from
+the merge of this change, whose hosted CI run is the final evidence for the
+tagged commit. No image, signature, deployment or repository-setting change was
+performed.
+
+### Merged pull requests
+
+Everything below is merged into `master`. Each pull request head passed the six
+hosted CI jobs before merge.
+
+| PR | Merge commit | Content |
+|---|---|---|
+| #72 | `5bdfd41` | Go 1.27.4 and `golang.org/x/crypto` v0.59.0 (security) |
+| #73 | `6d46429` | Opt-in evidence-at-rest encryption (age/X25519) |
+| #74 | `0f578e3` | Operator console API (auth, roles, sessions/CSRF, hash-chained audit, investigations, SSE) |
+| #75 | `2a9363f` | Embedded console UI, design system, static landing page under `site/` (not deployed) |
+| #76 | `484bd65` | Experimental fleet inventory: Ed25519 node identity, one-time enrollment, signed heartbeats |
+| #77 | `7b96af1` | Encrypted container v3 with authenticated checkpoints; `--require-sealed` |
+| #79 | `777dcc9` | Experimental opt-in evidence forwarding, agent to hub |
+| #80 | `6f89837` | Experimental SSO via OIDC and logical tenant isolation; gzip/ETag static assets; per-sensor overview buckets; go-oidc v3.21.0, oauth2 v0.38.0, go-jose v4.1.4 |
+| #82 | `8f1a0b2` | Measured performance pass (secondary indexes, overview snapshots), `make bench`, `architecture/performance.md` |
+| #78 | `c5328ac` | Console UI polish (elevation, icons, sparklines, event drawer, command palette, motion rules) |
+| #81 | `7ae0356` | UI for evidence origin, SSO sign-in and tenant switching |
+
+Dependabot PRs #68 and #70 are closed as superseded. PR #71 (pinned GitHub Action
+bumps) is open, rebased and CI-green, and has not been reviewed or merged.
+
+### Acceptance criteria (BACKLOG P1-2)
+
+| Criterion | State |
+|---|---|
+| Every delivery-plan slice (1-8) merged, PR and merge commit recorded | MET — `DELIVERY-PLAN.md` |
+| Clean `master` | MET at audit start: the audit change was cut from `7ae0356` with a clean tree |
+| Full race/fuzz/Helm/license/secret/vulnerability/SBOM gates on the exact commit | MET — see "Gates on `7ae0356`" below |
+| No unresolved P0/P1/P2 milestone item | DEFERRED — P1-3 (#71, pinned Action updates awaiting review), P2-1, P2-2 and P2-3 are moved to the milestone after v0.2.0 at tagging time (2026-11-16); P2-4 was already a later milestone. None of them changes shipped runtime behavior |
+| Documentation and threat model match runtime | AUDITED — in-flight wording replaced with merged state, versions/quotas/ports/dependency counts cross-checked, relative links checked; `THREAT-MODEL.md` and the API/protocol contracts were checked for status wording and numbers, not re-derived from source; no independent human review |
+| Release, tag, signing, image and cluster actions explicitly `NOT RUN` unless authorized | MET — none performed |
+| Verification vocabulary separates `PASS`, `FAIL`, `BLOCKED`, `NOT RUN` | MET |
+| Final handoff moves only genuinely later work | MET — `HANDOFF.md` "Next priorities after v0.2.0" |
+
+### Manual browser verification (2026-11-15)
+
+Run against the real server with separate hub and agent processes and two
+tenants, in Chromium:
+
+- token sign-in;
+- overview including forwarded counts;
+- events with the origin column;
+- fleet screen with forwarding state;
+- tenant switch showing none of the other tenant's data;
+- gzip and ETag on static assets.
+
+Earlier manual checks (console against `aegismesh demo --console`; fleet with two
+real processes, including `stale` after three missed heartbeats) are in the
+2026-11-15 entries below. Fleet token revocation was verified by a two-process
+backend run and automated tests, not in the browser.
+
+### NOT RUN / NOT VERIFIED
+
+- **NOT RUN:** tag, GitHub release, container image, binary signature and
+  provenance attestation for v0.2.0 — none exists. A maintainer creates the tag
+  after the gates below are filled.
+- **NOT VERIFIED:** OIDC against any real external identity provider; it has been
+  exercised only against local test providers.
+- **NOT VERIFIED:** the UI in any browser other than Chromium.
+- **NOT RUN:** a real-cluster Kubernetes run; the Helm chart is contract-tested
+  only.
+- **NOT RUN:** publication of the landing page; it is not hosted anywhere.
+- **NOT RUN:** `golangci-lint` — not installed locally; the Makefile runs `gofmt`
+  and `go vet` and reports the skip.
+- **NOT RUN:** physical power-loss testing, external-IdP interoperability, durable
+  offline forwarding (not implemented) and review of PR #71.
+- **BLOCKED:** `make sbom sbom-check` inside a linked git worktree (the pinned
+  generator cannot resolve the main-module version there); run it in an ordinary
+  clone.
+- **Known test fragility:** CLI doctor tests expect the default ports
+  8081/6399/8090/9110 to be free; a busy machine can fail `make test` for that
+  reason alone (BACKLOG follow-up).
+
+### Gates on `7ae0356`
+
+To be filled by the maintainer on the exact commit before this change merges. Do
+not replace a cell with anything but the real outcome (`PASS`, `FAIL`, `BLOCKED`
+or `NOT RUN`, plus the exact blocker or output summary).
+
+| Gate | Result | Notes |
+|---|---|---|
+| `make lint` | PASS | gofmt and `go vet`; `golangci-lint` NOT RUN (not installed) |
+| `make test` | FAIL then PASS | first run on `7ae0356` failed only `TestHostHandshakeFailures/echoes_wrong_frame_type` (fixed 2 s handshake bound on a loaded machine; 3/3 PASS in isolation). The bound was raised in this change and `make lint test` re-run on the release-prep head: see below |
+| `make ui-test` | PASS | Node.js >= 20 |
+| `make vuln` | PASS | pinned govulncheck |
+| `make fuzz-seed` | PASS | bounded real fuzz targets |
+| `make license-check` | PASS | |
+| `make secrets-scan` | PASS | |
+| `make supply-chain-check` | PASS | |
+| `make helm-contract` | PASS | local Helm v4 |
+| `make sbom` | PASS | run in the ordinary clone |
+| `make sbom-check` | PASS | needs the SBOM from the previous row |
+| `go mod verify` | PASS | |
+| Hosted CI on `master` | PASS | all six jobs on the `7ae0356` run |
+
+### Checks the audit author ran
+
+| Command/check | Result | Output summary |
+|---|---|---|
+| `git diff --check` | PASS | exit 0, no output, run on the final documentation change |
+| `make secrets-scan` | PASS | `secrets-scan: ok` (heuristic tracked-file scan) |
+| `make ui-test` | PASS | 169 tests, 169 passed, 0 failed, 0 skipped (Node.js v25.8.2); run because `site/index.html` changed, and it includes the site link and CSS-copy tests |
+| In-flight wording sweep (`grep -rn -i 'uncommitted\|candidate\|PR pending\|open PR\|unmerged\|awaits\|awaiting\|orchestrator\|backend engineer\|frontend engineer\|in flight\|stacked on\|hosted CI: NOT RUN\|this branch'` over `README.md`, `CHANGELOG.md`, `docs/*.md`, `docs/architecture/*.md`) | PASS | no stale in-flight statement remains outside dated entries of this file and the `*-history-*` archives; remaining hits are unrelated uses of "candidates" or historical descriptions of fixed defects |
+| Relative links and heading anchors in every changed Markdown file (ad hoc script, not a repository command) | PASS | 0 broken links across the changed files; one pre-existing dead link to an uncommitted benchmark file was replaced by a note |
+| `make lint`, `make test`, `make vuln`, `make fuzz-seed`, `make license-check`, `make supply-chain-check`, `make helm-contract`, `make sbom`, `make sbom-check`, `go mod verify` | NOT RUN | deliberately skipped by the audit author (documentation-only change, tight disk); the maintainer records them in the gate table above |
+
+## 2026-11-16 — measured backend performance and architecture pass (merged as #82)
 
 **PASS — local implementation, final benchmark set and required gates.** Worktree
 `perf/console-hot-paths`, initially clean at `338eea7b0ed4bb69fb1ddb6402704d1b27efc842`,
@@ -224,12 +349,12 @@ committed; `docs/performance/2026-11-15/table.md` holds the resulting medians.
 | `make license-check secrets-scan` | PASS | `license-secrets.txt`: 18 modules within policy; tracked-file heuristic secret scan OK; no dependency changes |
 | `git diff --check` | PASS | `diff-check.txt`; final documentation check recorded separately after this entry |
 
-Exit codes are recorded in
-[`performance/2026-11-15/command-results.tsv`](performance/2026-11-15/command-results.tsv).
+Exit codes were recorded in `command-results.tsv` in the local run directory
+(not committed; see [`performance/2026-11-15/README.md`](performance/2026-11-15/README.md)).
 Unmeasured scenarios and reproducibility limits are explicit in the architecture
 note. These local checks are not hosted-CI, review, deployment or production proof.
 
-## 2026-11-15 — console SSO, logical tenant isolation and delivery polish
+## 2026-11-15 — console SSO, logical tenant isolation and delivery polish (merged as #80)
 
 **PASS — local implementation and verification.** Worktree `feat/console-sso`,
 initially clean at `245ccd0`, stacked on `feat/evidence-forwarding` (PR #79).
@@ -335,7 +460,7 @@ no RP-initiated logout, refresh persistence, per-tenant keys, billing, rate plan
 self-service creation or hard hosted isolation boundary ships. Host/process
 compromise and shared disk/CPU/request/stream admission cross tenants.
 
-## 2026-11-15 — experimental evidence forwarding, local uncommitted slice
+## 2026-11-15 — experimental evidence forwarding, local uncommitted slice (merged as #79)
 
 **PASS — local verification.** Worktree `feat/evidence-forwarding`, initially clean at
 `25645c03188b9dcc0a6e81c7bbd7177b46ecbb58` (encrypted live-read / stacked PR #77,
@@ -439,7 +564,7 @@ investigation annotations, forwarded-index history backfill, hub-to-node traffic
 are not implemented; the last two retain the permanent no-control/single-tenant boundary.
 Exact additive API fields and integrity wording are in architecture/console-api.md.
 
-## 2026-11-15 — stack status
+## 2026-11-15 — stack status (all merged; see the 2026-11-16 audit)
 
 **Status record, not a new test run.** The work of 2026-11-14/15 is committed and
 pushed as a stack of open, unmerged pull requests against `master` (`01579d3`).
@@ -453,6 +578,10 @@ or name a candidate describe the state when they were written.
 | #74 | `feat/console-api` (on #73) | operator console API | **PASS**, all 6 jobs | no |
 | #75 | `feat/console-ui-embed` (on #74) | embedded console UI, design system, landing page | **PASS**, all 6 jobs, including the Node UI tests step | no |
 | pending | `feat/fleet-enrollment` (on #75) | experimental fleet inventory | **NOT RUN** | no |
+
+**Update 2026-11-16:** the table above records the state on 2026-11-15. The
+fleet PR is #76; #72-#76 are all merged into `master` (merge commits are listed
+in the 2026-11-16 audit entry), and later PRs #77-#82 are merged as well.
 
 No release, tag, image, signature, deployment or repository-setting change
 happened. Dependabot PRs #68 and #70 are superseded by #72 but still open; #71
@@ -469,7 +598,7 @@ happened. Dependabot PRs #68 and #70 are superseded by #72 but still open; #71
 - Fleet token revocation was **not** re-run in the browser. It was verified by
   the backend two-process run and automated tests.
 
-## 2026-11-15 — fleet review: abuse resistance and heartbeat write coalescing
+## 2026-11-15 — fleet review: abuse resistance and heartbeat write coalescing (merged as #76)
 
 **PASS — local fixes and requested gates.** Base is the local draft `ad53dc7`
 (`wip(fleet): draft before review`), branch `feat/fleet-enrollment`. These changes
@@ -575,7 +704,7 @@ pressure remain possible; no DDoS/host isolation or prospective performance
 claim is made. The full registry is still rewritten under the mutex at the
 coalesced cadence, plus synchronous durable changes.
 
-## 2026-11-15 — experimental fleet inventory candidate
+## 2026-11-15 — experimental fleet inventory candidate (merged as #76)
 
 **PASS — local implementation and required verification.** Branch
 `feat/fleet-enrollment`, base HEAD `20a2dbb`, stacking the operator console.
@@ -681,7 +810,7 @@ Optional `fleet status` and `demo --fleet` were omitted. Evidence forwarding,
 rotation, mTLS/attestation, remote configuration, upgrades, tenancy and SSO remain
 proposed, not implemented; no hub-to-agent control channel is reserved.
 
-## 2026-11-15 — embedded operator console UI
+## 2026-11-15 — embedded operator console UI (merged as #75)
 
 Worktree branch `feat/console-ui-embed` on top of `feat/console-api`, macOS arm64,
 Go **1.27.4**, Node.js v25.8.2. Local commits only: no push, `gh`, hosted CI,
@@ -708,7 +837,7 @@ investigation (cookie session plus CSRF) all worked, with no CSP violations. The
 mock-based walk-through of all 13 screens in both themes and at 375px is recorded
 in `docs/design-system.md`.
 
-## 2026-11-15 — console backend review fixes
+## 2026-11-15 — console backend review fixes (merged as #74)
 
 Worktree `feat/console-api`, continuing local draft `4976522` without committing,
 pushing, switching branches, or running `gh`. macOS arm64 / Go 1.27.4. Verification
@@ -766,7 +895,7 @@ now describes available UI assets without assuming whether this build embeds the
 | `awk 'length($0) > 140'` over all 48 new Go files, including draft files and untracked additions | **PASS**, 1 line: `internal/console/server.go:24`, the 189-character fixed CSP string. All other lines are at most 140 characters. |
 | Exported Go documentation audit | **PASS**, 0 missing declaration, field, or interface-method comments in the new production Go files. |
 
-## 2026-11-14 — first operator console backend candidate
+## 2026-11-14 — first operator console backend candidate (merged as #74)
 
 Worktree `feat/console-api`, base `e82df977c4119629b3bd87b8496428615ff1b865`,
 macOS arm64 / Go **1.27.4**. All changes were uncommitted when this entry was written, including the supplied
@@ -840,7 +969,7 @@ through login, reads, operator mutations, audit, and live SSE; both processes
 exited on SIGINT. The one-off script and transcript were removed during review;
 the Go integration tests are the maintained reproduction path.
 
-## 2026-11-14 — steady-traffic encryption segment review
+## 2026-11-14 — steady-traffic encryption segment review (merged as #73)
 
 Candidate was uncommitted when written (now committed in PR #73), on `feat/evidence-at-rest-encryption`, based on
 `c64b58f29373ac475ec6a44ce692722062c5dfba`, macOS arm64 / Go **1.27.4**.
@@ -898,7 +1027,7 @@ model, CLI/data-flow guidance, roadmap and handoff now describe these boundaries
 | `make vuln` | **PASS**, exit 0: pinned govulncheck v1.7.0, `No vulnerabilities found.` |
 | `git diff --check` | **PASS**, exit 0 after the final documentation/ledger update; no whitespace errors. |
 
-## 2026-11-14 — evidence-at-rest encryption recovery and review
+## 2026-11-14 — evidence-at-rest encryption recovery and review (merged as #73)
 
 Candidate: `feat/evidence-at-rest-encryption` (uncommitted when written; now PR #73) on
 `c64b58f29373ac475ec6a44ce692722062c5dfba` (reviewed but unmerged toolchain
@@ -1057,7 +1186,7 @@ callbacks before a later failure; CLI outputs remain buffered/staged until the
 complete read succeeds. Direct linked-worktree SBOM generation, human review and
 exact-head CI/merge remain open as stated above.
 
-## 2026-11-14 — whole-repository Go security refresh
+## 2026-11-14 — whole-repository Go security refresh (merged as #72)
 
 Baseline: clean `security/go-toolchain-vuln-fixes` at `01579d3`. Local host:
 macOS arm64. Selected Go **1.27.4**, `golang.org/x/crypto` **v0.59.0** and
@@ -1131,6 +1260,9 @@ build/publication or deployment was performed.
 
 ## Required evidence for the next implementation slice
 
+Slice 6 (evidence encryption) merged as #73 and #77; this list is kept as the
+record of the criteria that were applied.
+
 Optional evidence-at-rest encryption is not complete until the exact PR head has:
 
 - focused config, storage, reader and CLI tests;
@@ -1146,7 +1278,7 @@ Optional evidence-at-rest encryption is not complete until the exact PR head has
 Release publication and real-cluster operation remain separate `NOT RUN` actions
 unless explicitly authorized at action time.
 
-## 2026-11-15 — v3 encrypted checkpoint/live-read amendment (local, uncommitted)
+## 2026-11-15 — v3 encrypted checkpoint/live-read amendment (local, uncommitted) (merged as #77)
 
 **Scope and baseline.** `feat/encrypted-live-read` started clean at local master
 `484bd65`; local ancestry includes merges #72-#76. New encrypted writes are v3;

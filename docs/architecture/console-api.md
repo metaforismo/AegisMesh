@@ -1,6 +1,6 @@
 # Console API v1 — contract
 
-Status: **implemented local contract; SSO via OIDC (experimental), logical tenant isolation (experimental)**. This is
+Status: **implemented and merged (v0.2.0); SSO via OIDC (experimental), logical tenant isolation (experimental)**. This is
 the only interface between the Go console server (`internal/console`) and the
 embedded web UI (`internal/consoleui`). Change this document in the same commit
 as any behavior change.
@@ -413,8 +413,7 @@ per-node copies locally for retained history, with explicit read identities when
 
 `meta.auth.token` controls both bearer and token-session authentication.
 `oidc.enabled` means configured, not a live provider readiness assertion. The
-UI can link to `/api/v1/auth/oidc/login` using `display_name` as plain text.
-The server implements no UI rendering changes in this slice.
+UI links to `/api/v1/auth/oidc/login` and renders `display_name` as plain text.
 
 OIDC is Authorization Code + S256 PKCE, state and nonce, for public clients or
 confidential clients using HTTP Basic client authentication. The callback accepts
@@ -454,7 +453,7 @@ the same 404 code/body and store lookup as absent IDs; no global existence probe
 runs. In configurations with multiple tenants, new investigation evidence
 references must resolve to that tenant's local index (404 otherwise); already
 attached, evicted references can still be detached. Existing bare-ID annotations
-remain local-only; forwarded-event annotation support is outside this slice.
+remain local-only; forwarded-event annotation support is not implemented.
 
 Each tenant has independent 1000-investigation/32 MiB snapshots, up to 100 notes
 per investigation, 200 event references, 100 outstanding enrollment tokens,

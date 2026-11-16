@@ -23,8 +23,9 @@ JSONL segments under `runtime.data_dir` on the machine running AegisMesh.
 `inspect list/show/export` read it locally; export produces native or
 ECS-compatible NDJSON you own. Nothing leaves by default. An explicitly enabled
 webhook sends bounded evidence batches to its fixed operator-configured endpoint,
-and an explicitly selected remote provider sends bounded prompt context to its
-fixed API endpoint.
+an explicitly selected remote provider sends bounded prompt context to its
+fixed API endpoint, and an explicitly enabled fleet agent (experimental) forwards
+redacted evidence to its configured hub.
 
 **Is evidence tamper-proof?**
 AegisMesh detects inconsistency between an observation payload and its stored
@@ -57,6 +58,7 @@ Differences are tabulated in docs/research/competitive-landscape.md.
 **Is this production-ready?**
 No production-readiness claim is made. It is a tested early vertical slice with
 real listeners and evidence paths, plus honest limits: no TLS termination on
-decoys, no at-rest encryption, an authentication-only SSH decoy with no
-post-authentication channels, no autonomous response, and no verified
+decoys, evidence encryption that is opt-in and off by default, an authentication-only SSH decoy with no
+post-authentication channels, no autonomous response, experimental fleet, SSO and tenant features (OIDC is untested
+against real identity providers; tenants are logical only), and no verified
 real-cluster Kubernetes support. Read docs/ROADMAP.md first.

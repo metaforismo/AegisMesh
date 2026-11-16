@@ -451,8 +451,9 @@ execution boundary. Protocol changes require a new protocol version and ADR.
 
 ## ADR-0016: Evidence encryption is optional native age/X25519 with an irreversible per-directory mode guard
 
-**Status:** Accepted; v3 live-read amendment implemented locally, uncommitted.
-Local verification is recorded in `docs/verification.md`; no v3 merge/release claim.
+**Status:** Accepted; implemented and merged (#73), with the v3 live-read
+amendment merged in #77. Verification is recorded in `docs/verification.md`;
+no release claim.
 
 **Context.** The native JSONL store is intentionally local-first, but plaintext
 evidence can contain sensitive attacker-controlled context. AegisMesh needs an
@@ -535,8 +536,9 @@ independent frames retain public-recipient-only writes and keyless retention.
 
 ## ADR-0017 — single-node read-mostly operator console
 
-**Status:** implemented in open PRs #74 (API) and #75 (embedded UI), unmerged;
-hosted CI passes on both heads; human review and merge remain separate.
+**Status:** implemented and merged: #74 (API) and #75 (embedded UI), with UI
+polish in #78 and #81. Hosted CI passed on every PR head; no deployment or
+production-readiness claim.
 
 **Context and alternatives.** Operators need bounded interactive evidence queries
 without changing sensor behavior or granting remote control. Two designs were
@@ -599,9 +601,8 @@ by the v1 contract. This decision does not claim production readiness.
 
 ## ADR-0018 — outbound-only experimental fleet identity and inventory
 
-Date: 2026-11-15. Inventory merged in #76; experimental evidence forwarding is
-implemented locally, uncommitted on `feat/evidence-forwarding`, stacked on the
-encrypted live-read branch (PR #77). Hosted CI/review are not claimed; see verification.md.
+Date: 2026-11-15. Inventory merged in #76; experimental evidence forwarding
+merged in #79. Both are experimental; see verification.md for what was run.
 
 **Context and ownership.** The console's `Runtime` seam exposes value snapshots;
 its evidence index is disposable and must not become an agent transport. The
@@ -695,7 +696,7 @@ a full remote table can temporarily deny new addresses. Bounded work and audit q
 limit allocation but do not provide DDoS or host resource isolation. Permanent
 tombstones count toward the node cap; there is no deletion/rotation escape hatch.
 
-**Implemented locally — experimental evidence forwarding.** Best-effort forwarding with counted loss;
+**Implemented and merged (#79) — experimental evidence forwarding.** Best-effort forwarding with counted loss;
 local store authoritative. Agent and hub evidence consent default off. The post-successful-append
 tap feeds a bounded memory ring, including direct correlation signals; a separate signed-batch
 worker and HTTP transport isolate retry latency from storage and heartbeats. The alternatives
@@ -750,8 +751,7 @@ those managed-service properties.
 
 ## ADR-0019 — SSO via OIDC (experimental)
 
-Date: 2026-11-15. Implemented locally, uncommitted on `feat/console-sso`, stacked
-on `feat/evidence-forwarding` (PR #79). Supersedes ADR-0017's original no-SSO/no-
+Date: 2026-11-15. Implemented and merged in #80. Supersedes ADR-0017's original no-SSO/no-
 egress limitation for this explicitly enabled authentication edge only.
 
 **Decision.** Opt-in Authorization Code with S256 PKCE, server-side state/nonce
@@ -806,7 +806,7 @@ activity. The OIDC path has no authority over sensors, config or enforcement.
 
 ## ADR-0020 — logical tenant isolation (experimental)
 
-Date: 2026-11-15. Local uncommitted implementation on `feat/console-sso`.
+Date: 2026-11-15. Implemented and merged in #80.
 
 **Alternatives and ownership.** Adding tenant filters independently to handlers
 would leave aggregate counters, SSE, ID references and quotas easy to miss. A

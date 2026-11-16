@@ -215,7 +215,7 @@ Metrics have fixed outcome labels only, never node IDs:
 
 ## Experimental evidence forwarding (2026-11-15 amendment)
 
-This slice implements **best-effort forwarding with counted loss; local store authoritative**.
+Evidence forwarding implements **best-effort forwarding with counted loss; local store authoritative**.
 Both `fleet.agent.forward_evidence.enabled` and `fleet.hub.accept_evidence.enabled`
 default false. Enabling forwarding explicitly discloses redacted evidence to the hub,
 including correlation signals. The runtime offers only envelopes whose local authoritative

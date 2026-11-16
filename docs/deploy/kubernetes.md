@@ -18,7 +18,8 @@ what would make Kubernetes "supported" in docs/ROADMAP.md.
   a real CNI and node drains. **NOT RUN locally** for this release.
 - **NOT YET AVAILABLE** — published OCI image or packaged chart artifact
   (release ships binaries + SBOM only), persistence beyond emptyDir,
-  multi-replica, liveness/readiness probes.
+  multi-replica. Default-on exec liveness/readiness probes are rendered by the
+  chart, but kubelet probe scheduling has not been run in a cluster.
 
 ## Design intent
 

@@ -1,7 +1,7 @@
 # Local benchmark evidence, 2026-11-15–16
 
-> The raw sample files and pprof profiles named in this document (`*.txt`,
-> `*.pprof`) were produced during the run but are not committed: they are
+> The raw sample files, pprof profiles and exit-code table named in this document
+> (`*.txt`, `*.pprof`, `command-results.tsv`) were produced during the run but are not committed: they are
 > machine-specific and reproducible with `make bench`. `table.md` holds the
 > medians and ranges taken from them.
 

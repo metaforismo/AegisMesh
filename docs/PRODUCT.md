@@ -1,12 +1,7 @@
 # AegisMesh product brief
 
-Current local branch (`feat/console-sso`, uncommitted): **SSO via OIDC
-(experimental)** and **logical tenant isolation (experimental)** are implemented
-as specified in ADR-0019/0020 and `architecture/console-api.md`. Current evidence
-is in `verification.md`; the dated branch amendment below defines scope and limits.
-
-
-Version: v0.2 development line. Status: active; no production-readiness claim.
+Version: v0.2.0 (`master` at `7ae0356`, to be tagged by a maintainer). Status: active
+early platform; no production-readiness claim. Updated 2026-11-16.
 
 ## One-liner
 
@@ -64,8 +59,10 @@ self-proving incident certainty.
   botnet behavior, phishing delivery or destructive action in any tier.
 - **No malware execution or detonation.** Captured binaries and commands remain
   inert evidence; AegisMesh is not a sandbox for running them.
-- **No multi-tenancy claim** until tenant confusion, authorization, data
-  residency and cross-tenant evidence risks are designed and verified.
+- **No hard multi-tenancy claim.** Logical tenant isolation ships as an
+  experiment in one shared process; a hard boundary (per-tenant keys or
+  processes) needs tenant confusion, authorization, data residency and
+  cross-tenant evidence risks designed and verified first.
 - **Not a compliance certification.** AegisMesh can export evidence; auditors
   and operators decide what that evidence means.
 
@@ -90,7 +87,7 @@ Three product families:
 |---|---|
 | Licensing | Apache-2.0 end to end; dependency license policy in CI and CycloneDX SBOM paths |
 | Offline | Deterministic local provider plus static policy is functional without runtime network egress |
-| Supply chain | Two direct third-party Go modules in the current baseline: YAML and pinned `golang.org/x/crypto`; the resolved graph is license-checked |
+| Supply chain | Six direct third-party Go modules, each with a recorded justification: YAML, `golang.org/x/crypto` (SSH), `filippo.io/age` (encryption), and `go-oidc`, `oauth2`, `go-jose` (opt-in SSO); the resolved graph is license-checked in CI |
 | Safe defaults | Loopback bind and unprivileged ports validated by `doctor`; strict config; dry-run behavior; optional fixed-worker fault containment with exact in-process default |
 | Evidence hygiene | Versioned envelope, payload hashing, redaction, rotation/retention bounds and observation-not-incident semantics |
 | Explainability | Stored policy/finding identifiers and inspection surfaces explain why a decoy responded or a recommendation was produced |
@@ -117,92 +114,83 @@ service today. Self-hosted inventory administration is described below.
 
 ## Current core scope
 
-Implemented in the current tree: CLI (`init`, `doctor`, `validate`, `run`, `demo`, `inspect`, `recommend`,
-`rules`, `migrate beelzebub`, `ext`, `healthcheck`, `version`, `completion`);
+Implemented on `master`: CLI (`init`, `doctor`, `validate`, `run`, `demo`, `inspect`, `recommend`,
+`rules`, `migrate beelzebub`, `ext`, `healthcheck`, `console`, `version`, `completion`);
 HTTP/TCP/MCP sensors plus authentication-only SSH; static policies;
 deterministic local and opt-in remote providers; optional per-sensor fixed-worker
 fault containment; JSONL evidence with correlation signals and optional native
 age/X25519 at-rest encryption; ECS-compatible local export; deterministic dry-run
 recommendations; loopback admin endpoints;
-data-only observer extensions; opt-in webhook delivery; Docker/Compose; Helm
-packaging; pinned CI/release definitions and documentation.
+data-only observer extensions; opt-in webhook delivery; an opt-in operator console
+with an embedded UI; Docker/Compose; Helm packaging; pinned CI/release definitions
+and documentation. Opt-in **experimental** features: fleet inventory, evidence
+forwarding, SSO via OIDC and logical tenant isolation.
 
 Does not ship yet: Telnet/database sensors, OTLP or automatic SIEM connectors,
 autonomous response connectors or enforcement,
-durable offline evidence guarantees, hard hosted tenant boundaries, hosted SaaS/control plane,
-or verified real-cluster Kubernetes support. See `docs/ROADMAP.md`.
+durable offline evidence guarantees (the forwarding queue is memory-only),
+cross-node correlation, hard tenant boundaries, a hosted SaaS/control plane,
+verified real-cluster Kubernetes support, or a published image, signed binary or
+provenance attestation. See `docs/ROADMAP.md`.
 
-Evidence encryption is present in the supplied master baseline. This local,
-uncommitted v3 amendment enables CLI reads of a running node through the last
-authenticated checkpoint. Open segments carry explicit incompleteness notices;
-older ones are interrupted-segment warnings, also reported structurally by doctor.
-`--require-sealed` restores strict completion checks. Checkpoints add 250 bytes
-per busy flush with pinned age/X25519, and idle flushes write none. No private
-identity enters the runtime or console. Historical v2 remains seal-only; no
-migration occurs. Encryption protects new event contents on media; existing
-plaintext, exports and file metadata remain exposed. Host/identity compromise,
-key loss, public-recipient forgery and checkpoint-tail rollback remain limits.
-Even a removed seal looks open if truncated to a checkpoint; strict reads are
-needed for full completion assurance. See ADR-0016 and `evidence-encryption.md`.
+## Evidence encryption (ADR-0016)
 
-## First operator console (P3-2, merged baseline #74 and #75)
+Optional, off by default. New encrypted segments use container v3: CLI reads of a
+running node work through the last authenticated checkpoint, and open segments
+carry explicit incompleteness notices; older ones are interrupted-segment
+warnings, also reported structurally by doctor. `--require-sealed` restores strict
+completion checks. Checkpoints add 250 bytes per busy flush with pinned
+age/X25519, and idle flushes write none. No private identity enters the runtime or
+console. Historical v2 remains seal-only; no migration occurs. Encryption protects
+new event contents on media; existing plaintext, exports and file metadata remain
+exposed. Host/identity compromise, key loss, public-recipient forgery and
+checkpoint-tail rollback remain limits. Even a removed seal looks open if
+truncated to a checkpoint; strict reads are needed for full completion assurance.
+See `evidence-encryption.md`.
+
+## Operator console (P3-2, merged #74, #75, #78, #81)
 
 The console provides a disabled-by-default, authenticated HTTP API and an
 embedded operator UI inside the single binary. The UI has no build step and no
-third-party code, and is served only when `console.enabled` is true. It is single-node and single-
-tenant, uses named token operators (viewer/analyst/admin), and reads bounded
-indexed evidence. Operator-authored investigations and an append-only audit
-trail are the durable writes in that console slice. Optional fleet inventory
-administration is additive; the console cannot control sensors.
-Encrypted storage exposes live envelopes only; audit/notes remain plaintext.
-Local tests and the verification ledger describe the evidence; this is not a
-merged, deployed, SSO, multi-tenant or production-readiness claim.
+third-party code, and is served only when `console.enabled` is true. It uses named
+token operators (viewer/analyst/admin), and reads bounded indexed evidence.
+Operator-authored investigations and an append-only audit trail are the durable
+writes. Optional fleet inventory administration is additive; the console cannot
+control sensors. Encrypted storage exposes live envelopes only; audit/notes remain
+plaintext. The UI has been verified in Chromium only. This is not a deployed or
+production-readiness claim.
 
+## Fleet inventory and evidence forwarding (experimental; #76, #79)
 
-## First fleet inventory (P3-1 foundation, PR #76)
+Experimental fleet inventory with authenticated enrollment and heartbeats. A hub
+lists node identities and self-reported health through the authenticated console.
+Agents dial that hub using local Ed25519 identities and a bounded independent
+loop. One-time admin tokens establish identity; signed requests, expiry/replay
+checks and permanent revocation protect the inventory boundary. Neither status
+signatures nor online state attest host integrity. The hub cannot command nodes.
 
-Experimental fleet inventory with authenticated enrollment and heartbeats is
-implemented in the local master baseline (merge #76). A hub lists node identities
-and self-reported health through the authenticated console. Agents dial that
-hub using local Ed25519 identities and a bounded independent loop. One-time
-admin tokens establish identity; signed requests, expiry/replay checks and
-permanent revocation protect the inventory boundary. Neither status signatures
-nor online state attest host integrity. The hub cannot command nodes.
+Experimental evidence forwarding sends copies of redacted live evidence from agent
+to hub: best effort with counted loss, local store authoritative. Agent disclosure
+and hub reception are separate opt-ins, both off by default. There is no on-disk
+spool. Durable spooling, key rotation, attestation, upgrades and commercial
+service boundaries remain proposed, not implemented. This is not a hosted service.
+See ADR-0018 and `architecture/fleet-protocol.md`.
 
-This is not a hosted service; the original inventory slice preceded ADR-0020. Experimental live evidence batching
-is implemented locally on `feat/evidence-forwarding`: best-effort forwarding with counted loss;
-local store authoritative. Separate agent disclosure and hub reception consent default off.
-Durable spooling, key rotation, attestation, upgrades and commercial
-service boundaries remain proposed, not implemented. See ADR-0018, the fleet
-protocol and current verification ledger; local proof is separate from review,
-hosted CI, merge, deployment and operational acceptance.
+## Console identity and isolation (experimental; #80)
 
-
-## Console identity and isolation — local branch, 2026-11-15
-
-`feat/console-sso`, stacked on `feat/evidence-forwarding` (PR #79), adds
-**SSO via OIDC (experimental)** and **logical tenant isolation (experimental)**.
-These are local uncommitted changes, not a merge, deployment, hosted CI or
-operational acceptance claim. ADR-0019/0020 and console-api.md define the exact
-contract; verification.md records executed checks and their limits.
-
-OIDC is opt-in Authorization Code/S256, state/nonce/browser binding, library-owned
+**SSO via OIDC (experimental)** and **logical tenant isolation (experimental)**,
+specified in ADR-0019/0020 and `architecture/console-api.md`. OIDC is opt-in
+Authorization Code/S256 with state/nonce/browser binding, library-owned
 asymmetric token verification, explicit role and tenant mappings, bounded egress
 and credential-capped sessions. Existing tokens remain break-glass by default;
-`token_login: false` requires OIDC. Discovery outages retry without stopping
-sensors. Logout remains local. No refresh-token persistence or provider logout.
+`token_login: false` requires OIDC. Logout remains local. OIDC has only been
+exercised against local test providers.
 
-One declared active tenant covers index queries, sources/overview/by_node,
-SSE, investigations, audit, fleet registries, enrollment tokens and forwarded
-evidence. Local runtime views belong to local_tenant. Per-tenant quotas and
-recoverable legacy migration isolate logical state pressure; no admin all view.
-At most 32 tenants share a process, OS user, data directory, hub encryption
-recipient and signing/egress settings. Host/process compromise and shared disk/
-CPU exhaustion cross tenants. Per-tenant keys, billing, rate plans, self-service
-creation and a hard hosted isolation boundary remain outside scope.
-
-Delivery polish includes bounded startup gzip, representation-specific strong
-ETags/304/no-cache for non-index assets and aligned per-sensor overview buckets
-(up to 64 sensor IDs). The existing UI is unchanged; it can consume the documented
-meta/session additions. Remaining work includes external-IdP interoperability,
-human review and independent deployment evidence; no release action is authorized.
+One declared active tenant covers index queries, sources/overview/by_node, SSE,
+investigations, audit, fleet registries, enrollment tokens and forwarded evidence.
+Local runtime views belong to `local_tenant`. Per-tenant quotas and recoverable
+legacy migration isolate logical state pressure; there is no admin "all" view. At
+most 32 tenants share a process, OS user, data directory, hub encryption recipient
+and signing/egress settings. Host/process compromise and shared disk/CPU
+exhaustion cross tenants. Per-tenant keys, billing, rate plans, self-service
+creation and a hard hosted isolation boundary are out of scope.
