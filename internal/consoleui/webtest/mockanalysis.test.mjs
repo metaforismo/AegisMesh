@@ -26,7 +26,8 @@ async function login(token) {
 }
 const get = (cookie, path) => fetch(`${BASE}/api/v1${path}`, { headers: { cookie } });
 
-const SESSION_KEYS = ['id', 'source', 'first_seen', 'last_seen', 'duration_ms', 'event_count', 'sensors', 'sensor_kinds', 'sensors_truncated', 'classification_counts', 'rule_ids', 'max_severity', 'frameworks', 'cadence', 'automation'].sort();
+// Round 4 adds campaign_id and actor (contract r4); see mockinsight.test.mjs.
+const SESSION_KEYS = ['campaign_id', 'actor', 'id', 'source', 'first_seen', 'last_seen', 'duration_ms', 'event_count', 'sensors', 'sensor_kinds', 'sensors_truncated', 'classification_counts', 'rule_ids', 'max_severity', 'frameworks', 'cadence', 'automation'].sort();
 
 test('sessions: documented shape, bounds and the scripted stories', async () => {
   const c = await login('dev-viewer');

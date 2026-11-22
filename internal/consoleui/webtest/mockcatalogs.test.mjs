@@ -70,7 +70,8 @@ test('honeytokens: ids and kinds only, never a value; hits from planted ids', as
   assert.deepEqual(by('unplanted-spare').sensor_ids, []);
   assert.deepEqual(by('workspace-key').sources, ['198.51.100.140']);
   assert.equal(by('diagnostic-echo').kind, 'agent_canary');
-  assert.equal(by('planted-key').hit_count, 1);
+  // The LLMjacking story and one campaign variant (198.51.100.212) replay it.
+  assert.equal(by('planted-key').hit_count, 2);
   assert.equal((await get(c, '/honeytokens?window=2d')).status, 400);
 });
 
