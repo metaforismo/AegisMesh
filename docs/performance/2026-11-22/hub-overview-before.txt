@@ -1,0 +1,21 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/console
+cpu: Apple M3
+BenchmarkAcceptingHubOverview-8   	      16	   6926966 ns/op	 2850836 B/op	   38916 allocs/op
+--- BENCH: BenchmarkAcceptingHubOverview-8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+BenchmarkAcceptingHubOverview-8   	      16	   7997146 ns/op	 2850904 B/op	   38916 allocs/op
+--- BENCH: BenchmarkAcceptingHubOverview-8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+BenchmarkAcceptingHubOverview-8   	      18	   7427986 ns/op	 2846324 B/op	   38915 allocs/op
+--- BENCH: BenchmarkAcceptingHubOverview-8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:44: offered=50000 retained=14167 nodes=8
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/console	5.994s

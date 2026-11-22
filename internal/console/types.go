@@ -4,6 +4,7 @@ package console
 
 import (
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
+	"github.com/metaforismo/aegismesh/internal/rulecatalog"
 )
 
 // Sensor is a runtime snapshot augmented with indexed observation counts.
@@ -114,13 +115,19 @@ type Runtime interface {
 
 // Rule is catalog-authored rule metadata with its effective enabled state.
 type Rule struct {
+	// ObserveOnly marks rules that cannot select an enforcement action.
+	ObserveOnly bool `json:"observe_only"`
+	// Guidance is static next-step operator advice.
+	Guidance string `json:"guidance"`
+	// Frameworks lists editorial relates-to references from the catalog.
+	Frameworks []rulecatalog.FrameworkMapping `json:"frameworks"`
 	// ID is the catalog rule identifier.
 	ID string `json:"id"`
 	// Family distinguishes detection and correlation rules.
 	Family string `json:"family"`
 	// Title is catalog-authored rule summary text.
 	Title string `json:"title"`
-	// Description is optional catalog-authored explanatory text.
+	// Description is catalog-authored explanatory text.
 	Description string `json:"description"`
 	// Severity is the catalog severity.
 	Severity string `json:"severity"`

@@ -13,6 +13,7 @@ package correlate
 
 import (
 	"fmt"
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"time"
 )
 
@@ -32,14 +33,22 @@ const (
 	RuleToolProbing RuleID = "COR-003"
 	// RuleSustainedRecon fires when a source sustains interactions across at
 	// least two sensors within one window.
-	RuleSustainedRecon RuleID = "COR-004"
+	RuleSustainedRecon     RuleID = "COR-004"
+	RuleAutomationCadence  RuleID = "COR-005"
+	RuleAIEnumeration      RuleID = "COR-006"
+	RuleCredentialStuffing RuleID = "COR-007"
+	RuleCredentialReplay   RuleID = "COR-008"
 )
 
 var ruleSummaries = map[RuleID]string{
-	RuleRepeatedInjection: "repeated injection findings from one source",
-	RuleProtocolHopping:   "one source probing multiple decoy protocols",
-	RuleToolProbing:       "one source invoking many distinct canary tools",
-	RuleSustainedRecon:    "sustained interaction across several sensors",
+	RuleRepeatedInjection:  "repeated injection findings from one source",
+	RuleProtocolHopping:    "one source probing multiple decoy protocols",
+	RuleToolProbing:        "one source invoking many distinct canary tools",
+	RuleSustainedRecon:     "sustained interaction across several sensors",
+	RuleAutomationCadence:  "short regular interaction gaps; consistent with scripted or agent-driven activity",
+	RuleAIEnumeration:      "one source touched multiple AI API families",
+	RuleCredentialStuffing: "one source presented many distinct credential attempts; consistent with credential stuffing",
+	RuleCredentialReplay:   "a decoy-only credential was presented after the same source interacted with a different sensor",
 }
 
 // KnownRuleIDs returns all correlation rule IDs in stable order.
@@ -49,6 +58,7 @@ func KnownRuleIDs() []string {
 		string(RuleProtocolHopping),
 		string(RuleToolProbing),
 		string(RuleSustainedRecon),
+		string(RuleAutomationCadence), string(RuleAIEnumeration), string(RuleCredentialStuffing), string(RuleCredentialReplay),
 	}
 }
 
@@ -71,6 +81,9 @@ func ValidateRuleIDs(ids []string) error {
 // payloads onto it; SourceKey must be attacker-controlled but bounded by the
 // caller (e.g., a normalized peer host).
 type Event struct {
+	AIFamily     detect.AIFamily
+	AuthAttempts []string // memory-only digest equality; never persisted
+
 	ID             string    // provenance: source envelope id
 	Time           time.Time // event time (drives all windows)
 	SourceKey      string
@@ -93,6 +106,8 @@ type Signal struct {
 
 // Options bounds the engine. Zero-value fields take defaults via normalize.
 type Options struct {
+	AutomationThreshold int // default 8; 4..PerSourceEvents
+	CredentialThreshold int // default 8; 3..PerSourceEvents
 	// Window is the lookback for every rule (default 10m, max 1h).
 	Window time.Duration
 	// PerSourceEvents caps each source's ring (default 64, max 512).
@@ -157,6 +172,24 @@ func (o *Options) Normalize() {
 	if o.ReconThreshold <= 0 {
 		o.ReconThreshold = DefaultReconThresh
 	}
+	if o.AutomationThreshold == 0 {
+		o.AutomationThreshold = 8
+	}
+	if o.CredentialThreshold == 0 {
+		o.CredentialThreshold = 8
+	}
+	if o.AutomationThreshold < 4 {
+		o.AutomationThreshold = 4
+	}
+	if o.AutomationThreshold > MaxPerSourceEvents {
+		o.AutomationThreshold = MaxPerSourceEvents
+	}
+	if o.CredentialThreshold < 3 {
+		o.CredentialThreshold = 3
+	}
+	if o.CredentialThreshold > MaxPerSourceEvents {
+		o.CredentialThreshold = MaxPerSourceEvents
+	}
 	if o.Now == nil {
 		o.Now = time.Now
 	}
@@ -164,6 +197,19 @@ func (o *Options) Normalize() {
 
 // Validate reports configuration mistakes Normalize cannot repair.
 func (o *Options) Validate() error {
+	cap := o.PerSourceEvents
+	if cap == 0 {
+		cap = DefaultPerSourceEvents
+	}
+	for _, f := range []struct {
+		name   string
+		v, min int
+	}{{"automation_threshold", o.AutomationThreshold, 4}, {"credential_threshold", o.CredentialThreshold, 3}} {
+		if f.v != 0 && (f.v < f.min || f.v > cap) {
+			return fmt.Errorf("correlate: %s out of bounds", f.name)
+		}
+	}
+
 	if o.Window < 0 || o.Window > MaxWindow {
 		return fmt.Errorf("correlate: window must be within 0..%s", MaxWindow)
 	}

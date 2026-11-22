@@ -162,6 +162,9 @@ func TestEveryRouteTenantIsolation(t *testing.T) {
 					verb, path, _ := strings.Cut(route.Pattern, " ")
 					path = strings.ReplaceAll(path, "{event_id}", h.eventID)
 					id := investigation.ID
+					if strings.HasPrefix(path, "/api/v1/sessions/") {
+						id = sessionID(t, h)
+					}
 					if strings.HasPrefix(path, "/api/v1/events/") {
 						id = h.eventID
 					}
@@ -173,6 +176,12 @@ func TestEveryRouteTenantIsolation(t *testing.T) {
 					}
 					path = strings.ReplaceAll(path, "{id}", id)
 					path = strings.ReplaceAll(path, "{source}", "127.0.0.1")
+					if path == "/api/v1/export/events" {
+						path += "?window=24h&format=cef"
+					}
+					if path == "/api/v1/export/indicators" {
+						path += "?window=24h&format=txt"
+					}
 					input := apiRequest{method: verb, path: path, cookie: cookie, csrf: csrf}
 					if method == "token" {
 						input.token = "bravo-" + role

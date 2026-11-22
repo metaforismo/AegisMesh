@@ -47,3 +47,14 @@ a JSON-RPC invalid-params error — probing is itself signal.
 - Not attribution: an event proves a connection from a host, not intent.
 - Not containment: AegisMesh never blocks, rate-limits, or retaliates.
 - Not proof of compromise on its own — it is a signal to investigate.
+
+
+## Instruction-following agent markers
+
+AI decoy scaffolds also plant an `agent_canary` marker in a static diagnostic
+instruction. Seeing that marker inbound produces AGT-001: interaction followed
+an instruction embedded in decoy content, consistent with an LLM-driven client.
+It never establishes that a client is an AI agent; a human or scanner can copy
+the instruction too. Credential markers use HT-001 instead. Both retain token
+ids and redact values before evidence previews. Neither can influence response
+enforcement. See [ai-threat-detection.md](ai-threat-detection.md).

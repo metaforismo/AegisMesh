@@ -33,6 +33,10 @@ const CookieName = "aegismesh_session"
 
 // Options supplies trusted configuration, value snapshots, and bounded UI assets.
 type Options struct {
+	// Decoys supplies safe configured surface metadata, without response bodies.
+	Decoys []Decoy
+	// Honeytokens supplies configured marker identifiers and planting, never values.
+	Honeytokens []Honeytoken
 	// TenantIndexes supplies runtime-owned indexes for declared remote partitions.
 	TenantIndexes map[string]*evidenceindex.Index
 	// OIDCSecret resolves a private reference without persisting its contents.
@@ -74,8 +78,11 @@ type asset struct {
 
 // Server owns the console listener, ephemeral authentication, and operator state.
 type Server struct {
+	decoyCatalog    []Decoy
+	tokenCatalog    []Honeytoken
 	unassignedAudit *audit.Log
 	tenantID        string
+	instanceID      string
 	views           map[string]*Server
 	oidc            *oidc.Manager
 	oidcCancel      context.CancelFunc
@@ -129,18 +136,21 @@ func New(opts Options) (_ *Server, err error) {
 	}
 
 	server := &Server{
-		cfg:         opts.Config,
-		fleetHub:    opts.FleetHub,
-		fleetStatus: opts.FleetStatus,
-		index:       opts.Index,
-		runtime:     opts.Runtime,
-		rules:       append([]Rule{}, opts.Rules...),
-		ui:          opts.UI,
-		auth:        sessions,
-		done:        make(chan struct{}),
-		mux:         http.NewServeMux(),
-		slots:       make(chan struct{}, 8),
-		streams:     make(chan struct{}, 16),
+		decoyCatalog: append([]Decoy{}, opts.Decoys...),
+		tokenCatalog: append([]Honeytoken{}, opts.Honeytokens...),
+		cfg:          opts.Config,
+		instanceID:   opts.StateDir,
+		fleetHub:     opts.FleetHub,
+		fleetStatus:  opts.FleetStatus,
+		index:        opts.Index,
+		runtime:      opts.Runtime,
+		rules:        append([]Rule{}, opts.Rules...),
+		ui:           opts.UI,
+		auth:         sessions,
+		done:         make(chan struct{}),
+		mux:          http.NewServeMux(),
+		slots:        make(chan struct{}, 8),
+		streams:      make(chan struct{}, 16),
 		requests: opts.Meter.CounterVec(
 			"aegismesh_console_requests_total", "Console requests by fixed endpoint group", 32,
 		),

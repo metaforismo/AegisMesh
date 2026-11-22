@@ -241,3 +241,20 @@ func TestSessionEvictionCannotCrossTenant(t *testing.T) {
 		t.Fatal("A evicted B's session")
 	}
 }
+
+func TestLoginAvailableHonorsCapacityAndPrunesExpiredKeys(t *testing.T) {
+	now := time.Unix(1800000000, 0)
+	manager := newManager(t, func() time.Time { return now })
+	for i := 0; i < MaxRemotes; i++ {
+		if !manager.AllowLogin(fmt.Sprintf("remote-%d", i)) {
+			t.Fatal("early quota")
+		}
+	}
+	if manager.LoginAvailable("new-remote") {
+		t.Fatal("full throttle table admitted unknown remote")
+	}
+	now = now.Add(time.Minute)
+	if !manager.LoginAvailable("new-remote") || len(manager.attempts) != 0 {
+		t.Fatal("expired quota did not recover")
+	}
+}

@@ -82,15 +82,22 @@ func (s *System) buildConsole() error {
 			}
 		}
 		rules = append(rules, console.Rule{
-			ID:       rule.ID,
-			Family:   rule.Family,
-			Title:    rule.Summary,
-			Severity: rule.Severity,
-			Enabled:  enabled,
+			ID:          rule.ID,
+			Frameworks:  rule.Frameworks,
+			Family:      rule.Family,
+			Title:       rule.Summary,
+			Description: rule.Description,
+			Guidance:    rule.Guidance,
+			ObserveOnly: rule.ObserveOnly,
+			Severity:    rule.Severity,
+			Enabled:     enabled,
 		})
 	}
 
+	decoys, markers := console.DecoyCatalog(s.cfg)
 	server, err := console.New(console.Options{
+		Decoys:        decoys,
+		Honeytokens:   markers,
 		Config:        s.cfg.Console,
 		TenantIndexes: s.tenantIndexes,
 		OIDCSecret:    s.cfg.ResolveOIDCSecret,

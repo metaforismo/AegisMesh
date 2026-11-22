@@ -1,0 +1,84 @@
+{
+  "window": "24h",
+  "as_of": "2026-11-22T12:00:00Z",
+  "totals": {
+    "events": 9,
+    "interaction": 9,
+    "canary_invocation": 0,
+    "correlation_signal": 0,
+    "sources": 2,
+    "sensors_active": 1
+  },
+  "previous_totals": {
+    "events": 2,
+    "interaction": 2,
+    "canary_invocation": 0,
+    "correlation_signal": 0,
+    "sources": 2,
+    "sensors_active": 1
+  },
+  "new_sources": 1,
+  "returning_sources": 1,
+  "sessions_consistent_with_automation": 1,
+  "top_rules": [
+    {
+      "title": "a credential that exists only in decoy material was presented",
+      "rule_id": "HT-001",
+      "events": 8,
+      "severity": "critical"
+    },
+    {
+      "title": "interaction followed an instruction embedded in decoy content; consistent with an LLM-driven client",
+      "rule_id": "AGT-001",
+      "events": 1,
+      "severity": "high"
+    }
+  ],
+  "new_techniques": [
+    {
+      "framework": "mitre-atlas",
+      "id": "AML.T0055",
+      "name": "Unsecured Credentials"
+    },
+    {
+      "framework": "mitre-attack",
+      "id": "T1078",
+      "name": "Valid Accounts"
+    },
+    {
+      "framework": "mitre-attack",
+      "id": "T1552",
+      "name": "Unsecured Credentials"
+    },
+    {
+      "framework": "owasp-llm-2025",
+      "id": "LLM02",
+      "name": "Sensitive Information Disclosure"
+    }
+  ],
+  "honeytoken_hits": 8,
+  "agent_canary_hits": 1,
+  "open_investigations": 2,
+  "dry_run_recommendations": 3,
+  "bounds": {
+    "index": {
+      "events": 13,
+      "capacity": 100,
+      "oldest": "",
+      "history": "truncated"
+    },
+    "scanned_events": 13,
+    "scan_limit": 8192,
+    "scan_truncated": false
+  },
+  "limits": {
+    "interpretation": "Retained observations, not incidents, client attribution or technique execution; no scheduler or delivery.",
+    "history": "truncated",
+    "scan_truncated": false,
+    "source_comparison": "New means absent from the preceding sampled window, not first-ever seen.",
+    "investigations_available": true,
+    "recommendation_excluded": 0,
+    "recommendation_missing": 0,
+    "recommendation_cap": 20
+  }
+}

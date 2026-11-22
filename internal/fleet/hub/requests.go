@@ -139,6 +139,9 @@ func (h *Hub) reject(w http.ResponseWriter, err error) {
 }
 
 func (h *Hub) respond(w http.ResponseWriter, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	code := Code(err)
 	status := http.StatusBadRequest
 	switch code {

@@ -115,8 +115,18 @@ func NewHTTPGate(c config.Sensor, resolveBodyFile func(string) ([]byte, error), 
 //  4. Finally, a generic builtin 404.
 //
 // GET does not implicitly include HEAD; configure each method explicitly.
-func (g *HTTPGate) Resolve(ctx context.Context, method, path string, body []byte) (HTTPDecision, error) {
+func (g *HTTPGate) Resolve(ctx context.Context, method, path string, body []byte, headers ...map[string][]string) (HTTPDecision, error) {
+	selected := map[string][]string{}
+	if len(headers) > 0 {
+		selected = headers[0]
+	}
+	parts := []string{method, path, string(body)}
+	for name, values := range selected {
+		parts = append(parts, name)
+		parts = append(parts, values...)
+	}
 	det := g.enf.Evaluate(g.sensorID, detect.Input{
+		Method: method, Path: path, Body: string(body), Headers: selected, RawParts: parts,
 		Text:       BoundedDetectInput(method+" "+path+" "+string(body), g.enf.EngineMaxInput()),
 		TotalBytes: len(method) + len(path) + len(body),
 	})
@@ -226,6 +236,8 @@ func (g *TCPGate) Resolve(line string) TCPDecision {
 	det := g.enf.Evaluate(g.sensorID, detect.Input{
 		Text:       BoundedDetectInput(line, g.enf.EngineMaxInput()),
 		TotalBytes: len(line),
+		RawParts:   []string{line},
+		Protocol:   "tcp",
 	})
 	if det.Action == ActionRefuse {
 		return TCPDecision{
@@ -308,3 +320,6 @@ func ruleName(name string) string {
 	}
 	return name
 }
+
+func (g *HTTPGate) Scrub(s string) string { return g.enf.Scrub(s) }
+func (g *TCPGate) Scrub(s string) string  { return g.enf.Scrub(s) }

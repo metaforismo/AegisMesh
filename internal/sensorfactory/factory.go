@@ -35,7 +35,7 @@ func Build(c config.Sensor, resolveBody BodyResolver, prov llm.Provider, enf *po
 	case config.SensorKindMCP:
 		return mcpsensor.New(c, enf)
 	case config.SensorKindSSH:
-		return sshsensor.New(c)
+		return sshsensor.New(c, enf)
 	default:
 		return nil, fmt.Errorf("unknown kind %q", c.Kind)
 	}

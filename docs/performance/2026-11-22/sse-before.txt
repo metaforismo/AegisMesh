@@ -1,0 +1,15 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/console
+cpu: Apple M3
+BenchmarkSSEFanout/One-8         	       1	 101264500 ns/op	     19129 append-ns/event	       100.0 events/op	       987.0 events/s	  595304 B/op	    5946 allocs/op
+BenchmarkSSEFanout/One-8         	       1	 101270583 ns/op	     31144 append-ns/event	       100.0 events/op	       987.0 events/s	  554048 B/op	    5847 allocs/op
+BenchmarkSSEFanout/One-8         	       1	 104262167 ns/op	    115683 append-ns/event	       100.0 events/op	       957.9 events/s	  554048 B/op	    5847 allocs/op
+BenchmarkSSEFanout/Sixteen-8     	       1	 101262208 ns/op	     35225 append-ns/event	       100.0 events/op	       987.1 events/s	 1751368 B/op	   13479 allocs/op
+BenchmarkSSEFanout/Sixteen-8     	       1	 101278417 ns/op	     21170 append-ns/event	       100.0 events/op	       987.0 events/s	 1736720 B/op	   13420 allocs/op
+BenchmarkSSEFanout/Sixteen-8     	       1	 101298000 ns/op	     36130 append-ns/event	       100.0 events/op	       986.8 events/s	 1741952 B/op	   13432 allocs/op
+BenchmarkSSEFanout/Slow-8        	       1	 101269500 ns/op	     38203 append-ns/event	       100.0 events/op	       987.0 events/s	 1678544 B/op	   12996 allocs/op
+BenchmarkSSEFanout/Slow-8        	       1	 101236125 ns/op	     30953 append-ns/event	       100.0 events/op	       987.3 events/s	 1674696 B/op	   12975 allocs/op
+BenchmarkSSEFanout/Slow-8        	       1	 104496500 ns/op	     72632 append-ns/event	       100.0 events/op	       956.2 events/s	 1661008 B/op	   12927 allocs/op
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/console	14.749s

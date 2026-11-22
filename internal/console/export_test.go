@@ -17,3 +17,11 @@ func (s *Server) RoutesForTest() []RouteForTest {
 	}
 	return routes
 }
+
+// CloseAuditForTest makes sensitive-download fail-closed checks use a real
+// unavailable audit writer without adding a production injection seam.
+func (s *Server) CloseAuditForTest() {
+	for _, view := range s.views {
+		_ = view.audit.Close()
+	}
+}

@@ -40,7 +40,7 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 |---|---|---|
 | TB1 | Spoofing source IPs, DoS via slowloris/huge bodies/regex bombs, injection via logged payloads, credential probing, SSH decoy escape | No trust of client-supplied identity fields; HTTP/TCP/MCP inputs use server timeouts, byte caps, bounded loops, and redaction; the SSH boundary uses synthetic authentication only, bounded handshake/session/auth attempts and metadata, an in-memory Ed25519 host key, and rejects every channel/global request; sensor behavior has no attacker-controlled filesystem/exec capability |
 | TB2 | Log/evidence forging after compromise, unbounded disk growth, plaintext disclosure or encrypted-segment/key loss | Envelope carries a SHA-256 consistency check over the observation payload; per-event sequence numbers from the writing process; retention enforces max count and max age; redaction is applied at event construction. Optional native age/X25519 framing authenticates event ciphertext at rest, requires explicit bounded owner-only read identities, and uses a persistent mode guard to reject later plaintext writes in an encrypted data directory. The payload hash is not writer authentication; encryption does not hide filesystem metadata or provide key recovery. |
-| TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body or extension-manifest files, unsafe worker launch | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body and extension-manifest files resolved relative to the config directory with traversal and real symlink containment checks; process isolation accepts only a boolean and launches a fixed same-binary worker with no config-derived command, path, environment, credential, or provider setting |
+| TB3 | Malicious config (SSRF-ish binds, privileged ports, regex abuse, huge allocations), path traversal via body or extension-manifest files, unsafe worker launch | Strict schema validation with unknown-field rejection; bind address policy check (public/privileged requires explicit opt-in flags); regex compile with length caps; body and extension-manifest files resolved relative to the config directory with traversal and real symlink containment checks; process isolation accepts only a boolean and launches a fixed same-binary worker with no config-derived command, path, environment, real provider credential, or provider destination; bounded fake markers cross only as data |
 | TB4 | Prompt-injected provider output instructing follow-on actions, jailbreak content stored/replayed, provider SSRF | Provider output treated exactly like attacker input: size-capped, redacted, stored as quoted text; it can only ever become a decoy *response string* — there is no code path from provider output to exec, paths, config mutation, or enforcement; outbound provider URL is fixed by config, allowlisted scheme http(s), timeout-bounded |
 | TB5 | Malicious extension code, manifest spoofing, output flooding, zombie processes, compromised extension artifact | Explicitly configured observer subprocesses only; strict bounded manifests; required sha256 digest plus optional ed25519 signature; exact `["observe"]` capability; identity-bound canonical handshake and event-linked acknowledgement; request/deadline/output caps; minimal environment; protocol violation revokes the process. Unknown/duplicate fields and untrusted error text are rejected, and no output reaches policy, evidence mutation, filesystem selection or enforcement |
 | TB6 | Recon via metrics/health, header injection into admin responses | Separate loopback-only listener, no attacker-reachable data in responses, explicit opt-out documented but default on |
@@ -103,8 +103,8 @@ The shipped SSH sensor is an observation-only protocol surface. Its security
 contract is:
 
 - authentication is synthetic: password and public-key callbacks complete bounded protocol handshakes but
-  never validate, reuse, compare, hash, log, or retain real credentials;
-- usernames and credential contents are omitted from evidence entirely, not hashed;
+  never validate, reuse or log credentials; bounded password tuples produce memory-only distinctness digests (ADR-0021);
+- usernames, credential contents and auth-attempt digests are omitted from evidence; only safe configured marker ids may appear in findings;
 - one Ed25519 host key is generated per sensor instance and held in memory; no configured host-key
   file/path or persistent key lifecycle exists, so reconstructing the sensor rotates the advertised key;
 - all channels and global requests are rejected, including shell, PTY, subsystem, SFTP, and forwarding
@@ -417,3 +417,60 @@ one process, one OS user and one data directory, sharing the hub's evidence
 encryption recipient and signing/egress configuration. Host/process compromise
 crosses tenants. No per-tenant keys, billing, rate plans or self-service tenant
 creation are implemented; this is not a hard hosted isolation boundary.
+
+## Synthetic AI decoys and ephemeral auth distinctness (ADR-0021)
+
+The `ai-decoy` scaffold serves only static synthetic AI-shaped responses.
+There is no model, remote inference, download, key-management or instruction
+execution path behind those endpoints. Honeytokens must be fake and planted
+only in decoy material; real keys are never appropriate marker values.
+Literal matching happens on acquired bounded input, before redaction/preview
+truncation. Marker values never reach stored evidence; findings carry token
+ids. New detection/correlation rules remain observations and cannot cause
+response enforcement or changes to real assets.
+
+SSH and HTTP authentication now derive memory-only length-framed SHA-256
+attempt digests for live distinctness (COR-007). Bounded private worker IPC may
+carry these digests; native JSON, storage, indexes, webhooks, extensions and
+fleet forwarding cannot. Parent-authoritative append still precedes local
+correlation. Host/process memory compromise can expose these transient data;
+this is not a memory-secrecy guarantee. Digests are not durable password hashes
+or proof of failed/valid authentication, and stored signals cannot reconstruct
+attempt distinctness after restart.
+
+Agent markers and short/regular request patterns can also be followed by a
+human, scanner, scheduled monitor or ordinary client. Source IPs are not user
+identities. Editorial framework references are not coverage or attribution.
+See [ai-threat-detection.md](ai-threat-detection.md) for the exact premises,
+thresholds, source/window semantics and false-match limitations.
+
+## Round 3 boundary refinement (local, uncommitted; ADR-0023)
+
+The MCP workspace is a static synthetic **lookup** API. TB1/TB3 do not gain a
+real file, environment, query interpreter or execution capability: declared
+keys compile into exact in-memory maps and write/exec-shaped calls are only
+observed. Connection context caps step/sequence state and expires with the
+connection. File/env content is synthetic; honeytoken values are deliberately
+served but scrubbed before evidence previews/storage. Existing policy findings
+retain their semantics; MCP-001..003 cannot enforce. See `mcp-environments.md`.
+
+Console event downloads/digests are read-boundary projections, not a new TB7
+network edge. Export destinations are stdout, an operator-chosen new local
+file, or an authenticated operator-requested attachment. CEF/syslog escaping
+prevents record/structured-data delimiter injection; OTLP is JSON format only.
+ECS retains sensitive redacted native observations and requires analyst access.
+Fixed filenames prevent header injection. No untrusted data selects an output
+path, changes configuration or reaches enforcement. Markdown uses the shared
+neutraliser. Source novelty, automation and technique relations describe only
+retained sampled evidence, never incidents/actors or technique execution.
+
+Local decoy/honeytoken catalogs expose IDs and static counts only in
+local_tenant, never bodies or values; forwarded sensor/token collisions cannot
+populate local-config counts. Raw event-detail reads are now audited before
+bytes, even for viewers. Invalid Bearer attempts share a bounded process-wide
+throttle table with distinct keys from browser login; hub early rejections
+receive no-store/security headers. SSE frames are immutable, scoped to an index
+partition and bounded by the unchanged stream/queue limits. This is logical
+isolation within the same process, not isolation from a compromised host.
+The review's reproduced findings, checked controls and untested surfaces are
+in `security-review-2026-11.md`; it does not establish perimeter security.

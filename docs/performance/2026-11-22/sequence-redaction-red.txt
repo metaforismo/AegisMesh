@@ -1,0 +1,5 @@
+--- FAIL: TestSequenceRedactsBeforeTruncation (0.00s)
+    sequence_redaction_test.go:32: sequence retained a marker prefix
+FAIL
+FAIL	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	0.540s
+FAIL

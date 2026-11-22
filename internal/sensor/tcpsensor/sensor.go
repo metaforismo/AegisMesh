@@ -240,7 +240,7 @@ func (s *Sensor) emit(d sensor.Deps, ref event.SensorRef, remote string, lines [
 	if n := len(lines); n > 0 {
 		last = lines[n-1]
 	}
-	preview, truncated := redact.Preview([]byte(last), redact.MaxPreviewBytes)
+	preview, truncated := redact.Preview([]byte(s.g.Scrub(last)), redact.MaxPreviewBytes)
 	sum := sha256.Sum256([]byte(last))
 
 	obs := observation{
@@ -254,7 +254,7 @@ func (s *Sensor) emit(d sensor.Deps, ref event.SensorRef, remote string, lines [
 		Response: responseInfo{
 			RuleID:       dec.RuleID,
 			Via:          string(dec.From),
-			ReplyPreview: safePreview(dec.Response),
+			ReplyPreview: safePreview([]byte(s.g.Scrub(string(dec.Response)))),
 		},
 		Detection: newDetectionInfo(dec.Detection),
 	}
@@ -262,7 +262,7 @@ func (s *Sensor) emit(d sensor.Deps, ref event.SensorRef, remote string, lines [
 	if err != nil {
 		return
 	}
-	rules := []string{"credential_scrub"}
+	rules := []string{"credential_scrub", "honeytoken_scrub"}
 	if truncated {
 		rules = append(rules, "preview_truncated")
 	}

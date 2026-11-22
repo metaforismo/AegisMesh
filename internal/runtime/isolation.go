@@ -27,6 +27,7 @@ func isolatedSensorSpec(c config.Sensor, cfg *config.Config) (sensorproc.WorkerS
 	}
 	return sensorproc.WorkerSpec{
 		Sensor:             c,
+		Honeytokens:        cfg.Honeytokens,
 		Detection:          cfg.Detection,
 		Instance:           cfg.Runtime.InstanceName,
 		MaterializedBodies: specBodies,

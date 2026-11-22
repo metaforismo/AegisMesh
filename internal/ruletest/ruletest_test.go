@@ -104,7 +104,9 @@ func TestEvaluatePreservesCanonicalOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := detect.KnownRuleIDs()
+	// Plain text has no HTTP context or planted tokens; the six original
+	// content rules remain the exact prefix of the registry.
+	want := detect.KnownRuleIDs()[:6]
 	have := idsOf(got)
 	if len(have) != len(want) {
 		t.Fatalf("expected all %d detection rules to fire in canonical order, got %v", len(want), have)

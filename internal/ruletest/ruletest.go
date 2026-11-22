@@ -52,7 +52,8 @@ type Result struct {
 }
 
 // Evaluate evaluates one validated rule-test input against the default
-// DETECTION rule set (all six rules active, detect.DefaultMaxInputBytes).
+// DETECTION rule set (all rules active, detect.DefaultMaxInputBytes; plain text
+// can match the original six content rules only).
 //
 // Mapping invariants (deliberate and documented):
 //

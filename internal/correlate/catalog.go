@@ -8,10 +8,10 @@ type SignalInfo struct {
 }
 
 // SignalCatalog derives static metadata from the rule registry. Enum order is
-// preserved (COR-001..COR-004); it is part of the published contract and must
+// preserved (COR-001..COR-008); it is part of the published contract and must
 // stay stable across releases (append new rules at the end).
 func SignalCatalog() []SignalInfo {
-	ids := []RuleID{RuleRepeatedInjection, RuleProtocolHopping, RuleToolProbing, RuleSustainedRecon}
+	ids := []RuleID{RuleRepeatedInjection, RuleProtocolHopping, RuleToolProbing, RuleSustainedRecon, RuleAutomationCadence, RuleAIEnumeration, RuleCredentialStuffing, RuleCredentialReplay}
 	out := make([]SignalInfo, 0, len(ids))
 	for _, id := range ids {
 		out = append(out, SignalInfo{ID: id, Summary: ruleSummaries[id]})

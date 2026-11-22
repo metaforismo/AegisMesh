@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/correlate"
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/observe"
 )
@@ -69,7 +70,8 @@ type obsProbe struct {
 	ToolName   string `json:"tool_name"`
 	Detection  *struct {
 		Findings []struct {
-			RuleID string `json:"rule_id"`
+			RuleID   string          `json:"rule_id"`
+			AIFamily detect.AIFamily `json:"ai_family,omitempty"`
 		} `json:"findings"`
 	} `json:"detection"`
 }
@@ -77,15 +79,18 @@ type obsProbe struct {
 // correlateOptions is the runtime-facing subset of config.Correlation (kept
 // separate so this package does not import config).
 type correlateOptions struct {
-	WindowSeconds   int
-	PerSourceEvents int
-	MaxSources      int
-	DisabledRules   []string
+	AutomationThreshold int
+	CredentialThreshold int
+	WindowSeconds       int
+	PerSourceEvents     int
+	MaxSources          int
+	DisabledRules       []string
 }
 
 func newCorrelateAdapter(cfg correlateOptions, deps correlateDeps, meter observe.Meter, log *slog.Logger) *correlateAdapter {
 	opts := correlate.Options{
-		Window:          time.Duration(cfg.WindowSeconds) * time.Second,
+		Window:              time.Duration(cfg.WindowSeconds) * time.Second,
+		AutomationThreshold: cfg.AutomationThreshold, CredentialThreshold: cfg.CredentialThreshold,
 		PerSourceEvents: cfg.PerSourceEvents,
 		MaxSources:      cfg.MaxSources,
 	}
@@ -148,8 +153,12 @@ func envelopeToCorrelateEvent(e event.Envelope) (correlate.Event, bool) {
 		return correlate.Event{}, false
 	}
 	var findings []string
+	var family detect.AIFamily
 	if probe.Detection != nil {
 		for _, f := range probe.Detection.Findings {
+			if f.RuleID == "LLM-001" {
+				family = f.AIFamily
+			}
 			if f.RuleID != "" {
 				findings = append(findings, f.RuleID)
 			}
@@ -160,7 +169,8 @@ func envelopeToCorrelateEvent(e event.Envelope) (correlate.Event, bool) {
 		key = "sensor:" + e.Sensor.ID
 	}
 	return correlate.Event{
-		ID:             e.ID,
+		ID:       e.ID,
+		AIFamily: family, AuthAttempts: e.AuthAttempts,
 		Time:           e.Time,
 		SourceKey:      key,
 		SensorID:       e.Sensor.ID,

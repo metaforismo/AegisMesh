@@ -26,7 +26,9 @@ func (s *Server) scopedServer(name string, opts Options, dir string) (*Server, e
 		}
 	}
 	view := &Server{
-		unassignedAudit: s.unassignedAudit, cfg: s.cfg, tenantID: name, views: s.views, auth: s.auth, oidc: s.oidc,
+		decoyCatalog:    s.decoyCatalog,
+		tokenCatalog:    s.tokenCatalog,
+		unassignedAudit: s.unassignedAudit, cfg: s.cfg, tenantID: name, instanceID: s.instanceID, views: s.views, auth: s.auth, oidc: s.oidc,
 		index: index, runtime: s.runtime, rules: s.rules, fleetStatus: s.fleetStatus,
 		fleetHub: s.fleetHub.ForTenant(name), listener: s.listener,
 		done: s.done, slots: s.slots, streams: s.streams, clients: s.clients,
@@ -38,6 +40,8 @@ func (s *Server) scopedServer(name string, opts Options, dir string) (*Server, e
 	if name != tenant.Local(s.cfg.LocalTenant) {
 		view.runtime = absentRuntime{}
 		view.rules = []Rule{}
+		view.decoyCatalog = []Decoy{}
+		view.tokenCatalog = []Honeytoken{}
 		view.fleetStatus = func() protocol.Status {
 			status := protocol.Status{}
 			if view.fleetHub != nil {

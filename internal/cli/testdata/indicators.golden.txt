@@ -1,0 +1,4 @@
+# PROPOSED blocklist for operator review; never applied by AegisMesh.
+# Decoy contact is an observation, not an incident. Confidence: 15/100 (low).
+# Skipped non-IP source keys: 0; events: 0.
+192.0.2.8

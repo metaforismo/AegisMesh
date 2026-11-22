@@ -13,8 +13,78 @@ does not turn an unavailable local command into a local PASS.
 Dated entries are records of the state when they were written. Words such as
 "uncommitted", "candidate", "local" or "open, unmerged" in them describe that
 moment and are not rewritten; headings carry "(merged as #NN)" where a PR has
-since merged. Current merge status is in the 2026-11-16 audit entry directly
-below.
+since merged. Historical merge status is in the 2026-11-16 audit entry; the
+new local uncommitted slice is recorded first.
+
+## 2026-11-22 — round 3 backend (local, uncommitted)
+
+Branch `feat/decoy-environments-siem`, initial clean worktree at
+`29c6f421bfe0c52e87ebc27438dbe37bcf76515b`. All changes remain uncommitted.
+No push, tag, PR, merge, release, deployment or external provider/SIEM test was
+performed. `go.mod`, `go.sum`, UI and dev mock are unchanged. Machine: Apple M3,
+Darwin arm64, macOS 26.5.2 (25F84), Go 1.27.4. Disk remained about 12–13 GiB free,
+above the 2 GiB cleanup threshold; no `go clean -cache` was needed. All Go suites
+and benchmarks ran sequentially with `GOFLAGS=-p=1`.
+
+Built and exercised: exact-map MCP file/env/query tools, strict config and
+bounds, connection sequence/redaction, disabled/observe-only detection, pinned
+catalog mappings/prose, multi-step demo, read-then-cross-sensor replay including
+worker mode, deterministic SIEM formats/goldens/escaping, CLI staged output,
+digest comparison/limits/Markdown, all new route roles and tenant isolation,
+origin-qualified event/session/export behavior and retained-source histograms.
+Full final JSON contracts are in `architecture/console-api.md`; ADR-0023 records
+ownership and alternatives. The real perimeter source review and failing-first
+findings are in `security-review-2026-11.md`.
+
+| Check | Exact command / result |
+| --- | --- |
+| PASS | `GOFLAGS=-p=1 make lint` — gofmt and go vet; golangci-lint unavailable and explicitly skipped by the Makefile |
+| PASS | `GOFLAGS=-p=1 make test` — full `go test -race ./...`; final run includes the long-marker sequence regression and bounded authentication-table expiry case |
+| PASS | `GOFLAGS=-p=1 make secrets-scan` — existing tracked-file heuristic scanner |
+| PASS | `GOFLAGS=-p=1 make ui-test` — 169 tests, zero failed/skipped, no UI/mock edits |
+| PASS | `GOFLAGS=-p=1 go test ./internal/eventexport -run '^$' -fuzz '^FuzzEscapers$' -fuzztime=15s -fuzzminimizetime=0 -parallel=1` — 447,981 executions in this local run |
+| PASS | `GOFLAGS=-p=1 go test ./internal/sensor/mcpsensor -run '^$' -fuzz '^FuzzEnvironmentLookup$' -fuzztime=15s -fuzzminimizetime=0 -parallel=1` — 246,654 executions in this local run |
+| PASS | `GOFLAGS=-p=1 make bench BENCH_TIME=100ms BENCH_COUNT=1` — complete existing sequential backend benchmark target, including the accepting-hub fixture |
+| PASS | `git diff --check`; no changes under `internal/consoleui`, `go.mod`, `go.sum` |
+| PASS | Supplemental heuristic scan of tracked **and untracked** current files: 548 files at scan time, zero matches; no Git staging/index change used |
+| NOT RUN | `make sbom` — deliberately skipped as requested because the existing generator is broken in linked worktrees |
+| NOT RUN | Hosted CI, real SIEM/collector interoperability, external OIDC, public saturation/p99, releases/deployment/publication |
+
+Full local command output is retained in [round3-verification.log](round3-verification.log).
+The supplemental secret heuristic is a tripwire, not proof of secret absence.
+The final first-party suites also run config/environment/escaper fuzz seeds;
+the whole existing `make fuzz-seed` target was not run, only the two new targets
+received timed fuzzing. The Makefile now includes both in future `fuzz-seed` runs.
+
+Failing-first receipts for Bearer throttling, full-table expiry, early hub
+rejection headers, raw event audit and long-marker redaction are retained under
+`performance/2026-11-22/*-red.txt`; the final full race suite passes. The first
+complete race run failed a newly added test that required a handled-tool result
+for duplicated arguments, even though strict parsing had correctly rejected the
+whole object. That test was corrected to require rejection/no secret content;
+the failing run is retained in the log, not counted as PASS. Earlier focused
+contract/golden count drift was corrected with explicit backend fixtures; no UI
+or mock contract was edited.
+
+Performance uses three matching before/after samples, with raw logs/ranges in
+[performance/2026-11-22](performance/2026-11-22/README.md). Accepting-hub overview:
+median 7,427,986 → 2,923,616 ns/op, 2,850,836 → 1,159,193 B/op,
+38,916 → 5,770 allocs/op; eight real enrolled synthetic identities, 14,167
+retained of 50,000 offered envelopes. This is read-side work with acceptance
+enabled/live name resolution, not concurrent ingestion load. SSE sixteen-client
+allocation per 100 events: 1,741,952 → 643,920 B/op, 13,432 → 5,967 allocs/op;
+paced wall time remains about 101 ms. Single-client bytes increase
+554,048 → 608,032. An exploratory SSE after sample failed its healthy-client
+assertion under variable load; retained and excluded, then all comparison cases
+passed on retry. No capacity, statistical-significance or blanket speedup claim.
+
+Limits retained deliberately: digest is on demand with no delivery/scheduler;
+OTLP is format only with no exporter; history/source novelty is sample-relative;
+CLI missing investigation state is null; local catalogs do not infer remote
+config or external body-file planting; COR-008 remains cross-sensor contact
+plus marker presentation, not same-sensor read proof; public/real-provider
+behavior and hard tenancy remain unverified. No new runtime egress or execution
+capability was introduced.
 
 ## 2026-11-16 — v0.2.0 release-readiness audit
 
@@ -1380,3 +1450,442 @@ deletion/replacement and whole-segment forgery by anyone with the public recipie
 remain outside the guarantee. Reads are per-file size snapshots, not an atomic
 directory snapshot; callbacks are provisional until the final result. See the
 ADR-0016 amendment, threat model and encryption guide for the same boundaries.
+
+
+## 2026-11-22 — AI attack observation pack (uncommitted)
+
+Branch `feat/ai-threat-detection`, base `f05f6a8`. All changes remain
+**UNCOMMITTED** for owner review. No push, tag, PR, release or deployment.
+Only synthetic, operator-owned loopback traffic was used. No dependency changes
+(`git diff -- go.mod go.sum` is empty). Design: ADR-0021 and
+[ai-threat-design.md](ai-threat-design.md); behaviour and limitations:
+[ai-threat-detection.md](ai-threat-detection.md).
+
+Implemented: randomized static AI HTTP scaffold/example; bounded fake credential
+and agent markers across four sensors and process workers; six appended
+observe-only findings; four appended correlations; editorial framework mappings
+in text/JSON CLI and rules API; synthetic interaction and sequence corpora; and
+the extended loopback demo. No deliverable was descoped.
+
+### Final checks
+
+The environment prefixes keep package compilation/tests sequential and limit
+host CPU contention. The first full-tree race run failed in a fleet/hub transport integration test;
+its result is retained below. A final gate is run only after that failure and
+the newly found credential-preview edge cases have been resolved.
+
+| Command | Result |
+|---|---|
+| `GOFLAGS=-p=1 GOMAXPROCS=4 make lint` | **PASS**, exit 0 on the final Go source. `go vet ./...` and gofmt passed; golangci-lint is unavailable and the Makefile's documented fallback ran. |
+| `GOFLAGS=-p=1 GOMAXPROCS=2 make test` | **FAIL**, first complete attempt: fleet/hub `TestAgentQueueRecoveryOverflowAndGaps`, transport unavailable during queue recovery. All other packages passed. |
+| `GOFLAGS=-p=1 GOMAXPROCS=4 make test` | **PASS**, exit 0 on final Go source; all test-bearing packages passed with the race detector (including the runtime, sensors and fleet/hub). Output below. |
+| `GOMAXPROCS=4 go test -p 1 -v ./internal/ruletest -run TestSynthetic` | **PASS**, exit 0; 24 benign interactions, eight attack-shaped interactions; four benign sequences and four attack-shaped sequences. Output counts below. |
+| `GOMAXPROCS=4 go build -p 1 -o /tmp/aegismesh-ai ./cmd/aegismesh` | **PASS**, exit 0 on the final source. |
+| `/tmp/aegismesh-ai validate --config examples/ai-decoy.yaml` | **PASS**, exit 0, 2 HTTP sensors / 20 static rules. |
+| `/tmp/aegismesh-ai rules list` and `rules list --json`, each compared with `cmp` to its checked-in golden | **PASS**, exit 0; text and JSON match their goldens. |
+| `/tmp/aegismesh-ai demo --json` | **PASS**, exit 0; output below, including integrity, listener release and cleanup. |
+| `/tmp/aegismesh-ai honeytoken new --kind credential --format openai --id review-key` | **PASS**, exit 0; synthetic YAML snippet printed to a private temporary file. Both kinds/all formats also have CLI tests in the full gate. |
+| `make secrets-scan` | **PASS**, exit 0, `secrets-scan: ok` for tracked files. |
+| `sh /tmp/aegis-ai-secrets-scan-all.sh` | **PASS**, exit 0, `secrets-scan: ok`; exact repository scanner copied to `/tmp` with only its inventory changed from `git ls-files` to `git ls-files --cached --others --exclude-standard`, so all new unstaged files were scanned too. No files were staged. |
+| `git diff --check` | **PASS**, exit 0, no output. |
+| `make sbom` | **NOT RUN**, explicitly skipped per task: generator cannot resolve the main module inside a linked worktree. |
+
+Lint output:
+
+```text
+go vet ./...
+golangci-lint not installed; skipped (vet+fmt ran)
+```
+
+### Synthetic corpus measurement
+
+These are hits **on this 24-sample synthetic benign interaction corpus** and
+**on this four-sequence synthetic benign correlation corpus**. They are not a
+false-positive rate, prospective measurement, client attribution or framework
+coverage claim. Ordinary model/version/health clients and a placeholder key
+account for low findings; the cross-family ordinary client sequence accounts
+for COR-006. Every medium-or-higher detection rule has zero hits on these
+particular benign samples; the test fails otherwise. All six new detection
+rules and all four new correlations have attack-shaped positive fixtures.
+
+```text
+PI-001: 0 hits on this 24-sample synthetic benign corpus
+PI-002: 0 hits on this 24-sample synthetic benign corpus
+EXF-001: 0 hits on this 24-sample synthetic benign corpus
+ESC-001: 0 hits on this 24-sample synthetic benign corpus
+OBS-001: 0 hits on this 24-sample synthetic benign corpus
+RES-001: 0 hits on this 24-sample synthetic benign corpus
+LLM-001: 7 hits on this 24-sample synthetic benign corpus
+LLM-002: 0 hits on this 24-sample synthetic benign corpus
+LLM-003: 0 hits on this 24-sample synthetic benign corpus
+LLM-004: 1 hits on this 24-sample synthetic benign corpus
+HT-001: 0 hits on this 24-sample synthetic benign corpus
+AGT-001: 0 hits on this 24-sample synthetic benign corpus
+COR-001: 0 hits on this 4-sequence synthetic benign corpus
+COR-002: 0 hits on this 4-sequence synthetic benign corpus
+COR-003: 0 hits on this 4-sequence synthetic benign corpus
+COR-004: 0 hits on this 4-sequence synthetic benign corpus
+COR-005: 0 hits on this 4-sequence synthetic benign corpus
+COR-006: 1 hits on this 4-sequence synthetic benign corpus
+COR-007: 0 hits on this 4-sequence synthetic benign corpus
+COR-008: 0 hits on this 4-sequence synthetic benign corpus
+```
+
+### Development failures and corrections
+
+Earlier focused runs were **FAIL**, then corrected: old tests expected six
+active detection rules/four correlations or every rule to match plain text;
+the new context-dependent registries have 12/8 entries. A test-only config
+called validation before setting required legacy action defaults; one fixture
+used a generic marker while expecting a provider-key class; an index test used
+the wrong constructor parameter type; and the first build caught an incorrect
+`RemoteAddr()` call. The first final lint found one unkeyed imported Match
+literal in a new test; the keyed form passed the retry. No such failure is
+silently treated as a pass.
+
+A focused full runtime pass also failed `TestSystemEndToEndLifecycle` with
+`only 0/4 events recorded`. Its existing five-second polling deadline equalled
+the runtime's five-second flush interval. The test helper now permits two flush
+intervals; production timing is unchanged. The subsequent focused lifecycle /
+AI sensor regression command passed (runtime package `ok`, 6.621s):
+
+```text
+GOMAXPROCS=2 go test -p 1 ./internal/runtime ./internal/detect ./internal/honeytoken ./internal/redact ./internal/policy ./internal/ruletest -run 'TestAI|TestAIRules|TestRepeatedMarkers|TestSystemEndToEndLifecycle|TestStructuredInteraction|TestSynthetic' -count=1
+```
+
+Earlier targeted checks also exercised all 20 generated static profile replies
+through real loopback listeners, exact rule mappings over the authenticated
+rules API, maximum 64-marker findings through the recommendation reader,
+redaction/index exclusion and both in-process and same-binary isolated sensor
+paths. The full final race gate below covers their final source versions.
+
+### Focused verification after the first full race failure
+
+```text
+GOMAXPROCS=4 go test -race -p 1 ./internal/redact ./internal/detect ./internal/fleet/hub -run 'TestPresentedKeyContextsRemoveWholeValues|TestProviderShapesAndMemoryOnlyAuthDigests|TestAIRules|TestAgentQueueRecoveryOverflowAndGaps' -count=2
+ok  	github.com/metaforismo/aegismesh/internal/redact	1.517s
+ok  	github.com/metaforismo/aegismesh/internal/detect	1.439s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	6.991s
+```
+
+**PASS**, exit 0, including the failed fleet test twice in isolation. No fleet
+transport or hub implementation/test was changed. This does not conclusively
+attribute the earlier transport failure; the full retry is required evidence.
+The preview review found TCP AUTH/standalone placeholders and JSON `key`
+values that needed complete scrubbing. The final redactor covers these and
+512-byte provider-shaped values; format recognition accepts only key ASCII
+characters. Regression cases passed twice under the race detector.
+
+### Demo output from the final binary
+
+```json
+{
+  "detection_rules": [
+    "LLM-001",
+    "LLM-002",
+    "LLM-004",
+    "HT-001",
+    "AGT-001"
+  ],
+  "schema": "aegismesh.demo/v1",
+  "mode": "synthetic",
+  "network": "loopback-only",
+  "egress": "none",
+  "sensors": [
+    "http",
+    "tcp",
+    "mcp",
+    "ssh"
+  ],
+  "events": 8,
+  "interactions": 7,
+  "canary_invocations": 1,
+  "integrity_verified": true,
+  "recommendations": 5,
+  "dry_run": true,
+  "enforcement": false,
+  "signal_not_incident": true,
+  "listeners_released": true,
+  "cleanup_complete": true
+}
+```
+
+### Review boundaries
+
+- COR-007 compares in-memory auth digests and persists only contributing event
+  IDs in signals. Stored evidence cannot reconstruct auth distinctness.
+- Source IP is a grouping key, not an identity; NAT and rotation can merge or
+  split observations. Cadence also matches ordinary scanners/scheduled clients.
+- Shared `/v1/*` request paths default to `openai_compatible`; they do not prove
+  which backend exists. No actual AI model or provider integration was used.
+- Framework mappings are editorial "relates to" references. AGT-001 maps the
+  defender-mirrored technique, not proven attacker use.
+- Hosted CI, deployment, external-provider tests and field detection-quality
+  measurement were **NOT RUN** and are not implied by local synthetic checks.
+
+### Final full race output
+
+```text
+go test -race ./...
+?   	github.com/metaforismo/aegismesh/cmd/aegismesh	[no test files]
+ok  	github.com/metaforismo/aegismesh/deploy/helm/aegismesh	(cached)
+?   	github.com/metaforismo/aegismesh/examples/extensions/echo-responder	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/admin	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/agekey	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/cli	5.529s
+ok  	github.com/metaforismo/aegismesh/internal/config	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console	11.315s
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/auth	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/investigations	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/oidc	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/stateio	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/tenant	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/consoleui	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/correlate	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/demo	2.083s
+ok  	github.com/metaforismo/aegismesh/internal/detect	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ecsexport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/egress	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/event	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ext	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/extmanager	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/agent	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	28.192s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/identity	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/protocol	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/honeytoken	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/llm	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/migrate/beelzebub	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/observe	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/policy	3.390s
+ok  	github.com/metaforismo/aegismesh/internal/recommend	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/redact	1.363s
+ok  	github.com/metaforismo/aegismesh/internal/rulecatalog	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulesinput	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ruletest	1.929s
+ok  	github.com/metaforismo/aegismesh/internal/runtime	35.209s
+?   	github.com/metaforismo/aegismesh/internal/sensor	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensor/httpsensor	2.073s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	1.806s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/sshsensor	3.948s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/tcpsensor	1.501s
+?   	github.com/metaforismo/aegismesh/internal/sensorfactory	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensorproc	8.516s
+ok  	github.com/metaforismo/aegismesh/internal/storage	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/strictjson	(cached)
+?   	github.com/metaforismo/aegismesh/internal/testutil/benchfixture	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/testutil/oidctest	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/version	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/webhook	(cached)
+ok  	github.com/metaforismo/aegismesh/tools/sbomcheck	(cached)
+```
+
+### AI pack file inventory
+
+92 changed/new files; all left unstaged and uncommitted.
+
+```text
+CHANGELOG.md
+README.md
+cmd/aegismesh/main.go
+docs/ROADMAP.md
+docs/THREAT-MODEL.md
+docs/ai-threat-design.md
+docs/ai-threat-detection.md
+docs/architecture/adr.md
+docs/architecture/console-api.md
+docs/canary-model.md
+docs/cli.md
+docs/configuration.md
+docs/verification.md
+examples/ai-decoy.yaml
+internal/cli/cli_test.go
+internal/cli/completion.go
+internal/cli/demo.go
+internal/cli/demo_cli_test.go
+internal/cli/effective_finding_test.go
+internal/cli/healthcheck_test.go
+internal/cli/honeytoken.go
+internal/cli/honeytoken_test.go
+internal/cli/init.go
+internal/cli/rules.go
+internal/cli/rules_cli_test.go
+internal/cli/testdata/demo.golden.json
+internal/cli/testdata/demo.golden.txt
+internal/cli/testdata/rules.golden.json
+internal/cli/testdata/rules.golden.txt
+internal/config/ai_decoy.go
+internal/config/ai_test.go
+internal/config/config.go
+internal/config/fuzz_test.go
+internal/config/load.go
+internal/config/scaffold.go
+internal/config/validate.go
+internal/console/types.go
+internal/correlate/ai_test.go
+internal/correlate/catalog.go
+internal/correlate/correlate.go
+internal/correlate/correlate_test.go
+internal/correlate/rules.go
+internal/demo/demo.go
+internal/demo/demo_test.go
+internal/detect/ai.go
+internal/detect/ai_test.go
+internal/detect/catalog_test.go
+internal/detect/detect.go
+internal/event/envelope.go
+internal/evidenceindex/index.go
+internal/evidenceindex/index_test.go
+internal/evidenceindex/projection.go
+internal/honeytoken/honeytoken.go
+internal/honeytoken/honeytoken_test.go
+internal/policy/actions.go
+internal/policy/ai_test.go
+internal/policy/policy.go
+internal/recommend/recommend.go
+internal/recommend/recommend_test.go
+internal/redact/auth.go
+internal/redact/redact.go
+internal/redact/redact_test.go
+internal/rulecatalog/frameworks.go
+internal/rulecatalog/frameworks_test.go
+internal/rulecatalog/performance_regression_test.go
+internal/rulecatalog/rulecatalog.go
+internal/rulecatalog/rulecatalog_test.go
+internal/rulecatalog/testdata/frameworks.tsv
+internal/ruletest/corpus_test.go
+internal/ruletest/correlation_corpus_test.go
+internal/ruletest/interaction.go
+internal/ruletest/ruletest.go
+internal/ruletest/ruletest_test.go
+internal/ruletest/testdata/ai-corpus.json
+internal/ruletest/testdata/ai-correlation-corpus.json
+internal/runtime/ai_detection_test.go
+internal/runtime/console.go
+internal/runtime/correlate.go
+internal/runtime/evidence.go
+internal/runtime/isolation.go
+internal/runtime/runtime.go
+internal/runtime/runtime_test.go
+internal/sensor/httpsensor/sensor.go
+internal/sensor/mcpsensor/sensor.go
+internal/sensor/sensor.go
+internal/sensor/sshsensor/sensor.go
+internal/sensor/tcpsensor/sensor.go
+internal/sensorfactory/factory.go
+internal/sensorproc/builtin.go
+internal/sensorproc/protocol.go
+internal/sensorproc/proxy.go
+internal/sensorproc/worker.go
+```
+
+
+## 2026-11-22 — backend review corrections and bounded observation downloads
+
+Scope: uncommitted changes on `b9b4edd` in the backend worktree. HEAD was
+unchanged at completion; no staging, commit, push, tag, PR or deployment.
+No dependencies, configuration fields or dev-mock changes. UI integration remains
+with the frontend owner. This ledger records local synthetic and loopback proof,
+not external-provider, SIEM interoperability or production-capacity evidence.
+
+| Command | Result |
+|---|---|
+| `go test ./internal/honeytoken ./internal/detect ./internal/correlate ./internal/evidenceview ./internal/indicatorexport ./internal/evidencereport ./internal/console ./internal/ruletest` (initial integration run) | **FAIL**, exit 1: six new routes required explicit authorization fixtures and valid session IDs in tenant fixtures. Part 1 packages passed. Fixtures were corrected; subsequent focused and full race runs passed. |
+| `go test ./internal/console ./internal/cli ./internal/evidenceindex ./internal/config ./internal/ruletest ./internal/correlate ./internal/evidenceview ./internal/indicatorexport ./internal/evidencereport` | **PASS**, exit 0; final focused run before the final gates. |
+| `AEGISMESH_UPDATE_INDICATOR_GOLDENS=1 go test ./internal/cli -run TestIndicatorExportCLIGolden -count=1` | **PASS**, exit 0; generated non-secret deterministic CSV/TXT/STIX goldens, subsequently checked by normal tests and the race suite. |
+| `go test ./internal/evidencereport -run '^$' -fuzz=FuzzMarkdownNeutralizer -fuzztime=5s -fuzzminimizetime=0 -parallel=2` | **PASS**, exit 0; 60,136 executions, 156 new interesting inputs, no failure. Final race suite also ran seed cases after adding explicit Unicode-format-control neutralization. |
+| `make ui-test` | **PASS**, exit 0; 169 tests, 169 passed, zero failed/skipped. Existing mock contracts require no mock edit. |
+| `make secrets-scan` | **PASS**, exit 0; tracked working-tree heuristic. Supplemental fixed-pattern scan of all 19 new/untracked source/golden files also passed. No full provider-shaped marker literals were committed or added as fixtures. |
+| `make lint` | **PASS**, exit 0; gofmt check and `go vet ./...`. `golangci-lint` unavailable; Makefile explicitly skipped it. |
+| `make test` (after `make lint`) | **PASS**, exit 0; `go test -race ./...`, full package results captured below. |
+| `git diff --check` | **PASS**, exit 0. |
+| `df -h /System/Volumes/Data` | **PASS**, about 15 GiB initially and 14 GiB after the race gate. Never approached the 1.5 GiB cache-clean threshold; no cache deletion performed. |
+| `make sbom` | **NOT RUN**, deliberately skipped as requested: known linked-worktree generator limitation. |
+| External SIEM import / provider credential validation / UI for new endpoints | **NOT RUN**. No external validation request or runtime egress was added. Frontend implementation was outside this backend task. |
+
+Evidence includes exact 30-minute idle/tie/tenant ID cases, cadence and regularity
+formulas, phase/timeline caps, 8192-entry scan truncation, local-vs-forwarded ID
+collisions, cursor filter/snapshot binding, strict query/role/tenant checks,
+real-listener attachments, audit failure before download, required STIX object
+properties/patterns/UUIDv5/resolved references, skipped-source accounting,
+CLI since/usage/corruption/size/golden checks, and Markdown HTML/fence/control
+neutralization. The expanded benign corpus has 26 samples (generic version/SSE
+added, metrics retained); it produces six LLM-001 hits, one LLM-004 hit and zero
+medium-or-higher hits. These are fixture properties, not field error rates.
+
+Important limit: locally generated provider-shaped random decoys are never
+registered or verified with providers. It is impossible to prove offline that
+random strings can never collide with provider-issued values. The docs and
+implementation make no absolute provider-invalidity claim. Committed example
+placeholders are rejected with an actionable `honeytoken new` instruction.
+
+Captured final lint output:
+
+```text
+go vet ./...
+golangci-lint not installed; skipped (vet+fmt ran)
+```
+
+Captured final full race gate output:
+
+```text
+go test -race ./...
+?   	github.com/metaforismo/aegismesh/cmd/aegismesh	[no test files]
+ok  	github.com/metaforismo/aegismesh/deploy/helm/aegismesh	(cached)
+?   	github.com/metaforismo/aegismesh/examples/extensions/echo-responder	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/admin	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/agekey	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/cli	15.287s
+ok  	github.com/metaforismo/aegismesh/internal/config	5.817s
+ok  	github.com/metaforismo/aegismesh/internal/console	19.192s
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/auth	3.062s
+ok  	github.com/metaforismo/aegismesh/internal/console/investigations	16.954s
+ok  	github.com/metaforismo/aegismesh/internal/console/oidc	2.494s
+ok  	github.com/metaforismo/aegismesh/internal/console/stateio	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/tenant	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/consoleui	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/correlate	4.386s
+ok  	github.com/metaforismo/aegismesh/internal/demo	4.219s
+ok  	github.com/metaforismo/aegismesh/internal/detect	3.793s
+ok  	github.com/metaforismo/aegismesh/internal/ecsexport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/egress	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/event	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	35.417s
+ok  	github.com/metaforismo/aegismesh/internal/evidencereport	2.395s
+ok  	github.com/metaforismo/aegismesh/internal/evidenceview	2.701s
+ok  	github.com/metaforismo/aegismesh/internal/ext	16.645s
+ok  	github.com/metaforismo/aegismesh/internal/extmanager	34.419s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/agent	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	42.717s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/identity	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/protocol	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/honeytoken	2.404s
+ok  	github.com/metaforismo/aegismesh/internal/indicatorexport	4.839s
+ok  	github.com/metaforismo/aegismesh/internal/llm	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/migrate/beelzebub	1.701s
+ok  	github.com/metaforismo/aegismesh/internal/observe	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/policy	11.685s
+ok  	github.com/metaforismo/aegismesh/internal/recommend	3.482s
+ok  	github.com/metaforismo/aegismesh/internal/redact	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulecatalog	3.743s
+ok  	github.com/metaforismo/aegismesh/internal/rulesinput	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ruletest	3.948s
+ok  	github.com/metaforismo/aegismesh/internal/runtime	46.563s
+?   	github.com/metaforismo/aegismesh/internal/sensor	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensor/httpsensor	7.183s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	7.691s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/sshsensor	8.584s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/tcpsensor	2.484s
+?   	github.com/metaforismo/aegismesh/internal/sensorfactory	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensorproc	14.127s
+ok  	github.com/metaforismo/aegismesh/internal/storage	20.317s
+ok  	github.com/metaforismo/aegismesh/internal/strictjson	(cached)
+?   	github.com/metaforismo/aegismesh/internal/testutil/benchfixture	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/testutil/oidctest	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/version	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/webhook	(cached)
+ok  	github.com/metaforismo/aegismesh/tools/sbomcheck	(cached)
+```

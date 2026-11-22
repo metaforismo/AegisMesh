@@ -1,0 +1,9 @@
+--- FAIL: TestBearerFailuresAreRateLimited (0.04s)
+    perimeter_review_test.go:9: status = 401; want 429; body = {"error":{"code":"unauthenticated","message":"valid operator authentication is required"}}
+FAIL
+FAIL	github.com/metaforismo/aegismesh/internal/console	0.452s
+--- FAIL: TestCapacityRejectionAlwaysHasSecurityHeaders (0.04s)
+    perimeter_review_test.go:13: capacity response: 503 map[]
+FAIL
+FAIL	github.com/metaforismo/aegismesh/internal/fleet/hub	0.404s
+FAIL

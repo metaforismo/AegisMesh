@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 	"github.com/metaforismo/aegismesh/internal/rulecatalog"
 )
 
@@ -376,5 +378,33 @@ func TestRecommendationIDSortsAndDeduplicatesRules(t *testing.T) {
 	want := RecommendationID("00000000000000000000000000000001", strings.Repeat("a", 64), []string{"PI-001", "PI-002"})
 	if got != want {
 		t.Fatalf("rule order/duplicates changed ID: %s != %s", got, want)
+	}
+}
+
+func TestMaximumHoneytokenFindingsRemainReadable(t *testing.T) {
+	var tokens []honeytoken.Token
+	var values []string
+	for i := 0; i < 64; i++ {
+		value := fmt.Sprintf("synthetic-marker-%03d", i)
+		tokens = append(tokens, honeytoken.Token{ID: fmt.Sprintf("plant-%d", i), Value: value, Kind: honeytoken.Credential})
+		values = append(values, value)
+	}
+	input := strings.Join(values, " ")
+	matches := honeytoken.New(tokens).Find(input)
+	hits := detect.New(detect.Options{}).Evaluate(detect.Input{Path: "/v1/models", TokenMatches: matches})
+	if len(hits) != 65 {
+		t.Fatal("did not exercise all tokens plus an AI finding")
+	}
+	raw, err := json.Marshal(map[string]any{"detection": map[string]any{"action": "observe", "findings": hits}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := event.New(&event.Sequencer{}, "synthetic", event.SensorRef{ID: "http-decoy", Kind: "http", Listen: "127.0.0.1:0"}, event.ClassificationInteraction, raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := Generate([]event.Envelope{env}, Options{})
+	if err != nil || len(report.Recommendations) != 1 {
+		t.Fatalf("maximum valid token configuration rejected: %v", err)
 	}
 }

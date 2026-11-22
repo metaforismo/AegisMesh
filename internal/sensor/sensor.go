@@ -7,20 +7,24 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"strings"
 
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 	"github.com/metaforismo/aegismesh/internal/observe"
 )
 
 // Deps are the injected capabilities for one sensor instance.
 type Deps struct {
-	Config   config.Sensor
-	Bus      *event.Bus
-	Meter    observe.Meter
-	Log      *slog.Logger
-	Seq      *event.Sequencer
-	Instance string
+	Honeytokens []honeytoken.Token
+	Config      config.Sensor
+	Bus         *event.Bus
+	Meter       observe.Meter
+	Log         *slog.Logger
+	Seq         *event.Sequencer
+	Instance    string
 }
 
 // Sensor is a long-running decoy listener.
@@ -75,4 +79,25 @@ func PeerHost(addr string) string {
 		}
 	}
 	return host
+}
+
+// RequestHeaders preserves header values for bounded in-memory analysis only.
+// Host is parsed out of Header by net/http and must be included explicitly.
+func RequestHeaders(r *http.Request) map[string][]string {
+	out := make(map[string][]string, len(r.Header)+1)
+	for name, values := range r.Header {
+		key := strings.ToLower(name)
+		out[key] = append(out[key], values...)
+	}
+	out["host"] = []string{r.Host}
+	return out
+}
+
+func RequestParts(r *http.Request, body []byte) []string {
+	parts := []string{r.Method, r.RequestURI, r.Host, string(body)}
+	for name, values := range r.Header {
+		parts = append(parts, name)
+		parts = append(parts, values...)
+	}
+	return parts
 }

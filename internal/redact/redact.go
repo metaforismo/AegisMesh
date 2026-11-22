@@ -34,13 +34,16 @@ var (
 	// runs before both because quoted keys never satisfy the bare [=:]
 	// forms ("password":"x" is invisible to them).
 	credentialPatterns = []redactor{
+		{regexp.MustCompile(`(?i)^[ \t]*AUTH[ \t]+[^\r\n]+`), "AUTH [redacted]"},
+		{regexp.MustCompile(`(?i)^[ \t]*(EMPTY|ollama|sk-xxxx)[ \t]*$`), "[redacted-key]"},
+		{regexp.MustCompile(`\b(sk-[A-Za-z0-9_-]{4,512}|ghp_[A-Za-z0-9_]{4,512}|github_pat_[A-Za-z0-9_]{4,512}|AKIA[A-Za-z0-9_-]{12,512})`), "[redacted-provider-key]"},
 		{regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`), "[redacted-private-key]"},
 		{regexp.MustCompile(`(?i)bearer\s+[a-z0-9._~+/=-]{8,512}`), "bearer [redacted]"},
 		{regexp.MustCompile(`(?i)aws4-hmac-sha256\s+\S{16,512}`), "aws4-hmac-sha256 [redacted]"},
 		{regexp.MustCompile(`(?i)(authorization|proxy-authorization|www-authenticate)[:]\s*[^\r\n]{1,1000}`), "$1: [redacted]"},
 		{regexp.MustCompile(`(?i)((set-)?cookie)[:]\s*[^\r\n]{1,1000}`), "$1: [redacted]"},
-		{regexp.MustCompile(`(?i)"(password|passwd|pwd|pass|secret|token|api[_-]?key|access[_-]?key|session[_-]?id|client[_-]?secret|private[_-]?key)"\s*:\s*(?:"[^"]{0,1000}"|[^,\s}{\]]{1,256})`), `"$1": "[redacted]"`},
-		{regexp.MustCompile(`(?i)\b(password|passwd|pwd|pass|secret|token|api[_-]?key|access[_-]?key|session[_-]?id)[=:]\s?\S{1,256}`), "$1=[redacted]"},
+		{regexp.MustCompile(`(?i)"(password|passwd|pwd|pass|secret|token|api[_-]?key|access[_-]?key|session[_-]?id|client[_-]?secret|private[_-]?key|key)"\s*:\s*(?:"[^"]{0,1000}"|[^,\s}{\]]{1,256})`), `"$1": "[redacted]"`},
+		{regexp.MustCompile(`(?i)\b(password|passwd|pwd|pass|secret|token|api[_-]?key|access[_-]?key|session[_-]?id|key)[=:]\s?\S{1,256}`), "$1=[redacted]"},
 	}
 )
 

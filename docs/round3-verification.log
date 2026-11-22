@@ -1,0 +1,572 @@
+Round 3 local verification — 2026-11-22
+Branch feat/decoy-environments-siem
+Base HEAD 29c6f421bfe0c52e87ebc27438dbe37bcf76515b
+Changes uncommitted. No push/tag/PR/merge/deploy.
+
+PASS: GOFLAGS=-p=1 make lint
+go vet ./...
+golangci-lint not installed; skipped (vet+fmt ran)
+
+PASS: GOFLAGS=-p=1 make test
+go test -race ./...
+?   	github.com/metaforismo/aegismesh/cmd/aegismesh	[no test files]
+ok  	github.com/metaforismo/aegismesh/deploy/helm/aegismesh	(cached)
+?   	github.com/metaforismo/aegismesh/examples/extensions/echo-responder	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/admin	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/agekey	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/cli	6.424s
+ok  	github.com/metaforismo/aegismesh/internal/config	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console	11.014s
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/auth	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/investigations	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/oidc	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/stateio	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/tenant	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/consoleui	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/correlate	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/demo	1.584s
+ok  	github.com/metaforismo/aegismesh/internal/detect	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/digest	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ecsexport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/egress	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/event	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/eventexport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/evidencereport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/evidenceview	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ext	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/extmanager	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/agent	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/identity	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/protocol	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/honeytoken	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/indicatorexport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/llm	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/migrate/beelzebub	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/observe	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/policy	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/recommend	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/redact	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulecatalog	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulesinput	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ruletest	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/runtime	41.038s
+?   	github.com/metaforismo/aegismesh/internal/sensor	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensor/httpsensor	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	1.943s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/sshsensor	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/sensor/tcpsensor	(cached)
+?   	github.com/metaforismo/aegismesh/internal/sensorfactory	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensorproc	6.327s
+ok  	github.com/metaforismo/aegismesh/internal/storage	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/strictjson	(cached)
+?   	github.com/metaforismo/aegismesh/internal/testutil/benchfixture	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/testutil/oidctest	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/version	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/webhook	(cached)
+ok  	github.com/metaforismo/aegismesh/tools/sbomcheck	(cached)
+
+PASS: GOFLAGS=-p=1 make secrets-scan
+./scripts/secrets-scan.sh
+secrets-scan: ok
+
+PASS: GOFLAGS=-p=1 make ui-test
+node --test 'internal/consoleui/webtest/*.test.mjs'
+(node:9050) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/api.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ login stores CSRF in memory and sends it only on mutations (2.579958ms)
+✔ logout sends CSRF (contract: DELETE /session is a mutation) and forgets it (0.166375ms)
+✔ path segments and query values are encoded (0.15725ms)
+✔ 401 on a data call clears CSRF and notifies once (1.006334ms)
+✔ 401 from the session probe or login does not trigger the redirect hook (0.365708ms)
+✔ error envelope parsing tolerates junk and unknown codes (2.339084ms)
+✔ network failure becomes unavailable; abort passes through (0.525542ms)
+✔ describeError gives operator-facing text for every code (0.419708ms)
+(node:9051) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/auth.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ signInOptions picks the controls from meta.auth (20.120417ms)
+✔ ssoDisplayName is plain, bounded text with a fallback (0.433042ms)
+✔ loginErrorCode accepts only the contract codes (0.1215ms)
+✔ every error code has its own calm message; unknown codes get the generic one (0.318334ms)
+✔ authMethodLabel names the method for the account menu (0.09675ms)
+✔ the DOM layer allows the OIDC start path and no other server path (0.096375ms)
+✔ sign-in card: token only, SSO only, both, none (2.352791ms)
+✔ sign-in card shows the mapped message for an error code, never other text (0.971209ms)
+(node:9052) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/chart.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ niceCeil and ticks (1.370791ms)
+✔ stackedLayout keeps classification order, gaps and baseline (0.225916ms)
+✔ stackedLayout ignores junk values (0.074959ms)
+✔ labelIndices and share (0.07525ms)
+✔ jsonTokens reproduces JSON.stringify exactly (0.19425ms)
+(node:9053) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/ui/components.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ severity chip: known values get a meter class, anything else is "none" (1.026166ms)
+✔ classification chip uses a shape glyph and the word (0.088875ms)
+✔ evidence is text, truncates by code point and keeps the full value in title (0.102792ms)
+✔ badges only accept known kinds (0.05875ms)
+✔ table cells carry interface-text labels for the stacked mobile layout (2.236917ms)
+✔ kv renders an em dash for empty values and skips undefined (0.127584ms)
+✔ every routable screen except login has a registered module (0.171875ms)
+(node:9054) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/dom.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ children are text nodes, never parsed markup (1.313542ms)
+✔ text prop sets textContent (0.216583ms)
+✔ disallowed attributes throw (0.719875ms)
+✔ aria- and data- attributes are allowed (0.163875ms)
+✔ href accepts in-app routes and the fixed project links only (0.410875ms)
+✔ class tokens are validated (0.282542ms)
+✔ prop only sets form state (0.149375ms)
+✔ boolean and null attributes (0.098125ms)
+✔ svg uses the SVG namespace; fragments flatten (0.252ms)
+✔ event handlers are functions passed via on, never attributes (0.228375ms)
+(node:9055) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ the drawer parameter does not change the events view identity (1.68425ms)
+✔ withQuery opens and closes the drawer while keeping filters (1.925667ms)
+✔ only a well-formed event id opens the drawer (0.317041ms)
+(node:9056) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/screens/event.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ forwarded copy: origin, hub-side integrity scope, no investigation attach (6.810417ms)
+✔ local event on an accepting hub: "This node", attach offered, no hub scope (0.419708ms)
+✔ local event on a node that receives no evidence: no origin row (0.871375ms)
+(node:9057) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/fleet.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ every status has a distinct badge kind (and so a distinct shape) and a word (0.843416ms)
+✔ node id is the fingerprint prefix (0.1925ms)
+✔ sensor summary counts states and tolerates junk (4.807ms)
+✔ token TTL and note bounds follow the contract (2.517125ms)
+✔ expiry accepts RFC 3339 and legacy Unix seconds (4.896792ms)
+✔ fleet routes parse and reject bad node ids (0.301458ms)
+✔ fleet audit actions are part of the closed vocabulary (0.055334ms)
+✔ the configuration reference the teaching state links to is an allowed href (0.205333ms)
+✔ forwarding summary normalizes counters, optional queue and error category (1.040292ms)
+(node:9058) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/screens/fleet.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ roles off: teaching state, no inventory requests (2.3865ms)
+✔ viewer on a hub sees inventory but no token controls (9.3905ms)
+✔ admin on a hub sees the token panel (2.049875ms)
+✔ hub routes answering 503 render a hub-unavailable notice instead of failing (0.785583ms)
+✔ agent-only node explains where the inventory lives (0.585375ms)
+✔ accepting hub: reception state, forwarding per node, labelled loss and view-events links (2.002416ms)
+✔ hub refusing evidence: reception off, no view-events links (7.534333ms)
+✔ agent role shows its own forwarding state and error category (0.751333ms)
+(node:9059) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/format.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ times render in UTC (5.113375ms)
+✔ relative time and durations (0.240083ms)
+✔ numbers and bytes (2.18375ms)
+✔ deltas are descriptive (0.611ms)
+✔ truncate never splits a surrogate pair (0.074666ms)
+✔ datetime-local conversion is UTC (0.226709ms)
+✔ taxonomy helpers (0.106917ms)
+(node:9060) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/keys.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ moveIndex: first move selects an end, then clamps or wraps (1.903333ms)
+✔ isTypingTarget: text fields swallow shortcuts, buttons and checkboxes do not (0.116458ms)
+✔ chordOf maps the platform modifier to "mod" (0.093791ms)
+✔ createSequences completes "g e" within the timeout only (0.112583ms)
+(node:9061) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/batch.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a burst becomes one flush per frame, capped per frame, in arrival order (1.64625ms)
+✔ flushNow drains synchronously; stop drops the queue (0.140791ms)
+✔ overflow says how many rows to drop to stay within the cap (0.064916ms)
+(node:9072) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9070) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ fleet status reports roles; node list covers every status and filters (271.067334ms)
+✔ token and revoke routes are admin-only and need CSRF (18.238458ms)
+✔ token lifecycle: create shows the raw token once, list hides it, delete removes it (16.884917ms)
+✔ revoke is idempotent and permanent (5.70075ms)
+✔ hub disabled: GET /fleet works, node and token routes answer 503 unavailable (8.955541ms)
+(node:9065) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9066) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9067) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ accepting hub: fleet reports reception, forwarded events carry their origin (374.812041ms)
+✔ node filter: local, one node, and invalid values (49.237084ms)
+✔ overview: by_node on an accepting hub, sorted by id, summing to the window total (11.889166ms)
+✔ detail: forwarded integrity scope, origin, and id disambiguation (14.501125ms)
+✔ fleet nodes: forwarding states, one node with drops and gaps (2.568625ms)
+✔ hub refusing evidence: no by_node, no forwarded events, agents report evidence_disabled (23.408ms)
+✔ agent: forwarding status always present, hub flag off (4.837459ms)
+(node:9073) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ static and API responses carry the production security headers (221.359791ms)
+✔ session cookie is HttpOnly + SameSite=Strict; bad tokens are 401 (8.107375ms)
+✔ mutations need the CSRF header and strict bodies; roles are enforced (13.6585ms)
+✔ event filters reject unknown parameters (9.212625ms)
+(node:9075) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9077) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9076) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ meta advertises the configured sign-in methods (233.810875ms)
+✔ OIDC success: session cookie, redirect to /, session shape, audit claims (16.41975ms)
+✔ OIDC failures redirect to a fixed code and discard provider text (11.394125ms)
+✔ OIDC state is single use and bound to the pre-login cookie (2.748ms)
+✔ the fake provider page offers identities and every failure (2.99975ms)
+✔ tenant switch rotates session and CSRF, keeps expiry, ends the old session (9.5445ms)
+✔ a viewer with one membership cannot switch (2.084542ms)
+✔ tenants hold visibly different data; local-only resources stay in the local tenant (20.248666ms)
+✔ by_sensor carries buckets on the main series starts, zeros included (15.651834ms)
+✔ default mock: one tenant named default, token sessions (0.828667ms)
+✔ static assets: gzip, strong ETag, 304, 406; index stays no-store (9.41825ms)
+(node:9069) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/origin.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ node filter accepts exactly "local" or a lowercase 32-hex id (0.804ms)
+✔ the node filter goes through URL normalization and is reported when invalid (0.888667ms)
+✔ origin of an event: absent or "local" node means this node (0.06425ms)
+✔ live matching mirrors the server node filter (0.11925ms)
+✔ origin formatting: this node, named node with short id, unnamed and malformed (0.104459ms)
+✔ origin column: only on an accepting hub, a node filter, or forwarded rows (0.076625ms)
+✔ by_node is ranked by events, ties by id, malformed rows dropped (0.108333ms)
+✔ row identity and detail links carry the origin (0.118292ms)
+✔ node filter options: any, this node, nodes by name, unknown current value kept (35.925584ms)
+✔ palette node targets exist only on an accepting hub (2.160375ms)
+(node:9071) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/palette.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ scoreMatch orders exact > prefix > word start > substring > fuzzy > none (0.847792ms)
+✔ scoreMatch is case-insensitive and returns highlight ranges (0.684708ms)
+✔ word boundaries include punctuation found in ids and source keys (0.071042ms)
+✔ rankItems keeps input order for ties, applies weight and keywords (0.188292ms)
+✔ rankItems: a prefix match on a weighted screen beats fuzzy data hits (0.067292ms)
+✔ highlightRuns splits text into hit and plain runs without touching markup (0.119708ms)
+(node:9074) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/route.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ parseHash resolves every screen (2.401666ms)
+✔ invalid params and unknown paths are not_found (0.142083ms)
+✔ source keys round-trip through href and parseHash (0.202667ms)
+✔ oversized source key is rejected (0.067333ms)
+✔ query round-trip, first value wins, empty dropped (2.691167ms)
+✔ encodeSegment escapes the characters encodeURIComponent leaves (0.196375ms)
+✔ normalizeEventFilters keeps valid values and reports the rest (0.586958ms)
+✔ inverted time range is rejected (0.084958ms)
+✔ isRfc3339 (0.059792ms)
+✔ windows and audit filters fall back to safe defaults (0.156084ms)
+✔ matchesEventFilters mirrors the server filter semantics (0.553625ms)
+✔ events without a finding never meet a minimum severity (0.04875ms)
+(node:9078) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/chart.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ bucketTrace: totals per bucket, start and end from the starts (4.17625ms)
+✔ bucketTrace: one bucket needs `end`; bad input gives null (1.623666ms)
+✔ sensorBuckets: the server series when present (0.301333ms)
+✔ sensorBuckets: a sensor with no events in the window gets zeros on the main starts (0.546041ms)
+✔ sensorBuckets: falls back on older servers and past the cap (0.984958ms)
+✔ indexKnownFrom: dashed time follows the index history (0.084542ms)
+✔ shared design-system CSS is byte-identical in the console and the site (14.485292ms)
+✔ site pages load no scripts and only local or project assets (11.177041ms)
+(node:9080) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/chart.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ sparkPath scales to the box and closes the area on the baseline (3.334541ms)
+✔ sparkPath: flat, single and empty series (0.2255ms)
+✔ seriesOf reads one classification or the total (0.259292ms)
+✔ binTimes counts into equal bins and never clamps outside times in (0.288333ms)
+✔ bucketRange: inclusive until stops one second before the next bucket (4.24175ms)
+✔ waveDelays are eased, start at 0 and never exceed the budget (0.307ms)
+(node:9081) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/stream.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ RingBuffer keeps the newest items and counts drops (1.339333ms)
+✔ backoffDelay grows, caps and jitters within [50%, 100%] (0.088791ms)
+✔ parseObservation rejects malformed payloads (0.079458ms)
+✔ delivers observations and ignores garbage (0.209291ms)
+✔ drop with a live session reconnects with backoff (3.753667ms)
+✔ drop with an expired session stops for good (2.334416ms)
+✔ outage (session probe fails) keeps retrying (1.457583ms)
+✔ stop wins over a pending session check and late events (0.497459ms)
+(node:9082) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/swr.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ in-flight requests are shared and fresh values reused (1.416959ms)
+✔ allowStale returns the stale value now and reports a changed refresh (2.187042ms)
+✔ errors are not cached and invalidate clears everything (0.296833ms)
+✔ entries are bounded (0.107834ms)
+✔ abortable rejects for its caller without cancelling the shared promise (0.28575ms)
+(node:9083) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/francescogiannicola/Documents/ChatGPT/AegisMesh/.worktrees/backend/internal/consoleui/static/assets/js/lib/tenant.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/francescogiannicola/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9083) Warning: `--localstorage-file` was provided without a valid path
+✔ tenantInfo: nothing extra for one tenant named default (11.377875ms)
+✔ tenantInfo: a single non-default tenant is shown without a switcher (0.168041ms)
+✔ tenantInfo: several tenants offer the switcher; principal fields are a fallback (0.083209ms)
+✔ switchTargets and switchBody only ever name member tenants (0.100916ms)
+✔ routeAfterSwitch keeps list and screen views, leaves object views (0.464042ms)
+✔ switchTenant posts the tenant with the old CSRF token and keeps the new one (0.338917ms)
+✔ a 401 for a request that started before a switch does not sign the operator out (0.24875ms)
+✔ a failed switch (non-member) leaves the CSRF token in place (0.275209ms)
+✔ the read cache drops answers to requests that began before an invalidation (0.210042ms)
+✔ top bar: no tenant control with one tenant named default (2.519917ms)
+✔ top bar: a single named tenant is a static label (1.048958ms)
+✔ top bar: several tenants open a switcher that names the current one in words (0.585834ms)
+ℹ tests 169
+ℹ suites 0
+ℹ pass 169
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 741.686708
+
+PASS: GOFLAGS=-p=1 go test ./internal/eventexport -run '^$' -fuzz '^FuzzEscapers$' -fuzztime=15s -fuzzminimizetime=0 -parallel=1
+fuzz: elapsed: 0s, gathering baseline coverage: 0/4 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 4/4 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 92200 (30723/sec), new interesting: 123 (total: 127)
+fuzz: elapsed: 6s, execs: 199799 (35866/sec), new interesting: 124 (total: 128)
+fuzz: elapsed: 9s, execs: 268618 (22940/sec), new interesting: 127 (total: 131)
+fuzz: elapsed: 12s, execs: 341561 (24319/sec), new interesting: 134 (total: 138)
+fuzz: elapsed: 15s, execs: 447981 (35470/sec), new interesting: 134 (total: 138)
+fuzz: elapsed: 15s, execs: 447981 (0/sec), new interesting: 134 (total: 138)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/eventexport	15.551s
+
+PASS: GOFLAGS=-p=1 go test ./internal/sensor/mcpsensor -run '^$' -fuzz '^FuzzEnvironmentLookup$' -fuzztime=15s -fuzzminimizetime=0 -parallel=1
+fuzz: elapsed: 0s, gathering baseline coverage: 0/5 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 5/5 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 48570 (16185/sec), new interesting: 73 (total: 78)
+fuzz: elapsed: 6s, execs: 97514 (16315/sec), new interesting: 130 (total: 135)
+fuzz: elapsed: 9s, execs: 145626 (16037/sec), new interesting: 199 (total: 204)
+fuzz: elapsed: 12s, execs: 194003 (16129/sec), new interesting: 214 (total: 219)
+fuzz: elapsed: 15s, execs: 246654 (17548/sec), new interesting: 226 (total: 231)
+fuzz: elapsed: 15s, execs: 246654 (0/sec), new interesting: 226 (total: 231)
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	15.643s
+
+PASS: GOFLAGS=-p=1 make bench BENCH_TIME=100ms BENCH_COUNT=1
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/evidenceindex
+cpu: Apple M3
+BenchmarkIndex/tenants=1/AppendEvict-8         	   22405	      5078 ns/op	     14236 retained/tenant	    4765 B/op	      55 allocs/op
+BenchmarkIndex/tenants=1/Query/None-8          	   23654	      5004 ns/op	   15665 B/op	      74 allocs/op
+BenchmarkIndex/tenants=1/Query/Node-8          	    2961	     41548 ns/op	   16017 B/op	      84 allocs/op
+BenchmarkIndex/tenants=1/Query/Classification-8         	    3386	     32693 ns/op	   15666 B/op	      73 allocs/op
+BenchmarkIndex/tenants=1/Query/Sensor-8                 	    2682	     47709 ns/op	   15681 B/op	      74 allocs/op
+BenchmarkIndex/tenants=1/Query/Kind-8                   	    1300	     83699 ns/op	   15680 B/op	      74 allocs/op
+BenchmarkIndex/tenants=1/Query/Source-8                 	   18195	      6277 ns/op	   15681 B/op	      74 allocs/op
+BenchmarkIndex/tenants=1/Query/Rule-8                   	    1064	    111683 ns/op	   16241 B/op	     108 allocs/op
+BenchmarkIndex/tenants=1/Query/Severity-8               	     361	    344621 ns/op	   16247 B/op	     108 allocs/op
+BenchmarkIndex/tenants=1/Query/Q-8                      	     248	    479296 ns/op	   15691 B/op	      74 allocs/op
+BenchmarkIndex/tenants=1/Query/Since-8                  	   14653	      8329 ns/op	   15665 B/op	      74 allocs/op
+BenchmarkIndex/tenants=1/Query/Until-8                  	     416	    280934 ns/op	   15652 B/op	      73 allocs/op
+BenchmarkIndex/tenants=1/Query/Combined-8               	  180972	       718.7 ns/op	    1360 B/op	      10 allocs/op
+BenchmarkIndex/tenants=1/Query/DeepCursor-8             	   17787	      6661 ns/op	   16999 B/op	      86 allocs/op
+BenchmarkIndex/tenants=1/Overview/1h-8                  	    1777	     75468 ns/op	  129336 B/op	     629 allocs/op
+BenchmarkIndex/tenants=1/Overview/24h-8                 	     153	    775074 ns/op	  588968 B/op	    2139 allocs/op
+BenchmarkIndex/tenants=1/Overview/7d-8                  	      51	   2299887 ns/op	  973396 B/op	    5718 allocs/op
+BenchmarkIndex/tenants=1/Sources-8                      	     597	    213742 ns/op	  216512 B/op	     792 allocs/op
+BenchmarkIndex/tenants=1/SourceTimeline-8               	   14930	      8118 ns/op	   16305 B/op	      78 allocs/op
+BenchmarkIndex/tenants=1/Related-8                      	  554133	       230.0 ns/op	     432 B/op	       5 allocs/op
+BenchmarkIndex/tenants=8/AppendEvict-8                  	   22246	      5374 ns/op	     14187 retained/tenant	    4763 B/op	      55 allocs/op
+BenchmarkIndex/tenants=8/Query/None-8                   	   27726	      5554 ns/op	   15664 B/op	      74 allocs/op
+BenchmarkIndex/tenants=8/Query/Node-8                   	    1816	     68486 ns/op	   16017 B/op	      84 allocs/op
+BenchmarkIndex/tenants=8/Query/Classification-8         	    2787	     42364 ns/op	   15664 B/op	      73 allocs/op
+BenchmarkIndex/tenants=8/Query/Sensor-8                 	    1604	     76749 ns/op	   15681 B/op	      74 allocs/op
+BenchmarkIndex/tenants=8/Query/Kind-8                   	     387	    282354 ns/op	   15685 B/op	      74 allocs/op
+BenchmarkIndex/tenants=8/Query/Source-8                 	   18421	      6449 ns/op	   15680 B/op	      74 allocs/op
+BenchmarkIndex/tenants=8/Query/Rule-8                   	     184	    649172 ns/op	   16254 B/op	     108 allocs/op
+BenchmarkIndex/tenants=8/Query/Severity-8               	      60	   1882063 ns/op	   16272 B/op	     108 allocs/op
+BenchmarkIndex/tenants=8/Query/Q-8                      	      48	   2448155 ns/op	   15720 B/op	      74 allocs/op
+BenchmarkIndex/tenants=8/Query/Since-8                  	   13310	      9468 ns/op	   15664 B/op	      74 allocs/op
+BenchmarkIndex/tenants=8/Query/Until-8                  	      62	   1809839 ns/op	   15679 B/op	      73 allocs/op
+BenchmarkIndex/tenants=8/Query/Combined-8               	  161836	       832.2 ns/op	    1360 B/op	      10 allocs/op
+BenchmarkIndex/tenants=8/Query/DeepCursor-8             	   15430	      7190 ns/op	   16992 B/op	      86 allocs/op
+BenchmarkIndex/tenants=8/Overview/1h-8                  	    1728	     78414 ns/op	  129339 B/op	     629 allocs/op
+BenchmarkIndex/tenants=8/Overview/24h-8                 	      63	   1906519 ns/op	  588968 B/op	    2139 allocs/op
+BenchmarkIndex/tenants=8/Overview/7d-8                  	      25	   4746095 ns/op	  973392 B/op	    5718 allocs/op
+BenchmarkIndex/tenants=8/Sources-8                      	     229	    488430 ns/op	  216512 B/op	     792 allocs/op
+BenchmarkIndex/tenants=8/SourceTimeline-8               	   12974	      8655 ns/op	   16304 B/op	      78 allocs/op
+BenchmarkIndex/tenants=8/Related-8                      	  567039	       246.7 ns/op	     432 B/op	       5 allocs/op
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	15.529s
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/console
+cpu: Apple M3
+BenchmarkAcceptingHubOverview-8   	      32	   3258290 ns/op	 1167592 B/op	    5771 allocs/op
+--- BENCH: BenchmarkAcceptingHubOverview-8
+    accepting_benchmark_test.go:80: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:80: offered=50000 retained=14167 nodes=8
+    accepting_benchmark_test.go:80: offered=50000 retained=14167 nodes=8
+BenchmarkConsoleRequest/tenants=1/events/Cookie-8         	    3349	     37431 ns/op	   36406 B/op	     102 allocs/op
+BenchmarkConsoleRequest/tenants=1/events/Bearer-8         	    3291	     37644 ns/op	   36181 B/op	     100 allocs/op
+BenchmarkConsoleRequest/tenants=1/overview/Cookie-8       	    8934	     19077 ns/op	   14591 B/op	      88 allocs/op
+BenchmarkConsoleRequest/tenants=1/overview/Bearer-8       	    9087	     13139 ns/op	   14385 B/op	      86 allocs/op
+BenchmarkConsoleRequest/tenants=1/session/Cookie-8        	   62584	      1928 ns/op	    2152 B/op	      23 allocs/op
+BenchmarkConsoleRequest/tenants=1/session/Bearer-8        	   70132	      1812 ns/op	    1888 B/op	      21 allocs/op
+BenchmarkConsoleRequest/tenants=8/events/Cookie-8         	    3096	     37553 ns/op	   36328 B/op	     102 allocs/op
+BenchmarkConsoleRequest/tenants=8/events/Bearer-8         	    3243	     35372 ns/op	   36154 B/op	     100 allocs/op
+BenchmarkConsoleRequest/tenants=8/overview/Cookie-8       	    9663	     12443 ns/op	   14580 B/op	      88 allocs/op
+BenchmarkConsoleRequest/tenants=8/overview/Bearer-8       	    9577	     12462 ns/op	   14379 B/op	      86 allocs/op
+BenchmarkConsoleRequest/tenants=8/session/Cookie-8        	   61170	      2065 ns/op	    2152 B/op	      23 allocs/op
+BenchmarkConsoleRequest/tenants=8/session/Bearer-8        	   64044	      1843 ns/op	    1888 B/op	      21 allocs/op
+BenchmarkSSEFanout/One-8                                  	       1	 101269750 ns/op	     26345 append-ns/event	       100.0 events/op	       987.1 events/s	  613440 B/op	    5810 allocs/op
+BenchmarkSSEFanout/Sixteen-8                              	       1	 101252500 ns/op	     10547 append-ns/event	       100.0 events/op	       987.3 events/s	  666800 B/op	    6027 allocs/op
+BenchmarkSSEFanout/Slow-8                                 	       1	 101291125 ns/op	     31603 append-ns/event	       100.0 events/op	       986.9 events/s	  670608 B/op	    6021 allocs/op
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/console	9.597s
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/storage
+cpu: Apple M3
+BenchmarkStorageAppend/Plain-8         	   31629	      3747 ns/op	    1153 B/op	       3 allocs/op
+BenchmarkStorageAppend/Encrypted-8     	     949	    122445 ns/op	   12604 B/op	     120 allocs/op
+BenchmarkStorageAppend/EncryptedCheckpoint-8         	     506	    236152 ns/op	   22265 B/op	     239 allocs/op
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/storage	0.938s
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/runtime
+cpu: Apple M3
+BenchmarkRuntimeTap/Primary-8         	16293092	         7.159 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRuntimeTap/Index-8           	   20607	      5490 ns/op	    4631 B/op	      52 allocs/op
+BenchmarkRuntimeTap/IndexForwarder-8  	   16596	      6943 ns/op	    5792 B/op	      55 allocs/op
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/runtime	5.944s
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/fleet/hub
+cpu: Apple M3
+BenchmarkHeartbeat1000-8       	    1815	     64991 ns/op	   15308 B/op	     164 allocs/op
+BenchmarkEvidenceBatch1000-8   	       7	  26186494 ns/op	15820624 B/op	  150472 allocs/op
+PASS
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	1.057s
+
+PASS: Supplemental heuristic scan, current tracked and untracked files (same token-pattern classes and allow markers as secrets-scan)
+Current tracked + untracked files checked: 548; heuristic matches: 0
+
+FAIL (corrected): first complete race run found an overconstrained new duplicate-argument test; the parser correctly rejected the whole object before tool dispatch. The test now asserts no secret disclosure; final complete make test above passes.
+go test -race ./...
+?   	github.com/metaforismo/aegismesh/cmd/aegismesh	[no test files]
+ok  	github.com/metaforismo/aegismesh/deploy/helm/aegismesh	(cached)
+?   	github.com/metaforismo/aegismesh/examples/extensions/echo-responder	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/admin	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/agekey	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/cli	5.547s
+ok  	github.com/metaforismo/aegismesh/internal/config	1.850s
+ok  	github.com/metaforismo/aegismesh/internal/console	10.838s
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/auth	1.676s
+ok  	github.com/metaforismo/aegismesh/internal/console/investigations	6.222s
+ok  	github.com/metaforismo/aegismesh/internal/console/oidc	1.702s
+ok  	github.com/metaforismo/aegismesh/internal/console/stateio	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/tenant	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/consoleui	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/correlate	1.407s
+ok  	github.com/metaforismo/aegismesh/internal/demo	1.787s
+ok  	github.com/metaforismo/aegismesh/internal/detect	1.805s
+ok  	github.com/metaforismo/aegismesh/internal/digest	1.442s
+ok  	github.com/metaforismo/aegismesh/internal/ecsexport	1.482s
+ok  	github.com/metaforismo/aegismesh/internal/egress	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/event	1.547s
+ok  	github.com/metaforismo/aegismesh/internal/eventexport	1.980s
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	6.931s
+ok  	github.com/metaforismo/aegismesh/internal/evidencereport	1.387s
+ok  	github.com/metaforismo/aegismesh/internal/evidenceview	1.435s
+ok  	github.com/metaforismo/aegismesh/internal/ext	5.048s
+ok  	github.com/metaforismo/aegismesh/internal/extmanager	7.371s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/agent	1.729s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	14.762s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/identity	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/protocol	1.440s
+ok  	github.com/metaforismo/aegismesh/internal/honeytoken	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/indicatorexport	1.493s
+ok  	github.com/metaforismo/aegismesh/internal/llm	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/migrate/beelzebub	1.556s
+ok  	github.com/metaforismo/aegismesh/internal/observe	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/policy	2.337s
+ok  	github.com/metaforismo/aegismesh/internal/recommend	1.442s
+ok  	github.com/metaforismo/aegismesh/internal/redact	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulecatalog	1.635s
+ok  	github.com/metaforismo/aegismesh/internal/rulesinput	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ruletest	1.618s
+ok  	github.com/metaforismo/aegismesh/internal/runtime	34.932s
+?   	github.com/metaforismo/aegismesh/internal/sensor	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensor/httpsensor	1.679s
+--- FAIL: TestEnvironmentRejectsAmbiguousArgumentsAndCapsEncodedContent (0.00s)
+    environment_test.go:205: 
+FAIL
+FAIL	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	0.855s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/sshsensor	3.551s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/tcpsensor	1.426s
+?   	github.com/metaforismo/aegismesh/internal/sensorfactory	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensorproc	6.398s
+ok  	github.com/metaforismo/aegismesh/internal/storage	9.282s
+ok  	github.com/metaforismo/aegismesh/internal/strictjson	(cached)
+?   	github.com/metaforismo/aegismesh/internal/testutil/benchfixture	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/testutil/oidctest	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/version	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/webhook	3.221s
+ok  	github.com/metaforismo/aegismesh/tools/sbomcheck	(cached)
+FAIL
+make: *** [test] Error 1
+
+PASS: GOFLAGS=-p=1 make secrets-scan (after documentation truth-sync)
+./scripts/secrets-scan.sh
+secrets-scan: ok
+
+PASS: git diff --check
+PASS: git diff --exit-code -- go.mod go.sum internal/consoleui
+PASS: git diff --cached --exit-code (nothing staged)
+NOT RUN: golangci-lint, command -v golangci-lint returned exit 1 (unavailable)

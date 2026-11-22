@@ -3,9 +3,10 @@ mode: synthetic
 network: loopback-only (OS-assigned unprivileged ports)
 egress: none
 sensors: http, tcp, mcp, ssh
-evidence: 4 observations (3 interaction, 1 canary invocation)
+evidence: 11 observations (7 interaction, 4 canary invocation)
+AI observations: LLM-001, LLM-002, LLM-004, HT-001, AGT-001, MCP-001, MCP-002
 integrity: verified observation payload hashes
-recommendations: 1 dry-run proposal (no enforcement)
+recommendations: 8 dry-run proposal (no enforcement)
 semantics: observation, not incident
 shutdown: listeners released
 cleanup: complete

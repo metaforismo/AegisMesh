@@ -319,7 +319,7 @@ func TestHealthcheckWiredIntoRootUsage(t *testing.T) {
 	must(app.Register(
 		NewInitCmd(env), NewDoctorCmd(env), NewHealthcheckCmd(env),
 		NewValidateCmd(env), NewRunCmd(env), NewInspectCmd(env),
-		NewMigrateCmd(env), NewRulesCmd(env), NewExtCmd(env),
+		NewMigrateCmd(env), NewRulesCmd(env), NewHoneytokenCmd(env), NewExtCmd(env),
 		NewVersionCmd(env), NewCompletionCmd(env),
 	))
 	var buf bytes.Buffer

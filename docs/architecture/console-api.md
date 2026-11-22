@@ -47,7 +47,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
 
 | Role | Grants |
 |---|---|
-| `viewer` | all `GET` endpoints except audit |
+| `viewer` | read endpoints except analyst downloads and admin audit |
 | `analyst` | viewer + investigation writes |
 | `admin` | analyst + audit trail |
 
@@ -115,7 +115,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
   "by_sensor": [ { "sensor_id": "web", "kind": "http", "events": 80, "buckets": [Bucket] } ],
   "by_severity": { "critical": 0, "high": 3, "medium": 8, "low": 2, "info": 0,
                    "none": 107 },         // "none" = events without any finding
-  "top_rules": [ { "rule_id": "PI-001", "events": 6, "severity": "high" } ],
+  "top_rules": [ { "rule_id": "PI-001", "title": "instruction-override phrasing directed at an automated agent", "events": 6, "severity": "high" } ],
   "top_sources": [SourceSummary],       // up to 10
   "recent_signals": [EventSummary],     // up to 10 correlation signals
   "open_investigations": 2
@@ -148,7 +148,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
 
 // Rule
 { "id": "PI-001", "family": "detection",   // detection | correlation
-  "title": "…", "description": "…",          // description may be ""
+  "title": "…", "description": "…", "guidance": "…", "observe_only": false,
   "severity": "high", "enabled": true }      // severity is "" for correlation rules
 
 // Investigation
@@ -226,7 +226,8 @@ each newly stored envelope; `event: heartbeat` with `data: {"time":"…"}` every
 15 s. The stream accepts optional `node=<id>|local`; other filters remain client-side. A browser
 `EventSource` cannot read the status of a failed stream, so on close the UI
 calls `GET /api/v1/session` to tell an expired session from an outage. A slow client is disconnected rather than buffered without bound. At most
-16 concurrent streams (503 beyond).
+16 concurrent streams (503 beyond). Observation JSON is encoded once per tenant/event
+and shared across its node-filter classes; heartbeat frames remain per stream.
 
 ## Audit actions
 
@@ -234,7 +235,7 @@ calls `GET /api/v1/session` to tell an expired session from an outage. A slow cl
 `session.oidc_login`, `session.oidc_denied`, `session.tenant_switch`,
 `investigation.create`, `investigation.update`, `investigation.note`,
 `investigation.attach`, `investigation.detach`, `audit.read`, `audit.verify`,
-`authz.denied`. Token values, session identifiers and note bodies are never
+`authz.denied`, `event.read`, `export.events`. Token values, session identifiers and note bodies are never
 written to the audit trail.
 
 ## Implementation safety bounds and clarified semantics
@@ -494,3 +495,355 @@ returns 406. `/` (index.html) stays `no-store` with no ETag or compression.
 starts, length and classification fields as `overview.buckets`, including zeros.
 When more sensor IDs occur across a fleet, only the first 64 represented in
 newest-first evidence are detailed; the main totals still include all events.
+
+
+### AI pack rule metadata addition (uncommitted)
+
+`GET /api/v1/rules` adds `frameworks: [{framework, id, name}]` to each Rule,
+using the same catalog as `rules list`/`explain`. References are editorial
+"relates to" mappings, not coverage or completeness claims. AGT-001 reflects
+the defender-mirrored technique; it does not prove attacker use. HT-001 has
+severity `critical`; all six appended AI/token rules are observe-only.
+Native event observations may contain safe `ai_family`, `credential_class`,
+and `token_id` finding metadata. Auth-attempt digests are memory-only and are
+excluded from the index, API envelope JSON and all durable/exported evidence.
+See [../ai-threat-detection.md](../ai-threat-detection.md).
+
+## Attacker sessions, framework relations and downloads (ADR-0022)
+
+These are deterministic read projections of already redacted evidence. There is
+no model call, connector, new console egress, enforcement or evidence mutation.
+An observed source key is not an actor identity; NAT and proxies can combine
+clients. The existing listener, tenant selection, viewer/analyst hierarchy,
+Host/Origin/authentication checks, body rejection, eight-handler capacity and
+error envelope apply. Unknown/duplicate query keys are rejected. No new config
+field or dependency is introduced. UI and dev mock support are separate work.
+
+| GET route | Role | Selection and response |
+|---|---|---|
+| `/api/v1/sessions` | viewer | `window=1h\|24h\|7d` (default 24h), exact `source` (<=255 bytes), `limit` (default 50, 1..200), `cursor`; `{sessions:[Session],total_matched,next_cursor,as_of,window,bounds}` |
+| `/api/v1/sessions/{id}` | viewer | No query; `Session` fields plus `{timeline:[TimelineEvent],phases:[Phase],timeline_truncated,bounds}` |
+| `/api/v1/coverage` | viewer | `window` as above; `{frameworks:[{framework,techniques:[{id,name,rule_ids,observed_event_count,last_seen}]}],since,until,interpretation,bounds}` |
+| `/api/v1/export/indicators` | analyst | Exactly one of `session=<id>`, `source=<key>`, `investigation=<id>`, `window=<window>`; required `format=stix\|csv\|txt`; attachment |
+| `/api/v1/sessions/{id}/report` | analyst | No query; deterministic `text/markdown` attachment |
+| `/api/v1/investigations/{id}/report` | analyst | No query; deterministic `text/markdown` attachment, including attached notes |
+
+`bounds` is `{index:{events,capacity,oldest,history},scanned_events,scan_limit:8192,
+scan_truncated}`. One locked snapshot samples the newest 8192 entries before
+selection; a sparse source/investigation/window can therefore have no sampled
+events even when older entries remain indexed. History is `complete`,
+`truncated` or `unavailable` under the existing index contract. Neither complete
+history nor an untruncated scan establishes completeness outside this process's
+retained index. Response bodies are at most 2 MiB; an oversized response returns
+503 `unavailable` with no partial download. STIX also caps object construction
+at approximately 2048 objects (a final bounded group can cross this guard before
+failure). Reduce list limit or export scope after a size error.
+
+### Session contract
+
+A session joins consecutive events with the same nonempty source key in the
+sample, including signals and all authenticated node origins, until an idle gap
+is **greater than 30 minutes**. Exactly 30 minutes stays in the session. Empty
+source keys are excluded rather than combined. Time order is native timestamp,
+then `local|node_id:event_id` lexical order for ties. The 32-hex ID is the first
+128 bits of SHA-256(JSON array `[tenant,source,first_origin_event_key]`). This
+is stable while that first retained event stays first; eviction, restart,
+late equal-time arrivals or sample movement can change it. No session state is
+persisted. Foreign, evicted and absent IDs return the same 404. Malformed IDs
+return 400.
+
+Grouping precedes list window selection: return sessions overlapping the
+inclusive interval `[as_of-window,as_of]`. Counts and detail include the whole
+sampled session, including context outside that interval. Source selection is
+exact. Sort sessions by last seen descending, then session ID ascending.
+Cursors are HMAC authenticated, tenant/process scoped, and bind source, window,
+snapshot digest and the first page's `as_of`. Limits may change between pages.
+Changed evidence, changed filters, restart, tampering, cross-endpoint or
+cross-tenant reuse returns 400; restart pagination without the cursor.
+
+`Session` fields (arrays and maps are present even when empty):
+
+```json
+{
+  "id":"32 hex", "source":"observed peer key",
+  "first_seen":"RFC3339Nano UTC", "last_seen":"RFC3339Nano UTC",
+  "duration_ms":1000, "event_count":8,
+  "sensors":["sensor-id"], "sensor_kinds":["http"],
+  "sensors_truncated":false,
+  "classification_counts":{"interaction":7,"correlation_signal":1},
+  "rule_ids":["LLM-001","COR-005"], "max_severity":"low",
+  "frameworks":[{"framework":"mitre-attack","id":"T1595","name":"Active Scanning"}],
+  "cadence":{"min_gap_ms":0,"median_gap_ms":100,"p90_gap_ms":200,
+    "events_per_minute":60,"regularity":0.75},
+  "automation":{"assessment":"inconclusive",
+    "evidence":[{"code":"insufficient_events","detail":"fixed explanatory prose"}]}
+}
+```
+
+Durations/gaps are numeric milliseconds and can be fractional. `max_severity`
+is empty if no detection severity is mapped (correlation signals have no catalog
+severity). Sensors and kinds are unique/sorted and independently capped at 64,
+with `sensors_truncated`; rule IDs and framework references are unique/sorted
+catalog values. Classifications count retained envelopes, including signals.
+
+Cadence uses all retained session events: nonnegative adjacent gaps, upper
+median (`sorted[len/2]`), nearest-rank p90 (`ceil(.9*gap_count)-1`), and rate
+`(event_count-1)/elapsed_minutes`. Rate is zero for zero elapsed time. Regularity
+is the fraction of gaps whose absolute distance from the upper median is
+<=25% of that median; for a zero median, only zero gaps count. No gaps yields
+all zeros. Zero timestamps/gaps can reflect clock precision or scheduling.
+
+Automation **separately excludes correlation-signal events from timing and
+minimum-count checks** to avoid artificial sub-second gaps. At least eight
+non-signal events are required for any assessment other than `inconclusive`.
+With eight or more, any listed predicate yields
+`consistent_with_automation`; otherwise `mixed` means none of these selected
+predicates established consistency, not evidence of a human/automated mixture.
+Evidence codes, in deterministic order:
+
+- `sub_second_cadence`: interaction upper median gap <1000 ms, including zero;
+  this is cadence, not a measured request/response reaction.
+- `regular_cadence`: median in [1000,30000] ms and at most one interaction gap
+  outside median +/-25%.
+- `agent_canary`, `correlation_cadence`, `multi_surface_enumeration`,
+  `honeytoken_replay`, `cross_sensor_replay`: AGT-001, COR-005, COR-006,
+  HT-001 and COR-008 respectively were present in sampled session rules.
+- `insufficient_events`: fewer than eight non-signal observations, even when
+  one of the rule predicates is present. Evidence remains listed.
+
+This is an observation with supporting evidence, never an automation verdict,
+LLM attribution or a claim that an observed technique succeeded.
+
+Detail timeline contains the **first 200** chronological session events:
+`{event_id,node_id,time,gap_ms,sensor,kind,classification,rule_ids,summary}`.
+`node_id` is `local` for local events. `gap_ms` is null on the first event.
+Phases segment that same capped timeline into contiguous runs:
+`{stage,first_seen,last_seen,event_ids}`. Static precedence is:
+
+1. `decoy_credential_replay`: HT-001 or COR-008.
+2. `ai_service_abuse`: LLM-002, LLM-003, AGT-001, PI-001, PI-002 or ESC-001.
+3. `credential_access`: EXF-001, LLM-004, COR-007 or SSH kind.
+4. `discovery`: all other observations.
+
+Stages can recur or appear in any order; segmentation describes evidence,
+not a forced attack lifecycle or inferred intent. `timeline_truncated` also
+means the phases cover only that prefix. Node-qualified timeline entries
+resolve colliding fleet IDs; phase event IDs are bare references into it.
+
+### Framework relations
+
+Always returns the catalog's `mitre-attack`, `mitre-atlas`, `owasp-llm-2025`
+mappings, including unobserved techniques (`0` and empty `last_seen`). Counts
+use unique retained entries per technique, even when several rules map there,
+in the inclusive selected window. Rules and techniques are sorted by ID;
+frameworks have the order above. Disabled rules remain catalog relations.
+This answers "which techniques our rules relate to, and what we observed";
+it is not coverage/completeness, compliance, technique execution or attribution.
+AGT-001 references the defender-mirrored technique as documented in the AI pack.
+
+### Indicator downloads
+
+Only literal IPv4/IPv6 source keys are eligible. IPv4-mapped IPv6 normalizes to
+IPv4; zone identifiers, hostnames, host:port values, empty keys and other strings
+are skipped and counted. No DNS lookup or provider validation occurs. Deduplicate
+canonical IPs and origin-qualified event references. Confidence is **15/100**,
+deliberately low: decoy contact is an observation. Session scope includes its
+sampled context; source scope includes all sampled events for that key;
+investigation scope resolves only attached local bare event IDs, preserving
+legacy annotation semantics; window scope selects individual events.
+
+Downloads use fixed filenames (`aegismesh-indicators.json|csv|txt`),
+`Content-Disposition: attachment`, and the existing no-store/security headers.
+No input selects a filesystem path. All downloads add:
+`X-AegisMesh-Index-History`, `X-AegisMesh-Index-Events`,
+`X-AegisMesh-Scanned-Events`, `X-AegisMesh-Scan-Limit`,
+`X-AegisMesh-Scan-Truncated`. Indicators add
+`X-AegisMesh-Skipped-Non-IP-Sources` and `X-AegisMesh-Skipped-Non-IP-Events`.
+CSV with no indicators contains only its header; skip counts remain in headers
+(and CLI stderr). TXT includes skip counts even when empty.
+
+STIX follows [OASIS STIX 2.1](https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html):
+a bundle of synthetic instance identity, low-confidence IP indicators, evidence
+notes, ATT&CK/ATLAS attack-pattern references and `related-to` relationships.
+Notes link exact `local|node_id:event_id` references without copying observations.
+OWASP mappings remain in sessions/reports; they are not emitted as ATT&CK/ATLAS
+attack patterns. Indicator patterns are `[ipv4-addr:value = 'IP']` or
+`[ipv6-addr:value = 'IP']`, `pattern_type:stix`, `pattern_version:2.1`, with
+`valid_from`, created/modified timestamps and descriptions preserving uncertainty.
+The export summary note includes skipped counts. Every contained SDO/SRO has
+`spec_version:"2.1"`; the bundle itself has no spec_version, per the specification.
+IDs are deterministic RFC 4122 UUIDv5 (DNS namespace, JSON array name including
+type). Identity namespace derives from trusted console state directory plus
+tenant; paths are hashed, never exported. CLI uses the sorted native instance
+labels instead. These namespaces need not produce equal console/CLI identity IDs.
+Static identity/catalog metadata has fixed 2026-01-01 timestamps; observed bounds
+use UTC RFC3339 with nine fractional digits. Changing indicator content yields a
+new immutable ID. No TAXII delivery or validation against an external SIEM is
+claimed; tests check required properties, patterns, UUIDs and resolved references.
+
+CSV columns: `indicator,type,first_seen,last_seen,event_count,confidence,
+interpretation,skipped_non_ip_sources,skipped_non_ip_events`. Only IPs populate
+the indicator column. TXT has one canonical IP per line after a **PROPOSED
+blocklist for operator review; never applied by AegisMesh** comment header.
+
+### Observation reports and audit
+
+Markdown reports contain scope, bounded timeline, sources (up to 64), rules with
+editorial mappings, automation observations (up to 200 session groups), notes,
+proposed dry-run recommendations and explicit limits. Omitted counts are shown.
+Investigations disclose unresolved attached references; forwarded collisions
+never resolve a local attachment. Recommendations use the existing engine on
+up to 4096 verified local envelopes, at most 20 proposals. Forwarded inputs and
+inputs over the cap are counted as excluded; events evicted after the summary
+snapshot are counted as unavailable. Invalid recommendation inputs fail closed
+with 503. There is no cross-node recommendation engine. Report filename is
+`aegismesh-observation-report.md`; no generated-at clock makes downloads drift.
+
+All variable strings (including titles, notes, sources, summaries and catalog
+prose) are capped at 4000 characters, controls and Unicode formatting controls replaced, JSON quoted onto one
+line and fenced as text. A leading quote prevents attacker fences from starting
+a line; JSON escapes HTML and Unicode line separators. Only static text creates
+Markdown structure. Newline formatting within notes is flattened deliberately.
+No raw credential values, prompts or request bodies are copied. The report is
+not a declaration that an incident occurred or a forensic chain of custody.
+
+Audit adds successful `export.indicators`, `session.report` and
+`investigation.report` reads; audit must append before response bytes. Targets
+are session/investigation IDs where selected, never raw source keys or note
+text. Audit exhaustion/failure returns 503 and no attachment. Existing
+`authz.denied` applies to insufficient roles. Sensors, policy and stored evidence
+remain immutable through all these routes.
+
+## Round 3 additions (local, uncommitted)
+
+These additions use the existing authentication, tenant selection, Host/Origin,
+CSRF, URI/body bounds, eight-handler admission and no-store response policy.
+None adds an egress destination or sensor/configuration mutation.
+
+| Method and path | Minimum role | Result |
+| --- | --- | --- |
+| `GET /api/v1/export/events?format=...&window=24h` | analyst | Bounded audited attachment, formats `cef`, `syslog-rfc5424`, `otlp-json`, `ecs` |
+| `GET /api/v1/digest?window=24h` | viewer | Digest JSON, windows `24h`, `7d`, default `24h` |
+| `GET /api/v1/decoys?window=24h` | viewer | `{decoys:[Decoy],bounds:Bounds}`; windows `1h`, `24h`, `7d`, default `24h` |
+| `GET /api/v1/honeytokens?window=24h` | viewer | `{honeytokens:[Honeytoken],bounds:Bounds}`; same windows/default |
+
+Export events accepts **exactly one** of `session`, `source`, `investigation`,
+`window`, matching indicator download scopes and validation. Session context
+can extend beyond the selected window; investigations resolve attached local
+IDs only. Selection is newest-8192 sampled; native lookups are origin-qualified,
+with a conservative 2 MiB input budget, and missing references fail closed.
+Output is capped at 2 MiB and audited as `export.events` before bytes. Fixed
+attachment names are `aegismesh-events-cef.log`,
+`aegismesh-events-syslog-rfc5424.log`, `aegismesh-events-otlp-json.json`,
+`aegismesh-events-ecs.ndjson`. Content types are text/plain, application/json
+(OTLP), application/x-ndjson (ECS). Bounds headers match indicator downloads.
+There is no disk path parameter. **OTLP is format only; AegisMesh does not ship
+an OTLP exporter.** [Format/escaping/severity contract](../siem-export.md).
+
+The digest captures one `as_of` and compares `[as_of-window,as_of)` with the
+immediately preceding equal window. Both totals count classifications, sources
+and active sensors. Source novelty and technique novelty are relative to the
+preceding sample, not first-ever observations. Automation session counts reuse
+retained source sessions and their eight-non-signal minimum; a session counts
+once if any event overlaps the current window and its full sampled context is
+consistent with automation. No client identity is inferred. Honeytoken/agent
+hits count events with HT-001/AGT-001, once per rule per event. Top rules are the
+ten largest event counts with stable ID ties and static catalog title/severity.
+New techniques are unique `{framework,id,name}` references absent from the
+preceding window, sorted by framework then ID. Open investigations count every
+current annotation whose status is not closed, independent of evidence window.
+Recommendations use at most 4096 current-window local verified envelopes, at
+most 20 proposed dry-run recommendations; forwarded, over-cap and evicted
+references are counted explicitly. This is on demand, without scheduling.
+
+```jsonc
+// Digest — arrays are present even when empty
+{
+  "window":"24h", "as_of":"RFC3339Nano UTC",
+  "totals":{"events":9,"interaction":8,"canary_invocation":1,"correlation_signal":0,"sources":2,"sensors_active":2},
+  "previous_totals":{"events":2,"interaction":2,"canary_invocation":0,"correlation_signal":0,"sources":1,"sensors_active":1},
+  "new_sources":1, "returning_sources":1,
+  "sessions_consistent_with_automation":1,
+  "top_rules":[{"rule_id":"MCP-001","title":"declared synthetic credential content was requested","severity":"medium","events":1}],
+  "new_techniques":[{"framework":"mitre-atlas","id":"AML.T0055","name":"Unsecured Credentials"}],
+  "honeytoken_hits":1, "agent_canary_hits":0,
+  "open_investigations":2, "dry_run_recommendations":1,
+  "bounds":{"index":{"events":11,"capacity":50000,"oldest":"…","history":"complete"},"scanned_events":11,"scan_limit":8192,"scan_truncated":false},
+  "limits":{"interpretation":"Retained observations, not incidents, client attribution or technique execution; no scheduler or delivery.","history":"complete","scan_truncated":false,"source_comparison":"New means absent from the preceding sampled window, not first-ever seen.","investigations_available":true,"recommendation_excluded":0,"recommendation_missing":0,"recommendation_cap":20}
+}
+
+// Decoy — only configured local surfaces of the active local_tenant
+{"id":"ai-workspace","kind":"mcp","listen":"127.0.0.1:8002",
+ "surface_families":["mcp_environment"],"rules":0,"tools":5,"fake_files":2,
+ "honeytoken_ids":["decoy-key"],"events":4,"last_activity":"RFC3339Nano UTC"}
+
+// Honeytoken — ID and kind are safe catalog metadata, never the marker value
+{"id":"decoy-key","kind":"credential","sensor_ids":["ai-api","ai-workspace"],
+ "hit_count":1,"last_hit":"RFC3339Nano UTC","sources":["192.0.2.4"]}
+```
+
+Catalog arrays are sorted by ID; families, planted IDs, sensor IDs and sources
+are sorted/unique. Metadata derives once from the effective config, with no
+bodies, schemas, prompts, env content or token values retained in the console
+catalog. HTTP families derive from configured static paths (vLLM profile rule
+names disambiguate its shared paths); unclassified HTTP surfaces use `http`.
+Tool counts include five environment tools; rule counts combine HTTP/TCP static
+rules; fake file counts exclude synthetic env/query entries. Planting is found
+only in inline configured response material; external body files are not read
+for this catalog, so their planting is not inferred. A token with no detected
+planting has `sensor_ids:[]`. Other tenants get empty local catalogs, even
+administrators. Forwarded observations do not count as hits or activity for
+local-config catalogs, avoiding node/sensor-ID collisions. Activity/hits use the
+selected half-open window within the newest 8192-event snapshot; empty last
+activity/hit is `""`. Honeytoken counts use exact configured IDs from detection
+metadata; several tokens can each count on the same event. Bodies/values are
+never returned. These are observations, not proof of successful secret use.
+
+Existing types gain:
+
+```jsonc
+// Rule, all catalog records have nonempty static prose
+{"id":"MCP-001","family":"detection","title":"declared synthetic credential content was requested",
+ "description":"Declared synthetic credential content was requested from the workspace.",
+ "guidance":"Check the connection tool sequence and later HT-001 or COR-008 observations.",
+ "severity":"medium","enabled":true,"observe_only":true,"frameworks":[]}
+// Overview (additions)
+{"index":{"events":0,"capacity":50000,"oldest":"","history":"complete"},
+ "top_rules":[{"rule_id":"PI-001","title":"instruction-override phrasing directed at an automated agent","severity":"high","events":1}]}
+// EventDetail (addition)
+{"session_id":"32 hex, or empty if outside retained analysis sessions"}
+// Source detail (addition beside source/events/next_cursor)
+{"inter_arrival":[{"lt_ms":100,"count":0},{"lt_ms":1000,"count":0},{"lt_ms":10000,"count":7},{"lt_ms":60000,"count":0},{"lt_ms":300000,"count":0},{"lt_ms":1800000,"count":0},{"lt_ms":null,"count":0}]}
+```
+
+`observe_only` is true for all correlation signals and detection rules that
+cannot select a response action. It does not suppress older findings on the
+same interaction. Top-rule severity now comes from the rule's own catalog
+entry, including empty severity for correlations, rather than another finding
+on the same event. `index.events==0` explicitly means the index is empty;
+nonzero occupancy with zero window totals is a quiet window. History still
+qualifies completeness. Event-session links use the newest 8192 retained
+summaries and authenticated origin, so colliding fleet IDs cannot link the
+wrong event; evicted anchors can change session IDs. Raw detail reads are now
+sensitive reads: `event.read` is audited with `local|node_id:event_id` before
+response bytes, even for viewers. Audit unavailable/exhausted means 503 with
+no envelope. This also applies to HEAD's GET handler semantics.
+
+Inter-arrival uses **all** retained events for the exact source, independent of
+page limit, cursor or the 8192 analysis sample. It sorts by index timestamp /
+append order and counts each nonnegative adjacent gap, including equal-time
+arrivals and correlation signals. Buckets have exclusive upper bounds
+100 ms, 1 s, 10 s, 1 min, 5 min, 30 min, then infinity (`lt_ms:null`). Thus exact
+1 s enters the `<10 s` bucket. Sum of counts is retained source count minus
+one. This includes generated signals and clock/scheduling artifacts; it is not
+an automation assessment. No events yields zero counts. No new query parameter
+is accepted on source detail.
+
+Malformed/duplicate/unknown query parameters or bodies on the new GET routes
+return 400. Export scopes use the existing 512-byte generic query cap and
+255-byte source cap. Invalid Bearer authorization attempts are separately
+budgeted from browser login attempts: ten/address/minute across the existing
+4096-key throttle table, then 429 with Retry-After 60. Successful Bearer reads
+do not consume this budget; once exhausted that remote must wait before retrying
+a valid Bearer token. Cookie sessions remain independent. Bounds are process
+local and are not a distributed rate-limit or hard tenant boundary.

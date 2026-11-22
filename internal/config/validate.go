@@ -19,6 +19,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/egress"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 )
 
 var (
@@ -34,7 +35,7 @@ var (
 		SensorKindHTTP: {"persona": true, "rules": true, "fallback": true, "max_body_bytes": true},
 		SensorKindTCP:  {"banner": true, "session": true, "tcp_rules": true},
 		SensorKindMCP: {"path": true, "server_name": true, "server_version": true, "instructions": true, "tools": true,
-			"resources": true, "prompts": true},
+			"resources": true, "prompts": true, "environment": true},
 		SensorKindSSH: {"ssh": true},
 	}
 )
@@ -87,6 +88,9 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("%w: tcp sensor %q: %v", errConfig, s.ID, err)
 			}
 		case SensorKindMCP:
+			if err := ValidateMCPEnvironment(s.Environment, c.Honeytokens); err != nil {
+				return fmt.Errorf("sensor[%d]: %w", i, err)
+			}
 			if err := validateMCPSensor(s); err != nil {
 				return fmt.Errorf("%w: mcp sensor %q: %v", errConfig, s.ID, err)
 			}
@@ -135,6 +139,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.validateProcessIsolation(); err != nil {
 		return err
+	}
+	if err := honeytoken.Validate(c.Honeytokens); err != nil {
+		return fmt.Errorf("%w: %w", errConfig, err)
 	}
 	if err := ValidateDetection(c.Detection); err != nil {
 		return fmt.Errorf("%w: %v", errConfig, err)
@@ -566,6 +573,23 @@ func (c *Config) ResolveExtensionManifestPath(rel string) (string, error) {
 // checks disabled rule ids against the engine's registry. A disabled section
 // may still be validated so typos never hide behind enabled=false.
 func ValidateCorrelation(c *Correlation) error {
+	cap := c.PerSourceEvents
+	if cap == 0 {
+		cap = DefaultCorrelationPerSrcEvents
+	}
+	for _, field := range []struct {
+		name       string
+		value, min int
+	}{{"automation_threshold", c.AutomationThreshold, 4}, {"credential_threshold", c.CredentialThreshold, 3}} {
+		value := field.value
+		if value == 0 {
+			value = 8
+		}
+		if value < field.min || value > cap {
+			return fmt.Errorf("correlation.%s must be within %d..per_source_events (0 = default 8)", field.name, field.min)
+		}
+	}
+
 	if len(c.DisabledRules) > 0 {
 		if err := correlate.ValidateRuleIDs(c.DisabledRules); err != nil {
 			return fmt.Errorf("correlation.disabled_rules: %v", err)
@@ -646,9 +670,9 @@ func validateMCPSensor(s *Sensor) error {
 	if len(s.Instructions) > 4096 {
 		return fmt.Errorf("instructions exceeds 4096 bytes")
 	}
-	if n := len(s.Tools); n == 0 {
+	if n := len(s.Tools); n == 0 && s.Environment == nil {
 		return fmt.Errorf("at least one canary tool is required (an MCP endpoint without tools serves no deception purpose)")
-	} else if n > MaxMCPTools {
+	} else if n+MCPEnvironmentToolCount(s.Environment) > MaxMCPTools {
 		return fmt.Errorf("%d tools exceed cap of %d", n, MaxMCPTools)
 	}
 	if len(s.Resources) > MaxMCPResources {
@@ -670,7 +694,7 @@ func validateMCPSensor(s *Sensor) error {
 		if !toolNameRe.MatchString(t.Name) {
 			return fmt.Errorf("%s.name %q is not a valid MCP tool name", where, t.Name)
 		}
-		if names[t.Name] {
+		if names[t.Name] || s.Environment != nil && IsMCPEnvironmentTool(t.Name) {
 			return fmt.Errorf("%s.name %q duplicates an earlier tool name", where, t.Name)
 		}
 		names[t.Name] = true
