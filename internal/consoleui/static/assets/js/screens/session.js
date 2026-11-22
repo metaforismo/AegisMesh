@@ -19,7 +19,7 @@ import {
   assessmentOf, evidenceMeta, storyItems, stageSummary, formatDurationMs, regularityText, boundsNote, unfoldSentence, stageMeta,
 } from '../lib/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
-import { pageHead, panel, kv, sevChip, evidence, chip, empty, banner, helpTip, toast, errorState, link, glyph } from '../ui/components.js';
+import { pageHead, panel, kv, sevChip, evidence, chip, empty, banner, helpTip, toast, errorState, link, glyph, copyable } from '../ui/components.js';
 import { assessmentChip, frameworkChips, stageTag, kindChips } from '../ui/story.js';
 import { downloadActions } from '../ui/downloads.js';
 import { icon } from '../ui/icons.js';
@@ -388,7 +388,7 @@ export default {
           panel({
             title: 'Details',
             body: kv([
-              ['Session id', h('code', { class: 'hash' }, d.id)],
+              ['Session id', copyable(d.id, { label: 'session id' })],
               ['Sensors', h('span', { class: 'chip-row' }, (d.sensors || []).map((x) => chip(x, { mono: true })), d.sensors_truncated ? chip('more not listed') : null)],
               ['Classes', h('span', { class: 'chip-row' }, Object.entries(d.classification_counts || {}).map(([k, v]) => chip(`${k.replace(/_/g, ' ')} ${v}`)))],
               ['Bounds', h('span', { class: 'kv-note' }, boundsNote(d.bounds))],

@@ -94,6 +94,7 @@ export default {
   title: 'Source',
   async render(root, ctx) {
     const key = ctx.route.params.source;
+    ctx.setTitle?.(key);
     // The first page uses the contract maximum so the activity strip has as
     // much of the history as one request can carry.
     const [res, origin] = await Promise.all([

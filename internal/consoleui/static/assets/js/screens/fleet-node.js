@@ -73,6 +73,7 @@ export default {
       });
     }
 
+    ctx.setTitle?.(n.name || '');
     mount(root,
       pageHead({
         crumbs: [['Fleet', href('fleet')], ['Node', null]],

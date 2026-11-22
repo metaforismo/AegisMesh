@@ -2588,3 +2588,13 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 /* A session's campaign membership, in a table cell. */
 .campaign-mark { display: inline-flex; align-items: center; gap: 3px; color: var(--color-accent); font-size: var(--text-2xs); font-weight: var(--weight-medium); text-decoration: none; }
 .campaign-mark:hover { text-decoration: underline; }
+@media (max-width: 45rem) {
+  .score__corner { min-width: 7.5rem; }
+  .score__who .evidence { max-width: 7rem; }
+  .score__step { min-width: 5.75rem; }
+  .score__shape .evidence { max-width: 5.5rem; }
+}
+/* Touch: inline links that open a source, rule or campaign get a 40px target. */
+@media (pointer: coarse) {
+  .source-chip, .campaign-mark, .score__src, .rule-link { display: inline-flex; align-items: center; min-height: 40px; }
+}

@@ -1040,3 +1040,8 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 .digest__md { width: 100%; margin-top: var(--space-3); font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.5; }
 .rule-link { text-decoration: none; }
 .rule-link:hover .chip { border-color: var(--color-accent-line); color: var(--color-accent); }
+/* Plain links among page actions sit on the button baseline, as quiet
+   text actions beside the one primary button. */
+.page-head__actions > a:not(.btn) { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 var(--space-2); border-radius: var(--radius-sm); color: var(--color-accent); font-size: var(--text-sm); font-weight: var(--weight-medium); text-decoration: none; }
+.page-head__actions > a:not(.btn):hover { text-decoration: underline; }
+@media (pointer: coarse) { .page-head__actions > a:not(.btn) { min-height: 44px; } }
