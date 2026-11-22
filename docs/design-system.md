@@ -381,6 +381,66 @@ Extension points for later screens: a screen is an item in `NAV`
 `screens/index.js`; the palette picks up `NAV` automatically. Nothing is
 listed before it exists.
 
+### Identity pass (2026-11-22)
+
+Art direction: **a written briefing inside an instrument.** The console keeps
+its calm graphite-and-cobalt instrument, and adds one bold move: page titles
+and the situation brief are set in the platform's serif (`--font-display`:
+New York on Apple systems, then Iowan Old Style, Charter, Georgia), the
+voice of a briefing a defender reads, while every operational surface stays
+in the sans with tabular numerals. The mesh appears as a faint 24px lattice
+(`--lattice-line`, `--lattice-node`) behind the top of each screen and the
+landing hero, and the evidence inset gains a 2px "tag" notch, the only
+ornament in the product and reserved for attacker-supplied text. Mono text
+uses a slashed zero.
+
+| Token | Value | Notes |
+|---|---|---|
+| `--font-display` | system serif stack | Titles, brief, session sentence. No font is fetched |
+| `--text-display`, `--leading-display` | 30px, 1.12 | Page titles (24px below 720px) |
+| `--lattice-line`, `--lattice-node` | cobalt at 5.5% / 12% (light), 4% / 10% (dark) | Decorative only; carries no information |
+
+Contrast: the display face uses the existing ink tokens, so text ratios are
+unchanged. New marks are non-text and redundant with printed values: mesh
+node edges use `--color-ink-3` (4.95:1 on canvas light, 6.15:1 dark) or the
+accent; tempo ticks use the classification slots (light signal green is
+2.82:1, so the list beside it carries the data, as for the main chart).
+
+New pieces:
+
+- **Sparkline marks** (`.spark__mark`, `lib/viz.js sparkMarks`): the start
+  point, the interior maximum and a nonzero interior minimum, on the same
+  geometry as the line; the last point keeps its dot.
+- **Sensor mesh** (Overview, `.mesh`, `meshLayout`): sensors from
+  `overview.by_sensor` as nodes around the console core; node area follows
+  events in the window; a pulsing ring and a solid edge only for sensors with
+  events in the newest bucket (`lastBucketActive`), dashed when that bucket was
+  empty, plain when the API sent no buckets. Every node is a link to the
+  sensor's events with its name and count in text. The pulse stops under
+  reduced motion.
+- **Sessions tile** beside Investigations on the Overview.
+- **Tempo ribbon** (session story, `.tempo`, `tempoLayout`): every timeline
+  event on one axis, gaps on a log scale, quiet stretches over 5 minutes as
+  labelled breaks, stage bands underneath, taller ticks for correlation
+  signals. One tab stop, arrow keys, Enter opens the event; hover or focus
+  highlights the matching event in the list.
+- **"How this session unfolded"** (`unfoldSentence`): one sentence in the
+  display serif composed only from the session's fields; the source stays
+  evidence.
+- **Row density** (top bar): comfortable or compact, remembered in this
+  browser (`aegismesh.density`, parsed against a closed list) and applied as
+  `html[data-density]`. Stacking tables gain a low-specificity zebra.
+- **Empty-state art** (`emptyArt`, `.empty-art`): a lattice, one decoy and a
+  probe line, drawn inline; used where an empty list is a normal state.
+- **Stat hierarchy**: the all-events tile leads (accent top rule, larger value).
+
+Motion fix: route transitions no longer crossfade. The old view leaves in
+`--duration-instant`, the new one enters after it, and the transition group
+no longer morphs between page heights; `swapView` finds the current view when
+the swap actually runs, removes any stray view and skips a running
+transition, so a navigation that overtakes another cannot leave two screens
+stacked (the ghosting seen in phase 2).
+
 ### Attacker sessions, the attack story and techniques (2026-11-22)
 
 Built on `GET /sessions`, `/sessions/{id}`, `/coverage`, `/export/indicators`,
@@ -759,3 +819,52 @@ and does not ship.
 | Light 1440px: Techniques (ATT&CK with unobserved cells), Rules | PASS |
 | 375px: the SSH story (light), Sessions, Techniques, Rules and Overview (dark); no horizontal page scroll (found and fixed: the framework tabs and the bounds note widened the page) | PASS |
 | Session detail in light at 1440px, reduced motion, Firefox and Safari, the real Go server | NOT RUN |
+
+### Verification: identity pass (2026-11-22, Chromium in the Claude browser pane, mock on port 9133)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (209 tests, adding sparkline marks, mesh layout, last-bucket activity, tempo layout, density parsing, the unfold sentence) | PASS |
+| `go test ./internal/consoleui` | PASS |
+| Overview dark and light at 1440px (display titles, brief, lattice, lead tile, sensor mesh); LLMjacking session dark at 1440px (unfold sentence, tempo ribbon, timeline) | PASS |
+| 375px light: session story and Overview; no horizontal page scroll on Overview, Events, Sessions, Techniques, Rules, Guide (found and fixed: a help tip's enlarged hit area poking past the content edge) | PASS |
+| Ghosting fix in a visible, motion-enabled browser; reduced motion; site pages after the identity change; dark at 375px for this pass | NOT RUN: the pane is hidden (View Transitions and animations do not progress), cannot emulate reduced motion, and refused the static site server |
+
+### Identity pass, continued (2026-11-22)
+
+- **Stage bar regression fixed.** The session hero's stage bar used the
+  `reveal-x` clip-path entrance; where that reveal did not complete, the bar
+  stayed clipped to a fraction of its width. The bar is now static and
+  full-width, and the discovery segment has a visible fill. Checked in dark and
+  light at 1440px and at 375px.
+- **Sign-in:** the title and a one-line statement in the display serif, a
+  lattice field behind the card, an accent top edge on the card.
+- **Sidebar rail:** "Collapse sidebar" at the foot of the nav switches to an
+  icon rail (`html[data-rail]`, remembered as `aegismesh.rail`, desktop widths
+  only). Labels stay in each link's accessible name and tooltip.
+- **First-run tour** (`ui/tour.js`): five steps (situation brief, counts,
+  Sessions, search, Guide) in a non-modal popover. No overlay, nothing behind
+  it is inert, focus moves to the step title, Esc or "Skip tour" ends it,
+  finishing or skipping is remembered (`aegismesh.tour`), steps whose target
+  is hidden (the nav drawer on phones) are skipped, and the Guide has "Take
+  the five-step tour again".
+- **Tables:** while a table scrolls sideways in its wrapper, the first column
+  sticks to the left edge.
+- **Site:** `site/index.html` is rebuilt: a serif headline on a lattice field,
+  a composed showcase from the real components (situation brief, sensor mesh,
+  a story slice) with synthetic data and a caption that says so, one card per
+  shipped capability, "What it is not", and a quick start whose commands are
+  taken from `docs/cli.md` (`make build`, `demo --console`, `init --profile
+  ai-decoy`, `honeytoken new`, `run --dry-run`). `site/design-system.html`
+  gains "Identity" and "Mesh, tempo, density" sections; the earlier sections
+  remain. The dev mock serves `site/` read-only under `/__site/` so the pages
+  can be checked with the console's security headers.
+
+| Check | Result |
+|---|---|
+| `make ui-test` (210 tests) and `go test ./internal/consoleui` | PASS |
+| Stage bar: session hero, dark and light 1440px, 375px (DOM width and screenshot) | PASS |
+| Landing: dark 1440px (hero, capabilities, what it is not, quick start), light 375px (hero, showcase); no horizontal scroll | PASS |
+| Style guide: dark 1440px, Identity and Mesh/tempo/density sections; no horizontal scroll | PASS |
+| Sign-in dark 1440px; tour and rail on Overview dark 1440px; no horizontal scroll at 375px on Overview, Guide, Sessions, a session | PASS |
+| Landing light 1440px and dark 375px; style guide light and 375px; sign-in light and 375px; tour at 375px; reduced motion | NOT RUN |

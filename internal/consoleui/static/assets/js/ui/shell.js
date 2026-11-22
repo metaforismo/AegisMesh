@@ -6,6 +6,7 @@ import { tenantInfo } from '../lib/tenant.js';
 import { authMethodLabel } from '../lib/auth.js';
 import { formatDateTime } from '../lib/format.js';
 import { icon, brandMark } from './icons.js';
+import { parseDensity, nextDensity } from '../lib/viz.js';
 
 export { brandMark };
 
@@ -86,6 +87,84 @@ function themeControl() {
   btn.addEventListener('click', () => cycleTheme());
   themeListeners.add(paint);
   paint(readTheme());
+  return btn;
+}
+
+// ---- Row density -----------------------------------------------------------
+// Comfortable or compact rows, remembered in this browser (a convenience,
+// like the theme). The stored value is parsed against a closed list.
+
+const DENSITY_KEY = 'aegismesh.density';
+
+function readDensity() {
+  try {
+    return parseDensity(globalThis.localStorage?.getItem(DENSITY_KEY));
+  } catch {
+    return 'comfortable';
+  }
+}
+
+export function applyDensity(d = readDensity()) {
+  document.documentElement.setAttribute('data-density', parseDensity(d));
+}
+
+function densityControl() {
+  const btn = h('button', { class: ['btn', 'btn--ghost', 'btn--icon'], type: 'button' });
+  const paint = (d) => {
+    btn.replaceChildren(icon(d === 'compact' ? 'rules' : 'menu'));
+    btn.setAttribute('aria-label', `Row density: ${d}. Activate for ${nextDensity(d)} rows.`);
+    btn.setAttribute('title', `Rows: ${d}`);
+    btn.setAttribute('aria-pressed', String(d === 'compact'));
+  };
+  btn.addEventListener('click', () => {
+    const next = nextDensity(readDensity());
+    try {
+      globalThis.localStorage?.setItem(DENSITY_KEY, next);
+    } catch {
+      // Storage may be unavailable; the choice still applies to this page.
+    }
+    applyDensity(next);
+    paint(next);
+  });
+  paint(readDensity());
+  return btn;
+}
+
+// ---- Sidebar rail ------------------------------------------------------------
+// A collapsed sidebar shows icons only (labels stay in the accessible name
+// and a tooltip). Remembered in this browser; '1' or nothing.
+
+const RAIL_KEY = 'aegismesh.rail';
+const readRail = () => {
+  try {
+    return globalThis.localStorage?.getItem(RAIL_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+export function applyRail(on = readRail()) {
+  document.documentElement.toggleAttribute('data-rail', Boolean(on));
+}
+
+function railToggle() {
+  const btn = h('button', { class: ['btn', 'btn--ghost', 'btn--sm', 'rail-toggle'], type: 'button' });
+  const paint = (on) => {
+    btn.replaceChildren(icon(on ? 'chevron-right' : 'chevron-left', { size: 'sm' }), h('span', { class: 'rail-toggle__label' }, on ? 'Expand' : 'Collapse sidebar'));
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Expand the sidebar' : 'Collapse the sidebar to icons');
+  };
+  btn.addEventListener('click', () => {
+    const next = !readRail();
+    try {
+      globalThis.localStorage?.setItem(RAIL_KEY, next ? '1' : '0');
+    } catch {
+      // Storage may be unavailable; the choice still applies to this page.
+    }
+    applyRail(next);
+    paint(next);
+  });
+  paint(readRail());
   return btn;
 }
 
@@ -199,7 +278,7 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     if (!items.length) return null;
     const indicator = h('span', { class: 'nav-indicator', 'aria-hidden': 'true' });
     const list = h('ul', { class: 'nav-list' }, indicator, items.map((i) => {
-      const a = h('a', { class: 'nav-link', href: i.href, 'data-route': i.route },
+      const a = h('a', { class: 'nav-link', href: i.href, 'data-route': i.route, title: i.label },
         icon(i.icon),
         h('span', { class: 'nav-link__label' }, i.label),
         i.tag ? h('span', { class: 'nav-link__tag' }, i.tag) : null);
@@ -215,8 +294,9 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     h('a', { class: 'brand', href: '#/overview' }, brandMark(), 'AegisMesh'),
     groups,
     h('div', { class: 'nav-foot' },
-      h('p', { class: 'muted' }, 'Times in UTC'),
-      h('p', { class: 'muted' }, `Version ${meta?.version || 'unknown'}`),
+      railToggle(),
+      h('p', { class: 'muted nav-foot__meta' }, 'Times in UTC'),
+      h('p', { class: 'muted nav-foot__meta' }, `Version ${meta?.version || 'unknown'}`),
       h('a', { href: 'https://github.com/metaforismo/AegisMesh/blob/master/docs/architecture/console-api.md' }, 'API contract')));
 
   const scrim = h('div', { class: 'nav-scrim', 'aria-hidden': 'true' });
@@ -252,6 +332,7 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     search,
     h('div', { class: 'top-spacer' }),
     liveSlot,
+    densityControl(),
     themeControl(),
     tenantControl(session, onSwitchTenant),
     accountControl(session, meta, onLogout));

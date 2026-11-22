@@ -56,7 +56,7 @@ export default {
         ? scrolling(table({ caption: 'Attacker sessions', columns: columns(), rows, rowClass: (s) => (s.automation?.assessment === 'consistent_with_automation' ? 'row--noted' : null) }))
         : empty(f.source ? 'No session from this source in the window' : 'No sessions in this window',
           'A session needs at least one event with a source key. Try a wider window; sessions are built from the newest indexed events only.',
-          h('a', { class: 'btn', href: href('sessions', { window: '7d', source: f.source || '' }) }, 'Last 7 days'), { icon: 'story' }));
+          h('a', { class: 'btn', href: href('sessions', { window: '7d', source: f.source || '' }) }, 'Last 7 days'), { icon: 'story', art: true }));
       mount(pagerSlot, pager({
         shown: rows.length, total, hasMore: Boolean(cursor),
         onMore: async () => {

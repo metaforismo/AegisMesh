@@ -30,6 +30,9 @@ import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/or
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATIC = path.resolve(HERE, '../static');
+// The project site, served read-only under /__site/ so it can be checked in a
+// browser with the same security headers (a development convenience).
+const SITE_DIR = path.resolve(HERE, '../../../site');
 const argPort = process.argv.indexOf('--port');
 const PORT = Number(argPort > 0 ? process.argv[argPort + 1] : process.env.PORT || 9121);
 const HOST = '127.0.0.1';
@@ -1172,6 +1175,23 @@ function ifNoneMatch(header, etag) {
   return header.split(',').map((x) => x.trim().replace(/^W\//, '')).some((x) => x === '*' || x === etag);
 }
 
+async function serveSite(res, url) {
+  let rel;
+  try { rel = decodeURIComponent(url.pathname.slice('/__site'.length)); } catch { return fail(res, 'not_found', 'not found'); }
+  if (rel === '/') rel = '/index.html';
+  const file = path.resolve(SITE_DIR, `.${rel}`);
+  if (!file.startsWith(SITE_DIR + path.sep)) return fail(res, 'not_found', 'not found');
+  const type = TYPES[path.extname(file)];
+  if (!type) return fail(res, 'not_found', 'not found');
+  try {
+    const raw = await readFile(file);
+    res.writeHead(200, securityHeaders({ 'Content-Type': type, 'Cache-Control': 'no-store' }));
+    return res.end(raw);
+  } catch {
+    return fail(res, 'not_found', 'not found');
+  }
+}
+
 async function serveStatic(req, res, url) {
   let rel;
   try { rel = decodeURIComponent(url.pathname); } catch { return fail(res, 'not_found', 'not found'); }
@@ -1217,6 +1237,7 @@ const server = http.createServer(async (req, res) => {
   if (host !== `${HOST}:${PORT}` && host !== `localhost:${PORT}`) return fail(res, 'invalid_argument', 'host mismatch'); // 421 in production
   try {
     if (url.pathname.startsWith('/api/v1/')) return await api(req, res, url);
+    if (url.pathname.startsWith('/__site/') && req.method === 'GET') return await serveSite(res, url);
     if (url.pathname === '/__mock/burst' && req.method === 'GET') return send(res, 200, { sent: burst(url.searchParams.get('n') || 200), streams: streams.size });
     if (url.pathname === '/__mock/idp/authorize' && req.method === 'GET' && OIDC_AUTH) return idpPage(res, url);
     if (req.method !== 'GET') return fail(res, 'not_found', 'not found');

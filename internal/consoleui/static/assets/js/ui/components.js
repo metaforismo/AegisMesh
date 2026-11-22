@@ -6,6 +6,7 @@ import { classificationMeta, isSeverity, severityLabel, capitalize } from '../li
 import { formatDateTime, formatRelative, truncate } from '../lib/format.js';
 import { describeError } from '../lib/api.js';
 import { sparkPath } from '../lib/chart.js';
+import { sparkMarks } from '../lib/viz.js';
 import { icon } from './icons.js';
 
 // ---- Severity, classification, badges ------------------------------------
@@ -114,6 +115,7 @@ export function sparkline(values, { series = '', width = 88, height = 28, label 
   el.appendChild(svg('g', { class: 'spark__draw' },
     svg('path', { class: 'spark__area', d: p.area }),
     svg('path', { class: 'spark__line', d: p.line }),
+    sparkMarks(values, { width, height, pad: 2.5 }).filter((m) => m.kind !== 'end').map((m) => svg('circle', { class: ['spark__mark', `spark__mark--${m.kind}`], cx: m.x, cy: m.y, r: 1.6 })),
     p.last ? svg('circle', { class: 'spark__dot', cx: p.last.x, cy: p.last.y, r: 2 }) : null));
   return el;
 }
@@ -146,9 +148,26 @@ export function loading(label = 'Loading') {
     h('span', { class: 'btn-row' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), `${label}…`));
 }
 
-export function empty(title, detail, action, { icon: name = 'inbox' } = {}) {
+// A small lattice with one decoy node and a probe line that stops short of
+// it: the empty states' illustration, in the product's own motif.
+export function emptyArt() {
+  const grid = [];
+  for (let i = 0; i <= 5; i++) {
+    grid.push(svg('line', { class: 'empty-art__grid', x1: i * 24, x2: i * 24, y1: 0, y2: 72 }));
+    if (i <= 3) grid.push(svg('line', { class: 'empty-art__grid', x1: 0, x2: 120, y1: i * 24, y2: i * 24 }));
+  }
+  return svg('svg', { class: 'empty-art', viewBox: '0 0 120 72', 'aria-hidden': 'true', focusable: 'false' },
+    grid,
+    svg('path', { class: 'empty-art__probe', d: 'M12 60 C 36 60, 48 36, 66 30' }),
+    svg('circle', { class: 'empty-art__node', cx: 12, cy: 60, r: 3.5 }),
+    svg('circle', { class: 'empty-art__node', cx: 96, cy: 12, r: 3 }),
+    svg('circle', { class: 'empty-art__node', cx: 108, cy: 60, r: 3 }),
+    svg('rect', { class: 'empty-art__decoy', x: 66, y: 18, width: 24, height: 24, rx: 4 }));
+}
+
+export function empty(title, detail, action, { icon: name = 'inbox', art = false } = {}) {
   return h('div', { class: 'state' },
-    h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(name)),
+    art ? emptyArt() : h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(name)),
     h('p', { class: 'state__title' }, title),
     detail ? h('p', null, detail) : null,
     action || null);

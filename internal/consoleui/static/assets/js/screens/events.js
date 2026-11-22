@@ -256,7 +256,7 @@ export default {
         ? empty('No events match these filters', 'Nothing in the index matches all of them. Remove one to widen the list:',
           h('div', { class: 'fchip-row' }, emptyChips.map(filterChip), h('a', { class: ['btn', 'btn--sm'], href: href('events', { live: liveRequested ? '1' : '' }) }, 'Clear all')), { icon: 'filter' })
         : empty('No event has been stored yet', liveRequested ? 'Live mode is on: new observations appear here as sensors record them.' : 'Sensors record observations here as they arrive. Decoys have no legitimate users, so an empty list is a normal state.',
-          h('a', { class: 'btn', href: '#/guide?t=index' }, icon('guide', { size: 'sm' }), 'What the console can see'), { icon: 'inbox' }));
+          h('a', { class: 'btn', href: '#/guide?t=index' }, icon('guide', { size: 'sm' }), 'What the console can see'), { icon: 'inbox', art: true }));
     paintTable();
     paintPager();
 

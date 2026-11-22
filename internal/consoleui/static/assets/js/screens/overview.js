@@ -1,4 +1,5 @@
-import { h, mount } from '../lib/dom.js';
+import { h, mount, svg } from '../lib/dom.js';
+import { meshLayout, lastBucketActive } from '../lib/viz.js';
 import { href, normalizeWindow } from '../lib/route.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
 import { formatCount, formatDelta } from '../lib/format.js';
@@ -103,6 +104,39 @@ function sensorsMeta(rows) {
   return rows.length >= BY_SENSOR_CAP ? `Activity over the window; the ${BY_SENSOR_CAP} sensors seen most recently` : 'Activity over the window';
 }
 
+// The sensor mesh: sensors as nodes around the console core, from
+// overview.by_sensor. Node size follows events in the window; a ring
+// pulses only for sensors with events in the newest bucket (when the API
+// sends per-sensor buckets). Every node is a link with its name and count.
+function meshPanel(rows, windowText) {
+  const list = rows.slice(0, 12).map((r) => ({ id: String(r.sensor_id || ''), kind: String(r.kind || ''), events: r.events, active: lastBucketActive(r.buckets) }));
+  if (!list.length) return panel({ title: 'Sensor mesh', body: empty('No sensor events', 'No sensor stored an event in this window.', null, { art: true }) });
+  const W = 320;
+  const H = 228;
+  const nodes = meshLayout(list, { cx: W / 2, cy: H / 2, ring: 76 });
+  const hasBuckets = list.some((n) => n.active !== null);
+  const plot = svg('svg', { class: 'mesh', viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': `Sensors with events in the ${windowText}` },
+    nodes.map((n) => svg('line', { class: ['mesh__edge', n.active ? 'mesh__edge--active' : ''], x1: W / 2, y1: H / 2, x2: n.x, y2: n.y })),
+    svg('circle', { class: 'mesh__core-ring', cx: W / 2, cy: H / 2, r: 14 }),
+    svg('circle', { class: 'mesh__core', cx: W / 2, cy: H / 2, r: 6 }),
+    nodes.map((n) => {
+      const label = `${n.id}: ${formatCount(n.events)} events${n.active === true ? ', active in the newest bucket' : n.active === false ? ', quiet in the newest bucket' : ''}`;
+      return svg('a', { href: href('events', { sensor: n.id }), 'aria-label': label },
+        n.active ? svg('circle', { class: 'mesh__pulse', cx: n.x, cy: n.y, r: n.r }) : null,
+        svg('circle', { class: ['mesh__node', n.active ? 'mesh__node--active' : '', n.active === false ? 'mesh__node--quiet' : ''], cx: n.x, cy: n.y, r: n.r }),
+        svg('text', { class: 'mesh__label', x: n.lx, y: n.ly - 2, 'text-anchor': n.anchor }, n.id),
+        svg('text', { class: 'mesh__count', x: n.lx, y: n.ly + 10, 'text-anchor': n.anchor }, formatCount(n.events)));
+    }));
+  return panel({
+    title: 'Sensor mesh',
+    meta: rows.length > 12 ? `The 12 sensors with events in the ${windowText}; node area follows events` : `Every sensor with events in the ${windowText}; node area follows events`,
+    body: h('div', { class: 'mesh-wrap' }, plot,
+      hasBuckets ? h('ul', { class: 'mesh-legend' },
+        h('li', { class: 'mesh-legend__item' }, h('span', { class: ['mesh-legend__swatch', 'mesh-legend__swatch--active'] }), 'Events in the newest bucket (ring)'),
+        h('li', { class: 'mesh-legend__item' }, h('span', { class: ['mesh-legend__swatch', 'mesh-legend__swatch--quiet'] }), 'None in the newest bucket (dashed)')) : null),
+  });
+}
+
 export default {
   title: 'Overview',
   async render(root, ctx) {
@@ -203,16 +237,28 @@ export default {
             aside: sensorTrace(s, knownFrom),
           }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
         }),
+        meshPanel(sensors, windowText)),
+      h('div', { class: 'grid grid--2' },
         panel({
           title: 'Investigations',
           body: h('div', { class: 'inv-summary' },
             h('p', { class: 'inv-summary__value' }, formatCount(ov.open_investigations)),
             h('p', { class: 'muted' }, Number(ov.open_investigations) === 1 ? 'open investigation' : 'open investigations'),
             h('a', { class: ['btn', 'btn--sm'], href: href('investigations', { status: 'open' }) }, 'Review open investigations', icon('chevron-right', { size: 'sm' }))),
+        }),
+        panel({
+          title: titled('Sessions', 'session'),
+          body: h('div', { class: 'inv-summary' },
+            h('p', { class: 'inv-summary__value' }, sessions ? formatCount(Number(sessions.total_matched) || 0) : '—'),
+            h('p', { class: 'muted' }, sessions ? 'sessions overlapping this window' : 'The sessions view did not answer.'),
+            h('a', { class: ['btn', 'btn--sm'], href: href('sessions', { window }) }, 'Read the sessions', icon('chevron-right', { size: 'sm' }))),
         })),
       h('p', { class: 'page-note' }, icon('info', { size: 'sm' }),
         h('span', null, 'Counts come from the console’s bounded in-memory index, not from all evidence ever stored. Use ', h('code', null, 'aegismesh inspect'), ' for older evidence.'),
         tip('index')),
     );
+    // First visit in this browser: offer the short tour (non-modal; the
+    // module loads only then).
+    return { mounted: () => { import('../ui/tour.js').then((m) => { if (!m.tourDone()) m.startTour(); }).catch(() => {}); } };
   },
 };

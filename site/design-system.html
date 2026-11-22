@@ -28,6 +28,8 @@
   <div class="wrap ds-layout">
     <nav class="ds-toc" aria-label="Sections">
       <a href="#principles">Principles</a>
+      <a href="#identity">Identity</a>
+      <a href="#instrument">Mesh, tempo, density</a>
       <a href="#color">Color</a>
       <a href="#type">Type</a>
       <a href="#space">Space &amp; shape</a>
@@ -61,6 +63,49 @@
           <li><strong>Honest numbers.</strong> Changes against the previous window are neutral ink. More observations are not styled as good or bad.</li>
           <li><strong>System fonts only.</strong> Nothing is fetched from another origin.</li>
         </ul>
+      </section>
+
+      <section class="ds-section" id="identity">
+        <h2>Identity</h2>
+        <p>A written briefing inside an instrument. The console stays a calm graphite-and-cobalt instrument; page titles, the situation brief and the session sentence speak in the platform's serif (<code>--font-display</code>: New York, Iowan Old Style, Charter, Georgia), like a briefing a defender reads. Everything operational stays in the sans, numbers are tabular, and monospace uses a slashed zero.</p>
+        <div class="ds-demo ds-demo--col">
+          <p class="display">Overview</p>
+          <p class="brief__text lp-serif">714 events in the last 24 hours, 485 more than the window before (+212%). 55 canary invocations.</p>
+          <p><code>id 0f00a0b0</code> · <span class="evidence">GET /admin → 200</span> carries the evidence notch on its left edge: the one ornament, reserved for attacker-supplied text.</p>
+        </div>
+        <p>The mesh appears as a faint lattice (<code>--lattice-line</code>, <code>--lattice-node</code>) behind the top of each screen and the landing hero. It is decorative and carries no information.</p>
+        <div class="ds-demo lattice ds-lattice" aria-hidden="true"></div>
+      </section>
+
+      <section class="ds-section" id="instrument">
+        <h2>Mesh, tempo, density</h2>
+        <p>The Overview's sensor mesh draws sensors from <code>overview.by_sensor</code> around the console core. Node area follows events; a ring marks a sensor with events in the newest bucket and a dashed node one without. Every node is a link with its name and count in text.</p>
+        <div class="ds-demo">
+          <svg class="mesh ds-mesh" viewBox="0 0 240 170" role="img" aria-label="Example sensor mesh: ai-ollama and web active in the newest bucket, ssh quiet">
+            <line class="mesh__edge mesh__edge--active" x1="120" y1="85" x2="120" y2="25"/><line class="mesh__edge mesh__edge--active" x1="120" y1="85" x2="177" y2="66"/><line class="mesh__edge" x1="120" y1="85" x2="155" y2="134"/>
+            <circle class="mesh__core-ring" cx="120" cy="85" r="12"/><circle class="mesh__core" cx="120" cy="85" r="5"/>
+            <circle class="mesh__node mesh__node--active" cx="120" cy="25" r="11"/><circle class="mesh__node mesh__node--active" cx="177" cy="66" r="8"/><circle class="mesh__node mesh__node--quiet" cx="155" cy="134" r="6"/>
+            <text class="mesh__label" x="138" y="22">ai-ollama</text><text class="mesh__label" x="190" y="70">web</text><text class="mesh__label" x="164" y="152">ssh</text>
+          </svg>
+        </div>
+        <p>The session tempo ribbon puts every event on one axis: gaps on a log scale, quiet stretches over five minutes as labelled breaks, stage bands underneath, taller ticks for correlation signals. In the console it has one tab stop and arrow keys, and hovering a tick highlights the event in the list.</p>
+        <div class="ds-demo">
+          <svg class="tempo" viewBox="0 0 400 64" role="img" aria-label="Example tempo ribbon with a five-minute break">
+            <rect class="tempo__band tempo__band--discovery" x="10" y="40" width="120" height="8" rx="2"/><rect class="tempo__band tempo__band--ai_service_abuse" x="130" y="40" width="90" height="8" rx="2"/><rect class="tempo__band tempo__band--decoy_credential_replay" x="220" y="40" width="170" height="8" rx="2"/>
+            <line class="tempo__axis" x1="10" x2="390" y1="34.5" y2="34.5"/>
+            <line class="tempo__tick tempo__tick--interaction" x1="10" x2="10" y1="20" y2="34"/><line class="tempo__tick tempo__tick--interaction" x1="60" x2="60" y1="20" y2="34"/><line class="tempo__tick tempo__tick--interaction" x1="110" x2="110" y1="20" y2="34"/><line class="tempo__tick tempo__tick--interaction" x1="150" x2="150" y1="20" y2="34"/>
+            <path class="tempo__break" d="M218 30 l4 9 M222 30 l4 9"/><text class="tempo__label" x="222" y="60" text-anchor="middle">14 min</text>
+            <line class="tempo__tick tempo__tick--interaction" x1="250" x2="250" y1="20" y2="34"/><line class="tempo__tick tempo__tick--signal" x1="300" x2="300" y1="14" y2="34"/><line class="tempo__tick tempo__tick--interaction" x1="390" x2="390" y1="20" y2="34"/>
+          </svg>
+        </div>
+        <p>Row density is comfortable or compact, toggled in the console's top bar and remembered in this browser. Stacking tables carry a low-specificity zebra so hover, cursor, open and live states always win. Where an empty list is a normal state, the empty state draws a small lattice with one decoy and a probe line that stops short of it.</p>
+        <div class="ds-demo">
+          <div class="state">
+            <svg class="empty-art" viewBox="0 0 120 72" aria-hidden="true" focusable="false"><line class="empty-art__grid" x1="0" x2="0" y1="0" y2="72"/><line class="empty-art__grid" x1="24" x2="24" y1="0" y2="72"/><line class="empty-art__grid" x1="48" x2="48" y1="0" y2="72"/><line class="empty-art__grid" x1="72" x2="72" y1="0" y2="72"/><line class="empty-art__grid" x1="96" x2="96" y1="0" y2="72"/><line class="empty-art__grid" x1="0" x2="120" y1="24" y2="24"/><line class="empty-art__grid" x1="0" x2="120" y1="48" y2="48"/><path class="empty-art__probe" d="M12 60 C 36 60, 48 36, 66 30"/><circle class="empty-art__node" cx="12" cy="60" r="3.5"/><circle class="empty-art__node" cx="96" cy="12" r="3"/><rect class="empty-art__decoy" x="66" y="18" width="24" height="24" rx="4"/></svg>
+            <p class="state__title">No event has been stored yet</p>
+            <p>Decoys have no legitimate users, so an empty list is a normal state.</p>
+          </div>
+        </div>
       </section>
 
       <section class="ds-section" id="color">

@@ -14,6 +14,9 @@
 
   /* ---- Type ------------------------------------------------------------ */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+  /* Display: a system serif for page titles and the situation brief, the
+     voice of a written briefing inside an instrument. Nothing is fetched. */
+  --font-display: ui-serif, "New York", "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, Cambria, serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Modular scale, ratio ~1.2 from a 14px UI base (dense consoles read at 13–14px). */
@@ -41,7 +44,9 @@
   --tracking-figure: -0.022em;      /* large numerals: tighter, they read as one shape */
   --tracking-display: -0.03em;
   --tracking-label: 0.01em;         /* 11–12px labels breathe slightly */
-  --tracking-caps: 0.08em;          /* uppercase monospace micro-labels (instrument readouts) */
+  --tracking-caps: 0.08em;
+  --text-display: 1.875rem;        /* 30px page titles (display serif) */
+  --leading-display: 1.12;          /* uppercase monospace micro-labels (instrument readouts) */
 
   /* ---- Space (4px grid) ------------------------------------------------ */
   --space-0: 0;
@@ -171,6 +176,9 @@
   /* Ambient mesh motif (shell, login, landing): faint, never content. */
   --mesh-dot: rgb(23 32 43 / 0.09);
   --mesh-line: rgb(46 79 201 / 0.10);
+  /* Lattice: the mesh as a faint 24px grid behind content. Decorative only. */
+  --lattice-line: rgb(46 79 201 / 0.055);
+  --lattice-node: rgb(46 79 201 / 0.12);
 
   /* ---- Elevation ------------------------------------------------------- */
   /* Three planes. Panels sit on the canvas (1), popovers and tooltips float
@@ -234,6 +242,8 @@
     --chart-crosshair: #909bab;
     --mesh-dot: rgb(231 235 241 / 0.07);
     --mesh-line: rgb(142 165 255 / 0.10);
+    --lattice-line: rgb(142 165 255 / 0.04);
+    --lattice-node: rgb(142 165 255 / 0.10);
     --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
     --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
     --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);
@@ -286,6 +296,8 @@
   --chart-crosshair: #909bab;
   --mesh-dot: rgb(231 235 241 / 0.07);
   --mesh-line: rgb(142 165 255 / 0.10);
+  --lattice-line: rgb(142 165 255 / 0.04);
+  --lattice-node: rgb(142 165 255 / 0.10);
   --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
   --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
   --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);

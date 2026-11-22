@@ -627,3 +627,116 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 .panel__title .tabs { max-width: 100%; }
 .page-note { flex-wrap: nowrap; align-items: flex-start; }
 .page-note > span { min-width: 0; }
+
+/* ==== Identity (console) ==================================================== */
+
+.page-head__title {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-display);
+  letter-spacing: -0.012em;
+  font-optical-sizing: auto;
+  text-wrap: balance;
+}
+/* Evidence and title helpers keep their own faces inside a display title. */
+.page-head__title .evidence { font-size: 0.62em; vertical-align: 0.12em; }
+.page-head__title .help-tip { vertical-align: 0.2em; }
+@media (max-width: 45rem) { .page-head__title { font-size: 1.5rem; } }
+
+/* The lattice sits behind the content column, fading out down the page. */
+.shell__main::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: -1;
+  height: 28rem;
+  background-image:
+    linear-gradient(var(--lattice-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lattice-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  pointer-events: none;
+}
+.shell__main { isolation: isolate; }
+
+/* The brief reads as the lead paragraph of a briefing. */
+.brief__text { font-family: var(--font-display); font-size: 1.1875rem; line-height: 1.6; letter-spacing: -0.003em; }
+.brief__text .brief__num { font-family: var(--font-sans); font-size: 0.92em; letter-spacing: var(--tracking-figure); }
+.brief__eyebrow { font-family: var(--font-sans); font-size: var(--text-xs); letter-spacing: 0; text-transform: none; color: var(--color-ink-2); }
+@media (max-width: 45rem) { .brief__text { font-size: 1.0625rem; } }
+
+/* Stat tiles: the first (all events) leads; the class tiles follow. */
+.grid--stats > .stat:first-child { border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border)); box-shadow: inset 0 2px 0 var(--color-accent), var(--elev-1); }
+.grid--stats > .stat:first-child .stat__value { font-size: 2rem; }
+
+/* Overview mesh panel */
+.mesh-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+.mesh-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); color: var(--color-ink-3); font-size: var(--text-xs); }
+.mesh-legend__item { display: inline-flex; align-items: center; gap: var(--space-2); }
+.mesh-legend__swatch { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--color-ink-3); }
+.mesh-legend__swatch--active { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.mesh-legend__swatch--quiet { border-style: dashed; }
+
+/* Session tempo */
+.tempo-wrap { display: flex; flex-direction: column; gap: var(--space-2); }
+.tempo-note { color: var(--color-ink-3); font-size: var(--text-xs); }
+.unfold { font-family: var(--font-display); font-size: 1.0625rem; line-height: 1.55; color: var(--color-ink); max-width: 72ch; }
+/* The help tip's enlarged hit area must not poke past the content edge. */
+.page-note { padding-right: var(--space-3); }
+
+/* ---- Sign-in (identity) -------------------------------------------------- */
+.login__card h1 { font-family: var(--font-display); font-size: 2rem; font-weight: var(--weight-semibold); letter-spacing: -0.016em; line-height: 1.08; font-optical-sizing: auto; }
+.login__lede { font-family: var(--font-display); color: var(--color-ink-2); font-size: 1.0625rem; line-height: 1.5; }
+.login::after {
+  content: ""; position: absolute; inset: 0; z-index: -3;
+  background-image: linear-gradient(var(--lattice-line) 1px, transparent 1px), linear-gradient(90deg, var(--lattice-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, #000 25%, transparent 90%);
+}
+.login__card { border-top: 2px solid var(--color-accent); }
+
+/* ---- Sidebar rail (collapsed) ------------------------------------------- */
+.rail-toggle { justify-content: flex-start; gap: var(--space-2); margin: 0 calc(-1 * var(--space-2)) var(--space-2); color: var(--color-ink-3); }
+@media (min-width: 60.0625rem) {
+  :root[data-rail] { --nav-width: 3.75rem; }
+  :root[data-rail] .shell__nav { padding-inline: var(--space-2); }
+  :root[data-rail] .nav-link { justify-content: center; padding: 0; }
+  :root[data-rail] .nav-link__label,
+  :root[data-rail] .nav-link__tag,
+  :root[data-rail] .rail-toggle__label,
+  :root[data-rail] .nav-foot__meta,
+  :root[data-rail] .nav-foot > a,
+  :root[data-rail] .brand { font-size: 0; }
+  :root[data-rail] .nav-link__label,
+  :root[data-rail] .nav-link__tag,
+  :root[data-rail] .rail-toggle__label,
+  :root[data-rail] .nav-foot__meta,
+  :root[data-rail] .nav-foot > a { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  :root[data-rail] .nav-group__label { overflow: hidden; height: 1px; padding: 0; margin: var(--space-2) 0; background: var(--color-border); color: transparent; }
+  :root[data-rail] .brand { justify-content: center; padding: 0; }
+  :root[data-rail] .rail-toggle { justify-content: center; margin-inline: 0; }
+  :root[data-rail] .nav-foot { padding-inline: 0; }
+}
+
+/* ---- Tables: sticky first column while a table scrolls sideways ---------- */
+@media (min-width: 45.0625rem) and (max-width: 89.99rem) {
+  .table-wrap .table th:first-child,
+  .table-wrap .table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--color-surface); box-shadow: inset -1px 0 0 var(--color-border); }
+  .table-wrap .table th:first-child { z-index: 2; background: var(--color-surface-2); }
+}
+.table-wrap--scroll .table th:first-child,
+.table-wrap--scroll .table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--color-surface); box-shadow: inset -1px 0 0 var(--color-border); }
+.table-wrap--scroll .table th:first-child { z-index: 2; background: var(--color-surface-2); }
+
+/* ---- First-run tour ------------------------------------------------------- */
+/* Non-modal: no overlay, nothing behind it inert. The target gets a ring. */
+.tour { position: fixed; inset: auto; width: min(20rem, calc(100vw - 1rem)); margin: 0; padding: var(--space-4); border: var(--border-width) solid var(--color-accent-line); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--elev-3), var(--highlight); color: var(--color-ink); }
+.tour:popover-open { display: flex; flex-direction: column; gap: var(--space-2); animation: tour-in var(--duration-fast) var(--ease-out) both; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(4px); } }
+.tour__count { color: var(--color-ink-3); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; }
+.tour__title { font-family: var(--font-display); font-size: 1.1875rem; font-weight: var(--weight-semibold); line-height: 1.2; }
+.tour__title:focus { outline: none; }
+.tour__text { color: var(--color-ink-2); font-size: var(--text-sm); }
+.tour__actions { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.tour-target { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: var(--radius-md); }

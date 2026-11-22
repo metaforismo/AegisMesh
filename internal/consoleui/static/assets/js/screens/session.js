@@ -8,14 +8,15 @@
 // Stages describe which rules fired, not intent; the automation reading is
 // an observation with its evidence, never a verdict.
 
-import { h, mount } from '../lib/dom.js';
+import { h, mount, svg } from '../lib/dom.js';
+import { tempoLayout } from '../lib/viz.js';
 import { href, withQuery, isEventId, isSessionId } from '../lib/route.js';
 import { formatCount, formatDateTime, formatClock } from '../lib/format.js';
 import { eventKey, parseEventKey, isNodeId } from '../lib/origin.js';
 import { moveIndex, isTypingTarget } from '../lib/keys.js';
 import { cadence as gapBins } from '../lib/cadence.js';
 import {
-  assessmentOf, evidenceMeta, storyItems, stageSummary, formatDurationMs, regularityText, boundsNote,
+  assessmentOf, evidenceMeta, storyItems, stageSummary, formatDurationMs, regularityText, boundsNote, unfoldSentence, stageMeta,
 } from '../lib/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
 import { pageHead, panel, kv, sevChip, evidence, chip, empty, banner, helpTip, toast, errorState, link, glyph } from '../ui/components.js';
@@ -86,6 +87,67 @@ function timelineView(d, rowHref) {
   }));
 }
 
+// The tempo ribbon: every event on one axis, gaps compressed on a log
+// scale, quiet stretches over 5 minutes drawn as breaks, phase bands
+// underneath. Hover or focus a tick to highlight that event in the list;
+// Enter or a click opens it. One tab stop; arrow keys move between ticks.
+function tempoView(d, storySlot, rowHref) {
+  const timeline = Array.isArray(d.timeline) ? d.timeline : [];
+  if (timeline.length < 2) return null;
+  const W = 720;
+  const H = 64;
+  const L = tempoLayout(timeline, d.phases, { width: W, pad: 10 });
+  const STAGES = { discovery: 1, credential_access: 1, ai_service_abuse: 1, decoy_credential_replay: 1 };
+  const plot = svg('svg', { class: 'tempo', viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': 'Tempo: every event on one compressed time axis. Arrow keys move between events.' });
+  for (const b of L.bands) plot.appendChild(svg('rect', { class: ['tempo__band', `tempo__band--${STAGES[b.stage] ? b.stage : 'other'}`], x: b.left, y: 40, width: Math.max(2, b.right - b.left), height: 8, rx: 2 }));
+  plot.appendChild(svg('line', { class: 'tempo__axis', x1: 10, x2: W - 10, y1: 34.5, y2: 34.5 }));
+  for (const br of L.breaks) {
+    plot.appendChild(svg('path', { class: 'tempo__break', d: `M${br.x - 3} 30 l4 9 M${br.x + 1} 30 l4 9` }));
+    plot.appendChild(svg('text', { class: 'tempo__label', x: br.x, y: 60, 'text-anchor': 'middle' }, formatDurationMs(br.ms)));
+  }
+  const groups = [];
+  const hot = (i, on) => {
+    groups[i]?.classList.toggle('is-hot', on);
+    const key = keyOfEntry(timeline[i]);
+    storySlot.querySelector(`.story__event[data-key="${key}"]`)?.classList.toggle('is-hot', on);
+  };
+  L.ticks.forEach((t) => {
+    const ev = timeline[t.i];
+    const hit = svg('rect', {
+      class: 'tempo__hit', x: t.x - 5, y: 8, width: 10, height: 32, tabindex: t.i === 0 ? '0' : '-1', role: 'button',
+      'aria-label': `${clockMs(ev.time)} UTC, ${ev.classification === 'correlation_signal' ? 'correlation signal' : ev.sensor || 'event'}${(ev.rule_ids || []).length ? `, rules ${ev.rule_ids.join(' ')}` : ''}`,
+    });
+    const g = svg('g', null,
+      svg('line', { class: ['tempo__tick', `tempo__tick--${ev.classification === 'correlation_signal' ? 'signal' : ev.classification === 'canary_invocation' ? 'canary_invocation' : 'interaction'}`], x1: t.x, x2: t.x, y1: ev.classification === 'correlation_signal' ? 14 : 20, y2: 34 }),
+      hit);
+    groups.push(g);
+    const open = () => { if (isEventId(ev.event_id)) location.hash = rowHref(keyOfEntry(ev)); };
+    hit.addEventListener('pointerenter', () => hot(t.i, true));
+    hit.addEventListener('pointerleave', () => hot(t.i, false));
+    hit.addEventListener('focus', () => hot(t.i, true));
+    hit.addEventListener('blur', () => hot(t.i, false));
+    hit.addEventListener('click', open);
+    hit.addEventListener('keydown', (e) => {
+      let j = -1;
+      if (e.key === 'ArrowRight') j = Math.min(L.ticks.length - 1, t.i + 1);
+      else if (e.key === 'ArrowLeft') j = Math.max(0, t.i - 1);
+      else if (e.key === 'Home') j = 0;
+      else if (e.key === 'End') j = L.ticks.length - 1;
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); return; }
+      if (j >= 0) {
+        e.preventDefault();
+        groups.forEach((gr, k) => gr.lastChild.setAttribute('tabindex', k === j ? '0' : '-1'));
+        groups[j].lastChild.focus();
+      }
+    });
+    plot.appendChild(g);
+  });
+  plot.appendChild(svg('text', { class: 'tempo__label', x: 10, y: 60 }, clockMs(timeline[0].time)));
+  plot.appendChild(svg('text', { class: 'tempo__label', x: W - 10, y: 60, 'text-anchor': 'end' }, clockMs(timeline[timeline.length - 1].time)));
+  return h('div', { class: 'tempo-wrap' }, plot,
+    h('p', { class: 'tempo-note' }, 'Gaps are compressed (a log scale), so seconds and minutes both stay readable; breaks mark quiet stretches over 5 minutes. Taller ticks are correlation signals. Bands underneath are the stages.'));
+}
+
 function cadencePanel(d) {
   const c = d.cadence || {};
   const bins = gapBins((d.timeline || []).map((e) => e.time));
@@ -149,6 +211,8 @@ export default {
       return withQuery(route, { event: evId, event_node: node });
     };
     const storySlot = h('div', { class: 'story-wrap' }, timelineView(d, rowHref));
+    const tempo = tempoView(d, storySlot, rowHref);
+    const unfold = unfoldSentence(d).map((seg) => (seg.t === 'ev' ? evidence(seg.v, { max: 40 }) : seg.v));
 
     // ---- Event side panel (shared with Events) -------------------------------
     let drawer = null;
@@ -274,7 +338,7 @@ export default {
           primary: true,
           title: titled('Timeline', 'session'),
           meta: 'Oldest first, grouped into stages by the rules that fired. Gaps over 5 minutes are collapsed. j and k move between events; Enter opens one.',
-          body: storySlot,
+          body: [h('p', { class: 'unfold' }, unfold), tempo, storySlot],
         }),
         h('div', { class: 'story-side' },
           automationPanel(d),

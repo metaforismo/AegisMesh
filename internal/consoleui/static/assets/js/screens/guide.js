@@ -45,6 +45,14 @@ export default {
             ...g.entries.map(entryPanel),
           ]),
           panel({
+            title: 'Tour',
+            body: (() => {
+              const b = h('button', { class: 'btn', type: 'button' }, icon('guide', { size: 'sm' }), 'Take the five-step tour again');
+              b.addEventListener('click', () => import('../ui/tour.js').then((m) => { m.resetTour(); ctx.navigate('#/overview'); }));
+              return h('div', { class: 'stack' }, h('p', { class: 'guide__body' }, 'A short walk over the Overview and the shell: the situation brief, the counts, sessions, search and this guide. It never blocks the page; Esc ends it.'), b);
+            })(),
+          }),
+          panel({
             title: 'Keyboard',
             body: h('p', { class: 'guide__body' }, 'Press ', h('kbd', null, '?'), ' anywhere for every shortcut, and ', h('kbd', null, 'Ctrl'), ' ', h('kbd', null, 'K'), ' (', h('kbd', null, '⌘'), ' ', h('kbd', null, 'K'), ' on a Mac) to search events, sources, rules, screens and this guide.'),
           }))));

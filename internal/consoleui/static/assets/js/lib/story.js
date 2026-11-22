@@ -147,3 +147,31 @@ export function boundsNote(bounds) {
   parts.push('A source key is not an actor identity: NAT and proxies can combine clients.');
   return parts.join(' ');
 }
+
+// "How this session unfolded": one or two sentences composed only from the
+// session's own fields (source, counts, duration, sensors, stage order,
+// median gap). Segments like the Overview brief: { t: 'text'|'ev', v }.
+export function unfoldSentence(d) {
+  if (!d || typeof d !== 'object') return [];
+  const n = Number(d.event_count) || 0;
+  const sensors = Array.isArray(d.sensors) ? d.sensors.length : 0;
+  const kinds = Array.isArray(d.sensor_kinds) ? d.sensor_kinds.map((k) => String(k).toUpperCase()) : [];
+  const out = [{ t: 'ev', v: String(d.source ?? '') }, { t: 'text', v: ` produced ${n.toLocaleString('en-US')} event${n === 1 ? '' : 's'} over ${formatDurationMs(d.duration_ms)}` }];
+  if (sensors) out.push({ t: 'text', v: ` on ${sensors} sensor${sensors === 1 ? '' : 's'}${kinds.length ? ` (${kinds.join(', ')})` : ''}` });
+  // Stage order, consecutive repeats merged.
+  const order = [];
+  for (const p of Array.isArray(d.phases) ? d.phases : []) {
+    const full = stageMeta(p.stage).label;
+    const label = full.startsWith('AI') ? full : full[0].toLowerCase() + full.slice(1);
+    if (order[order.length - 1] !== label) order.push(label);
+  }
+  if (order.length === 1) out.push({ t: 'text', v: `, all of it ${order[0]}.` });
+  else if (order.length > 1) {
+    const mid = order.slice(1, -1);
+    out.push({ t: 'text', v: `: it began with ${order[0]}${mid.length ? `, moved through ${mid.join(', then ')}` : ''}, and ended with ${order[order.length - 1]}.` });
+  } else out.push({ t: 'text', v: '.' });
+  const med = d.cadence?.median_gap_ms;
+  if (n > 1 && Number.isFinite(Number(med))) out.push({ t: 'text', v: ` The typical gap between events was ${formatDurationMs(med)}.` });
+  if (d.timeline_truncated) out.push({ t: 'text', v: ' Stages cover the first 200 events.' });
+  return out;
+}
