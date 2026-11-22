@@ -56,6 +56,8 @@ export const SCREENS = Object.freeze({
   audit: lazy('Audit trail', () => import('./audit.js'), { role: 'admin', skeleton: 'table' }),
   fleet: lazy('Fleet', () => import('./fleet.js'), { skeleton: 'table' }),
   fleet_node: lazy('Fleet node', () => import('./fleet-node.js')),
+  // The guide's `t` (the term in focus) scrolls within the open screen.
+  guide: lazy('Guide', () => import('./guide.js'), { viewIgnore: ['t'] }),
 });
 
 export const notFoundScreen = {

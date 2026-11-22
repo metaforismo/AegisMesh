@@ -41,6 +41,7 @@
   --tracking-figure: -0.022em;      /* large numerals: tighter, they read as one shape */
   --tracking-display: -0.03em;
   --tracking-label: 0.01em;         /* 11–12px labels breathe slightly */
+  --tracking-caps: 0.08em;          /* uppercase monospace micro-labels (instrument readouts) */
 
   /* ---- Space (4px grid) ------------------------------------------------ */
   --space-0: 0;

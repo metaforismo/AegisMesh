@@ -13,16 +13,30 @@ import { roleAtLeast, capitalize } from '../lib/taxonomy.js';
 import { icon } from './icons.js';
 import { nodeFilterTargets } from '../lib/origin.js';
 import { NAV, isApple } from './shell.js';
+import { GLOSSARY } from '../lib/glossary.js';
+import { loadRecents, storeRecents, pushRecent } from '../lib/views.js';
+import { formatRelative } from '../lib/format.js';
 
-const GROUP_ORDER = ['Go to', 'Actions', 'Investigations', 'Nodes', 'Sensors', 'Sources'];
-const PER_GROUP_EMPTY = { 'Go to': 20, Actions: 10, Investigations: 5, Nodes: 5, Sensors: 6, Sources: 5 };
+const GROUP_ORDER = ['Recent', 'Go to', 'Actions', 'Investigations', 'Rules', 'Nodes', 'Sensors', 'Sources', 'Guide'];
+const PER_GROUP_EMPTY = { Recent: 6, 'Go to': 20, Actions: 10, Investigations: 5, Rules: 0, Nodes: 5, Sensors: 6, Sources: 5, Guide: 0 };
+const EVENT_SEARCH_MIN = 2;
+const EVENT_RESULTS = 6;
+
+const storage = () => {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+};
+const recentKey = (r) => (r ? `${r.kind}:${r.id}` : '');
 
 function screenItems(role) {
   const out = [];
   for (const g of NAV) {
     for (const i of g.items) {
       if (i.role && !roleAtLeast(role, i.role)) continue;
-      out.push({ group: 'Go to', label: i.label, icon: i.icon, hint: i.keys || g.group, weight: 60, run: (p) => p.navigate(i.href), keywords: [g.group] });
+      out.push({ group: 'Go to', label: i.label, icon: i.icon, hint: i.keys || g.group, weight: 60, run: (p) => p.navigate(i.href), keywords: [g.group], recent: { kind: 'screen', id: i.route } });
     }
   }
   return out;
@@ -40,16 +54,17 @@ async function dataItems(api, signal) {
     const res = await api.fleetNodes('', { signal }).catch(() => null);
     return nodeFilterTargets(fleet, res?.nodes);
   };
-  const [sensors, sources, invs, nodes] = await Promise.allSettled([
+  const [sensors, sources, invs, nodes, rules] = await Promise.allSettled([
     api.sensors({ signal }),
     api.sources('24h', 50, { signal }),
     api.investigations('', { signal }),
     api.fleet ? nodesOf() : Promise.resolve([]),
+    api.rules ? api.rules({ signal }) : Promise.resolve({ rules: [] }),
   ]);
   if (sensors.status === 'fulfilled') {
     for (const s of sensors.value?.sensors || []) {
       if (typeof s?.id !== 'string') continue;
-      out.push({ group: 'Sensors', label: s.id, hint: `${String(s.kind || '').toUpperCase()} sensor · events`, icon: 'sensors', keywords: [String(s.kind || '')], run: (p) => p.navigate(href('events', { sensor: s.id })) });
+      out.push({ group: 'Sensors', label: s.id, hint: `${String(s.kind || '').toUpperCase()} sensor · events`, icon: 'sensors', keywords: [String(s.kind || '')], run: (p) => p.navigate(href('events', { sensor: s.id })), recent: { kind: 'sensor', id: s.id } });
     }
   } else failed++;
   if (sources.status === 'fulfilled') {
@@ -61,7 +76,7 @@ async function dataItems(api, signal) {
   if (invs.status === 'fulfilled') {
     for (const i of invs.value?.investigations || []) {
       if (!isOpaqueId(i?.id)) continue;
-      out.push({ group: 'Investigations', label: String(i.title || '(untitled)'), hint: capitalize(i.status || ''), icon: 'investigations', run: (p) => p.navigate(href('investigations', i.id)) });
+      out.push({ group: 'Investigations', label: String(i.title || '(untitled)'), hint: capitalize(i.status || ''), icon: 'investigations', run: (p) => p.navigate(href('investigations', i.id)), recent: { kind: 'investigation', id: i.id } });
     }
   } else failed++;
   if (nodes.status === 'fulfilled') {
@@ -69,7 +84,18 @@ async function dataItems(api, signal) {
       out.push({ group: 'Nodes', label: n.label, hint: n.hint, icon: 'fleet', keywords: n.keywords, run: (p) => p.navigate(href('events', { node: n.node })) });
     }
   }
+  if (rules.status === 'fulfilled') {
+    for (const r of rules.value?.rules || []) {
+      if (typeof r?.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,64}$/.test(r.id)) continue;
+      // Rule titles come from the runtime's rule registry (interface text).
+      out.push({ group: 'Rules', label: r.id, hint: `${r.family === 'correlation' ? 'Correlation' : 'Detection'} rule · events citing it`, icon: 'rules', keywords: [String(r.title || '')], run: (p) => p.navigate(href('events', { rule: r.id })), recent: { kind: 'rule', id: r.id } });
+    }
+  } else failed++;
   return { items: out, failed };
+}
+
+function guideItems() {
+  return GLOSSARY.map((e) => ({ group: 'Guide', label: e.term, hint: 'Guide', icon: 'guide', keywords: [e.id], weight: -20, run: (p) => p.navigate(`#/guide?t=${e.id}`), recent: { kind: 'guide', id: e.id } }));
 }
 
 let openPalette = null;
@@ -83,16 +109,21 @@ export function togglePalette(p) {
   const controller = new AbortController();
   const base = [
     ...screenItems(p.role),
-    ...p.actions.filter((a) => !a.role || roleAtLeast(p.role, a.role)).map((a) => ({ group: 'Actions', weight: 40, ...a })),
+    ...p.actions.filter((a) => !a.role || roleAtLeast(p.role, a.role)).map((a) => ({ group: 'Actions', weight: 40, recent: a.recentId ? { kind: 'action', id: a.recentId } : null, ...a })),
+    ...guideItems(),
   ];
+  let recents = loadRecents(storage(), p.tenant);
+  let eventHits = { q: '', items: [], state: 'idle' };
+  let eventTimer = null;
+  let eventCtl = null;
   let data = [];
-  let note = 'Loading sensors, sources and investigations…';
+  let note = 'Loading sensors, sources, rules and investigations…';
   let results = [];
   let active = 0;
 
   const input = h('input', {
     class: 'palette__input', type: 'text', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'palette-list',
-    'aria-autocomplete': 'list', 'aria-label': 'Search screens, actions, sensors, sources and investigations',
+    'aria-autocomplete': 'list', 'aria-label': 'Search screens, actions, events, sources, rules, sensors, investigations and the guide',
     placeholder: 'Search or jump to…', autocomplete: 'off', spellcheck: 'false', maxlength: 64,
   });
   const list = h('ul', { class: 'palette__list', id: 'palette-list', role: 'listbox', 'aria-label': 'Results' });
@@ -111,6 +142,45 @@ export function togglePalette(p) {
     return h('span', { class: 'palette__label' }, r.item.evidence ? h('span', { class: 'evidence' }, runs) : runs);
   };
 
+  // Events are searched on the server (the same `q` as the Events list:
+  // summary, source and rule ids), debounced, at most a handful at a time.
+  const searchEvents = (q) => {
+    clearTimeout(eventTimer);
+    eventCtl?.abort();
+    if (q.length < EVENT_SEARCH_MIN || isEventId(q.toLowerCase())) {
+      eventHits = { q: '', items: [], state: 'idle' };
+      return;
+    }
+    if (eventHits.q === q) return;
+    eventHits = { q, items: [], state: 'loading' };
+    eventTimer = setTimeout(async () => {
+      eventCtl = new AbortController();
+      const signal = eventCtl.signal;
+      controller.signal.addEventListener('abort', () => eventCtl?.abort(), { once: true });
+      try {
+        const res = await p.api.events({ q }, '', EVENT_RESULTS, { signal });
+        if (signal.aborted || eventHits.q !== q) return;
+        const list = (Array.isArray(res?.events) ? res.events : []).filter((ev) => isEventId(ev?.id));
+        eventHits = {
+          q, state: 'done', total: Number(res?.total_matched) || list.length,
+          items: list.map((ev) => ({
+            group: 'Events', label: String(ev.summary || '(no summary)'), evidence: true, icon: 'events',
+            hint: `${ev.sensor?.id || 'sensor'} · ${formatRelative(ev.time)}`,
+            run: (pp) => pp.navigate(href('events', { q, event: ev.id, event_node: ev.node?.id || '' })),
+          })),
+        };
+      } catch {
+        if (!signal.aborted && eventHits.q === q) eventHits = { q, items: [], state: 'failed' };
+      }
+      if (!controller.signal.aborted) paint();
+    }, 220);
+  };
+
+  const recentItems = (all) => {
+    const byKey = new Map(all.filter((i) => i.recent).map((i) => [recentKey(i.recent), i]));
+    return recents.map((r) => byKey.get(recentKey(r))).filter(Boolean).map((i) => ({ ...i, group: 'Recent', hint: `${i.group} · ${i.hint || ''}`.replace(/ · $/, '') }));
+  };
+
   const paint = () => {
     const q = input.value.trim();
     let items = [...base, ...data];
@@ -119,29 +189,39 @@ export function togglePalette(p) {
       items = [{ group: 'Go to', label: `Open event ${id}`, icon: 'events', hint: 'Event', weight: 2000, run: (pp) => pp.navigate(href('events', { event: id })) }, ...items];
     }
     if (q) {
-      results = rankItems(items, q, { limit: 40 });
+      // Best match first; then each group keeps the position of its best hit.
+      const ranked = rankItems(items, q, { limit: 40 });
+      const order = [];
+      for (const r of ranked) if (!order.includes(r.item.group)) order.push(r.item.group);
+      results = order.flatMap((g) => ranked.filter((r) => r.item.group === g));
+      if (q.length >= EVENT_SEARCH_MIN && !isEventId(q.toLowerCase())) {
+        const all = { group: 'Events', label: `Search all events for “${q}”`, icon: 'search', hint: eventHits.state === 'done' ? `${eventHits.total} matching` : 'Events list', run: (pp) => pp.navigate(href('events', { q })) };
+        results.push({ item: all, ranges: [] }, ...eventHits.items.map((item) => ({ item, ranges: [] })));
+      }
     } else {
       results = [];
+      const pool = [...recentItems(items), ...items];
       for (const g of GROUP_ORDER) {
-        results.push(...items.filter((i) => i.group === g).slice(0, PER_GROUP_EMPTY[g]).map((item) => ({ item, ranges: [] })));
+        results.push(...pool.filter((i) => i.group === g).slice(0, PER_GROUP_EMPTY[g] ?? 5).map((item) => ({ item, ranges: [] })));
       }
     }
     active = Math.min(active, Math.max(0, results.length - 1));
     clear(list);
     let lastGroup = '';
     results.forEach((r, i) => {
-      if (!q && r.item.group !== lastGroup) {
+      if (r.item.group !== lastGroup) {
         lastGroup = r.item.group;
-        list.appendChild(h('li', { class: 'palette__group', role: 'presentation' }, lastGroup));
+        list.appendChild(h('li', { class: 'palette__group', role: 'presentation' }, lastGroup === 'Events' && eventHits.state === 'loading' ? 'Events · searching…' : lastGroup));
       }
       const li = h('li', {
         class: 'palette__item', role: 'option', id: `palette-opt-${i}`, 'aria-selected': String(i === active), 'data-index': String(i),
-      }, icon(r.item.icon || 'chevron-right'), labelNode(r), h('span', { class: 'palette__hint' }, q ? `${r.item.group} · ${r.item.hint || ''}`.replace(/ · $/, '') : (r.item.hint || '')));
+      }, icon(r.item.icon || 'chevron-right'), labelNode(r), h('span', { class: 'palette__hint' }, r.item.hint || ''));
       list.appendChild(li);
     });
     if (!results.length) list.appendChild(h('li', { class: 'palette__empty', role: 'presentation' }, `Nothing matches “${q}”.`));
     input.setAttribute('aria-activedescendant', results.length ? `palette-opt-${active}` : '');
-    status.textContent = note || `${results.length} result${results.length === 1 ? '' : 's'}`;
+    const failedEvents = eventHits.state === 'failed' ? ' Event search failed.' : '';
+    status.textContent = `${note || `${results.length} result${results.length === 1 ? '' : 's'}`}${failedEvents}`;
   };
 
   const select = (i) => {
@@ -158,10 +238,14 @@ export function togglePalette(p) {
     const r = results[i];
     if (!r) return;
     api.close();
+    if (r.item.recent) {
+      recents = pushRecent(recents, r.item.recent);
+      storeRecents(storage(), p.tenant, recents);
+    }
     r.item.run(p);
   };
 
-  input.addEventListener('input', () => { active = 0; paint(); });
+  input.addEventListener('input', () => { active = 0; searchEvents(input.value.trim()); paint(); });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) { e.preventDefault(); select(moveIndex(active, 1, results.length, { wrap: true })); }
     else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) { e.preventDefault(); select(moveIndex(active, -1, results.length, { wrap: true })); }
@@ -182,6 +266,8 @@ export function togglePalette(p) {
   dialog.addEventListener('click', (e) => { if (e.target === dialog) api.close(); });
   dialog.addEventListener('close', () => {
     controller.abort();
+    clearTimeout(eventTimer);
+    eventCtl?.abort();
     dialog.remove();
     openPalette = null;
   });
@@ -205,7 +291,7 @@ export function togglePalette(p) {
 
 export const SHORTCUTS = [
   { title: 'Anywhere', keys: [
-    [['mod', 'K'], 'Search, jump to a screen or run an action'],
+    [['mod', 'K'], 'Search events, sources, rules, screens and the guide; run an action'],
     [['?'], 'Show these shortcuts'],
     [['g', 'o'], 'Go to Overview'],
     [['g', 'e'], 'Go to Events'],
@@ -213,6 +299,7 @@ export const SHORTCUTS = [
     [['g', 'i'], 'Go to Investigations'],
     [['g', 'r'], 'Go to Recommendations'],
     [['g', 'n'], 'Go to Sensors'],
+    [['g', 'h'], 'Open the guide (what every term means)'],
   ] },
   { title: 'Events list', keys: [
     [['j'], 'Next row'],

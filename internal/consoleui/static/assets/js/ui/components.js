@@ -48,10 +48,14 @@ export function evidence(value, { block = false, max = 0 } = {}) {
   }, shown);
 }
 
+// Relative times carry the absolute UTC time: in the peek on hover, and as
+// visually hidden text, so assistive tech reads both.
 export function timeEl(value, { relative = false, now } = {}) {
   const full = formatDateTime(value);
   if (full === '—') return h('span', { class: 'muted' }, '—');
-  return h('time', { datetime: value, title: full }, relative ? formatRelative(value, now) : full);
+  return relative
+    ? h('time', { class: 'reltime', datetime: value, title: full }, formatRelative(value, now), h('span', { class: 'visually-hidden' }, ` (${full})`))
+    : h('time', { datetime: value, title: full }, full);
 }
 
 export function link(href, ...children) {
@@ -69,8 +73,10 @@ export function pageHead({ title, subtitle, actions, eyebrow }) {
     actions ? h('div', { class: 'btn-row page-head__actions' }, actions) : null);
 }
 
-export function panel({ title, meta, actions, body, flush = false, foot, id, headingLevel = 'h2' }) {
-  return h('section', { class: 'panel', id, 'aria-labelledby': id ? `${id}-title` : null },
+// `primary` marks the one panel a screen is about (a stronger frame);
+// everything else is secondary by default.
+export function panel({ title, meta, actions, body, flush = false, foot, id, headingLevel = 'h2', primary = false }) {
+  return h('section', { class: ['panel', primary ? 'panel--primary' : ''], id, 'aria-labelledby': id ? `${id}-title` : null },
     title ? h('div', { class: 'panel__head' },
       h('div', null,
         h(headingLevel, { class: 'panel__title', id: id ? `${id}-title` : null }, title),
@@ -352,6 +358,8 @@ export function installPeek(root = document) {
     }
     target = el;
     box.textContent = full;
+    // A time is interface text: it must not borrow the evidence look.
+    box.classList.toggle('peek--plain', el.classList.contains('reltime'));
     box.classList.add('is-shown');
     place(el);
   };
@@ -364,7 +372,7 @@ export function installPeek(root = document) {
     target = null;
     box.classList.remove('is-shown');
   };
-  const find = (node) => node?.closest?.('.evidence[title], .evidence[data-peek]');
+  const find = (node) => node?.closest?.('.evidence[title], .evidence[data-peek], .reltime[title], .reltime[data-peek]');
 
   root.addEventListener('pointerover', (e) => {
     if (e.pointerType === 'touch') return;
@@ -426,6 +434,61 @@ export function openDialog({ title, build, submitLabel = 'Save', onSubmit, dange
     document.body.appendChild(dialog);
     dialog.showModal();
   });
+}
+
+// ---- "What is this?" tips ------------------------------------------------------
+
+// Place a native popover under the control that opens it (computed geometry
+// through CSSOM; allowed by style-src 'self'). Left-aligned to the control,
+// kept inside the viewport.
+export function anchorPopover(pop, button, { align = 'left' } = {}) {
+  pop.addEventListener('beforetoggle', (e) => {
+    if (e.newState !== 'open') return;
+    const r = button.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const width = Math.min(pop.offsetWidth || 320, vw - 16);
+    const left = align === 'right' ? r.right - width : r.left;
+    pop.style.left = `${Math.round(Math.max(8, Math.min(left, vw - width - 8)))}px`;
+    pop.style.top = `${Math.round(r.bottom + 6)}px`;
+  });
+  pop.addEventListener('toggle', (e) => button.setAttribute('aria-expanded', String(e.newState === 'open')));
+  button.setAttribute('aria-expanded', 'false');
+  return pop;
+}
+
+let tipSeq = 0;
+
+// A small "?" beside a non-obvious term. It opens a popover with the short
+// definition and a link to the full entry in the Guide. Interface text only.
+export function helpTip(entry) {
+  if (!entry) return null;
+  const id = `tip-${entry.id}-${++tipSeq}`;
+  const btn = h('button', {
+    class: 'help-tip', type: 'button', popovertarget: id,
+    'aria-label': `What is “${entry.term}”?`, title: 'What is this?',
+  }, icon('help', { size: 'sm' }));
+  const pop = h('span', { class: ['menu', 'tip-pop'], id, popover: 'auto', role: 'note', 'aria-labelledby': `${id}-t` },
+    h('span', { class: 'tip-pop__term', id: `${id}-t` }, entry.term),
+    h('span', { class: 'tip-pop__text' }, entry.short),
+    h('a', { class: 'tip-pop__more', href: `#/guide?t=${entry.id}` }, icon('guide', { size: 'sm' }), 'Read more in the guide'));
+  anchorPopover(pop, btn);
+  // Following the link closes the tip; the route change does the rest.
+  pop.addEventListener('click', (e) => { if (e.target.closest?.('a')) pop.hidePopover?.(); });
+  return h('span', { class: 'help' }, btn, pop);
+}
+
+// ---- Filter chip ---------------------------------------------------------------
+
+// An active filter: name, value and a remove link. `chip` comes from
+// lib/filters.js activeFilterChips(); evidence values keep their treatment.
+export function filterChip(chip) {
+  const value = chip.evidence
+    ? h('span', { class: ['evidence', 'fchip__value'], title: chip.text.length > 40 ? chip.text : null }, truncate(chip.text, 40))
+    : h(chip.mono ? 'code' : 'span', { class: 'fchip__value' }, chip.text);
+  return h('span', { class: 'fchip' },
+    h('span', { class: 'fchip__name' }, chip.name),
+    value,
+    h('a', { class: 'fchip__remove', href: chip.removeHref, 'aria-label': `Remove filter ${chip.name}`, title: `Remove ${chip.name.toLowerCase()} filter` }, icon('close', { size: 'xs' })));
 }
 
 export function labelFor(value) {

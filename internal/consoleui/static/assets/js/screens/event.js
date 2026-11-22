@@ -2,6 +2,7 @@ import { h, mount } from '../lib/dom.js';
 import { href, isOpaqueId } from '../lib/route.js';
 import { formatDateTime } from '../lib/format.js';
 import { jsonTokens, tokensToText } from '../lib/json.js';
+import { addFilterHref } from '../lib/filters.js';
 import { pageHead, panel, kv, sevChip, clsChip, evidence, seal, table, empty, link, chip, toast, labelFor, banner, copyable } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { describeOrigin, normalizeNodeFilter, LOCAL } from '../lib/origin.js';
@@ -118,6 +119,7 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
               isOpaqueId(i.id) ? link(href('investigations', i.id), i.title) : i.title, statusBadge(i.status))))
             : empty('Not in any investigation', ctx.can('analyst') ? 'Use “Add to investigation” to collect it as evidence.' : 'An analyst can attach it to an investigation.'),
         })),
+      narrowPanel(s),
       panel({
         title: 'Findings', meta: 'Rule-authored reasons. They never quote the matched input.', flush: true,
         body: findings.length ? table({
@@ -145,6 +147,23 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
         body: [viewer.truncated ? banner('warn', 'Envelope display truncated', 'The envelope is too large to render fully. Use aegismesh inspect for the complete record.') : null, viewer.code],
       }));
     return d;
+}
+
+// "Narrow the list": the keyboard path for click-to-filter. Each link opens
+// Events filtered to one property of this event. The source key stays
+// evidence inside its button.
+function narrowPanel(s) {
+  const links = [];
+  const add = (key, value, label) => {
+    const target = addFilterHref({}, key, value);
+    if (target) links.push(h('a', { class: ['btn', 'btn--sm'], href: target }, icon('filter', { size: 'sm' }), label));
+  };
+  if (s.source) add('source', s.source, ['Same source ', evidence(s.source, { max: 24 })]);
+  if (s.sensor?.id) add('sensor', s.sensor.id, ['Same sensor ', h('code', null, s.sensor.id)]);
+  if (s.classification) add('classification', s.classification, ['Same class: ', clsChip(s.classification)]);
+  for (const r of (Array.isArray(s.rule_ids) ? s.rule_ids : []).slice(0, 4)) add('rule', r, ['Rule ', h('code', null, r)]);
+  if (!links.length) return null;
+  return panel({ title: 'Narrow the list', meta: 'Open Events filtered to one property of this event', body: h('div', { class: 'narrow' }, links) });
 }
 
 export default {

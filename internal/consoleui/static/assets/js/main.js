@@ -284,11 +284,12 @@ async function openPalette() {
   togglePalette({
     api,
     role: state.session.principal?.role,
+    tenant: tenantInfo(state.session).active || 'default',
     navigate: (target) => { location.hash = target; },
     actions: [
-      { label: 'Follow live events', icon: 'live', hint: 'Events in live mode', keywords: ['stream', 'tail'], run: (p) => p.navigate('#/events?live=1') },
-      { label: 'Switch color theme', icon: 'sun', hint: 'System, light, dark', keywords: ['dark', 'light', 'appearance'], run: () => cycleTheme() },
-      { label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: ['keys', 'help'], run: () => toggleShortcuts() },
+      { label: 'Follow live events', icon: 'live', hint: 'Events in live mode', keywords: ['stream', 'tail'], recentId: 'live', run: (p) => p.navigate('#/events?live=1') },
+      { label: 'Switch color theme', icon: 'sun', hint: 'System, light, dark', keywords: ['dark', 'light', 'appearance'], recentId: 'theme', run: () => cycleTheme() },
+      { label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: ['keys', 'help'], recentId: 'shortcuts', run: () => toggleShortcuts() },
       ...switchTargets(state.session).map((t) => ({
         label: `Switch tenant: ${t}`, icon: 'tenant', hint: `Act in tenant ${t}`, keywords: ['tenant', 'switch', t],
         run: () => switchTenant(t),

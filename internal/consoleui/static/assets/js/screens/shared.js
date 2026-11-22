@@ -84,21 +84,38 @@ export function eventTable(events, opts = {}) {
   return eventTableView(events, opts).el;
 }
 
-function eventColumns({ showDate = true, extra = [], rowHref, origin = false }) {
+// `filterHref(key, value)` (Events screen only) turns cell values into
+// click-to-filter links. They are a pointer convenience and stay out of the
+// tab order (tabindex -1): every row already has two tab stops, and the
+// event's "Narrow the list" panel is the keyboard path to the same filters.
+function filterable(filterHref, key, value, node, title) {
+  const target = filterHref ? filterHref(key, value) : null;
+  return target ? h('a', { class: 'cell-link', href: target, tabindex: '-1', title }, node) : node;
+}
+
+function eventColumns({ showDate = true, extra = [], rowHref, origin = false, filterHref }) {
   return [
     { label: 'Time (UTC)', className: 'nowrap', cell: (ev) => h('time', { datetime: ev.time, title: formatDateTime(ev.time) }, showDate ? formatDateTime(ev.time).replace(' UTC', '') : formatClock(ev.time)) },
     ...(origin ? [{ label: 'Origin', className: 'nowrap', cell: (ev) => originLabel(ev.node, { stack: true }) }] : []),
-    { label: 'Class', cell: (ev) => clsChip(ev.classification) },
+    { label: 'Class', cell: (ev) => filterable(filterHref, 'classification', ev.classification, clsChip(ev.classification), 'Show only this class') },
     { label: 'Severity', cell: (ev) => sevChip(ev.severity) },
-    { label: 'Sensor', cell: (ev) => h('span', { class: 'nowrap' }, h('code', null, ev.sensor?.id ?? '—'), ' ', ev.sensor?.kind ? chip(ev.sensor.kind) : null) },
-    { label: 'Source', className: 'nowrap', cell: (ev) => (ev.source ? link(href('sources', ev.source), evidence(ev.source, { max: 24 })) : h('span', { class: 'muted' }, 'unknown')) },
+    { label: 'Sensor', cell: (ev) => h('span', { class: 'nowrap' }, filterable(filterHref, 'sensor', ev.sensor?.id, h('code', null, ev.sensor?.id ?? '—'), 'Show only this sensor'), ' ', ev.sensor?.kind ? chip(ev.sensor.kind) : null) },
+    {
+      label: 'Source', className: 'nowrap',
+      cell: (ev) => {
+        if (!ev.source) return h('span', { class: 'muted' }, 'unknown');
+        const narrow = filterHref ? filterHref('source', ev.source) : null;
+        return h('span', { class: 'nowrap' }, link(href('sources', ev.source), evidence(ev.source, { max: 24 })),
+          narrow ? h('a', { class: 'cell-filter', href: narrow, tabindex: '-1', 'aria-label': 'Show only this source', title: 'Show only this source' }, icon('filter')) : null);
+      },
+    },
     {
       label: 'Summary', className: 'col-summary',
       cell: (ev) => (isEventId(ev.id)
         ? h('a', { href: rowHref ? rowHref(ev) : eventHref(ev), class: 'row-open', 'data-row-link': '' }, evidence(ev.summary, { max: 160 }))
         : evidence(ev.summary, { max: 160 })),
     },
-    { label: 'Rules', cell: (ev) => ruleChips(ev.rule_ids) },
+    { label: 'Rules', cell: (ev) => ruleChips(ev.rule_ids, filterHref) },
     ...extra,
   ];
 }
@@ -201,10 +218,10 @@ export function eventTableView(events, { caption = 'Events', newIds, origin = 'a
   };
 }
 
-export function ruleChips(ids) {
+export function ruleChips(ids, filterHref) {
   const list = Array.isArray(ids) ? ids : [];
   if (!list.length) return h('span', { class: 'muted' }, '—');
-  return h('span', { class: 'chip-row' }, list.slice(0, 4).map((id) => chip(id, { mono: true })), list.length > 4 ? chip(`+${list.length - 4}`) : null);
+  return h('span', { class: 'chip-row' }, list.slice(0, 4).map((id) => filterable(filterHref, 'rule', id, chip(id, { mono: true }), `Show only events citing ${id}`)), list.length > 4 ? chip(`+${list.length - 4}`) : null);
 }
 
 const STATUS_BADGE = { open: 'info', monitoring: 'warn', closed: 'neutral' };

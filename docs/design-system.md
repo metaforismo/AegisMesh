@@ -16,6 +16,7 @@ reference. `site/design-system.html` shows every component rendered.
 | `site/assets/css/site.css` | Landing page and reference-page layout |
 | `internal/consoleui/static/assets/js/ui/icons.js` | The icon set and the brand mark (the site's static SVGs are generated from it) |
 | `internal/consoleui/static/assets/js/lib/{palette,keys,batch,swr,chart}.js` | Pure logic behind the palette, keyboard navigation, live batching, the read cache and the small charts; unit-tested in `webtest/` |
+| `internal/consoleui/static/assets/js/lib/{brief,filters,views,cadence,glossary}.js` | The Overview's situation brief, filter chips and click-to-filter links, saved views and palette recents (browser storage, validated on read), source cadence statistics, and the Guide's glossary; unit-tested in `webtest/brief.test.mjs` and `webtest/understanding.test.mjs` |
 | `internal/consoleui/static/assets/js/lib/{auth,tenant}.js` | Sign-in option selection and OIDC error codes; tenant visibility, switch targets and where a switch lands; unit-tested in `webtest/` |
 
 There is no build step, no npm dependency and no third-party code. The console
@@ -62,6 +63,7 @@ Ratios are WCAG 2 contrast, computed from the token values (not estimated).
 | `--color-evidence-ink` | 13.18:1 on evidence-bg | 12.27:1 | Evidence text |
 | `--color-border-strong` | 3.59:1 on surface, 3.14:1 on canvas | 3.44:1, 3.22:1 on surface-2, 3.74:1 on canvas | Control edges (WCAG 1.4.11) |
 | `--color-accent` on `--color-accent-soft` | 5.68:1 | 6.00:1 | Selected palette row, open table row |
+| `--color-ink` / `--color-ink-2` on `--color-accent-soft` | 13.69:1 / 7.51:1 | 11.73:1 / 7.72:1 | Filter chip value and name, remove icon |
 | Status inks (`ok`, `warn`, `danger`, `info`) | ≥ 4.69:1 on their `-soft` fill | ≥ 6.00:1 | Badges and banners |
 | Severity fills `--sev-*` | ≥ 3.41:1 on surface, ≥ 3.20:1 on surface-2 | ≥ 4.75:1; ≥ 3.40:1 on the meter track | Meter segments |
 
@@ -82,6 +84,12 @@ normal-vision floor, contrast) against the surface each theme actually uses:
 
 Color follows the entity: a filter never repaints the remaining series.
 
+The filter chip's edge (`--color-accent-line` on `--color-accent-soft`,
+1.41:1 light, 1.71:1 dark) is decorative: the chip is not a control, and its
+remove link is identified by its icon at 7.51:1 / 7.72:1. The cadence fill
+and the brief's left rule use `--color-accent` (6.82:1 / 7.39:1 on surface).
+Ratios for the new pairs were computed with the WCAG 2 formula on 2026-11-22.
+
 Values measured with the WCAG 2 formula on 2026-11-15 after the canvas and
 hairline tokens were retuned (`--color-canvas` light `#edf0f4`, dark `#0d1218`;
 `--color-border` is a decorative hairline and carries no information alone).
@@ -93,6 +101,9 @@ hairline tokens were retuned (`--color-canvas` light `#edf0f4`, dark `#0d1218`;
   28px (`--text-2xl`) with `--tracking-figure`; page titles 22px. All numerals
   are tabular (`font-variant-numeric: tabular-nums` on the body), so counts
   do not jitter as they change.
+- `--tracking-caps` (0.08em) spaces the uppercase monospace micro-labels
+  (`.caps`, the brief's "Situation", the readout head, Guide groups). They
+  name a readout; they are interface text and never evidence.
 - Space is a 4px grid (`--space-1` = 4px … `--space-24` = 96px).
 - Radii encode hierarchy: chips 2px, controls 5px, panels 8px, dialogs,
   drawers and the palette 12px.
@@ -135,14 +146,17 @@ Rules:
 
 - **Never animates:** the command palette and shortcut sheet (keyboard,
   many times a day), j/k row and event stepping, navigation driven from the
-  keyboard (g-sequences, the palette, Enter on a link), filters, paging,
-  numbers changing, an in-place refresh (it never replays entrances).
+  keyboard (g-sequences, the palette, Enter on a link), filters, filter
+  chips and saved views, help tips, the situation brief and the chart
+  readout, paging, numbers changing, an in-place refresh (it never replays
+  entrances).
 - **Animates briefly:** pointer route changes (a 10px directional slide of
   the content area only; View Transitions API with a keyframe fallback),
   dialogs and the side panel (interruptible transitions on `[open]` with
   `display`/`overlay` discrete; exits shorter than entries), toasts
   (transitions, so bursts retarget), the nav indicator, the copy icon
-  morphing into a check, chart entry (bars rise in an eased 260ms wave) and
+  morphing into a check, chart entry (bars rise in an eased 260ms wave; the
+  source cadence columns rise once, `--duration-chart`) and
   hover (crosshair, dimming, a tooltip that glides), live rows (a color wash,
   never movement), the audit chain reflecting a verification.
 - **Ambient:** only the very slow opacity breathing of mesh nodes (sign-in
@@ -173,7 +187,8 @@ the full set, generated from the module.
 Light by default, dark when the OS prefers it, and an explicit
 `data-theme="light|dark"` on `<html>` always wins. The console's theme button
 cycles System → Light → Dark and remembers the choice in `localStorage`
-(a convenience only; nothing else is stored in the browser).
+(a convenience only). The only other things kept in the browser are saved
+event views and palette recents; see "Console security rules".
 
 ## Component inventory
 
@@ -215,6 +230,15 @@ cycles System → Light → Dark and remembers the choice in `localStorage`
 | `.route-progress` | Thin progress bar | Only when a screen takes more than ~140ms |
 | `.live-pill` | "N new events" | Appears when rows arrive out of view |
 | `.menu` (`__title`, `__list`, `__item`, `__check`, `__hint`, `__note`, `__head`, `__kv`) | Top-bar menu | A native `popover` (light dismiss, Esc, top layer from the platform), placed under its button by CSSOM. Opened many times a day, so it never animates. The current item carries `aria-current`, a check and the word "Current". Route changes close it |
+| `.caps` | Uppercase monospace micro-label | Interface text only |
+| `.panel--primary` | The one panel a screen is about | A firmer, decorative edge and a 16px title; every other panel is secondary |
+| `.brief` (`__head`, `__eyebrow`, `__dot`, `__meta`, `__text`, `__clause`, `__num`, `__foot`) | Situation brief (Overview) | Sentences from `lib/brief.js` only. Each clause links to the view that shows it; numbers are semibold ink; a source key is `.evidence`; a missing field is said, never zeroed |
+| `.readout` (`__head`, `__list`, `__value`, `__total`) | Readout legend | Glyph, series name and value. Whole window at rest; the hovered or focused bucket otherwise. Not a live region: the focused bar's label already announces the values |
+| `.help`, `.help-tip`, `.tip-pop` (`__term`, `__text`, `__more`) | "What is this?" tip | A `?` button beside a non-obvious term opening a native popover with the Guide's short definition and a link to the entry. Never animates |
+| `.fchip-row`, `.fchip` (`__name`, `__value`, `__remove`) | Active filter | Name, value, remove link. Evidence values keep `.evidence` inside the chip |
+| `.cell-link`, `.cell-filter` | Click-to-filter on a table value | Pointer convenience, out of the tab order (`tabindex="-1"`); the event's "Narrow the list" panel is the keyboard path. Hidden on devices without hover |
+| `.cadence` (`__col`, `__bar`, `__fill`, `__count`, `__label`) | Gap histogram (Source) | Every column prints its count; the peak column is also named in text. Caption states how many loaded events it used |
+| `.peek--plain` | Absolute time behind a relative time | Same floating element as the evidence peek, without the evidence look |
 | `.top-tenant`, `--static` | Active tenant in the top bar | A button that opens the tenant menu with several tenants; a static label with one tenant not named `default`; absent otherwise |
 
 ## Console security rules
@@ -232,7 +256,17 @@ The console server sends
   vocabularies before they reach a request, a class name or a link
   (`lib/route.js`).
 - The CSRF token lives only in the API client's closure; the session is an
-  HttpOnly cookie. Nothing sensitive goes into `localStorage`. A tenant
+  HttpOnly cookie. Nothing sensitive goes into `localStorage`. Besides the
+  theme it holds, per tenant (`aegismesh.views.<tenant>`,
+  `aegismesh.recent.<tenant>`): saved event views, with only non-evidence
+  filters (node, class, sensor, kind, rule, severity, since, until; source
+  keys and search text are attacker-influenced and never written), and up to
+  six palette recents by kind and id (screens, actions, rules, sensors,
+  investigations, Guide entries; never sources or events). Both are read
+  back as untrusted input: parsed defensively, names stripped of control and
+  bidi characters and capped, filters re-validated by
+  `normalizeEventFilters` before they reach a URL or a request. The UI says
+  "stored in this browser only". A tenant
   switch replaces the token with the rotated one from the response. A 401
   for a request that was already in flight with the old cookie during a
   switch is treated as an answer, not as a sign-out.
@@ -269,10 +303,71 @@ it is an audited action.
 
 Sign-in, Overview, Events (with live mode), Event detail, Sources, Source
 detail, Sensors, Rules, Recommendations, Node, Investigations, Investigation
-detail, Audit trail (admin only), Fleet and Fleet node (experimental).
+detail, Audit trail (admin only), Fleet and Fleet node (experimental), and
+the Guide.
 Analyst-only actions (create, rename, change status or priority, attach and
 detach evidence, add notes) are hidden for viewers; the server enforces the
 same rules.
+
+### Understanding aids (2026-11-22)
+
+- **Overview situation brief.** The first panel under the page head. A few
+  sentences from `buildBrief` (`lib/brief.js`), in a fixed order: volume
+  against the previous window (neutral "more than" / "fewer than"), canary
+  invocations, correlation signals, the highest finding severity present,
+  the most active source (its share of the window and how many sensors saw
+  it), the most cited rule, open investigations. Every clause links to the
+  filtered view, with `since` set to the window start so the list matches
+  what was counted. A field the server did not send produces a sentence
+  saying so. With no events in the window, the brief shows first-run steps
+  instead: `aegismesh doctor --config mesh.yaml`, `aegismesh run --config
+  mesh.yaml --dry-run`, `aegismesh demo --console`, and a link to the 7-day
+  window and the Guide; it says a quiet console is a normal state.
+- **Hierarchy.** The chart is the primary panel (`.panel--primary`); the
+  others are secondary. Panel titles for non-obvious terms carry a tip.
+- **Chart readout.** The legend is a readout: whole-window totals at rest,
+  the hovered or focused bucket's values otherwise, plus the existing
+  crosshair, tooltip and table view.
+- **Events filter bar.** Search is always visible; active filters are
+  removable chips with "Clear all"; the full form is behind "All filters
+  (n set)". Class, sensor, source and rule values in the table are
+  click-to-filter links (pointer only, see `.cell-link`); the event's
+  "Narrow the list" panel offers the same filters from the keyboard. An
+  empty filtered list shows the chips so one can be removed in place; an
+  empty index says an empty list is normal and links to the Guide.
+- **Saved views.** "Views" next to search lists views saved in this browser
+  for this tenant, opens one, deletes one, and saves the current filters
+  under a name. Source and search filters are dropped and the save dialog
+  says so.
+- **Palette as global search.** Groups: Recent (on an empty query), Go to,
+  Actions, Investigations, Rules (`GET /rules`), Nodes, Sensors, Sources,
+  Guide; when the query has two or more characters, "Search all events for
+  …" and up to six events from `GET /events?q=` (debounced, the same
+  substring match as the Events list), each opening the event in the side
+  panel over the filtered list. Results are grouped; a group sits where its
+  best match ranks.
+- **Guide** (`#/guide`, `g h`, nav "Help"). The glossary from
+  `lib/glossary.js`: observation vs incident, classification, canary
+  invocation, severity, finding, findings vs correlation signals, rule,
+  evidence text, source, cadence, recommendations (proposed, not executed),
+  investigation, index bounds, integrity, audit trail. `?t=<id>` scrolls to
+  and marks an entry; CLI commands have a copy button.
+- **Source cadence.** Beside the activity strip: the gaps between
+  consecutive loaded events in seven ranges (under 1 s to over 1 h), the
+  median, the 10th–90th percentile range and the share within a quarter of
+  the median, captioned "from the N loaded events" with how many were not
+  loaded. It says regular short gaps are typical of scripts and agent tool
+  loops and that it is an observation, not a verdict.
+- **Relative times** carry the absolute UTC time in the peek on hover and in
+  visually hidden text.
+- **Touch.** Under `(pointer: coarse)` buttons, nav links, segmented
+  controls, menu and palette items, copy buttons and chip remove links are
+  at least 44px; the help tip's hit area grows to 44px.
+
+Extension points for later screens: a screen is an item in `NAV`
+(`ui/shell.js`), a route in `lib/route.js`, and a descriptor in
+`screens/index.js`; the palette picks up `NAV` automatically. Nothing is
+listed before it exists.
 
 ### Sign-in (operator token and experimental single sign-on)
 
@@ -432,10 +527,11 @@ On a hub that accepts forwarded evidence, an event summary may carry `node:
 - **Command palette** (Cmd/Ctrl+K, or the search button): screens, actions
   (live events, theme, shortcuts, "Switch tenant: …" with several tenants,
   sign out), sensors, the top 50 sources of
-  the last 24 hours and investigations. Ranking: exact, prefix, word start,
+  the last 24 hours, investigations, rules, Guide entries, recents, and a
+  server-side event search (see "Understanding aids"). Ranking: exact, prefix, word start,
   substring, then fuzzy; tested in `webtest/palette.test.mjs`. A pasted
   32-hex event id offers to open that event.
-- **Shortcuts** (`?` shows them): `g` then `o/e/s/i/r/n/a` to go to a
+- **Shortcuts** (`?` shows them): `g` then `o/e/s/i/r/n/a/h` to go to a
   screen, `/` to search events, `j`/`k` to move through the events list,
   Enter to open a row, `o` to open the side panel's event as a full page,
   Esc to close. Single-letter shortcuts never fire inside text fields.
@@ -585,3 +681,15 @@ and does not ship.
 | Reduced motion | NOT RUN in the browser: the pane cannot emulate it. The menus never animate; nothing new animates |
 | Firefox and Safari (native `popover`, `<details>`) | NOT RUN: only Chromium was available |
 | Real identity providers and the real Go console server | NOT RUN: verified against the contract and the mock's fake provider only |
+
+### Verification: understanding aids (2026-11-22, macOS, Node 25, Chromium in the Claude browser pane)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (191 tests: the 169 before plus the situation brief, filter chips and click-to-filter links, saved views and recents parsing as untrusted input, cadence statistics, glossary cross-references and copy checks, chip/tip/relative-time rendering, the Guide route) | PASS |
+| `go test ./internal/consoleui` (embed safety, literal `import()` for the Guide) | NOT RUN: another task was using the Go cache on a nearly full disk. The new code was checked by hand against the embed test's forbidden patterns (no markup sinks, no `localStorage.setItem` with token, csrf or session in the call, one new literal `import('./guide.js')`) |
+| Browser against the mock, dark at 1440px: Overview brief with linked clauses, chart readout following a hovered bucket, help tip popover and its Guide link; Events filter chips, saved view stored and listed (only `sensor` and `severity` written), click-to-filter on a rule chip without opening the row, side panel "Narrow the list"; palette event search ("Search all events for …" and six results) and Guide entries; Source cadence beside the activity strip; Guide at `?t=severity` | PASS |
+| Light at 1440px: Overview (brief, readout on a hovered bucket), Events side panel | PASS |
+| 375px (mobile emulation, coarse pointer): Overview and Events, no horizontal page scroll | PASS |
+| Site: style guide "Understanding aids" section and landing showcase brief, light, 1440px | PASS |
+| Reduced motion, Firefox, Safari, the real Go console server, an empty index (first-run steps) in the browser | NOT RUN: the pane cannot emulate reduced motion, only Chromium was available, and the mock always has events (the empty brief is covered by unit tests) |

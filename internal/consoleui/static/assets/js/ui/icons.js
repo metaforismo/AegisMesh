@@ -58,6 +58,14 @@ const PATHS = {
   tenant: 'M8 2.25l5.75 2.9L8 8.05 2.25 5.15zM2.25 8.1L8 11l5.75-2.9M2.25 11L8 13.9l5.75-2.9',
   key: `${circle(5, 10.5, 2.75)}M7 8.5l6.25-6.25M10.5 5l1.75 1.75M12.25 3.25l1.25 1.25`,
   'sign-in': 'M10 2.5h2.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10M5.75 5l3 3-3 3M8.75 8H1.75',
+  // "What is this?": a question mark in a ring.
+  help: `${circle(8, 8, 6.25)}M6.25 6.25a1.8 1.8 0 0 1 3.5.55c0 1.2-1.75 1.45-1.75 2.6M8 11.4v.1`,
+  // The guide: an open book.
+  guide: 'M8 4.25C6.9 3.3 5.1 2.9 2.25 3v9.5c2.85-.1 4.65.3 5.75 1.25 1.1-.95 2.9-1.35 5.75-1.25V3C10.9 2.9 9.1 3.3 8 4.25zM8 4.25v9.5',
+  // Saved views: a bookmark ribbon.
+  bookmark: 'M4.25 2.25h7.5v11.5L8 10.9l-3.75 2.85z',
+  // Cadence: evenly spaced ticks on a baseline.
+  cadence: 'M1.75 13h12.5M3.5 13V8M6.5 13V5M9.5 13V8.5M12.5 13V6',
 };
 
 export const ICON_NAMES = Object.freeze(Object.keys(PATHS));

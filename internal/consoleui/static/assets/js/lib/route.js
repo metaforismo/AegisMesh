@@ -72,6 +72,7 @@ const ROUTES = [
   { name: 'fleet', pattern: ['fleet'] },
   { name: 'fleet', pattern: ['fleet', 'nodes'] },
   { name: 'fleet_node', pattern: ['fleet', 'nodes', ':id'], valid: (p) => /^[0-9a-f]{32}$/.test(p.id) },
+  { name: 'guide', pattern: ['guide'] },
   { name: 'login', pattern: ['login'] },
 ];
 

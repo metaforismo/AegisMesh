@@ -323,6 +323,8 @@ body { font-size: var(--text-md); }
 .sp-1 { width: var(--space-1); } .sp-2 { width: var(--space-2); } .sp-3 { width: var(--space-3); } .sp-4 { width: var(--space-4); } .sp-6 { width: var(--space-6); } .sp-8 { width: var(--space-8); } .sp-12 { width: var(--space-12); } .sp-16 { width: var(--space-16); }
 
 /* Static bar fills for the reference page (the console sets them via CSSOM). */
+.cad-0 { transform: scaleY(0); } .cad-10 { transform: scaleY(0.1); } .cad-35 { transform: scaleY(0.35); } .cad-100 { transform: scaleY(1); }
+.ds-tip { inset: auto; top: 30%; left: 50%; translate: -50% 0; }
 .fill-100 { transform: scaleX(1); } .fill-62 { transform: scaleX(0.62); } .fill-35 { transform: scaleX(0.35); } .fill-12 { transform: scaleX(0.12); }
 
 .ds .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); }
@@ -353,3 +355,8 @@ body { font-size: var(--text-md); }
 .ds-static { max-width: 23rem; }
 .ds-menu { position: static; width: 18rem; max-width: 100%; }
 .ds-grow-2 { flex-grow: 2; } .ds-grow-3 { flex-grow: 3; } .ds-grow-4 { flex-grow: 4; } .ds-grow-30 { flex-grow: 30; }
+
+/* The showcase's situation brief: same component, scaled to the window. */
+.window__brief { padding: var(--space-3) var(--space-4); }
+.window__brief .brief__head { margin-bottom: var(--space-1); }
+.window__brief .brief__text { font-size: var(--text-sm); line-height: var(--leading-normal); }

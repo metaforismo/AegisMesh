@@ -9,6 +9,10 @@ import { icon, brandMark } from './icons.js';
 
 export { brandMark };
 
+// Navigation is data: a screen appears here and in the palette by adding an
+// item (and a route in lib/route.js plus a descriptor in screens/index.js).
+// Screens for new API endpoints slot into the group they belong to; nothing
+// is listed before it exists.
 export const NAV = [
   { group: 'Observe', items: [
     { route: 'overview', label: 'Overview', href: '#/overview', icon: 'overview', keys: 'g o' },
@@ -25,6 +29,9 @@ export const NAV = [
     { route: 'node', label: 'Node', href: '#/node', icon: 'node' },
     { route: 'fleet', label: 'Fleet', href: '#/fleet', also: ['fleet_node'], icon: 'fleet', tag: 'Experimental' },
     { route: 'audit', label: 'Audit trail', href: '#/audit', role: 'admin', icon: 'audit', keys: 'g a' },
+  ] },
+  { group: 'Help', items: [
+    { route: 'guide', label: 'Guide', href: '#/guide', icon: 'guide', keys: 'g h' },
   ] },
 ];
 
