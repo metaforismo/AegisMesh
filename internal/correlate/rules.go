@@ -24,7 +24,10 @@ func (e *Engine) evaluate(trigger Event, st *sourceState) []Signal {
 		e.checkProtocolHopping(st),
 		e.checkToolProbing(st),
 		e.checkSustainedRecon(st),
-		e.checkCadence(trigger, st), e.checkAIEnumeration(trigger, st), e.checkStuffing(trigger, st), e.checkReplay(trigger, st),
+		e.checkCadence(trigger, st),
+		e.checkAIEnumeration(trigger, st),
+		e.checkStuffing(trigger, st),
+		e.checkReplay(trigger, st),
 	}
 	var out []Signal
 	for _, c := range cands { // fixed order => deterministic signal order
@@ -138,6 +141,7 @@ func (e *Engine) past(trigger Event, st *sourceState) []Event {
 	}
 	return events
 }
+
 func (e *Engine) checkCadence(trigger Event, st *sourceState) candidate {
 	events := e.past(trigger, st)
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Time.Before(events[j].Time) })
@@ -153,7 +157,10 @@ func (e *Engine) checkCadence(trigger Event, st *sourceState) candidate {
 	sorted := append([]time.Duration(nil), gaps...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 	median := sorted[len(sorted)/2]
-	if median < time.Second || median > 30*time.Second {
+	if median < time.Second {
+		return candidate{RuleAutomationCadence, true, events}
+	}
+	if median > 30*time.Second {
 		return candidate{id: RuleAutomationCadence}
 	}
 	// At most one gap may differ from the median by more than 25%.
@@ -169,6 +176,7 @@ func (e *Engine) checkCadence(trigger Event, st *sourceState) candidate {
 	}
 	return candidate{RuleAutomationCadence, outliers <= 1, events}
 }
+
 func (e *Engine) checkAIEnumeration(trigger Event, st *sourceState) candidate {
 	seen := map[string]bool{}
 	var events []Event
@@ -180,6 +188,7 @@ func (e *Engine) checkAIEnumeration(trigger Event, st *sourceState) candidate {
 	}
 	return candidate{RuleAIEnumeration, len(seen) >= 2, events}
 }
+
 func (e *Engine) checkStuffing(trigger Event, st *sourceState) candidate {
 	seen := map[string]bool{}
 	var events []Event
@@ -200,6 +209,7 @@ func (e *Engine) checkStuffing(trigger Event, st *sourceState) candidate {
 	}
 	return candidate{RuleCredentialStuffing, len(seen) >= e.opts.CredentialThreshold, events}
 }
+
 func (e *Engine) checkReplay(trigger Event, st *sourceState) candidate {
 	hit := false
 	for _, id := range trigger.FindingIDs {

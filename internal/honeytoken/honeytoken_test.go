@@ -3,6 +3,7 @@ package honeytoken
 import (
 	"errors"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,7 @@ func TestValidation(t *testing.T) {
 		{"kind", []Token{{valid.ID, valid.Value, "other"}}, false},
 		{"id", []Token{{"../path", valid.Value, Credential}}, false},
 		{"long id", []Token{{strings.Repeat("a", 65), valid.Value, Credential}}, false},
+		{"placeholder", []Token{{valid.ID, "REPLACE_WITH_GENERATED_TOKEN", Credential}}, false},
 		{"short value", []Token{{valid.ID, "tiny", Credential}}, false},
 		{"long value", []Token{{valid.ID, strings.Repeat("x", 257), Credential}}, false},
 		{"control", []Token{{valid.ID, "synthetic-token\nvalue", Credential}}, false},
@@ -68,7 +70,8 @@ func TestMatchingAndRedaction(t *testing.T) {
 }
 
 func TestGenerate(t *testing.T) {
-	for _, format := range []string{"openai", "anthropic", "aws", "github", "generic"} {
+	patterns := map[string]string{"openai": `^sk-proj-[A-Za-z0-9]{48}$`, "anthropic": `^sk-ant-api03-[A-Za-z0-9_-]{86}AA$`, "aws": `^AKIA[A-Z2-7]{16}$`, "github": `^ghp_[A-Za-z0-9]{36}$`, "generic": `^[0-9a-f]{40}$`}
+	for format, pattern := range patterns {
 		a, err := Generate("test-marker", Credential, format)
 		if err != nil {
 			t.Fatal(err)
@@ -77,8 +80,8 @@ func TestGenerate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if a.Value == b.Value || !strings.Contains(a.Value, "synthetic") && !strings.Contains(a.Value, "SYNTHETIC") {
-			t.Fatal("non-random or ambiguous synthetic value")
+		if a.Value == b.Value || !regexp.MustCompile(pattern).MatchString(a.Value) || !regexp.MustCompile(pattern).MatchString(b.Value) {
+			t.Fatal("non-random or incorrect format")
 		}
 	}
 	if _, err := Generate("bad/id", Credential, "generic"); err == nil {

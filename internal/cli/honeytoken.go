@@ -10,14 +10,19 @@ import (
 
 type honeytokenCmd struct{ env *Env }
 
+// NewHoneytokenCmd constructs the local marker generator.
 func NewHoneytokenCmd(env *Env) Command { return &honeytokenCmd{env} }
-func (c *honeytokenCmd) Name() string   { return "honeytoken" }
+
+func (c *honeytokenCmd) Name() string { return "honeytoken" }
+
 func (c *honeytokenCmd) Usage() string {
 	return "honeytoken new --kind credential|agent_canary --format openai|anthropic|aws|github|generic --id SLUG"
 }
+
 func (c *honeytokenCmd) Help() string {
 	return "Generate a synthetic honeytoken config snippet. Never use real credentials as honeytokens."
 }
+
 func (c *honeytokenCmd) Run(_ context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "new" {
 		return Usagef("choose subcommand: new")

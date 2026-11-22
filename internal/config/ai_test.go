@@ -114,3 +114,10 @@ func TestAIThresholdConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestAIDecoyTemplateRequiresReplacement(t *testing.T) {
+	_, err := Load(filepath.Join("..", "..", "examples", "ai-decoy.yaml"))
+	if err == nil || !strings.Contains(err.Error(), "unreplaced placeholder") || !strings.Contains(err.Error(), "honeytoken new") {
+		t.Fatal("template must explain how to generate markers", err)
+	}
+}

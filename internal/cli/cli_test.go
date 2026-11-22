@@ -36,6 +36,7 @@ func newTestApp(stdin ...io.Reader) (*App, *bytes.Buffer, *bytes.Buffer) {
 		NewDemoCmd(env),
 		NewInspectCmd(env),
 		NewRecommendCmd(env),
+		NewExportCmd(env),
 		NewRulesCmd(env), NewHoneytokenCmd(env),
 		NewMigrateCmd(env),
 		NewExtCmd(env),

@@ -26,7 +26,7 @@ func TestSyntheticCorpus(t *testing.T) {
 	if err := json.Unmarshal(raw, &corpus); err != nil {
 		t.Fatal(err)
 	}
-	if len(corpus.Benign) != 24 || len(corpus.Attack) != 8 {
+	if len(corpus.Benign) != 26 || len(corpus.Attack) != 9 {
 		t.Fatal("corpus size drift: update documented measurement")
 	}
 	tokens := []honeytoken.Token{{ID: "corpus-key", Value: "synthetic-corpus-credential", Kind: honeytoken.Credential}, {ID: "corpus-agent", Value: "synthetic-corpus-agent-marker", Kind: honeytoken.AgentCanary}}

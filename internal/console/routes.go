@@ -13,6 +13,12 @@ type routeSpec struct {
 
 func (s *Server) routeTable() []routeSpec {
 	return append(s.fleetRoutes(), []routeSpec{
+		{pattern: "GET /api/v1/sessions", role: "viewer", group: "attacker-sessions", handle: (*Server).attackerSessions},
+		{pattern: "GET /api/v1/sessions/{id}", role: "viewer", group: "attacker-sessions", handle: (*Server).attackerSession},
+		{pattern: "GET /api/v1/coverage", role: "viewer", group: "coverage", handle: (*Server).coverage},
+		{pattern: "GET /api/v1/export/indicators", role: "analyst", group: "indicator-export", handle: (*Server).exportIndicators},
+		{pattern: "GET /api/v1/sessions/{id}/report", role: "analyst", group: "reports", handle: (*Server).sessionReport},
+		{pattern: "GET /api/v1/investigations/{id}/report", role: "analyst", group: "reports", handle: (*Server).investigationReport},
 		{pattern: "GET /api/v1/auth/oidc/login", group: "oidc", handle: (*Server).oidcLogin},
 		{pattern: "GET /api/v1/auth/oidc/callback", group: "oidc", handle: (*Server).oidcCallback},
 		{pattern: "POST /api/v1/session/tenant", role: "viewer", group: "session", handle: (*Server).switchTenant},

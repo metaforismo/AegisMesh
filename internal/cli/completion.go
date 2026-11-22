@@ -23,7 +23,7 @@ Install, e.g.:
   fish: aegismesh completion fish > ~/.config/fish/completions/aegismesh.fish`
 }
 
-var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "rules", "honeytoken", "migrate", "version", "completion", "ext", "console"}
+var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "export", "rules", "honeytoken", "migrate", "version", "completion", "ext", "console"}
 
 func (c *completionCmd) Run(_ context.Context, args []string) error {
 	if len(args) != 1 {
@@ -64,6 +64,13 @@ _aegismesh_completions() {
           *) COMPREPLY=( $(compgen -W "--data-dir --identity --require-sealed --limit --sensor --kind --finding --classification --verify --id --out --profile --json" -- "$cur") ) ;;
         esac
       fi ;;
+    export)
+      case "$prev" in
+        --data-dir) COMPREPLY=( $(compgen -d -- "$cur") ) ;;
+        --identity) COMPREPLY=( $(compgen -f -- "$cur") ) ;;
+        --format) COMPREPLY=( $(compgen -W "stix csv txt" -- "$cur") ) ;;
+        *) COMPREPLY=( $(compgen -W "indicators --data-dir --format --since --identity --require-sealed" -- "$cur") ) ;;
+      esac ;;
     recommend)
       case "$prev" in
         --data-dir) COMPREPLY=( $(compgen -d -- "$cur") ) ;;
@@ -125,6 +132,13 @@ _aegismesh() {
           '--sensor[exact sensor id]:sensor id:' \
           '--classification[evidence class]:class:(interaction canary_invocation correlation_signal)' \
           '--json[emit JSON output]' ;;
+        export) _arguments \
+          '1:subcommand:(indicators)' \
+          '--data-dir[evidence directory]:directory:_directories' \
+          '*--identity[native age/X25519 identity file]:file:_files' \
+          '--format[download format]:format:(stix csv txt)' \
+          '--since[inclusive RFC3339 time]:timestamp:' \
+          '--require-sealed[reject open segments]' ;;
         console) _values 'operation' token hash ;;
         demo) _arguments '--json[emit JSON output]' '--console[keep operator console open]' ;;
         migrate) _values 'target' beelzebub ;;
@@ -155,6 +169,9 @@ complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l rule -r -d '
 complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l sensor -r -d 'exact sensor id'
 complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l classification -r -a 'interaction canary_invocation correlation_signal' -d 'evidence class'
 complete -c aegismesh -n '__fish_seen_subcommand_from recommend' -l json -d 'JSON output'
+complete -c aegismesh -n '__fish_seen_subcommand_from export' -a 'indicators'
+complete -c aegismesh -n '__fish_seen_subcommand_from export' -l format -r -a 'stix csv txt'
+complete -c aegismesh -n '__fish_seen_subcommand_from export' -l since -r -d 'inclusive RFC3339 time'
 complete -c aegismesh -n '__fish_seen_subcommand_from console' -a 'token hash'
 complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l console -d 'keep operator console open'
 complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l json -d 'JSON output'
@@ -162,6 +179,6 @@ complete -c aegismesh -l config -r -d 'config file'
 complete -c aegismesh -l data-dir -r -d 'evidence directory'
 complete -c aegismesh -n '__fish_seen_subcommand_from inspect' -l identity -r -d 'native age/X25519 identity file'
 complete -c aegismesh -l json -d 'JSON output'
-complete -c aegismesh -n '__fish_seen_subcommand_from inspect recommend' -l require-sealed -d 'reject open segments'
+complete -c aegismesh -n '__fish_seen_subcommand_from inspect recommend export' -l require-sealed -d 'reject open segments'
 complete -c aegismesh -l dry-run -d 'bind and stop immediately'
 `

@@ -28,6 +28,7 @@ func main() {
 		cli.NewConsoleCmd(env),
 		cli.NewInspectCmd(env),
 		cli.NewRecommendCmd(env),
+		cli.NewExportCmd(env),
 		cli.NewMigrateCmd(env),
 		cli.NewRulesCmd(env),
 		cli.NewHoneytokenCmd(env),

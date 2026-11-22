@@ -68,7 +68,7 @@ func TestNewCorrelations(t *testing.T) {
 		{"two outliers", []int{0, 10, 20, 60, 100, 110, 120, 130}, false},
 		{"irregular", []int{0, 2, 5, 13, 29, 58, 115, 229}, false},
 		{"slow", []int{0, 40, 80, 120, 160, 200, 240, 280}, false},
-		{"simultaneous", []int{0, 0, 0, 0, 0, 0, 0, 0}, false},
+		{"simultaneous", []int{0, 0, 0, 0, 0, 0, 0, 0}, true},
 		{"too few", []int{0, 10, 20, 30, 40, 50, 60}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

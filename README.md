@@ -22,6 +22,10 @@ The capabilities described here are backed by the checks recorded in
 [docs/verification.md](docs/verification.md); what was not run or not verified is listed there too. Changes since v0.1.0
 are in [CHANGELOG.md](CHANGELOG.md), and the plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+- Console source sessions, catalog technique observations, conservative STIX/CSV/TXT
+  indicator downloads and Markdown observation reports; deterministic and bounded,
+  with proposed recommendations only. See [API contracts](docs/architecture/console-api.md)
+  and [`export indicators`](docs/cli.md). Frontend integration is separate.
 - Static AI-service decoy profile, synthetic credential/agent markers and
   observe-only AI request/cadence/replay signals, with editorial framework
   references and a checked-in synthetic corpus. See

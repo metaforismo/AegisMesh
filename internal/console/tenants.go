@@ -26,7 +26,7 @@ func (s *Server) scopedServer(name string, opts Options, dir string) (*Server, e
 		}
 	}
 	view := &Server{
-		unassignedAudit: s.unassignedAudit, cfg: s.cfg, tenantID: name, views: s.views, auth: s.auth, oidc: s.oidc,
+		unassignedAudit: s.unassignedAudit, cfg: s.cfg, tenantID: name, instanceID: s.instanceID, views: s.views, auth: s.auth, oidc: s.oidc,
 		index: index, runtime: s.runtime, rules: s.rules, fleetStatus: s.fleetStatus,
 		fleetHub: s.fleetHub.ForTenant(name), listener: s.listener,
 		done: s.done, slots: s.slots, streams: s.streams, clients: s.clients,

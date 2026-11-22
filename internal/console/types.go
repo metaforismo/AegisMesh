@@ -115,6 +115,7 @@ type Runtime interface {
 
 // Rule is catalog-authored rule metadata with its effective enabled state.
 type Rule struct {
+	// Frameworks lists editorial relates-to references from the catalog.
 	Frameworks []rulecatalog.FrameworkMapping `json:"frameworks"`
 	// ID is the catalog rule identifier.
 	ID string `json:"id"`

@@ -76,6 +76,7 @@ type asset struct {
 type Server struct {
 	unassignedAudit *audit.Log
 	tenantID        string
+	instanceID      string
 	views           map[string]*Server
 	oidc            *oidc.Manager
 	oidcCancel      context.CancelFunc
@@ -130,6 +131,7 @@ func New(opts Options) (_ *Server, err error) {
 
 	server := &Server{
 		cfg:         opts.Config,
+		instanceID:  opts.StateDir,
 		fleetHub:    opts.FleetHub,
 		fleetStatus: opts.FleetStatus,
 		index:       opts.Index,

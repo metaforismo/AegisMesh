@@ -927,3 +927,64 @@ cross-field marker matching is claimed. Existing sensor limits, event/storage
 contracts and enforcement semantics for older rules are retained. New data is
 additive and no dependency is added. Exact predicates and the synthetic
 measurement scope are in `docs/ai-threat-detection.md`.
+
+## ADR-0022 — bounded session stories, framework relations and operator downloads
+
+**Status:** implemented locally, uncommitted; verification in `docs/verification.md`.
+
+**Context.** Operators need a chronological account and portable observations
+without granting the console another control or egress path. The disposable
+index has count/byte bounds and incomplete history; source keys are not actors.
+
+**Alternatives considered.** Implementing each projection directly in HTTP
+handlers would couple transport, grouping and rendering and duplicate CLI
+indicator behavior. Persisting sessions as another mutable index would add
+backfill, eviction and transactional ownership. A shared pure projection over
+one bounded snapshot provides the smaller interface and preserves read-only
+console ownership.
+
+**Decision.** `evidenceindex.Analysis()` copies at most 8192 newest summaries
+and consistent index stats under one read lock. `evidenceview` groups source
+sessions at an idle gap greater than 30 minutes, computes deterministic cadence,
+explicit automation evidence and catalog relation counts. `indicatorexport`
+renders conservative IP proposals in STIX/CSV/TXT for the HTTP and local CLI
+seams. `evidencereport` owns inert Markdown; the console supplies already scoped
+annotations, summaries and verified local dry-run recommendations. No new
+dependency, configuration field, model call, sensor control or runtime egress.
+The final wire contracts and formulas are in `console-api.md`.
+
+Session IDs hash tenant/source/first retained origin+event; they are stable
+only while that anchor remains first. List cursors bind an immutable snapshot
+digest and selection under the tenant's process HMAC key; stale reads restart.
+A 200-event timeline also bounds phase runs. Sensor/kind lists cap at 64 with
+an explicit flag. Responses/downloads cap at 2 MiB, with no partial downloads;
+STIX additionally stops object construction near 2048 objects. Source reports
+and assessments disclose every omitted/capped count. Credential/provider output
+and arbitrary observation text never become exec, paths, policy or enforcement.
+
+Automation requires eight non-signal events; correlated outputs cannot create
+fast timing evidence. Sub-second median or regular 1..30-second timing and
+listed marker/signal predicates are observations, not verdicts. Framework
+relations are catalog editorial references, not execution or completeness claims.
+STIX notes carry origin-qualified evidence references and conservative 15/100
+confidence; no automatic blocklist application or delivery connector exists.
+
+Report data is bounded, JSON quoted on a single line inside fixed text fences;
+only static strings supply Markdown headings. Existing recommendation generation
+is local-only, verified and capped; missing/forwarded references are disclosed.
+All successful sensitive downloads are audited before bytes are released.
+
+**Review corrections carried forward.** Honeytokens use crypto/rand rejection
+sampling in provider-shaped formats without a visible synthetic marker. They
+are never registered or validated with a provider. It is impossible to prove
+offline that random strings never collide with provider credentials; do not
+claim that guarantee. Committed examples reject explicit unreplaced placeholders.
+Generic `/version`, `/metrics`, `/sse` paths no longer identify AI surfaces.
+COR-005 accepts sub-second upper medians, or medians <=30 seconds with its
+at-most-one-outlier test; zero gaps are included with timestamp caveats.
+
+**Consequences and deferred work.** Session reconstruction is sample-dependent,
+not durable actor tracking. No complete-history, hard tenancy, external SIEM
+interoperability, attribution or production-capacity claim is made. UI/dev mock
+integration belongs to the frontend workstream. Native evidence remains the
+source of truth. No push, tag, PR, merge, release or deployment is implied.

@@ -463,3 +463,38 @@ those additional contexts through `internal/ruletest.EvaluateInteraction`.
 The demo records eight synthetic observations (seven interactions and one MCP
 canary invocation), prints LLM-001, LLM-002, LLM-004, HT-001 and AGT-001, and
 produces five dry-run proposals. All traffic stays on its own loopback sensors.
+
+## aegismesh export indicators
+
+```sh
+aegismesh export indicators --data-dir ./data --format stix
+aegismesh export indicators --data-dir ./data --format csv --since 2026-01-01T00:00:00Z
+aegismesh export indicators --data-dir ./data --format txt --identity ./read-identity.txt --require-sealed
+```
+
+`--data-dir` and `--format stix|csv|txt` are required; `--since` is an inclusive
+RFC3339 bound. `--identity FILE` is repeatable for encryption key rotation.
+Output is the complete attachment content on stdout; scanned/selected and skipped
+non-IP counts go to stderr. No network request or enforcement occurs. TXT is a
+PROPOSED blocklist for operator review, never applied. STIX is a deterministic
+2.1 bundle with a synthetic local instance identity, confidence 15/100 IP
+indicators, event-reference notes and editorial ATT&CK/ATLAS relationships.
+CSV/TXT contain one indicator per row/line. Source hostnames, zones, ports and
+other non-IP keys are skipped. Console shapes and CSV columns are documented in
+[console-api.md](architecture/console-api.md).
+
+All native input is verified before output; corrupt evidence, more than 8192
+read events (even before `--since`), approximately 2048 STIX objects or output
+above 2 MiB fails closed. Exit 0 means read/render success, possibly incomplete:
+open encrypted v3 segments expose their last checkpoint prefix and a stderr
+notice; `--require-sealed` rejects them. Exit 1 means read/output/limit failure;
+2 means invalid arguments. There is no `--out`: operators select any redirection
+path themselves. Golden tests cover all formats without storing provider keys.
+
+The checked-in `examples/ai-decoy.yaml` is a template: both clearly marked
+placeholders must be replaced everywhere (including response bodies) using
+`aegismesh honeytoken new`. Validation fails with an actionable message until
+they are replaced. `init --profile ai-decoy` generates fresh random markers and
+needs no replacement. Never substitute real provider credentials. Generated
+values use realistic shapes without a synthetic substring; no provider ever
+registers or validates them, and random collision impossibility is not claimed.

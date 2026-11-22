@@ -160,3 +160,17 @@ quality claim; no false-positive, attribution or coverage assertion follows
 from this implementation. Credential distinctness remains intentionally
 memory-only. Multi-step MCP environments, cross-node correlation and actual
 provider interoperability are separate work; this pack does not implement them.
+
+
+## Local backend continuation (uncommitted, ADR-0022)
+
+- Implemented: bounded tenant-scoped source sessions, cadence/evidence/phase
+  projections and catalog technique observations; conservative analyst indicator
+  and Markdown report downloads; local verified `export indicators`.
+- Verification: current exact commands/results are in `docs/verification.md`.
+  No merge, release or deployment is implied.
+- Deferred to frontend owner: sessions/coverage/export/report UI and dev mock
+  integration. No mock change was required by existing contract tests.
+- Future decisions: durable history/session identity beyond eviction, hard
+  tenant boundaries and independently exercised SIEM interoperability. Current
+  sampled observations are not completeness, attribution or incident verdicts.

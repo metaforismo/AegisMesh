@@ -1710,3 +1710,112 @@ internal/sensorproc/protocol.go
 internal/sensorproc/proxy.go
 internal/sensorproc/worker.go
 ```
+
+
+## 2026-11-22 — backend review corrections and bounded observation downloads
+
+Scope: uncommitted changes on `b9b4edd` in the backend worktree. HEAD was
+unchanged at completion; no staging, commit, push, tag, PR or deployment.
+No dependencies, configuration fields or dev-mock changes. UI integration remains
+with the frontend owner. This ledger records local synthetic and loopback proof,
+not external-provider, SIEM interoperability or production-capacity evidence.
+
+| Command | Result |
+|---|---|
+| `go test ./internal/honeytoken ./internal/detect ./internal/correlate ./internal/evidenceview ./internal/indicatorexport ./internal/evidencereport ./internal/console ./internal/ruletest` (initial integration run) | **FAIL**, exit 1: six new routes required explicit authorization fixtures and valid session IDs in tenant fixtures. Part 1 packages passed. Fixtures were corrected; subsequent focused and full race runs passed. |
+| `go test ./internal/console ./internal/cli ./internal/evidenceindex ./internal/config ./internal/ruletest ./internal/correlate ./internal/evidenceview ./internal/indicatorexport ./internal/evidencereport` | **PASS**, exit 0; final focused run before the final gates. |
+| `AEGISMESH_UPDATE_INDICATOR_GOLDENS=1 go test ./internal/cli -run TestIndicatorExportCLIGolden -count=1` | **PASS**, exit 0; generated non-secret deterministic CSV/TXT/STIX goldens, subsequently checked by normal tests and the race suite. |
+| `go test ./internal/evidencereport -run '^$' -fuzz=FuzzMarkdownNeutralizer -fuzztime=5s -fuzzminimizetime=0 -parallel=2` | **PASS**, exit 0; 60,136 executions, 156 new interesting inputs, no failure. Final race suite also ran seed cases after adding explicit Unicode-format-control neutralization. |
+| `make ui-test` | **PASS**, exit 0; 169 tests, 169 passed, zero failed/skipped. Existing mock contracts require no mock edit. |
+| `make secrets-scan` | **PASS**, exit 0; tracked working-tree heuristic. Supplemental fixed-pattern scan of all 19 new/untracked source/golden files also passed. No full provider-shaped marker literals were committed or added as fixtures. |
+| `make lint` | **PASS**, exit 0; gofmt check and `go vet ./...`. `golangci-lint` unavailable; Makefile explicitly skipped it. |
+| `make test` (after `make lint`) | **PASS**, exit 0; `go test -race ./...`, full package results captured below. |
+| `git diff --check` | **PASS**, exit 0. |
+| `df -h /System/Volumes/Data` | **PASS**, about 15 GiB initially and 14 GiB after the race gate. Never approached the 1.5 GiB cache-clean threshold; no cache deletion performed. |
+| `make sbom` | **NOT RUN**, deliberately skipped as requested: known linked-worktree generator limitation. |
+| External SIEM import / provider credential validation / UI for new endpoints | **NOT RUN**. No external validation request or runtime egress was added. Frontend implementation was outside this backend task. |
+
+Evidence includes exact 30-minute idle/tie/tenant ID cases, cadence and regularity
+formulas, phase/timeline caps, 8192-entry scan truncation, local-vs-forwarded ID
+collisions, cursor filter/snapshot binding, strict query/role/tenant checks,
+real-listener attachments, audit failure before download, required STIX object
+properties/patterns/UUIDv5/resolved references, skipped-source accounting,
+CLI since/usage/corruption/size/golden checks, and Markdown HTML/fence/control
+neutralization. The expanded benign corpus has 26 samples (generic version/SSE
+added, metrics retained); it produces six LLM-001 hits, one LLM-004 hit and zero
+medium-or-higher hits. These are fixture properties, not field error rates.
+
+Important limit: locally generated provider-shaped random decoys are never
+registered or verified with providers. It is impossible to prove offline that
+random strings can never collide with provider-issued values. The docs and
+implementation make no absolute provider-invalidity claim. Committed example
+placeholders are rejected with an actionable `honeytoken new` instruction.
+
+Captured final lint output:
+
+```text
+go vet ./...
+golangci-lint not installed; skipped (vet+fmt ran)
+```
+
+Captured final full race gate output:
+
+```text
+go test -race ./...
+?   	github.com/metaforismo/aegismesh/cmd/aegismesh	[no test files]
+ok  	github.com/metaforismo/aegismesh/deploy/helm/aegismesh	(cached)
+?   	github.com/metaforismo/aegismesh/examples/extensions/echo-responder	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/admin	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/agekey	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/cli	15.287s
+ok  	github.com/metaforismo/aegismesh/internal/config	5.817s
+ok  	github.com/metaforismo/aegismesh/internal/console	19.192s
+ok  	github.com/metaforismo/aegismesh/internal/console/audit	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/auth	3.062s
+ok  	github.com/metaforismo/aegismesh/internal/console/investigations	16.954s
+ok  	github.com/metaforismo/aegismesh/internal/console/oidc	2.494s
+ok  	github.com/metaforismo/aegismesh/internal/console/stateio	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/console/tenant	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/consoleui	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/correlate	4.386s
+ok  	github.com/metaforismo/aegismesh/internal/demo	4.219s
+ok  	github.com/metaforismo/aegismesh/internal/detect	3.793s
+ok  	github.com/metaforismo/aegismesh/internal/ecsexport	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/egress	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/event	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/evidenceindex	35.417s
+ok  	github.com/metaforismo/aegismesh/internal/evidencereport	2.395s
+ok  	github.com/metaforismo/aegismesh/internal/evidenceview	2.701s
+ok  	github.com/metaforismo/aegismesh/internal/ext	16.645s
+ok  	github.com/metaforismo/aegismesh/internal/extmanager	34.419s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/agent	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	42.717s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/identity	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/fleet/protocol	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/honeytoken	2.404s
+ok  	github.com/metaforismo/aegismesh/internal/indicatorexport	4.839s
+ok  	github.com/metaforismo/aegismesh/internal/llm	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/migrate/beelzebub	1.701s
+ok  	github.com/metaforismo/aegismesh/internal/observe	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/policy	11.685s
+ok  	github.com/metaforismo/aegismesh/internal/recommend	3.482s
+ok  	github.com/metaforismo/aegismesh/internal/redact	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/rulecatalog	3.743s
+ok  	github.com/metaforismo/aegismesh/internal/rulesinput	(cached)
+ok  	github.com/metaforismo/aegismesh/internal/ruletest	3.948s
+ok  	github.com/metaforismo/aegismesh/internal/runtime	46.563s
+?   	github.com/metaforismo/aegismesh/internal/sensor	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensor/httpsensor	7.183s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/mcpsensor	7.691s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/sshsensor	8.584s
+ok  	github.com/metaforismo/aegismesh/internal/sensor/tcpsensor	2.484s
+?   	github.com/metaforismo/aegismesh/internal/sensorfactory	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/sensorproc	14.127s
+ok  	github.com/metaforismo/aegismesh/internal/storage	20.317s
+ok  	github.com/metaforismo/aegismesh/internal/strictjson	(cached)
+?   	github.com/metaforismo/aegismesh/internal/testutil/benchfixture	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/testutil/oidctest	[no test files]
+?   	github.com/metaforismo/aegismesh/internal/version	[no test files]
+ok  	github.com/metaforismo/aegismesh/internal/webhook	(cached)
+ok  	github.com/metaforismo/aegismesh/tools/sbomcheck	(cached)
+```

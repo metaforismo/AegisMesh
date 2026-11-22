@@ -5,7 +5,8 @@ HTTP APIs on `127.0.0.1:11434` and `127.0.0.1:8001`. It configures the local
 provider, no fallback, one fake credential and one agent marker. There is no
 model behind these surfaces: requests never cause inference, model downloads,
 key creation, code execution or changes to configuration or assets.
-`examples/ai-decoy.yaml` is a checked-in synthetic example; generate a fresh
+`examples/ai-decoy.yaml` is a checked-in template with rejected `REPLACE_WITH_`
+placeholders. Replace both markers everywhere using `honeytoken new`, or generate a fresh
 profile for each deployment instead of reusing its marker values.
 
 The first listener serves Ollama root/version/tags/ps/generate/chat/show/pull,
@@ -67,10 +68,17 @@ aegismesh honeytoken new --kind credential --format openai --id planted-key
 aegismesh honeytoken new --kind agent_canary --format generic --id diagnostic-echo
 ```
 
-Formats `openai`, `anthropic`, `aws`, `github`, and `generic` add recognizable
-prefixes and an explicit synthetic marker plus 128 random bits. They are
-look-alikes, not valid provider-issued credentials. Merge the printed snippet
-into your configuration; the command does not modify files or contact a provider.
+Formats use crypto/rand with unbiased rejection sampling: `openai` is `sk-proj-`
+plus 48 base62 characters; `anthropic` is `sk-ant-api03-` plus 86 base64url
+characters and `AA`; `aws` is `AKIA` plus 16 characters from A-Z/2-7; `github`
+is `ghp_` plus 36 base62 characters; `generic` is 40 hexadecimal characters.
+No generated value contains an intentional synthetic marker. Values are locally
+random and never registered or validated with a provider. An offline generator
+cannot prove that a random string can never collide with a provider credential;
+no such guarantee is claimed. Never use real keys. Merge the printed snippet
+and replace any planted response-body copies; the command does not modify files
+or contact a provider. Repository fixtures contain short obvious fakes or
+runtime-generated markers, not committed full provider-shaped values.
 
 ## Detection rules
 
@@ -90,10 +98,11 @@ still has its usual action.
 
 Families are `ollama`, `openai_compatible`, `litellm`, `vllm`, `mcp_http`.
 Shared `/v1/*` paths are classified `openai_compatible`, including the second
-listener: request shape alone cannot identify vLLM. `/version` and `/metrics`
-are vLLM-like enumeration surfaces here, and ordinary version/metrics clients
-can match this low rule. Generic root `/` is deliberately not enough to
-identify an AI family. No user-agent, rotating IP, provider access validation,
+listener: request shape alone cannot identify vLLM. Distinctive `/tokenize`,
+`/detokenize`, `/v1/score`, `/rerank` and `/invocations` select the vLLM-like
+family. `/mcp` identifies the MCP HTTP path. Generic `/version`, `/metrics`,
+`/sse` and root `/` do not identify AI families or contribute families to
+COR-006, although the decoy still serves version/metrics responses. No user-agent, rotating IP, provider access validation,
 client attribution or model call is used to infer these findings.
 
 LLM-004 recognizes Bearer in Authorization/Proxy-Authorization, X-API-Key /
@@ -119,7 +128,7 @@ correlation:
 
 | Rule | Exact predicate and limitations |
 |---|---|
-| COR-005 | Last N events for one peer host, sorted by event time in the window ending at the trigger. Upper median inter-arrival gap is 1..30 seconds, and at most one gap differs from that median by more than 25%. Equal timestamps do not establish a cadence. Summary: consistent with scripted or agent-driven activity. Ordinary scanners, scheduled clients and uptime monitors may match. |
+| COR-005 | Last N events for one peer host, sorted by event time in the window ending at the trigger. There are N-1 adjacent gaps for the last N events. Fire if their upper median is <1 second, OR if it is <=30 seconds and at most one gap differs from that median by more than 25%. Exactly 1/30 seconds are inclusive in the regular branch; exactly 25% difference is allowed. Zero gaps count in the fast branch; ties may reflect timestamp precision or scheduling, not client reactions. Summary: consistent with scripted or agent-driven activity. Ordinary scanners, scheduled clients and uptime monitors may match. |
 | COR-006 | One source touched at least two distinct AI families within the window, using LLM-001 finding metadata. A disabled LLM-001 supplies no family evidence. |
 | COR-007 | At least N distinct bounded credential attempts from one source within the window, across HTTP auth headers and SSH password authentication. HTTP Basic and SSH compare the username/password tuple; bearer/API-key values compare as keys. Duplicate attempts count once. Synthetic SSH accepts bounded passwords, so these are attempts, not failed logins. |
 | COR-008 | HT-001 on the triggering sensor, after an earlier-in-event-time interaction by the **same peer host** with a different sensor ID, inside the window. It does not prove that the earlier sensor disclosed the token. |
@@ -153,7 +162,7 @@ no runtime fetch or framework content can influence behaviour.
 ## Synthetic measurement and demo
 
 `go test -v ./internal/ruletest -run TestSyntheticCorpus` reports each rule's
-hits on the checked-in 24-sample synthetic benign corpus, and checks eight
+hits on the checked-in 26-sample synthetic benign corpus, and checks nine
 attack-shaped interactions covering every new detection rule. The test fails
 if any medium-or-higher detection rule fires on the benign set. Measurement
 results are recorded in `docs/verification.md` after execution. These counts
@@ -164,7 +173,7 @@ benign corpus, COR-006 hits once (ordinary clients of two AI families); other
 correlation rules hit zero times. Unit cases additionally cover a cadence
 outlier, repeated auth values, source controls, cooldown and bounds.
 
-On this 24-sample synthetic benign interaction corpus, LLM-001 hits 7 times
+On this 26-sample synthetic benign interaction corpus, LLM-001 hits 6 times
 and LLM-004 hits once; every other detection rule hits zero times. No
 medium-or-higher rule fires on these samples. These are corpus counts, not a
 false-positive rate, attribution accuracy or field measurement.
@@ -174,3 +183,18 @@ false-positive rate, attribution accuracy or field measurement.
 HTTP decoy. It verifies redacted evidence and prints the observed rule IDs;
 `demo --console` exposes those same observations in the local console. There
 is no LLM client, external service, offensive framework or real key involved.
+
+
+## Console stories and operator downloads
+
+The console now derives bounded source sessions with a 30-minute idle threshold,
+rule-linked phases, cadence and explicit automation observations; eight non-signal
+events are the minimum for a non-inconclusive assessment. Signals are excluded
+from automation timing to avoid generated timestamp artefacts. Framework views
+count unique observed entries per catalog technique; these are editorial
+relations, never completeness or technique-success claims. Analyst downloads
+provide conservative STIX/CSV/TXT IP indicators and inert Markdown observation
+reports with proposed, unexecuted recommendations. No model, enforcement or
+console egress is added. The newest-8192 scan, 200-event detail cap, 2 MiB response
+limit, formulas, roles and final field shapes are in
+[console-api.md](architecture/console-api.md), ADR-0022 and [cli.md](cli.md).

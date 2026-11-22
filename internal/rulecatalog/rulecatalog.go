@@ -47,6 +47,7 @@ func All() []Entry {
 	}
 	return out
 }
+
 func cloneEntry(e Entry) Entry {
 	e.Frameworks = append([]FrameworkMapping{}, e.Frameworks...)
 	return e

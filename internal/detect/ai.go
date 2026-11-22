@@ -8,6 +8,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/honeytoken"
 )
 
+// AI observation rule identifiers append to the existing detection registry.
 const (
 	RuleAISurface    RuleID = "LLM-001"
 	RuleMinimalProbe RuleID = "LLM-002"
@@ -17,8 +18,10 @@ const (
 	RuleAgentCanary  RuleID = "AGT-001"
 )
 
+// AIFamily names a request surface, not an identified server implementation.
 type AIFamily string
 
+// AI surface families describe request paths rather than proven server identities.
 const (
 	FamilyOllama  AIFamily = "ollama"
 	FamilyOpenAI  AIFamily = "openai_compatible"
@@ -44,9 +47,9 @@ func SurfaceFamily(in Input) AIFamily {
 		return FamilyOpenAI
 	case "/health/liveliness", "/health/readiness", "/model/info", "/model/new", "/model/delete", "/model/update", "/key/info", "/key/generate", "/key/delete", "/key/update":
 		return FamilyLiteLLM
-	case "/version", "/metrics":
+	case "/tokenize", "/detokenize", "/v1/score", "/rerank", "/invocations":
 		return FamilyVLLM
-	case "/mcp", "/sse":
+	case "/mcp":
 		return FamilyMCP
 	}
 	return ""
@@ -164,12 +167,48 @@ func tokenKind(in Input, kind string) bool {
 
 func aiRules() []rule {
 	return []rule{
-		{RuleAISurface, SevLow, ConfHigh, "request targeted a known AI inference or management API surface", func(in Input, _ string) bool { return SurfaceFamily(in) != "" }},
-		{RuleMinimalProbe, SevMedium, ConfMedium, "short completion request with a tiny token budget; consistent with minimal-cost credential validation", func(in Input, _ string) bool { return minimalProbe(in) }},
-		{RuleAIManagement, SevMedium, ConfMedium, "model or key management attempt on an AI surface; consistent with resource hijacking", func(in Input, _ string) bool { return aiManagement(in) }},
-		{RuleProviderKey, SevLow, ConfMedium, "a provider-shaped API key or known placeholder was presented to a decoy", func(in Input, _ string) bool { return presentedKeyClass(in) != "" }},
-		{RuleHoneytoken, SevCritical, ConfHigh, "a credential that exists only in decoy material was presented", func(in Input, _ string) bool { return tokenKind(in, honeytoken.Credential) }},
-		{RuleAgentCanary, SevHigh, ConfMedium, "interaction followed an instruction embedded in decoy content; consistent with an LLM-driven client", func(in Input, _ string) bool { return tokenKind(in, honeytoken.AgentCanary) }},
+		{
+			id:         RuleAISurface,
+			severity:   SevLow,
+			confidence: ConfHigh,
+			reason:     "request targeted a known AI inference or management API surface",
+			match:      matchesAISurface,
+		},
+		{
+			id:         RuleMinimalProbe,
+			severity:   SevMedium,
+			confidence: ConfMedium,
+			reason:     "short completion request with a tiny token budget; consistent with minimal-cost credential validation",
+			match:      matchesMinimalProbe,
+		},
+		{
+			id:         RuleAIManagement,
+			severity:   SevMedium,
+			confidence: ConfMedium,
+			reason:     "model or key management attempt on an AI surface; consistent with resource hijacking",
+			match:      matchesAIManagement,
+		},
+		{
+			id:         RuleProviderKey,
+			severity:   SevLow,
+			confidence: ConfMedium,
+			reason:     "a provider-shaped API key or known placeholder was presented to a decoy",
+			match:      matchesProviderKey,
+		},
+		{
+			id:         RuleHoneytoken,
+			severity:   SevCritical,
+			confidence: ConfHigh,
+			reason:     "a credential that exists only in decoy material was presented",
+			match:      matchesHoneytoken,
+		},
+		{
+			id:         RuleAgentCanary,
+			severity:   SevHigh,
+			confidence: ConfMedium,
+			reason:     "interaction followed an instruction embedded in decoy content; consistent with an LLM-driven client",
+			match:      matchesAgentCanary,
+		},
 	}
 }
 
@@ -238,3 +277,15 @@ func keyCharacters(value string) bool {
 	}
 	return true
 }
+
+func matchesAISurface(in Input, _ string) bool { return SurfaceFamily(in) != "" }
+
+func matchesMinimalProbe(in Input, _ string) bool { return minimalProbe(in) }
+
+func matchesAIManagement(in Input, _ string) bool { return aiManagement(in) }
+
+func matchesProviderKey(in Input, _ string) bool { return presentedKeyClass(in) != "" }
+
+func matchesHoneytoken(in Input, _ string) bool { return tokenKind(in, honeytoken.Credential) }
+
+func matchesAgentCanary(in Input, _ string) bool { return tokenKind(in, honeytoken.AgentCanary) }

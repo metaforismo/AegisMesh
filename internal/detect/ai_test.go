@@ -69,7 +69,7 @@ func TestMetadataAndRegistryAppendOnly(t *testing.T) {
 	for _, tc := range []struct {
 		path   string
 		family AIFamily
-	}{{"/api/chat", FamilyOllama}, {"/v1/models", FamilyOpenAI}, {"/model/info", FamilyLiteLLM}, {"/version", FamilyVLLM}, {"/mcp", FamilyMCP}} {
+	}{{"/api/chat", FamilyOllama}, {"/v1/models", FamilyOpenAI}, {"/model/info", FamilyLiteLLM}, {"/tokenize", FamilyVLLM}, {"/detokenize", FamilyVLLM}, {"/v1/score", FamilyVLLM}, {"/rerank", FamilyVLLM}, {"/invocations", FamilyVLLM}, {"/version", ""}, {"/metrics", ""}, {"/sse", ""}, {"/mcp", FamilyMCP}} {
 		if SurfaceFamily(Input{Path: tc.path}) != tc.family {
 			t.Fatal(tc)
 		}

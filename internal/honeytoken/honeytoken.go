@@ -3,7 +3,6 @@ package honeytoken
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -12,26 +11,31 @@ import (
 )
 
 const (
+	// Credential marks decoy credentials; AgentCanary marks instruction-following markers.
 	Credential    = "credential"
 	AgentCanary   = "agent_canary"
 	MaxEntries    = 64
 	MaxInputBytes = 4 << 20
 )
 
+// ErrConfig identifies invalid marker configuration without exposing values.
 var ErrConfig = errors.New("honeytokens: invalid configuration")
 var slug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
+// Token is an operator-owned marker and its safe public identifier.
 type Token struct {
 	ID    string `yaml:"id" json:"id"`
 	Value string `yaml:"value" json:"value"`
 	Kind  string `yaml:"kind" json:"kind"`
 }
 
+// Match identifies a marker without retaining its value.
 type Match struct {
 	ID   string
 	Kind string
 }
 
+// Validate checks bounded, unique printable markers and rejects template placeholders.
 func Validate(tokens []Token) error {
 	if len(tokens) > MaxEntries {
 		return fmt.Errorf("%w: at most 64 entries", ErrConfig)
@@ -40,6 +44,9 @@ func Validate(tokens []Token) error {
 	for i, t := range tokens {
 		if !slug.MatchString(t.ID) || ids[t.ID] {
 			return fmt.Errorf("%w: entry %d needs a unique slug id (1..64 lowercase letters, digits, hyphens)", ErrConfig, i)
+		}
+		if strings.HasPrefix(t.Value, "REPLACE_WITH_") {
+			return fmt.Errorf("%w: entry %d has an unreplaced placeholder; use aegismesh honeytoken new", ErrConfig, i)
 		}
 		if len(t.Value) < 16 || len(t.Value) > 256 || values[t.Value] {
 			return fmt.Errorf("%w: entry %d needs a unique value of 16..256 bytes", ErrConfig, i)
@@ -63,6 +70,7 @@ type Matcher struct {
 	replacer *strings.Replacer
 }
 
+// New builds an immutable matcher; invalid configuration produces an empty matcher.
 func New(tokens []Token) *Matcher {
 	if Validate(tokens) != nil {
 		return &Matcher{}
@@ -111,21 +119,55 @@ func (m *Matcher) Scrub(s string) string {
 	return m.replacer.Replace(s)
 }
 
-// Generate produces an explicitly synthetic look-alike, never a provider key.
+// Generate produces an unregistered random provider-shaped decoy value locally.
+// It never contacts a provider. Shape alone cannot prove provider invalidity.
 func Generate(id, kind, format string) (Token, error) {
-	prefixes := map[string]string{"openai": "sk-synthetic-", "anthropic": "sk-ant-synthetic-", "aws": "AKIA-SYNTHETIC-", "github": "ghp_synthetic_", "generic": "synthetic-"}
-	prefix, ok := prefixes[format]
-	if !ok {
+	const base62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	var prefix, suffix, alphabet string
+	var length int
+	switch format {
+	case "openai":
+		prefix, alphabet, length = "sk-proj-", base62, 48
+	case "anthropic":
+		prefix, suffix, alphabet, length = "sk-ant-api03-", "AA", base62+"_-", 86
+	case "aws":
+		prefix, alphabet, length = "AKIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16
+	case "github":
+		prefix, alphabet, length = "ghp_", base62, 36
+	case "generic":
+		alphabet, length = "0123456789abcdef", 40
+	default:
 		return Token{}, fmt.Errorf("%w: format must be openai, anthropic, aws, github or generic", ErrConfig)
 	}
-	t := Token{ID: id, Kind: kind, Value: prefix + strings.Repeat("0", 32)}
+	t := Token{ID: id, Kind: kind, Value: prefix + strings.Repeat("0", length) + suffix}
 	if err := Validate([]Token{t}); err != nil {
 		return Token{}, err
 	}
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	value, err := randomCharacters(alphabet, length)
+	if err != nil {
 		return Token{}, fmt.Errorf("honeytokens: random generation: %w", err)
 	}
-	t.Value = prefix + hex.EncodeToString(raw[:])
+	t.Value = prefix + value + suffix
 	return t, nil
+}
+
+// Rejection sampling discards the incomplete final bucket, avoiding modulo bias.
+func randomCharacters(alphabet string, length int) (string, error) {
+	out := make([]byte, 0, length)
+	ceiling := 256 - 256%len(alphabet)
+	var random [128]byte
+	for len(out) < length {
+		if _, err := rand.Read(random[:]); err != nil {
+			return "", err
+		}
+		for _, b := range random {
+			if int(b) < ceiling {
+				out = append(out, alphabet[int(b)%len(alphabet)])
+				if len(out) == length {
+					break
+				}
+			}
+		}
+	}
+	return string(out), nil
 }

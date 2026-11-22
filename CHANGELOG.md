@@ -8,6 +8,12 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Tenant-scoped source sessions with capped timelines/phases, cadence and explicit
+  automation observations; catalog framework relation counts, including zeros.
+- Analyst STIX 2.1/CSV/TXT indicator and Markdown observation-report attachments,
+  audited before download; local `export indicators` with verified reads and
+  golden tests. Bounded snapshots, conservative confidence and no new egress.
+
 - `init --profile ai-decoy`: static synthetic Ollama, OpenAI-compatible,
   LiteLLM and vLLM HTTP shapes with deployment variation and two fake markers;
   no model, provider fallback or management backend.
@@ -18,6 +24,15 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 - Editorial framework references in the rule catalog, CLI and rules API;
   pinned mapping table, synthetic benign/attack-shaped corpus, and an expanded
   loopback-only demo. See ADR-0021 and `docs/ai-threat-detection.md`.
+
+### Fixed
+
+- Provider-shaped random honeytokens use unbiased crypto/rand selection; the
+  checked-in AI-decoy template rejects unreplaced placeholders. No offline
+  guarantee against a provider-side random collision is claimed.
+- Generic version/metrics/SSE paths no longer establish AI surface families.
+  COR-005 now includes sub-second bursts and documents zero-gap caveats.
+- Expanded dense AI rule/config literals and named helpers for readability.
 
 ### Compatibility
 

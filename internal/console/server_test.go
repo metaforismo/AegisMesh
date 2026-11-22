@@ -31,10 +31,17 @@ func TestEveryRouteAuthorization(t *testing.T) {
 		body   string
 		status int
 	}
+	attackerSessionID := sessionID(t, harness)
 	fixtures := map[string]fixture{
-		"GET /api/v1/auth/oidc/login":    {status: 302},
-		"GET /api/v1/auth/oidc/callback": {status: 302},
-		"POST /api/v1/session/tenant":    {role: "viewer", body: `{"tenant":"default"}`, status: 400},
+		"GET /api/v1/sessions":                   {role: "viewer", status: 200},
+		"GET /api/v1/sessions/{id}":              {role: "viewer", status: 200},
+		"GET /api/v1/coverage":                   {role: "viewer", status: 200},
+		"GET /api/v1/export/indicators":          {role: "analyst", status: 200},
+		"GET /api/v1/sessions/{id}/report":       {role: "analyst", status: 200},
+		"GET /api/v1/investigations/{id}/report": {role: "analyst", status: 200},
+		"GET /api/v1/auth/oidc/login":            {status: 302},
+		"GET /api/v1/auth/oidc/callback":         {status: 302},
+		"POST /api/v1/session/tenant":            {role: "viewer", body: `{"tenant":"default"}`, status: 400},
 		"GET /api/v1/fleet": {
 			role:   "viewer",
 			status: 200,
@@ -187,12 +194,17 @@ func TestEveryRouteAuthorization(t *testing.T) {
 		}
 		method, path, _ := strings.Cut(route.Pattern, " ")
 		path = strings.ReplaceAll(path, "{event_id}", harness.eventID)
-		if strings.HasPrefix(path, "/api/v1/events/") {
+		if strings.HasPrefix(path, "/api/v1/sessions/") {
+			path = strings.ReplaceAll(path, "{id}", attackerSessionID)
+		} else if strings.HasPrefix(path, "/api/v1/events/") {
 			path = strings.ReplaceAll(path, "{id}", harness.eventID)
 		} else {
 			path = strings.ReplaceAll(path, "{id}", investigation.ID)
 		}
 		path = strings.ReplaceAll(path, "{source}", "127.0.0.1")
+		if path == "/api/v1/export/indicators" {
+			path += "?window=24h&format=txt"
+		}
 		for _, mode := range []string{
 			"none",
 			"malformed",
