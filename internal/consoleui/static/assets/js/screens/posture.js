@@ -88,6 +88,8 @@ export default {
           figure('ok', 'Looks right', counts.ok, 'ok')),
         h('div', { class: 'psummary__side' },
           h('p', { class: 'psummary__line' }, total ? `${plural(total, 'check')} across ${plural(groups.length, 'area')}.` : 'The server returned no checks.', res?.generated_at ? [' Generated ', timeEl(res.generated_at, { relative: true }), '.'] : null),
+          res?.scope === 'evidence_only' ? h('p', null, 'This tenant has no local configuration, so only what its retained evidence shows was reviewed.') : null,
+          typeof res?.disclaimer === 'string' && res.disclaimer ? h('p', { class: 'psummary__disclaimer' }, h('span', { class: 'caps' }, 'Server'), ' ', res.disclaimer) : null,
           h('p', { class: 'muted' }, 'The same review from the command line: ', copyable('aegismesh posture --config mesh.yaml', { label: 'command' })))),
       attention.length
         ? panel({

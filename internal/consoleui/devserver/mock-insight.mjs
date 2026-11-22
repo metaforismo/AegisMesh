@@ -290,5 +290,5 @@ export function postureOf({ sensors, honeytokens, rules, index, principals, oidc
   ];
   const summary = { attention: 0, ok: 0, info: 0 };
   for (const c of checks) summary[c.status]++;
-  return { generated_at: new Date().toISOString(), summary, checks };
+  return { generated_at: new Date().toISOString(), scope: 'configuration_and_evidence', disclaimer: 'A static review of configuration and retained evidence; it is not a security guarantee and probes nothing.', summary, checks };
 }

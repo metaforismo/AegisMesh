@@ -971,6 +971,8 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 .pfig dd { margin-top: var(--space-1); padding-left: calc(16px + var(--space-2)); font-size: var(--text-2xl); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-figure); line-height: 1.1; }
 .psummary__side { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-ink-2); }
 .psummary__line { color: var(--color-ink); }
+.psummary__disclaimer { font-size: var(--text-xs); }
+.psummary__disclaimer .caps { margin-right: var(--space-1); color: var(--color-ink-3); font-size: var(--text-2xs); }
 @media (max-width: 60rem) { .psummary { grid-template-columns: minmax(0, 1fr); padding: var(--space-4); } .psummary__figs { flex-wrap: wrap; gap: var(--space-4) var(--space-6); } }
 .pchecks { display: flex; flex-direction: column; gap: var(--space-3); }
 .pcheck { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); }

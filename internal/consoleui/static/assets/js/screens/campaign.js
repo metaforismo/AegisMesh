@@ -22,7 +22,7 @@ const sessionHref = (id) => href('sessions', id);
 function legend(exact) {
   const item = (state, text) => h('li', { class: 'score-legend__item' }, h('span', { class: ['score-legend__mark', `score__cell--${state}`] }, h('span', { class: 'score__mark' })), text);
   return h('ul', { class: 'score-legend', 'aria-label': 'Score legend' },
-    item('performed', exact ? 'Step taken, with its time from the session’s first event' : 'Step taken by every session'),
+    item('performed', exact ? 'Step taken, with its time from the session’s first interaction' : 'Step taken by every session'),
     exact ? item('absent', 'Step not taken') : item('unknown', 'Taken by some sessions; the server does not say which'),
     h('li', { class: 'score-legend__item' }, h('span', { class: 'score-legend__band', 'aria-hidden': 'true' }), 'Shaded columns: every session took this step'));
 }
@@ -92,7 +92,12 @@ export default {
           h('div', { class: 'camp-hero__row' }, h('span', { class: 'caps' }, 'Basis'),
             c.basis.length ? h('ul', { class: 'basis' }, c.basis.map((b) => h('li', { class: 'basis__item' }, icon('check', { size: 'xs' }), basisText(b)))) : h('span', { class: 'muted' }, 'Not stated by the server')),
           h('div', { class: 'camp-hero__row' }, h('span', { class: 'caps' }, 'Stages'), c.stages.length ? h('span', { class: 'stage-row' }, c.stages.map(stageTag)) : h('span', { class: 'muted' }, '—')),
-          h('div', { class: 'camp-hero__row' }, h('span', { class: 'caps' }, 'Reads as'), mixView(raw?.automation_counts)))),
+          h('div', { class: 'camp-hero__row' }, h('span', { class: 'caps' }, 'Reads as'), mixView(raw?.automation_counts)),
+          // Optional server field: client families the members announced
+          // (attacker-supplied names, so evidence).
+          Array.isArray(raw?.client_families) && raw.client_families.length
+            ? h('div', { class: 'camp-hero__row' }, h('span', { class: 'caps' }, 'Clients'), h('span', { class: 'chip-row' }, raw.client_families.slice(0, 8).map((f) => evidence(String(f), { max: 32 }))))
+            : null)),
       h('div', { class: ['banner', 'banner--proposal', 'camp-caveat'] },
         icon('info'),
         h('div', null,

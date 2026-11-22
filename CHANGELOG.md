@@ -8,6 +8,13 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console: Campaigns list and detail (a lane-per-session score of shared steps,
+  basis, stages, automation mix, caveats), the actor profile on sessions as a
+  checklist of signals present or not observed, and a Posture review grouped
+  by area with attention first; all degrade to an "older server" state on 404.
+- Console: sidebar grouped as Observe, Understand, Deception, Operate; `g m`,
+  `g p`, `g u`; shortcut sheet generated from the navigation; per-screen tab
+  titles; print stylesheet for the session story and campaign detail.
 - Bounded synthetic MCP workspaces with exact in-memory lookup tools,
   per-connection sequences, observe-only MCP-001..003 and a multi-step demo.
 - Local CEF/RFC5424/OTLP-JSON/ECS event files and audited analyst attachments;

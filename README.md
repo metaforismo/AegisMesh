@@ -125,7 +125,10 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 An authenticated web console and HTTP API inside the same binary. **Opt-in** (`console.enabled`, default
 off), on its own listener (default `127.0.0.1:9120`). Operators sign in with named viewer, analyst or
 admin tokens (`aegismesh console token` generates one). It shows a bounded in-memory evidence index
-(default 50,000 events), a live stream, investigations and a hash-chained audit trail. The UI is plain
+(default 50,000 events), a live stream, investigations and a hash-chained audit trail, plus derived
+views: attacker sessions with an actor profile (signals checked, present or not), campaigns (several
+sources that followed the same steps; similar behaviour, not attribution) and a posture review of the
+running configuration (not a security guarantee). The UI is plain
 HTML, CSS and ES modules embedded in the binary: no build step, no third-party code, evidence rendered
 as text only.
 

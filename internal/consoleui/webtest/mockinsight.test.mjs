@@ -90,7 +90,7 @@ test('sessions carry campaign_id and an actor profile listing every signal', asy
 test('posture: summary matches checks, every area present, ok items carry no recommendation', async () => {
   const c = await login(on.base);
   const p = await (await get(on.base, c, '/posture')).json();
-  assert.deepEqual(Object.keys(p).sort(), ['checks', 'generated_at', 'summary']);
+  assert.deepEqual(Object.keys(p).sort(), ['checks', 'disclaimer', 'generated_at', 'scope', 'summary']);
   const count = (k) => p.checks.filter((x) => x.status === k).length;
   assert.deepEqual(p.summary, { attention: count('attention'), ok: count('ok'), info: count('info') });
   assert.deepEqual([...new Set(p.checks.map((x) => x.area))].sort(), ['access', 'deception', 'detection', 'evidence', 'exposure']);

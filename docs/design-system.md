@@ -21,6 +21,8 @@ reference. `site/design-system.html` shows every component rendered.
 | `internal/consoleui/devserver/mock-analysis.mjs` | The mock's twin of the backend's sessions, framework relations, indicator downloads and reports (ADR-0022), with scripted sessions; tested in `webtest/mockanalysis.test.mjs` |
 | `internal/consoleui/static/assets/js/lib/catalogs.js` | Decoy and honeytoken catalog logic, the rule action indicator, the server inter-arrival histogram, the SIEM event formats, and the digest (lead sentences, figures, limits, Markdown export with fenced server strings); tested in `webtest/catalogs.test.mjs` |
 | `internal/consoleui/devserver/mock-catalogs.mjs` | The mock's twin of the round-3 API: `/decoys`, `/honeytokens`, `/digest`, `/export/events`, rule prose and `observe_only`, `overview.index`, `session_id`, `inter_arrival`, with a scripted MCP decoy-environment session; tested in `webtest/mockcatalogs.test.mjs` |
+| `internal/consoleui/static/assets/js/lib/insight.js`, `ui/insight.js` | Round 4: campaign wording and the score layout (`campaignScore`), actor profile normalisation and signal meanings, posture grouping and docs links, shared `plural`/`listJoin`, and `isMissingEndpoint` for older servers; tested in `webtest/insight.test.mjs` |
+| `internal/consoleui/devserver/mock-insight.mjs` | The mock's twin of contract r4: `/campaigns`, `/campaigns/{id}`, `/posture`, `campaign_id` and `actor` on sessions, from scripted playbook variants; `--round4 off` answers like an older server. Tested in `webtest/mockinsight.test.mjs` |
 | `internal/consoleui/static/assets/js/lib/{auth,tenant}.js` | Sign-in option selection and OIDC error codes; tenant visibility, switch targets and where a switch lands; unit-tested in `webtest/` |
 
 There is no build step, no npm dependency and no third-party code. The console
@@ -262,6 +264,17 @@ event views and palette recents; see "Console security rules".
 | `.crumbs` (`__list`, `__item`, `__here`) | Breadcrumbs on detail pages | `nav[aria-label=Breadcrumb]`, the current page last with `aria-current="page"`; a source key stays evidence |
 | `.page-head__hint` | "What you can do here" | One line under every screen's subtitle; interface text |
 | `.empty-art--decoys`, `--tokens`, `--digest`, `.empty-art__ring` | Empty-state art variants | `emptyArtVariant(kind)`: a decoy in its listening ring, a key path returning to a marker, a briefing sheet; all in the lattice |
+| `.actor` (`--auto`, `--agent`, `--human`, `--none`, `--compact`) | Actor reading | Filled diamond "Likely automated", diamond with a centre dot "Possibly an AI agent", filled circle "Likely a person", dash "Inconclusive"; compact form adds "n of N" signals observed. Never a percentage or a gauge |
+| `.strength` (`--1..3`) | Signal strength | Three bars plus Weak, Moderate or Strong |
+| `.signals`, `.signal` (`--present`, `--absent`, `__box`, `__looked`, `__detail`, `__side`, `__lean`) | Actor checklist | Ticked box for observed, dashed empty box for not observed; what it measures, the server's measurement, which way it points |
+| `.profile` | Actor profile panel | Reading, the server's hedged sentence in the display serif, the tally, then the two checklist groups |
+| `.mix` (`__bar`, `__seg--*`, `__list`, `--compact`) | Automation mix of a campaign | Textured segments plus counts in words |
+| `.miniscore` | Campaign card art | Identical stops on every lane; decorative, the card prints the numbers |
+| `.score` (`__step`, `__lane`, `__who`, `__cell--performed/absent/unknown`, `.is-shared`), `.score-legend` | Campaign score | A real table: rows are sessions, columns shared steps; lane line through every cell; times from the session's first event; sticky lane labels and a scroll shadow |
+| `.pstatus` (`--attention`, `--info`, `--ok`), `.pcheck`, `.parea`, `.psummary` | Posture review | "!" square, italic "i" ring, check, each with its words; attention items carry a warn edge |
+| `.quiet-line` | One quiet line on the Overview | Posture attention count as a link, never a banner or alarm |
+| `.camp-strip` | Session's campaign | On the session story, links to the campaign with its label and basis |
+| `.stage-row` | Stage tags in a row | More air than a chip row; each tag carries its own mark |
 | `.top-tenant`, `--static` | Active tenant in the top bar | A button that opens the tenant menu with several tenants; a static label with one tenant not named `default`; absent otherwise |
 
 ## Console security rules
@@ -325,10 +338,14 @@ it is an audited action.
 ## Screens
 
 Sign-in, Overview, Events (with live mode), Event detail, Sources, Source
-detail, Sessions, Session detail, Digest, Investigations, Investigation
-detail, Techniques, Recommendations, Decoys, Honeytokens, Sensors, Rules,
-Node, Fleet and Fleet node (experimental), Audit trail (admin only), and the
-Guide.
+detail, Sessions, Session detail, Campaigns, Campaign detail, Digest,
+Investigations, Investigation detail, Techniques, Recommendations, Decoys,
+Honeytokens, Sensors, Rules, Posture, Node, Fleet and Fleet node
+(experimental), Audit trail (admin only), and the Guide. The sidebar groups
+them as Observe (Overview, Digest, Events, Sources), Understand (Sessions,
+Campaigns, Techniques, Investigations, Recommendations), Deception (Decoys,
+Honeytokens, Sensors, Rules), Operate (Posture, Node, Fleet, Audit trail) and
+Help.
 Analyst-only actions (create, rename, change status or priority, attach and
 detach evidence, add notes) are hidden for viewers; the server enforces the
 same rules.
@@ -759,6 +776,90 @@ no color token was added):
 | "Copy as Markdown" | PARTIAL: the pane refused the clipboard, so the fallback (selected read-only field) was checked; the success path is covered by unit tests only |
 | Print stylesheet, reduced motion, light at 375px for the new screens, Firefox and Safari, the real Go console server | NOT RUN: the pane cannot emulate print or reduced motion; only Chromium was available; verified against the mock and the contract only |
 
+### Campaigns, actor profiles and posture (round 4, 2026-11-23)
+
+Built on contract r4 (`GET /campaigns`, `/campaigns/{id}`, `/posture`, and
+`campaign_id` plus `actor` on sessions). Every new endpoint is optional: a
+404 (or 405/501) on a collection path shows "This server does not provide …
+yet" with a next step, and the Overview, sessions list and palette simply
+leave the new pieces out (`isMissingEndpoint`).
+
+- **Campaigns** (`#/campaigns`, nav Understand, `g m`, palette group
+  "Campaigns"): one card per campaign: the server's label in the display
+  serif, the basis as a sentence ("4 sources showed the same sequence of
+  steps, with a similar pace."), sources, sessions, events, span and last
+  seen, stages, how the sessions read (`.mix`), surfaces and the source keys
+  as evidence. A decorative mini score repeats the same stops on every lane.
+  A banner states that similar behaviour is not one operator.
+- **Campaign detail** (`#/campaigns/<id>`): crumbs, basis, span, a hero with
+  figures, the basis as a ticked list, stages and the mix; the server's
+  caveats quoted and marked "Server" under "Shared behaviour is not proof of
+  a shared operator"; then the **score**: a table drawn as lanes, one row per
+  session and one column per shared step (number, stage, the step shape as
+  evidence, "n of N"). With the optional `sessions[].step_marks` extension
+  each mark shows the time from that session's first event and a skipped
+  step is an empty ring; without it a step only some sessions took is a
+  dotted ring "not reported per session". Times count from the session's
+  first interaction (the backend excludes correlation signals). The
+  optional `client_families` field is shown as evidence. Columns every session took are
+  shaded. Rules (each opens its events), sources, a sessions table with each
+  reading, details with a copyable id. Print uses the paper stylesheet.
+- **Actor profile** (session story and sessions list): the hero leads with
+  the reading and the server's hedged sentence; beside the timeline the
+  checklist lists every evaluated signal: observed first (strongest first)
+  with strength bars, the measurement and which way it points, then "Looked
+  for, not observed". No percentage or gauge anywhere. The list's "Reads as"
+  column shows the reading and "n of N" signals; servers without `actor`
+  keep the automation column. A session in a campaign carries a "Campaign"
+  link in the list and a strip on the story with the campaign's label and
+  basis.
+- **Posture** (`#/posture`, nav Operate, `g p`): the header says it is a
+  configuration review, not a security guarantee; counts for needs attention,
+  for your information and looks right; attention items first with what was
+  observed, the recommendation and the doc pointer; then each area
+  (exposure, deception, detection, evidence, access) with its remaining
+  checks. A doc pointer becomes a link only when it is a plain `docs/*.md`
+  path (`docHref`, and `isSafeHref` accepts only that prefix on the project
+  repository); anything else is shown as text. The server's `disclaimer` is
+  quoted and marked "Server"; `scope: evidence_only` (a tenant without local
+  configuration) is said in words. "Needs attention" filter in
+  the URL (`?show=attention`). The Overview shows one quiet line under the
+  brief linking here.
+- **Navigation**: sidebar regrouped (see Screens); `g m`, `g p`, `g u` added;
+  the shortcut sheet is generated from `NAV` per role; palette lists
+  campaigns; the tour gains a Campaigns step (seven steps); the Guide gains
+  Campaign, Actor profile and Posture review (group "Patterns across
+  sources").
+- **Polish**: detail screens name the browser tab (`ctx.setTitle`: control
+  and bidi characters removed, 60 characters); the print stylesheet covers
+  the session story and campaign detail; inline source, rule and campaign
+  links have 40px targets on touch; plain links among page actions sit on
+  the button line; the session id is copyable; unknown stage values keep
+  their own words instead of "Other".
+
+Contrast: the new marks reuse existing tokens (`--color-accent` 6.82:1 /
+7.39:1 on surface, `--color-ink-2`, `--color-ink-3` ≥ 4.95:1,
+`--color-warn` on `--color-warn-soft` ≥ 4.69:1, `--color-ok` on
+`--color-ok-soft`); no color token was added. Score lanes and the column
+shade are decorative; every mark has visually hidden text.
+
+Motion: nothing new animates.
+
+### Verification: round 4 (2026-11-23, Node 25, Go toolchain, Chromium via Playwright, mock on port 9141)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (the earlier tests plus `insight.test.mjs` and `mockinsight.test.mjs`: wording, score states, posture grouping and docs links, NAV and shortcut sheet, the three screens with hostile strings, missing fields and a 404 server, the mock's r4 routes and `--round4 off`) | PASS |
+| `go test ./internal/consoleui/...` (embed safety, CSP, literal imports) and `go build ./...` | PASS |
+| Dark 1440px: Campaigns, Campaign detail, session story with actor profile and campaign strip, Posture, Overview (quiet line, campaigns tile) | PASS |
+| Light 1440px: Posture, session story, shortcut sheet; light 375px: Campaign detail | PASS |
+| 375px: no horizontal page scroll on 20 screens (Overview, Digest, Events, Sources, Source, Sessions, Session, Campaigns, Campaign, Techniques, Investigations, Recommendations, Decoys, Honeytokens, Sensors, Rules, Posture, Node, Fleet, Guide); Campaigns and Posture viewed dark | PASS |
+| Print emulation of Campaign detail (no chrome, score unclipped, marks in ink) | PASS |
+| Reduced motion emulated for the screenshots (no entrance replays) | PASS |
+| `g m`, `g p`, `g u`, `g c`, `g b`, `g a`, `g o` and `?` driven in the page | PASS |
+| `--round4 off`: Campaigns and Posture show the older-server state; Overview has no posture line or campaigns tile; Sessions keeps the Automation column | PASS |
+| Firefox, Safari, the real Go console server, screen readers | NOT RUN: only Chromium; the backend for r4 is being built in parallel |
+
 ## Interaction
 
 - **Command palette** (Cmd/Ctrl+K, or the search button): screens, actions
@@ -768,8 +869,10 @@ no color token was added):
   server-side event search (see "Understanding aids"). Ranking: exact, prefix, word start,
   substring, then fuzzy; tested in `webtest/palette.test.mjs`. A pasted
   32-hex event id offers to open that event.
-- **Shortcuts** (`?` shows them): `g` then `o/e/s/c/b/i/t/r/d/k/n/a/h` to go
-  to a screen (`b` Digest, `d` Decoys, `k` Honeytokens), `/` to search events, `j`/`k` to move through the events list,
+- **Shortcuts** (`?` shows them): `g` then `o/b/e/s/c/m/t/i/r/d/k/n/u/p/a/h` to go
+  to a screen (`b` Digest, `m` Campaigns, `d` Decoys, `k` Honeytokens, `u` Rules,
+  `p` Posture, `a` Audit for admins). The sheet's "Go to a screen" rows are
+  generated from `NAV`, the same list the router binds, so it cannot drift. `/` to search events, `j`/`k` to move through the events list,
   Enter to open a row, `o` to open the side panel's event as a full page,
   Esc to close. Single-letter shortcuts never fire inside text fields.
 - **Event side panel:** rows on the events list open the event over the
