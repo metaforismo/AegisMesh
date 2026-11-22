@@ -168,6 +168,9 @@ func TestEveryRouteTenantIsolation(t *testing.T) {
 					if strings.HasPrefix(path, "/api/v1/events/") {
 						id = h.eventID
 					}
+					if strings.HasPrefix(path, "/api/v1/campaigns/") {
+						id = "cmp_000000000000"
+					}
 					if strings.HasPrefix(path, "/api/v1/fleet/enrollment-tokens/") {
 						id = token.ID
 					}

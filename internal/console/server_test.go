@@ -33,9 +33,13 @@ func TestEveryRouteAuthorization(t *testing.T) {
 	}
 	attackerSessionID := sessionID(t, harness)
 	fixtures := map[string]fixture{
-		"GET /api/v1/sessions":                   {role: "viewer", status: 200},
-		"GET /api/v1/sessions/{id}":              {role: "viewer", status: 200},
-		"GET /api/v1/coverage":                   {role: "viewer", status: 200},
+		"GET /api/v1/sessions":      {role: "viewer", status: 200},
+		"GET /api/v1/sessions/{id}": {role: "viewer", status: 200},
+		"GET /api/v1/coverage":      {role: "viewer", status: 200},
+		"GET /api/v1/campaigns":     {role: "viewer", status: 200},
+		// The harness has a single source, so no campaign exists: authorized callers get 404.
+		"GET /api/v1/campaigns/{id}":             {role: "viewer", status: 404},
+		"GET /api/v1/posture":                    {role: "viewer", status: 200},
 		"GET /api/v1/export/indicators":          {role: "analyst", status: 200},
 		"GET /api/v1/sessions/{id}/report":       {role: "analyst", status: 200},
 		"GET /api/v1/investigations/{id}/report": {role: "analyst", status: 200},
@@ -202,6 +206,8 @@ func TestEveryRouteAuthorization(t *testing.T) {
 		path = strings.ReplaceAll(path, "{event_id}", harness.eventID)
 		if strings.HasPrefix(path, "/api/v1/sessions/") {
 			path = strings.ReplaceAll(path, "{id}", attackerSessionID)
+		} else if strings.HasPrefix(path, "/api/v1/campaigns/") {
+			path = strings.ReplaceAll(path, "{id}", "cmp_000000000000")
 		} else if strings.HasPrefix(path, "/api/v1/events/") {
 			path = strings.ReplaceAll(path, "{id}", harness.eventID)
 		} else {

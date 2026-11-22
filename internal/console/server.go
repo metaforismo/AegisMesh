@@ -23,6 +23,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/fleet/hub"
 	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
 	"github.com/metaforismo/aegismesh/internal/observe"
+	"github.com/metaforismo/aegismesh/internal/posture"
 )
 
 // CSP restricts UI resources and API connections to this console's origin.
@@ -33,6 +34,9 @@ const CookieName = "aegismesh_session"
 
 // Options supplies trusted configuration, value snapshots, and bounded UI assets.
 type Options struct {
+	// Posture supplies the secret-free configuration snapshot for posture review;
+	// nil limits the review to evidence-only checks.
+	Posture *posture.Facts
 	// Decoys supplies safe configured surface metadata, without response bodies.
 	Decoys []Decoy
 	// Honeytokens supplies configured marker identifiers and planting, never values.
@@ -80,6 +84,7 @@ type asset struct {
 type Server struct {
 	decoyCatalog    []Decoy
 	tokenCatalog    []Honeytoken
+	postureFacts    *posture.Facts
 	unassignedAudit *audit.Log
 	tenantID        string
 	instanceID      string
@@ -138,6 +143,7 @@ func New(opts Options) (_ *Server, err error) {
 	server := &Server{
 		decoyCatalog: append([]Decoy{}, opts.Decoys...),
 		tokenCatalog: append([]Honeytoken{}, opts.Honeytokens...),
+		postureFacts: opts.Posture,
 		cfg:          opts.Config,
 		instanceID:   opts.StateDir,
 		fleetHub:     opts.FleetHub,

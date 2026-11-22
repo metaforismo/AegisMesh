@@ -28,6 +28,7 @@ func (s *Server) scopedServer(name string, opts Options, dir string) (*Server, e
 	view := &Server{
 		decoyCatalog:    s.decoyCatalog,
 		tokenCatalog:    s.tokenCatalog,
+		postureFacts:    s.postureFacts,
 		unassignedAudit: s.unassignedAudit, cfg: s.cfg, tenantID: name, instanceID: s.instanceID, views: s.views, auth: s.auth, oidc: s.oidc,
 		index: index, runtime: s.runtime, rules: s.rules, fleetStatus: s.fleetStatus,
 		fleetHub: s.fleetHub.ForTenant(name), listener: s.listener,
@@ -42,6 +43,7 @@ func (s *Server) scopedServer(name string, opts Options, dir string) (*Server, e
 		view.rules = []Rule{}
 		view.decoyCatalog = []Decoy{}
 		view.tokenCatalog = []Honeytoken{}
+		view.postureFacts = nil
 		view.fleetStatus = func() protocol.Status {
 			status := protocol.Status{}
 			if view.fleetHub != nil {
