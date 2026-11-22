@@ -41,6 +41,10 @@ const EXTERNAL_HREFS = new Set([
   'https://github.com/metaforismo/AegisMesh/blob/master/docs/configuration.md',
 ]);
 
+// Project documentation pages (a posture check's doc pointer): one fixed
+// origin and path prefix, a plain Markdown file name and an optional anchor.
+const DOC_HREF = /^https:\/\/github\.com\/metaforismo\/AegisMesh\/blob\/master\/docs\/[a-z0-9][a-z0-9/_-]{0,120}\.md(#[a-z0-9-]{1,80})?$/;
+
 export class UnsafeAttributeError extends Error {
   constructor(message) {
     super(message);
@@ -49,7 +53,7 @@ export class UnsafeAttributeError extends Error {
 }
 
 export function isSafeHref(value) {
-  return typeof value === 'string' && (HASH_HREF.test(value) || SERVER_HREFS.has(value) || EXTERNAL_HREFS.has(value));
+  return typeof value === 'string' && (HASH_HREF.test(value) || SERVER_HREFS.has(value) || EXTERNAL_HREFS.has(value) || (DOC_HREF.test(value) && !value.includes('..') && !value.includes('//', 8)));
 }
 
 export function isClassToken(value) {
@@ -70,7 +74,7 @@ function setAttr(el, name, value) {
     throw new UnsafeAttributeError(`attribute not allowed: ${name}`);
   }
   if (name === 'href' && !isSafeHref(value)) {
-    throw new UnsafeAttributeError('href rejected: only in-app #/ routes, the OIDC sign-in path and allowlisted project links');
+    throw new UnsafeAttributeError('href rejected: only in-app #/ routes, the OIDC sign-in path, allowlisted project links and project docs pages');
   }
   if (name === 'class') value = classValue(value);
   el.setAttribute(name, value === true ? '' : String(value));

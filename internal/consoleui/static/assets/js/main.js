@@ -34,7 +34,7 @@ const loadPalette = () => {
   return paletteModule;
 };
 const loadLogin = () => import('./screens/login.js');
-const toggleShortcuts = () => loadPalette().then((m) => m.toggleShortcuts());
+const toggleShortcuts = () => loadPalette().then((m) => m.toggleShortcuts(state.session?.principal?.role));
 
 applyTheme();
 applyDensity();
@@ -64,6 +64,7 @@ const CACHEABLE = {
   overview: 1, events: 3, event: 2, sources: 2, source: 3, sensors: 0, rules: 0, recommendations: 1,
   node: 0, investigations: 1, investigation: 1, fleet: 0, fleetNodes: 1, fleetNode: 1,
   sessions: 2, attackSession: 1, coverage: 1, decoys: 1, honeytokens: 1, digest: 1,
+  campaigns: 0, campaign: 1, posture: 0,
 };
 const CURSOR_ARG = { events: 1, source: 1, sessions: 2 }; // later pages are never cached
 // Downloads are audited reads: never cached or prefetched, and not writes.
@@ -414,6 +415,13 @@ async function render({ soft = false } = {}) {
     liveSlot: shell.liveSlot,
     navigate: (target) => { location.hash = target; },
     rerender: () => render({ soft: true }),
+    // A detail screen names itself in the tab ("<name> · Session"). Text
+    // only, with control and bidi characters removed and the length capped.
+    setTitle: (text) => {
+      if (controller.signal.aborted) return;
+      const clean = Array.from(String(text ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')).slice(0, 60).join('');
+      document.title = clean ? `${clean} · ${screen.title} · AegisMesh` : `${screen.title} · AegisMesh`;
+    },
   };
 
   // Grace period: fast screens swap straight in, slow ones show a skeleton.

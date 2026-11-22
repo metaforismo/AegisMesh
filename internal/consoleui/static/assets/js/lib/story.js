@@ -49,7 +49,13 @@ export const STAGES = Object.freeze({
   ai_service_abuse: { label: 'AI service use', hint: 'Completion probes, model or key changes, prompt-injection phrasing, or an agent canary.' },
   decoy_credential_replay: { label: 'Decoy credential replay', hint: 'A planted credential came back (HT-001 or COR-008).' },
 });
-export const stageMeta = (s) => STAGES[s] || { label: 'Other', hint: '' };
+// A stage the console does not know (a newer server's vocabulary) keeps its
+// own name in words rather than collapsing into "Other".
+export const stageMeta = (s) => {
+  if (Object.hasOwn(STAGES, s)) return STAGES[s];
+  const words = String(s ?? '').replace(/[_-]+/g, ' ').trim().slice(0, 40);
+  return { label: words ? words[0].toUpperCase() + words.slice(1) : 'Other', hint: '' };
+};
 
 export const FRAMEWORK_LABELS = Object.freeze({ 'mitre-attack': 'MITRE ATT&CK', 'mitre-atlas': 'MITRE ATLAS', 'owasp-llm-2025': 'OWASP LLM 2025' });
 export const frameworkLabel = (f) => FRAMEWORK_LABELS[f] || 'Framework';

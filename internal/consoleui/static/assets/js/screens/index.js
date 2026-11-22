@@ -83,6 +83,16 @@ export const SCREENS = Object.freeze({
   digest: lazy('Digest', () => import('./digest.js'), {
     prefetch: (api, r) => { api.digest(normalizeDigestWindow(r.query.window)); },
   }),
+  campaigns: lazy('Campaigns', () => import('./campaigns.js'), {
+    skeleton: 'cards',
+    prefetch: (api) => { api.campaigns(); },
+  }),
+  campaign: lazy('Campaign', () => import('./campaign.js'), {
+    prefetch: (api, r) => { api.campaign(r.params.id); },
+  }),
+  posture: lazy('Posture', () => import('./posture.js'), {
+    prefetch: (api) => { api.posture(); },
+  }),
 });
 
 export const notFoundScreen = {

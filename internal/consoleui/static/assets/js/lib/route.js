@@ -93,6 +93,9 @@ const ROUTES = [
   { name: 'decoys', pattern: ['decoys'] },
   { name: 'honeytokens', pattern: ['honeytokens'] },
   { name: 'digest', pattern: ['digest'] },
+  { name: 'campaigns', pattern: ['campaigns'] },
+  { name: 'campaign', pattern: ['campaigns', ':id'], valid: (p) => /^cmp_[0-9a-z]{4,64}$/.test(p.id) },
+  { name: 'posture', pattern: ['posture'] },
   { name: 'login', pattern: ['login'] },
 ];
 

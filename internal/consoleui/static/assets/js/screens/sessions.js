@@ -13,6 +13,8 @@ import { pageHead, panel, segmented, sevChip, evidence, table, timeEl, empty, pa
 import { assessmentChip, cadenceStrip, kindChips } from '../ui/story.js';
 import { ruleChips } from './shared.js';
 import { icon } from '../ui/icons.js';
+import { actorChip } from '../ui/insight.js';
+import { isCampaignId } from '../lib/insight.js';
 
 const PAGE = 50;
 const WINDOWS = [['1h', '1h'], ['24h', '24h'], ['7d', '7d']];
@@ -23,13 +25,21 @@ export const sessionHref = (s) => href('sessions', s.id);
 // never the page.
 const scrolling = (el) => { el.classList.add('table-wrap--scroll'); return el; };
 
-function columns() {
+// A session that shares its playbook with other sources links to the
+// campaign. Shown only when the server reports campaign membership.
+const campaignMark = (s) => (isCampaignId(s.campaign_id)
+  ? h('a', { class: 'campaign-mark', href: href('campaigns', s.campaign_id), title: 'Other sources followed the same steps: open the campaign' }, icon('campaign', { size: 'xs' }), 'Campaign')
+  : null);
+
+// Servers with actor profiles (round 4) get the profile's reading; older
+// ones keep the automation observation.
+function columns(withActor) {
   return [
     {
       label: 'Source', className: 'nowrap',
       cell: (s) => h('span', { class: 'stack-tight' },
         h('a', { class: 'session-link', href: sessionHref(s), 'data-row-link': '' }, evidence(s.source, { max: 24 })),
-        h('span', { class: 'muted' }, 'last seen ', timeEl(s.last_seen, { relative: true }))),
+        h('span', { class: 'muted' }, 'last seen ', timeEl(s.last_seen, { relative: true }), campaignMark(s) ? [' · ', campaignMark(s)] : null)),
     },
     { label: 'Duration', num: true, className: 'nowrap', cell: (s) => formatDurationMs(s.duration_ms) },
     { label: 'Events', num: true, cell: (s) => formatCount(s.event_count) },
@@ -37,7 +47,9 @@ function columns() {
     { label: 'Max severity', cell: (s) => sevChip(s.max_severity) },
     { label: 'Rules', cell: (s) => ruleChips(s.rule_ids) },
     { label: 'Pace', className: 'nowrap', cell: (s) => cadenceStrip(s.cadence) },
-    { label: 'Automation', cell: (s) => assessmentChip(s.automation, { compact: true }) },
+    withActor
+      ? { label: 'Reads as', cell: (s) => (s.actor ? actorChip(s.actor, { compact: true }) : assessmentChip(s.automation, { compact: true })) }
+      : { label: 'Automation', cell: (s) => assessmentChip(s.automation, { compact: true }) },
   ];
 }
 
@@ -53,7 +65,7 @@ export default {
     const pagerSlot = h('div');
     const paint = () => {
       mount(tableSlot, rows.length
-        ? scrolling(table({ caption: 'Attacker sessions', columns: columns(), rows, rowClass: (s) => (s.automation?.assessment === 'consistent_with_automation' ? 'row--noted' : null) }))
+        ? scrolling(table({ caption: 'Attacker sessions', columns: columns(rows.some((r) => r?.actor && typeof r.actor === 'object')), rows, rowClass: (s) => (s.automation?.assessment === 'consistent_with_automation' ? 'row--noted' : null) }))
         : empty(f.source ? 'No session from this source in the window' : 'No sessions in this window',
           'A session needs at least one event with a source key. Try a wider window; sessions are built from the newest indexed events only.',
           h('a', { class: 'btn', href: href('sessions', { window: '7d', source: f.source || '' }) }, 'Last 7 days'), { icon: 'story', art: true }));

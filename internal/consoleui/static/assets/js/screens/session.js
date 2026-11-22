@@ -27,6 +27,8 @@ import { ruleChips, newInvestigationDialog, notFoundInTenant } from './shared.js
 import { createDrawer } from './events.js';
 import { renderEventDetail } from './event.js';
 import { tenantInfo } from '../lib/tenant.js';
+import { actorProfileView, actorChip } from '../ui/insight.js';
+import { actorProfile, isCampaignId, basisSentence } from '../lib/insight.js';
 
 const tip = (id) => helpTip(glossaryEntry(id));
 const titled = (text, id) => h('span', { class: 'title-help' }, text, tip(id));
@@ -175,6 +177,29 @@ function cadencePanel(d) {
   });
 }
 
+// Round 4: the actor profile, a reading of every signal the server checked.
+function actorPanel(d) {
+  const view = actorProfileView(d.actor, { lead: false });
+  if (!view) return null;
+  return panel({ title: titled('Actor profile', 'actor'), meta: 'What the server looked for in this session, and what it found', body: view });
+}
+
+// Round 4: this session shares its playbook with other sources. The label
+// and basis arrive from the campaign itself when it answers.
+function campaignStrip(ctx, d) {
+  if (!isCampaignId(d.campaign_id)) return null;
+  const text = h('span', { class: 'camp-strip__text' }, 'Other sources followed the same steps as this session.');
+  const strip = h('section', { class: 'camp-strip', 'aria-label': 'Campaign' },
+    h('span', { class: 'camp-strip__icon', 'aria-hidden': 'true' }, icon('campaign')),
+    h('div', { class: 'camp-strip__body' }, h('p', { class: 'caps' }, 'Part of a campaign'), text),
+    h('a', { class: ['btn', 'btn--sm'], href: href('campaigns', d.campaign_id) }, 'Compare the sources', icon('chevron-right', { size: 'sm' })));
+  ctx.api.campaign?.(d.campaign_id, { signal: ctx.signal }).then((c) => {
+    if (!c || typeof c !== 'object') return;
+    mount(text, typeof c.label === 'string' && c.label ? h('strong', null, c.label) : null, c.label ? '. ' : '', basisSentence(c), ' Similar behaviour, not proof of one operator.');
+  }).catch(() => {});
+  return strip;
+}
+
 function automationPanel(d) {
   const a = assessmentOf(d.automation);
   const items = Array.isArray(d.automation?.evidence) ? d.automation.evidence : [];
@@ -316,6 +341,8 @@ export default {
 
     const a = assessmentOf(d.automation);
     const total = Number(d.event_count) || timeline.length;
+    const profile = actorProfile(d.actor);
+    ctx.setTitle?.(String(d.source ?? ''));
     mount(root,
       pageHead({
         crumbs: [['Sessions', href('sessions')], [evidence(d.source, { max: 28 }), href('sources', d.source)], ['Session', null]],
@@ -325,14 +352,21 @@ export default {
         actions: [investigate, link(href('sources', d.source), 'Source profile'), link(href('events', { source: d.source }), 'All events from this source')],
       }),
       h('section', { class: ['story-hero', `story-hero--${a.glyph}`], 'aria-label': 'Session at a glance' },
-        h('div', { class: 'story-hero__lead' },
-          h('p', { class: 'caps' }, 'Automation observation'),
-          h('p', { class: 'story-hero__assess' }, assessmentChip(d.automation)),
-          h('p', { class: 'muted' }, 'An observation from pace and rules, with the evidence listed below. Never a verdict about who or what is behind it.')),
+        profile
+          ? h('div', { class: 'story-hero__lead' },
+            h('p', { class: 'caps' }, 'Actor profile'),
+            h('p', { class: 'story-hero__assess' }, actorChip(d.actor)),
+            profile.summary ? h('p', { class: 'story-hero__summary' }, profile.summary) : null,
+            h('p', { class: 'muted' }, `${profile.tally}; the checklist is beside the timeline. A reading, never a verdict about who or what is behind it.`))
+          : h('div', { class: 'story-hero__lead' },
+            h('p', { class: 'caps' }, 'Automation observation'),
+            h('p', { class: 'story-hero__assess' }, assessmentChip(d.automation)),
+            h('p', { class: 'muted' }, 'An observation from pace and rules, with the evidence listed below. Never a verdict about who or what is behind it.')),
         h('dl', { class: 'story-hero__figures' },
           [['Duration', formatDurationMs(d.duration_ms)], ['Events', formatCount(total)], ['Median gap', formatDurationMs(d.cadence?.median_gap_ms)], ['Max severity', sevChip(d.max_severity)], ['Surfaces', kindChips(d.sensor_kinds)]]
             .map(([k, v]) => h('div', null, h('dt', null, k), h('dd', null, v)))),
         stageRibbon(Array.isArray(d.phases) ? d.phases : [], total)),
+      campaignStrip(ctx, d),
       d.timeline_truncated ? banner('warn', 'Timeline shows the first 200 events', `This session has ${formatCount(total)} events. The timeline, its stages and the histogram cover the first 200; counts and pace above cover all of them.`) : null,
       h('div', { class: 'story-layout' },
         panel({
@@ -342,6 +376,7 @@ export default {
           body: [h('p', { class: 'unfold' }, unfold), tempo, storySlot],
         }),
         h('div', { class: 'story-side' },
+          actorPanel(d),
           automationPanel(d),
           cadencePanel(d),
           panel({
