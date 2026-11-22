@@ -42,6 +42,7 @@ type step struct {
 	kind  string
 	shape string
 	stage string
+	at    time.Time // first event of the collapsed run
 }
 
 // Shape normalises one stored observation summary into a bounded, scrubbed,
@@ -239,7 +240,7 @@ func collapse(items []interaction) ([]step, bool) {
 		if len(out) == MaxShapeSteps {
 			return out, true
 		}
-		out = append(out, step{kind: item.kind, shape: item.shape, stage: item.stage})
+		out = append(out, step{kind: item.kind, shape: item.shape, stage: item.stage, at: item.at})
 	}
 	return out, false
 }

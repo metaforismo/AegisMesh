@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +109,20 @@ func TestCampaignPrefixAndThresholds(t *testing.T) {
 	d := c.Detail()
 	if len(d.Steps) != 10 || d.Steps[8].Sessions != 1 || d.Steps[9].Shape != "GET /z" || d.Steps[0].Sessions != 2 {
 		t.Fatalf("%+v", d.Steps)
+	}
+	// Ties at index 8 resolve lexically to "GET /x"; the /y-/z session marks 0..7 and 9.
+	for _, s := range d.Sessions {
+		marks := []string{}
+		for _, m := range s.StepMarks {
+			marks = append(marks, fmt.Sprintf("%d@%.0f", m.Index, m.OffsetMS))
+		}
+		want := "0@0,1@1000,2@2000,3@3000,4@4000,5@5000,6@6000,7@7000,8@8000"
+		if s.Source == "192.0.2.2" {
+			want = "0@0,1@1000,2@2000,3@3000,4@4000,5@5000,6@6000,7@7000,9@9000"
+		}
+		if strings.Join(marks, ",") != want {
+			t.Fatalf("%s: %v", s.Source, marks)
+		}
 	}
 }
 

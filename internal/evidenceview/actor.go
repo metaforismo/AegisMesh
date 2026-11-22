@@ -234,7 +234,7 @@ func signalAdaptiveAfterError(items []interaction, _ map[string]bool) ActorSigna
 		}
 	}
 	s.Present = count > 0
-	s.Detail = fmt.Sprintf("%d error(s) corrected on the same path within %s", count, AdaptiveMaxGap)
+	s.Detail = fmt.Sprintf("%d rejected request(s) corrected on the same path within %d s", count, int(AdaptiveMaxGap/time.Second))
 	return s
 }
 
@@ -269,7 +269,7 @@ func signalTypoCorrections(items []interaction, _ map[string]bool) ActorSignal {
 		}
 	}
 	s.Present = count > 0
-	s.Detail = fmt.Sprintf("%d near-identical retry(ies) after a 404, %s..%s later", count, TypoMinGap, TypoMaxGap)
+	s.Detail = fmt.Sprintf("%d near-identical retry(ies) 1 to 60 s after a 404", count)
 	return s
 }
 

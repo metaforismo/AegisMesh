@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 )
@@ -79,14 +80,26 @@ type CampaignStep struct {
 	Sessions   int    `json:"sessions"`
 }
 
+// StepMark places one representative step on a member session's timeline.
+type StepMark struct {
+	Index    int     `json:"index"`
+	OffsetMS float64 `json:"offset_ms"`
+}
+
+// CampaignSession is a session summary plus the representative steps it performed.
+type CampaignSession struct {
+	Session
+	StepMarks []StepMark `json:"step_marks"`
+}
+
 // CampaignDetail adds the representative steps and member session summaries.
 type CampaignDetail struct {
 	Campaign
-	Steps             []CampaignStep `json:"steps"`
-	StepsTruncated    bool           `json:"steps_truncated"`
-	Sessions          []Session      `json:"sessions"`
-	SessionsTruncated bool           `json:"sessions_truncated"`
-	Caveats           []string       `json:"caveats"`
+	Steps             []CampaignStep    `json:"steps"`
+	StepsTruncated    bool              `json:"steps_truncated"`
+	Sessions          []CampaignSession `json:"sessions"`
+	SessionsTruncated bool              `json:"sessions_truncated"`
+	Caveats           []string          `json:"caveats"`
 }
 
 // CampaignSet is the full deterministic grouping of one tenant's sessions.
@@ -254,7 +267,7 @@ func campaignLabel(steps []step) string {
 // Detail derives the representative step sequence: for each index, the most
 // common kind/shape among members long enough to have it (ties: lexical order).
 func (c Campaign) Detail() CampaignDetail {
-	d := CampaignDetail{Campaign: c, Steps: []CampaignStep{}, Sessions: []Session{}, Caveats: append([]string{}, CampaignCaveats...)}
+	d := CampaignDetail{Campaign: c, Steps: []CampaignStep{}, Sessions: []CampaignSession{}, Caveats: append([]string{}, CampaignCaveats...)}
 	longest := 0
 	for _, member := range c.members {
 		longest = max(longest, len(member.steps))
@@ -281,7 +294,16 @@ func (c Campaign) Detail() CampaignDetail {
 		}
 		d.Steps = append(d.Steps, CampaignStep{Index: i, SensorKind: best[0], Shape: best[1], Stage: stage[best], Sessions: counts[best]})
 	}
-	d.Sessions = append(d.Sessions, c.members[:min(len(c.members), CampaignSessionRefLimit)]...)
+	for _, member := range c.members[:min(len(c.members), CampaignSessionRefLimit)] {
+		item := CampaignSession{Session: member, StepMarks: []StepMark{}}
+		for i, s := range member.steps {
+			if i < len(d.Steps) && s.kind == d.Steps[i].SensorKind && s.shape == d.Steps[i].Shape {
+				offset := float64(s.at.Sub(member.steps[0].at)) / float64(time.Millisecond)
+				item.StepMarks = append(item.StepMarks, StepMark{Index: i, OffsetMS: offset})
+			}
+		}
+		d.Sessions = append(d.Sessions, item)
+	}
 	d.SessionsTruncated = len(c.members) > CampaignSessionRefLimit
 	return d
 }
