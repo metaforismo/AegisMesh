@@ -1,0 +1,82 @@
+POSTURE REVIEW: 2 attention, 8 ok, 8 info
+Static review of the running configuration and of retained evidence; not a security guarantee or a complete audit.
+
+POS-001  ok         exposure   Decoys reachable beyond loopback
+         All 2 sensor(s) bind to loopback; only local clients can reach them.
+         see docs/ai-threat-detection.md#posture-review
+
+POS-002  ok         exposure   Relaxed safety opt-ins
+         No safety opt-in is relaxed; loopback binding, unprivileged ports and public-only LLM egress remain enforced.
+         see docs/ai-threat-detection.md#posture-review
+
+POS-003  ok         exposure   Console listener exposure
+         The operator console is disabled.
+         see docs/architecture/console-api.md#transport-and-exposure
+
+POS-004  ok         exposure   Attacker input sent to an LLM provider
+         No sensor forwards attacker input to a model provider (provider: local, fallback sensors: 0).
+         see docs/ai-threat-detection.md#posture-review
+
+POS-005  ok         exposure   Evidence copies leaving this host
+         No webhook or fleet forwarding is configured; evidence stays on this host.
+         see docs/ai-threat-detection.md#posture-review
+
+POS-006  info       access     Operator role separation
+         The console is disabled; operator roles were not evaluated.
+         see docs/architecture/console-api.md#transport-and-exposure
+
+POS-007  attention  deception  Honeytokens configured
+         No honeytokens are configured, so a replayed decoy credential cannot be recognised (HT-001, COR-008).
+         -> Generate markers with 'aegismesh honeytoken new' and plant them in decoy responses.
+         see docs/ai-threat-detection.md#honeytokens-and-agent-markers
+
+POS-008  info       deception  Agent canary marker
+         No honeytokens are configured (see POS-007), so no agent canary exists.
+         -> Add an agent_canary marker; following it is the strongest AI-agent signal (AGT-001).
+         see docs/ai-threat-detection.md#honeytokens-and-agent-markers
+
+POS-009  info       deception  Honeytokens planted in decoy content
+         No honeytokens are configured (see POS-007).
+         see docs/ai-threat-detection.md#honeytokens-and-agent-markers
+
+POS-010  info       deception  Honeytokens seen in retained evidence
+         No honeytokens are configured (see POS-007).
+         see docs/ai-threat-detection.md#honeytokens-and-agent-markers
+
+POS-011  ok         deception  AI decoy surface
+         AI surfaces configured: ai-http (openai_compatible).
+         see docs/ai-threat-detection.md#posture-review
+
+POS-012  info       deception  MCP synthetic environment
+         No MCP sensor is configured.
+         see docs/mcp-environments.md
+
+POS-013  ok         detection  Detection engine and rules
+         Detection is enabled with every rule active.
+         see docs/ai-threat-detection.md#detection-rules
+
+POS-014  attention  detection  Correlation engine and rules
+         Correlation is disabled, so cross-sensor signals (COR-001..COR-008) such as cadence and credential replay are never produced.
+         -> Set correlation.enabled: true.
+         see docs/ai-threat-detection.md#correlation-rules
+
+POS-015  info       detection  Detection actions change decoy responses
+         Decoy responses change when rules fire (medium=isolate, high=refuse). These actions affect only the decoy, never other systems, but an adaptive client can notice the change.
+         -> Use observe for severities where staying convincing matters more than slowing the client.
+         see docs/ai-threat-detection.md#detection-rules
+
+POS-016  info       evidence   Sensors without retained observations
+         No observations among the 11 retained events examined: quiet-tcp. A quiet decoy is not a fault.
+         -> If traffic was expected, check the listener is reachable from where attackers would come from.
+         see docs/ai-threat-detection.md#posture-review
+
+POS-017  ok         evidence   Analysis sample saturation
+         11 retained event(s) fit within the 8192-event analysis sample.
+         see docs/ai-threat-detection.md#posture-review
+
+POS-018  info       evidence   Evidence encryption at rest
+         Evidence is stored unencrypted; it is redacted but still holds attacker-supplied text and source addresses.
+         -> Enable storage.encryption if the data directory is backed up or shared.
+         see docs/evidence-encryption.md
+
+generated at 2026-11-01T13:00:00Z
