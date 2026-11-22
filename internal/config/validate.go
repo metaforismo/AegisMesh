@@ -35,7 +35,7 @@ var (
 		SensorKindHTTP: {"persona": true, "rules": true, "fallback": true, "max_body_bytes": true},
 		SensorKindTCP:  {"banner": true, "session": true, "tcp_rules": true},
 		SensorKindMCP: {"path": true, "server_name": true, "server_version": true, "instructions": true, "tools": true,
-			"resources": true, "prompts": true},
+			"resources": true, "prompts": true, "environment": true},
 		SensorKindSSH: {"ssh": true},
 	}
 )
@@ -88,6 +88,9 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("%w: tcp sensor %q: %v", errConfig, s.ID, err)
 			}
 		case SensorKindMCP:
+			if err := ValidateMCPEnvironment(s.Environment, c.Honeytokens); err != nil {
+				return fmt.Errorf("sensor[%d]: %w", i, err)
+			}
 			if err := validateMCPSensor(s); err != nil {
 				return fmt.Errorf("%w: mcp sensor %q: %v", errConfig, s.ID, err)
 			}
@@ -667,9 +670,9 @@ func validateMCPSensor(s *Sensor) error {
 	if len(s.Instructions) > 4096 {
 		return fmt.Errorf("instructions exceeds 4096 bytes")
 	}
-	if n := len(s.Tools); n == 0 {
+	if n := len(s.Tools); n == 0 && s.Environment == nil {
 		return fmt.Errorf("at least one canary tool is required (an MCP endpoint without tools serves no deception purpose)")
-	} else if n > MaxMCPTools {
+	} else if n+MCPEnvironmentToolCount(s.Environment) > MaxMCPTools {
 		return fmt.Errorf("%d tools exceed cap of %d", n, MaxMCPTools)
 	}
 	if len(s.Resources) > MaxMCPResources {
@@ -691,7 +694,7 @@ func validateMCPSensor(s *Sensor) error {
 		if !toolNameRe.MatchString(t.Name) {
 			return fmt.Errorf("%s.name %q is not a valid MCP tool name", where, t.Name)
 		}
-		if names[t.Name] {
+		if names[t.Name] || s.Environment != nil && IsMCPEnvironmentTool(t.Name) {
 			return fmt.Errorf("%s.name %q duplicates an earlier tool name", where, t.Name)
 		}
 		names[t.Name] = true

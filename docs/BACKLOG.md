@@ -188,13 +188,15 @@ verification entry.
   baseline control and full retry passed after the conflict cleared. Give these
   tests ephemeral listener fixtures in a separate change; preserve production
   doctor bind checks. See the dated verification entry for the baseline control.
-- **TODO (high) — paired console/IO controls and accepting-hub overview.** The
+- **PARTIAL (local round 3) — paired console/IO controls and accepting-hub overview.** The
   eight-tenant cookie overview did not improve in the short handler samples,
   despite lower allocation, and unchanged storage/session/heartbeat controls
   varied or regressed. Repeat with controlled machine load and interleaved
   baselines before attributing those timings. Add an accepting fleet hub and
   live registry-name resolution: `overview_handlers.go` adds `ByNode`, and
-  `evidenceindex/overview.go:ByNode` currently resolves names per observation.
+  `evidenceindex/overview.go:ByNode` resolved names per observation before round 3.
+  The new accepting-hub benchmark and per-origin resolution are measured in
+  `performance/2026-11-22`; paired IO controls and deployment load remain open.
   The current handler benchmark has no hub and no live resolver. Keep this gap
   distinct from the independent hub ingestion benchmark.
 - **TODO (high) — append codec ownership.** `storage.Store.Append`,
@@ -244,11 +246,12 @@ verification entry.
   registry path before adding an ownership directory; revocation, enrollment and
   restart must invalidate/update it atomically. Console evidence already uses
   separate per-tenant indexes, not post-filtering.
-- **TODO (medium) — shared SSE encoding.** `console/events_handlers.go:stream` encodes
-  per subscriber (16 maximum). The paced benchmark includes real stream handlers
-  but no sockets, cookie-revalidation churn or TLS. Only introduce shared frames
-  with a tenant-owned broadcaster, explicit cancellation/join ownership, immutable
-  bytes and slow-client tests. Current bounded drop/close behavior stays intact.
+- **IMPLEMENTED LOCALLY (round 3, uncommitted) — shared SSE encoding.** `console/events_handlers.go:stream` now shares one lazy immutable observation
+  frame per tenant index/event across node-filter classes. The unchanged sixteen
+  streams / 32-slot queues retain drop/close ownership, cancellation and tests.
+  Three-sample allocation measurements and single-stream overhead are recorded
+  in `performance/2026-11-22`; the paced harness has no sockets, cookie churn or
+  TLS and establishes no throughput gain. Broader saturation work remains open.
 
 Reviewed and deliberately retained: constant-time scan of at most 32 operator
 hashes (`console/auth`), separate session/fleet limiter policies, endpoint-specific
@@ -473,3 +476,25 @@ verification history with exact commands and regressions:
   provider; UI outside Chromium; durable offline forwarding (not implemented);
   correlation-signal fan-out to webhooks or extensions (not implemented);
   `golangci-lint` (not installed locally).
+
+
+## Round 3 local backend continuation — uncommitted
+
+Implemented: bounded exact-map MCP workspace and MCP-001..003, multi-step demo,
+local SIEM file formats and audited analyst downloads, on-demand deterministic
+digest, static rule prose/observe-only metadata, overview occupancy/title/
+severity, origin-qualified event/session link, full-retained-source histogram,
+value-free local decoy/honeytoken catalogs. No dependency or egress edge added.
+Security review SR-01..03 has failing-first regressions and documented limits.
+Shared SSE and accepting-hub overview changes have three-sample local before/
+after measurements, including single-stream overhead and an excluded failed
+SSE exploratory run. Final checks are in `verification.md`; merge, publication
+and external interoperability remain NOT RUN.
+
+Follow-ups: actual SIEM delivery/ingestion validation, scheduled digest (current
+command/API are on demand), remote configured catalogs, body-file planting
+metadata without new reads, same-sensor read-to-replay correlation, strong
+history completeness, and saturation/p99/paired IO controls. The previously
+listed unimplemented multi-step MCP/file-format scope is superseded only by
+this local slice, not by a production or release claim. UI/mock work stays in
+the frontend workstream; no UI files were changed.

@@ -116,7 +116,7 @@ func TestEntryJSONShapeIsStable(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
 	}
-	wantKeys := map[string]bool{"id": true, "family": true, "class": true, "severity": true, "summary": true, "frameworks": true}
+	wantKeys := map[string]bool{"id": true, "family": true, "class": true, "severity": true, "summary": true, "frameworks": true, "description": true, "guidance": true, "observe_only": true}
 	if len(m) != len(wantKeys) || !reflect.DeepEqual(keySet(m), wantKeys) {
 		t.Fatalf("detection entry keys drifted: %v", m)
 	}

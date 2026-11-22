@@ -11,6 +11,9 @@ LLM-003	T1496 Resource Hijacking	AML.T0034 Cost Harvesting	LLM10 Unbounded Consu
 LLM-004	T1078 Valid Accounts	AML.T0012 Valid Accounts	
 HT-001	T1552 Unsecured Credentials;T1078 Valid Accounts	AML.T0055 Unsecured Credentials	LLM02 Sensitive Information Disclosure
 AGT-001		AML.T0051 LLM Prompt Injection	LLM01 Prompt Injection
+MCP-001	T1552 Unsecured Credentials	AML.T0055 Unsecured Credentials	LLM02 Sensitive Information Disclosure
+MCP-002		AML.T0053 LLM Plugin Compromise	LLM06 Excessive Agency
+MCP-003		AML.T0053 LLM Plugin Compromise	LLM06 Excessive Agency
 COR-001		AML.T0051 LLM Prompt Injection	LLM01 Prompt Injection
 COR-002	T1046 Network Service Discovery		
 COR-003	T1046 Network Service Discovery	AML.T0053 LLM Plugin Compromise	LLM06 Excessive Agency

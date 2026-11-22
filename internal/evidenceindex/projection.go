@@ -22,6 +22,8 @@ type Node struct {
 
 // Summary is bounded display metadata derived only from an already stored observation.
 type Summary struct {
+	// TokenIDs are bounded finding references used for configured marker counts only.
+	TokenIDs []string `json:"-"`
 	// Node is absent for locally observed events.
 	Node *Node `json:"node,omitempty"`
 	// ID references the stored envelope.
@@ -205,6 +207,12 @@ func Project(envelope event.Envelope) (Summary, []Finding, []string) {
 			for _, raw := range rawFindings[:min(len(rawFindings), 128)] {
 				finding := object(raw)
 				id := text(finding, "rule_id", 32)
+				if (id == "HT-001" || id == "AGT-001") && len(summary.TokenIDs) < 128 {
+					token := text(finding, "token_id", 64)
+					if token != "" {
+						summary.TokenIDs = unique(summary.TokenIDs, token)
+					}
+				}
 				rule, ok := rulecatalog.Lookup(id)
 				if !ok || rule.Family != rulecatalog.FamilyDetection || seen[id] {
 					continue

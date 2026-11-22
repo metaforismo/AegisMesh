@@ -988,3 +988,68 @@ not durable actor tracking. No complete-history, hard tenancy, external SIEM
 interoperability, attribution or production-capacity claim is made. UI/dev mock
 integration belongs to the frontend workstream. Native evidence remains the
 source of truth. No push, tag, PR, merge, release or deployment is implied.
+
+## ADR-0023 — static MCP environments, local SIEM formats and bounded digest
+
+**Status:** implemented locally, uncommitted; final local checks in
+`docs/verification.md`. No publication or deployment is implied.
+
+**Grounding.** Sensors pass bounded interactions through the existing policy
+engine before redacted authoritative append. The console index receives only
+successful appends and partitions by authenticated tenant. `evidenceview`
+already owns retained sessions; native envelopes remain authoritative.
+`ecsexport` and Markdown neutralisation already define read boundaries.
+
+**Two designs considered.** (A) Make each MCP tool a callback to arbitrary
+workspace/file/query adapters, and implement format/digest logic separately in
+CLI and HTTP. This expands authority and duplicates behavior. (B) Compile
+strict declarative entries into exact in-memory maps, keep connection-local
+observation state, and share pure render/analysis packages between CLI and
+HTTP. B has the smaller authority surface and one testable format contract.
+No new dependency, plugin, interpreter, transport or mutable environment is
+needed. A persistent attacker-selected MCP session table was also rejected:
+connection context bounds ownership without a new identity/retention protocol.
+
+**Usage and module contract.** Operators declare `Sensor.Environment` or scaffold
+`init --profile ai-decoy`; sensors expose only five fixed synthetic tools.
+`eventexport.Render([]event.OriginEnvelope, format)` verifies and stages
+bounded bytes. `digest.Build(Input)` consumes an anchored snapshot plus explicit
+operator/recommendation counts; `digest.Render` emits JSON/inert Markdown.
+Console handlers own authentication/scoping/audit; CLI owns explicit local
+reader/identity/output flags. `DecoyCatalog` projects configuration to value-free
+metadata before the console retains it. No handler receives token values.
+
+**Decision.** Files/env/query results remain declared static data. Names are
+exact map keys, never OS paths/environment access, SQL, regexes or commands.
+A server-created HTTP connection owns up to 256 steps and the first 32 scrubbed
+tool names. MCP-001..003 append to detection order and cannot select policy
+actions; framework mappings use existing catalog IDs only. Replay reuses
+HT-001/COR-008 without upgrading cross-sensor contact into proven disclosure.
+
+Exports support CEF, RFC5424, OTLP JSON encoding and ECS locally; 8192 inputs,
+2 MiB staged bytes, origin-qualified resolution, fixed attachment names and
+audit-before-disclosure. OTLP is format only; no exporter/collector is added.
+Digest compares adjacent sampled windows at one anchor; source novelty is
+relative, automation is evidence-consistent, recommendations are unexecuted.
+CLI investigation reads are fixed-name, bounded and read-only; unavailable state
+is null, not a zero. New catalog APIs are local-tenant-only and value-free.
+
+**Perimeter decisions.** Separately budget invalid Bearer attempts using the
+existing bounded throttle state; install hub rejection headers at the response
+writer; audit raw event detail before bytes, including viewer reads. The real
+review and failing-first evidence are in `security-review-2026-11.md`.
+
+**Measured performance.** Share one lazy immutable SSE frame per tenant/event,
+leaving filtering/admission/write deadlines per subscriber. Resolve overview
+node names once per origin after counting. Matching before/after harnesses,
+including a real accepting hub and enrolled synthetic identities, are in
+`performance/2026-11-22`. Keep allocation/latency evidence separate; a paced
+SSE workload cannot show throughput gains and single-stream overhead remains.
+
+**Consequences.** Data contracts are additive; overview rule severity is now
+catalog severity rather than an unrelated highest finding. Native event schema
+is unchanged, with optional MCP observation fields. Source histograms include
+all retained events independently of page size; digest/catalog/session work
+uses the bounded newest sample. No hard tenant, complete-history, real SIEM,
+automation attribution, production performance or perimeter-security claim.
+UI/mock changes remain outside this backend task.

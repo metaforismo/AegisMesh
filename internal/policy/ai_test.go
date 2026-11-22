@@ -34,3 +34,12 @@ func TestAIObservationsNeverEnforce(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPFindingsCannotSelectActions(t *testing.T) {
+	cfg := config.Detection{Actions: config.DetectionActions{Info: "refuse", Low: "refuse", Medium: "refuse", High: "refuse"}}
+	enf := NewEnforcer(cfg, observe.NewRegistry())
+	got := enf.Evaluate("mcp", detect.Input{Protocol: "mcp", MCPSecretRead: true, MCPDepth: true, MCPWriteAttempt: true})
+	if got.Action != ActionObserve || len(got.Findings) != 4 {
+		t.Fatalf("MCP observations selected an action: %+v", got)
+	}
+}

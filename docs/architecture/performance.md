@@ -104,3 +104,27 @@ lifecycle in `lifecycle.go`; shutdown joins maintenance before closing storage.
 Repeated real listener cycles have a goroutine-count assertion. Broader codec,
 lifecycle/error, state-IO ownership, tenant fleet dispatch and shared-SSE changes,
 plus unmeasured/noisy cases, have concrete entries in [BACKLOG](../BACKLOG.md).
+
+## Round 3 measured follow-up — 2026-11-22 (local, uncommitted)
+
+Shared SSE encoding and accepting-hub overview name resolution now have matching
+three-sample before/after harnesses, raw logs, ranges and limits in
+[performance/2026-11-22](../performance/2026-11-22/README.md). The hub fixture
+uses a real accepting registry, eight signed/enrolled synthetic nodes and
+14,167 retained of 50,000 offered events, all in the selected window. Median
+handler overview: **7.428 ms → 2.924 ms**, **2,850,836 → 1,159,193 B/op**,
+**38,916 → 5,770 allocs/op**. Names resolve once per origin after counting,
+not once per observation. There is no overview cache or stale-window shortcut.
+
+SSE shares one immutable lazy JSON frame inside each tenant index, across its
+node-filter classes; each subscriber still validates session/filter/deadlines.
+Sixteen streams, 32-slot queues, slow-client drop/close and cancellation
+ownership are unchanged. Per 100-event batch with sixteen subscribers,
+median allocation was **1,741,952 → 643,920 B/op** and **13,432 → 5,967 allocs/op**.
+Wall time stays around 101 ms because the harness deliberately paces at 1000/s;
+no throughput gain follows. Single-stream bytes rise **554,048 → 608,032**.
+One exploratory after run failed its healthy-reader assertion under variable
+load; its raw output is retained and excluded, and the full retry passed.
+These are local synthetic measurements, not statistical significance, p99,
+capacity or deployment proof. Concurrent ingestion/reads, IO controls, public
+socket/TLS behavior and stronger load isolation remain unmeasured.

@@ -443,3 +443,34 @@ human, scanner, scheduled monitor or ordinary client. Source IPs are not user
 identities. Editorial framework references are not coverage or attribution.
 See [ai-threat-detection.md](ai-threat-detection.md) for the exact premises,
 thresholds, source/window semantics and false-match limitations.
+
+## Round 3 boundary refinement (local, uncommitted; ADR-0023)
+
+The MCP workspace is a static synthetic **lookup** API. TB1/TB3 do not gain a
+real file, environment, query interpreter or execution capability: declared
+keys compile into exact in-memory maps and write/exec-shaped calls are only
+observed. Connection context caps step/sequence state and expires with the
+connection. File/env content is synthetic; honeytoken values are deliberately
+served but scrubbed before evidence previews/storage. Existing policy findings
+retain their semantics; MCP-001..003 cannot enforce. See `mcp-environments.md`.
+
+Console event downloads/digests are read-boundary projections, not a new TB7
+network edge. Export destinations are stdout, an operator-chosen new local
+file, or an authenticated operator-requested attachment. CEF/syslog escaping
+prevents record/structured-data delimiter injection; OTLP is JSON format only.
+ECS retains sensitive redacted native observations and requires analyst access.
+Fixed filenames prevent header injection. No untrusted data selects an output
+path, changes configuration or reaches enforcement. Markdown uses the shared
+neutraliser. Source novelty, automation and technique relations describe only
+retained sampled evidence, never incidents/actors or technique execution.
+
+Local decoy/honeytoken catalogs expose IDs and static counts only in
+local_tenant, never bodies or values; forwarded sensor/token collisions cannot
+populate local-config counts. Raw event-detail reads are now audited before
+bytes, even for viewers. Invalid Bearer attempts share a bounded process-wide
+throttle table with distinct keys from browser login; hub early rejections
+receive no-store/security headers. SSE frames are immutable, scoped to an index
+partition and bounded by the unchanged stream/queue limits. This is logical
+isolation within the same process, not isolation from a compromised host.
+The review's reproduced findings, checked controls and untested surfaces are
+in `security-review-2026-11.md`; it does not establish perimeter security.

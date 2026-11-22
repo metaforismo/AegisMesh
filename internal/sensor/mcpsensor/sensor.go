@@ -100,10 +100,11 @@ func orString(v, fallback string) string {
 }
 
 type Sensor struct {
-	id  string
-	cfg config.Sensor
-	enf *policy.Enforcer
-	srv *http.Server
+	workspace *workspaceView
+	id        string
+	cfg       config.Sensor
+	enf       *policy.Enforcer
+	srv       *http.Server
 
 	mu sync.Mutex // guards ln: Start, Addr, and Close may run on any goroutine
 	ln net.Listener
@@ -120,10 +121,10 @@ func New(c config.Sensor, enf *policy.Enforcer) (*Sensor, error) {
 	if enf == nil {
 		return nil, fmt.Errorf("mcpsensor %s: nil enforcer", c.ID)
 	}
-	if len(c.Tools) == 0 {
+	if len(c.Tools) == 0 && c.Environment == nil {
 		return nil, fmt.Errorf("mcpsensor %s: no canary tools configured", c.ID)
 	}
-	return &Sensor{id: c.ID, cfg: c, enf: enf, done: make(chan error, 1)}, nil
+	return &Sensor{id: c.ID, cfg: c, enf: enf, done: make(chan error, 1), workspace: compileEnvironment(c.Environment)}, nil
 }
 
 func (s *Sensor) ID() string   { return s.id }
@@ -168,17 +169,18 @@ func (s *Sensor) Start(ctx context.Context, d sensor.Deps) error {
 		"prompts/get requests answered")
 
 	h := &handler{
-		ref:      event.SensorRef{ID: s.cfg.ID, Kind: s.Kind(), Listen: s.cfg.Listen},
-		cfg:      &s.cfg,
-		enf:      s.enf,
-		bus:      d.Bus,
-		seq:      d.Seq,
-		instance: d.Instance,
-		log:      d.Log,
-		events:   eventsTotal,
-		lists:    lists,
-		reads:    reads,
-		prompts:  prompts,
+		workspace: s.workspace,
+		ref:       event.SensorRef{ID: s.cfg.ID, Kind: s.Kind(), Listen: s.cfg.Listen},
+		cfg:       &s.cfg,
+		enf:       s.enf,
+		bus:       d.Bus,
+		seq:       d.Seq,
+		instance:  d.Instance,
+		log:       d.Log,
+		events:    eventsTotal,
+		lists:     lists,
+		reads:     reads,
+		prompts:   prompts,
 	}
 	mux := http.NewServeMux()
 	path := s.cfg.MCPPath
@@ -189,6 +191,7 @@ func (s *Sensor) Start(ctx context.Context, d sensor.Deps) error {
 
 	s.srv = &http.Server{ //nolint:gosec // explicit timeouts below
 		Handler:           mux,
+		ConnContext:       explorationContext,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -227,6 +230,9 @@ func (s *Sensor) Close(ctx context.Context) error {
 }
 
 type handler struct {
+	workspace  *workspaceView
+	step       int
+	sequence   []string
 	ref        event.SensorRef
 	cfg        *config.Sensor
 	enf        *policy.Enforcer
@@ -314,12 +320,25 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.advance(r, req) {
+		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID}, &rpcError{Code: codeServerRefused, Message: "connection request limit"})
+		return
+	}
+	var envResult json.RawMessage
+	var envHandled, secret, write bool
+	if h.cfg.Environment != nil && req.Method == "tools/call" {
+		envResult, envHandled, secret, write = environmentResult(h.workspace, req.Params)
+	}
+	depth := h.cfg.Environment != nil && h.step >= h.cfg.Environment.DepthThreshold
 	// Detection runs before any method dispatch. Input is the bounded raw
 	// message text; findings shape both the response (refuse) and evidence.
 	det := h.enf.Evaluate(h.ref.ID, detect.Input{
-		Text:       policy.BoundedDetectInput(req.Method+" "+string(req.Params), h.enf.EngineMaxInput()),
-		TotalBytes: len(req.Method) + len(req.Params),
-		Protocol:   "mcp", Method: r.Method, Path: r.URL.Path,
+		MCPSecretRead:   secret,
+		MCPDepth:        depth,
+		MCPWriteAttempt: write,
+		Text:            policy.BoundedDetectInput(req.Method+" "+string(req.Params), h.enf.EngineMaxInput()),
+		TotalBytes:      len(req.Method) + len(req.Params),
+		Protocol:        "mcp", Method: r.Method, Path: r.URL.Path,
 		RawParts: sensor.RequestParts(r, body), Headers: sensor.RequestHeaders(r),
 	})
 	w.Header().Set("X-AegisMesh-Action", string(det.Action))
@@ -371,6 +390,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			tools = append(tools, tinfo)
 		}
+		if h.cfg.Environment != nil {
+			tools = append(tools, environmentTools()...)
+		}
 		result, _ := json.Marshal(map[string]any{"tools": tools})
 		h.emitWithClass("tools/list", event.ClassificationInteraction, &det)
 		writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result}, nil)
@@ -383,6 +405,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					&rpcError{Code: codeInvalidParams, Message: "invalid params"})
 				return
 			}
+		}
+		if envHandled {
+			h.events.Inc()
+			h.emitCall(p.Name, p.Arguments, "environment", false, &det, h.remoteHost)
+			writeRPC(w, &rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: envResult}, nil)
+			return
 		}
 		tool, ok := h.toolByName(p.Name)
 		if !ok {
@@ -592,7 +620,7 @@ func writeRPC(w http.ResponseWriter, resp *rpcResponse, rpcErr *rpcError) {
 // listing or initializing against the endpoint is a plain interaction.
 func (h *handler) emitWithClass(method string, class string, det *policy.Decision) {
 	h.emitted = true
-	obs := observation{Method: h.enf.Scrub(method), RemoteHost: h.remoteHost, Detection: newDetectionInfo(det)}
+	obs := observation{Step: h.step, ToolSequence: h.sequence, Method: h.enf.Scrub(method), RemoteHost: h.remoteHost, Detection: newDetectionInfo(det)}
 	raw, err := json.Marshal(obs)
 	if err != nil {
 		return
@@ -615,6 +643,8 @@ func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rej
 	sum := sha256.Sum256(args)
 
 	obs := observation{
+		Step:          h.step,
+		ToolSequence:  h.sequence,
 		Method:        "tools/call",
 		ToolName:      h.enf.Scrub(tool),
 		ArgsLength:    argLen,
@@ -645,6 +675,8 @@ func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rej
 }
 
 type observation struct {
+	Step          int            `json:"step,omitempty"`
+	ToolSequence  []string       `json:"tool_sequence,omitempty"`
 	Method        string         `json:"method"`
 	ToolName      string         `json:"tool_name,omitempty"`
 	ArgsLength    int            `json:"args_length,omitempty"`

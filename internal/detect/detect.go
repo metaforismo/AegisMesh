@@ -47,6 +47,7 @@ func KnownRuleIDs() []string {
 		string(RuleEncodedPayload),
 		string(RuleExcessInput),
 		string(RuleAISurface), string(RuleMinimalProbe), string(RuleAIManagement), string(RuleProviderKey), string(RuleHoneytoken), string(RuleAgentCanary),
+		string(RuleMCPSecret), string(RuleMCPDepth), string(RuleMCPWrite),
 	}
 }
 
@@ -102,13 +103,16 @@ type Finding struct {
 // interaction so RES-001 can fire on overflow even though the engine never
 // sees the excess bytes.
 type Input struct {
-	Method       string
-	Path         string
-	Protocol     string
-	Headers      map[string][]string // lowercased selected header names
-	Body         string
-	TokenMatches []honeytoken.Match
-	RawParts     []string // acquired, sensor-bounded fields, consumed only by Enforcer
+	MCPSecretRead   bool
+	MCPDepth        bool
+	MCPWriteAttempt bool
+	Method          string
+	Path            string
+	Protocol        string
+	Headers         map[string][]string // lowercased selected header names
+	Body            string
+	TokenMatches    []honeytoken.Match
+	RawParts        []string // acquired, sensor-bounded fields, consumed only by Enforcer
 
 	Text       string
 	TotalBytes int
@@ -332,7 +336,7 @@ func allRules(maxInput int) []rule {
 			reason:     "interaction exceeded the detection evaluation bound",
 			match:      excessiveInputThreshold(maxInput),
 		},
-	}, aiRules()...)
+	}, append(aiRules(), mcpRules()...)...)
 }
 
 func boundedHeaders(headers map[string][]string) map[string][]string {

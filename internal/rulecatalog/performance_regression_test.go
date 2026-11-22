@@ -20,6 +20,7 @@ func TestImmutableMetadataMatchesOwnersAndSurvivesCallerMutation(t *testing.T) {
 	}
 	for i := range want {
 		want[i].Frameworks = frameworks(want[i].ID)
+		enrich(&want[i])
 	}
 	if got := All(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("owner metadata changed: %v", got)
@@ -29,6 +30,7 @@ func TestImmutableMetadataMatchesOwnersAndSurvivesCallerMutation(t *testing.T) {
 	returned[0].ID = "mutated"
 	for i := range want {
 		want[i].Frameworks = frameworks(want[i].ID)
+		enrich(&want[i])
 	}
 	if got := All(); !reflect.DeepEqual(got, want) {
 		t.Fatal("All aliases retained metadata")

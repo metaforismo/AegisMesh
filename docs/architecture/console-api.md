@@ -47,7 +47,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
 
 | Role | Grants |
 |---|---|
-| `viewer` | all `GET` endpoints except audit |
+| `viewer` | read endpoints except analyst downloads and admin audit |
 | `analyst` | viewer + investigation writes |
 | `admin` | analyst + audit trail |
 
@@ -115,7 +115,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
   "by_sensor": [ { "sensor_id": "web", "kind": "http", "events": 80, "buckets": [Bucket] } ],
   "by_severity": { "critical": 0, "high": 3, "medium": 8, "low": 2, "info": 0,
                    "none": 107 },         // "none" = events without any finding
-  "top_rules": [ { "rule_id": "PI-001", "events": 6, "severity": "high" } ],
+  "top_rules": [ { "rule_id": "PI-001", "title": "instruction-override phrasing directed at an automated agent", "events": 6, "severity": "high" } ],
   "top_sources": [SourceSummary],       // up to 10
   "recent_signals": [EventSummary],     // up to 10 correlation signals
   "open_investigations": 2
@@ -148,7 +148,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
 
 // Rule
 { "id": "PI-001", "family": "detection",   // detection | correlation
-  "title": "…", "description": "…",          // description may be ""
+  "title": "…", "description": "…", "guidance": "…", "observe_only": false,
   "severity": "high", "enabled": true }      // severity is "" for correlation rules
 
 // Investigation
@@ -226,7 +226,8 @@ each newly stored envelope; `event: heartbeat` with `data: {"time":"…"}` every
 15 s. The stream accepts optional `node=<id>|local`; other filters remain client-side. A browser
 `EventSource` cannot read the status of a failed stream, so on close the UI
 calls `GET /api/v1/session` to tell an expired session from an outage. A slow client is disconnected rather than buffered without bound. At most
-16 concurrent streams (503 beyond).
+16 concurrent streams (503 beyond). Observation JSON is encoded once per tenant/event
+and shared across its node-filter classes; heartbeat frames remain per stream.
 
 ## Audit actions
 
@@ -234,7 +235,7 @@ calls `GET /api/v1/session` to tell an expired session from an outage. A slow cl
 `session.oidc_login`, `session.oidc_denied`, `session.tenant_switch`,
 `investigation.create`, `investigation.update`, `investigation.note`,
 `investigation.attach`, `investigation.detach`, `audit.read`, `audit.verify`,
-`authz.denied`. Token values, session identifiers and note bodies are never
+`authz.denied`, `event.read`, `export.events`. Token values, session identifiers and note bodies are never
 written to the audit trail.
 
 ## Implementation safety bounds and clarified semantics
@@ -712,3 +713,137 @@ are session/investigation IDs where selected, never raw source keys or note
 text. Audit exhaustion/failure returns 503 and no attachment. Existing
 `authz.denied` applies to insufficient roles. Sensors, policy and stored evidence
 remain immutable through all these routes.
+
+## Round 3 additions (local, uncommitted)
+
+These additions use the existing authentication, tenant selection, Host/Origin,
+CSRF, URI/body bounds, eight-handler admission and no-store response policy.
+None adds an egress destination or sensor/configuration mutation.
+
+| Method and path | Minimum role | Result |
+| --- | --- | --- |
+| `GET /api/v1/export/events?format=...&window=24h` | analyst | Bounded audited attachment, formats `cef`, `syslog-rfc5424`, `otlp-json`, `ecs` |
+| `GET /api/v1/digest?window=24h` | viewer | Digest JSON, windows `24h`, `7d`, default `24h` |
+| `GET /api/v1/decoys?window=24h` | viewer | `{decoys:[Decoy],bounds:Bounds}`; windows `1h`, `24h`, `7d`, default `24h` |
+| `GET /api/v1/honeytokens?window=24h` | viewer | `{honeytokens:[Honeytoken],bounds:Bounds}`; same windows/default |
+
+Export events accepts **exactly one** of `session`, `source`, `investigation`,
+`window`, matching indicator download scopes and validation. Session context
+can extend beyond the selected window; investigations resolve attached local
+IDs only. Selection is newest-8192 sampled; native lookups are origin-qualified,
+with a conservative 2 MiB input budget, and missing references fail closed.
+Output is capped at 2 MiB and audited as `export.events` before bytes. Fixed
+attachment names are `aegismesh-events-cef.log`,
+`aegismesh-events-syslog-rfc5424.log`, `aegismesh-events-otlp-json.json`,
+`aegismesh-events-ecs.ndjson`. Content types are text/plain, application/json
+(OTLP), application/x-ndjson (ECS). Bounds headers match indicator downloads.
+There is no disk path parameter. **OTLP is format only; AegisMesh does not ship
+an OTLP exporter.** [Format/escaping/severity contract](../siem-export.md).
+
+The digest captures one `as_of` and compares `[as_of-window,as_of)` with the
+immediately preceding equal window. Both totals count classifications, sources
+and active sensors. Source novelty and technique novelty are relative to the
+preceding sample, not first-ever observations. Automation session counts reuse
+retained source sessions and their eight-non-signal minimum; a session counts
+once if any event overlaps the current window and its full sampled context is
+consistent with automation. No client identity is inferred. Honeytoken/agent
+hits count events with HT-001/AGT-001, once per rule per event. Top rules are the
+ten largest event counts with stable ID ties and static catalog title/severity.
+New techniques are unique `{framework,id,name}` references absent from the
+preceding window, sorted by framework then ID. Open investigations count every
+current annotation whose status is not closed, independent of evidence window.
+Recommendations use at most 4096 current-window local verified envelopes, at
+most 20 proposed dry-run recommendations; forwarded, over-cap and evicted
+references are counted explicitly. This is on demand, without scheduling.
+
+```jsonc
+// Digest — arrays are present even when empty
+{
+  "window":"24h", "as_of":"RFC3339Nano UTC",
+  "totals":{"events":9,"interaction":8,"canary_invocation":1,"correlation_signal":0,"sources":2,"sensors_active":2},
+  "previous_totals":{"events":2,"interaction":2,"canary_invocation":0,"correlation_signal":0,"sources":1,"sensors_active":1},
+  "new_sources":1, "returning_sources":1,
+  "sessions_consistent_with_automation":1,
+  "top_rules":[{"rule_id":"MCP-001","title":"declared synthetic credential content was requested","severity":"medium","events":1}],
+  "new_techniques":[{"framework":"mitre-atlas","id":"AML.T0055","name":"Unsecured Credentials"}],
+  "honeytoken_hits":1, "agent_canary_hits":0,
+  "open_investigations":2, "dry_run_recommendations":1,
+  "bounds":{"index":{"events":11,"capacity":50000,"oldest":"…","history":"complete"},"scanned_events":11,"scan_limit":8192,"scan_truncated":false},
+  "limits":{"interpretation":"Retained observations, not incidents, client attribution or technique execution; no scheduler or delivery.","history":"complete","scan_truncated":false,"source_comparison":"New means absent from the preceding sampled window, not first-ever seen.","investigations_available":true,"recommendation_excluded":0,"recommendation_missing":0,"recommendation_cap":20}
+}
+
+// Decoy — only configured local surfaces of the active local_tenant
+{"id":"ai-workspace","kind":"mcp","listen":"127.0.0.1:8002",
+ "surface_families":["mcp_environment"],"rules":0,"tools":5,"fake_files":2,
+ "honeytoken_ids":["decoy-key"],"events":4,"last_activity":"RFC3339Nano UTC"}
+
+// Honeytoken — ID and kind are safe catalog metadata, never the marker value
+{"id":"decoy-key","kind":"credential","sensor_ids":["ai-api","ai-workspace"],
+ "hit_count":1,"last_hit":"RFC3339Nano UTC","sources":["192.0.2.4"]}
+```
+
+Catalog arrays are sorted by ID; families, planted IDs, sensor IDs and sources
+are sorted/unique. Metadata derives once from the effective config, with no
+bodies, schemas, prompts, env content or token values retained in the console
+catalog. HTTP families derive from configured static paths (vLLM profile rule
+names disambiguate its shared paths); unclassified HTTP surfaces use `http`.
+Tool counts include five environment tools; rule counts combine HTTP/TCP static
+rules; fake file counts exclude synthetic env/query entries. Planting is found
+only in inline configured response material; external body files are not read
+for this catalog, so their planting is not inferred. A token with no detected
+planting has `sensor_ids:[]`. Other tenants get empty local catalogs, even
+administrators. Forwarded observations do not count as hits or activity for
+local-config catalogs, avoiding node/sensor-ID collisions. Activity/hits use the
+selected half-open window within the newest 8192-event snapshot; empty last
+activity/hit is `""`. Honeytoken counts use exact configured IDs from detection
+metadata; several tokens can each count on the same event. Bodies/values are
+never returned. These are observations, not proof of successful secret use.
+
+Existing types gain:
+
+```jsonc
+// Rule, all catalog records have nonempty static prose
+{"id":"MCP-001","family":"detection","title":"declared synthetic credential content was requested",
+ "description":"Declared synthetic credential content was requested from the workspace.",
+ "guidance":"Check the connection tool sequence and later HT-001 or COR-008 observations.",
+ "severity":"medium","enabled":true,"observe_only":true,"frameworks":[]}
+// Overview (additions)
+{"index":{"events":0,"capacity":50000,"oldest":"","history":"complete"},
+ "top_rules":[{"rule_id":"PI-001","title":"instruction-override phrasing directed at an automated agent","severity":"high","events":1}]}
+// EventDetail (addition)
+{"session_id":"32 hex, or empty if outside retained analysis sessions"}
+// Source detail (addition beside source/events/next_cursor)
+{"inter_arrival":[{"lt_ms":100,"count":0},{"lt_ms":1000,"count":0},{"lt_ms":10000,"count":7},{"lt_ms":60000,"count":0},{"lt_ms":300000,"count":0},{"lt_ms":1800000,"count":0},{"lt_ms":null,"count":0}]}
+```
+
+`observe_only` is true for all correlation signals and detection rules that
+cannot select a response action. It does not suppress older findings on the
+same interaction. Top-rule severity now comes from the rule's own catalog
+entry, including empty severity for correlations, rather than another finding
+on the same event. `index.events==0` explicitly means the index is empty;
+nonzero occupancy with zero window totals is a quiet window. History still
+qualifies completeness. Event-session links use the newest 8192 retained
+summaries and authenticated origin, so colliding fleet IDs cannot link the
+wrong event; evicted anchors can change session IDs. Raw detail reads are now
+sensitive reads: `event.read` is audited with `local|node_id:event_id` before
+response bytes, even for viewers. Audit unavailable/exhausted means 503 with
+no envelope. This also applies to HEAD's GET handler semantics.
+
+Inter-arrival uses **all** retained events for the exact source, independent of
+page limit, cursor or the 8192 analysis sample. It sorts by index timestamp /
+append order and counts each nonnegative adjacent gap, including equal-time
+arrivals and correlation signals. Buckets have exclusive upper bounds
+100 ms, 1 s, 10 s, 1 min, 5 min, 30 min, then infinity (`lt_ms:null`). Thus exact
+1 s enters the `<10 s` bucket. Sum of counts is retained source count minus
+one. This includes generated signals and clock/scheduling artifacts; it is not
+an automation assessment. No events yields zero counts. No new query parameter
+is accepted on source detail.
+
+Malformed/duplicate/unknown query parameters or bodies on the new GET routes
+return 400. Export scopes use the existing 512-byte generic query cap and
+255-byte source cap. Invalid Bearer authorization attempts are separately
+budgeted from browser login attempts: ten/address/minute across the existing
+4096-key throttle table, then 429 with Retry-After 60. Successful Bearer reads
+do not consume this budget; once exhausted that remote must wait before retrying
+a valid Bearer token. Cookie sessions remain independent. Bounds are process
+local and are not a distributed rate-limit or hard tenant boundary.

@@ -1,0 +1,5 @@
+--- FAIL: TestRawEventReadRequiresAuditBeforeDisclosure (0.04s)
+    perimeter_review_test.go:23: status = 200; want 503; body = {"envelope":{"schema":"aegismesh.event/v1","id":"e0da6a0df439078e62980b1c6d0df797","time":"2026-11-22T20:58:25.155872Z","seq":1,"instance":"synthetic","sensor":{"id":"web","kind":"http","listen":""},"classification":"interaction","redaction":{},"integrity":{"payload_sha256":"63cdf1d28c09fc82a8d33cec959d7aa7df43ff9b749e8c719b0cdcadbe692e73","algorithm":"sha256"},"observation":{"method":"GET","path":"/","remote_host":"127.0.0.1","response":{"status":200}}},"findings":[],"integrity":{"algorithm":"sha256","error":"","verified":true},"investigations":[],"related":[],"session_id":"542568ff232d951565115a1212f6f4e7","summary":{"id":"e0da6a0df439078e62980b1c6d0df797","time":"2026-11-22T20:58:25.155872000Z","seq":1,"sensor":{"id":"web","kind":"http","listen":""},"classification":"interaction","source":"127.0.0.1","summary":"GET / → 200","severity":"","rule_ids":[],"action":""}}
+FAIL
+FAIL	github.com/metaforismo/aegismesh/internal/console	0.412s
+FAIL

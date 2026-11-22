@@ -27,12 +27,15 @@ const (
 
 // Entry is one rule's stable operator-facing metadata.
 type Entry struct {
-	Frameworks []FrameworkMapping `json:"frameworks"`
-	ID         string             `json:"id"`
-	Family     string             `json:"family"`
-	Class      string             `json:"class"`
-	Severity   string             `json:"severity,omitempty"` // detection only; signals carry none
-	Summary    string             `json:"summary"`
+	Description string             `json:"description"`
+	Guidance    string             `json:"guidance"`
+	ObserveOnly bool               `json:"observe_only"`
+	Frameworks  []FrameworkMapping `json:"frameworks"`
+	ID          string             `json:"id"`
+	Family      string             `json:"family"`
+	Class       string             `json:"class"`
+	Severity    string             `json:"severity,omitempty"` // detection only; signals carry none
+	Summary     string             `json:"summary"`
 }
 
 // Entries derive once from compile-time engine registries. There is no runtime
@@ -76,6 +79,7 @@ func buildEntries() []Entry {
 	}
 	for i := range out {
 		out[i].Frameworks = frameworks(out[i].ID)
+		enrich(&out[i])
 	}
 	return out
 }

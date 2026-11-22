@@ -298,3 +298,97 @@ func TestRulesAPIFrameworkMappings(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPSecretReadThenCrossSensorReplay(t *testing.T) {
+	for _, isolated := range []bool{false, true} {
+		t.Run(fmt.Sprintf("isolated=%v", isolated), func(t *testing.T) {
+			cfg := testConfig(t)
+			token := honeytoken.Token{
+				ID:    "workspace-key",
+				Kind:  honeytoken.Credential,
+				Value: "synthetic-workspace-replay-marker",
+			}
+			cfg.Honeytokens = []honeytoken.Token{token}
+			on := true
+			cfg.Correlation.Enabled = &on
+			cfg.Detection.Actions = config.DetectionActions{
+				Info:   "observe",
+				Low:    "observe",
+				Medium: "observe",
+				High:   "observe",
+			}
+			for i := range cfg.Sensors {
+				if cfg.Sensors[i].Kind == config.SensorKindMCP {
+					cfg.Sensors[i].ProcessIsolation = isolated
+					cfg.Sensors[i].Environment = &config.MCPEnvironment{
+						DepthThreshold: 2,
+						Files: []config.MCPEntry{{
+							Name:    ".env",
+							Content: token.Value,
+							TokenID: token.ID,
+						}},
+					}
+				}
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			sys, err := Build(cfg, quietLogger())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer sys.Stop(context.Background())
+			if err := sys.Start(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			endpoints, _ := sys.Endpoints()
+			addresses := map[string]string{}
+			for _, e := range endpoints {
+				addresses[e.Kind] = e.Addr
+			}
+			transport := &http.Transport{Proxy: nil}
+			defer transport.CloseIdleConnections()
+			client := &http.Client{
+				Transport: transport,
+				Timeout:   3 * time.Second,
+			}
+			body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{"path":".env"}}}`
+			response, err := client.Post("http://"+addresses["mcp"]+"/mcp", "application/json", strings.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			content, err := io.ReadAll(response.Body)
+			response.Body.Close()
+			if err != nil || !bytes.Contains(content, []byte(token.Value)) {
+				t.Fatal("synthetic read failed", err)
+			}
+			request, _ := http.NewRequest("GET", "http://"+addresses["http"]+"/", nil)
+			request.Header.Set("Authorization", "Bearer "+token.Value)
+			response, err = client.Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, response.Body)
+			response.Body.Close()
+			sys.Stop(context.Background())
+			foundRead, foundReplay := false, false
+			if err := sys.store.Reader().ForEach(func(e event.Envelope) error {
+				if bytes.Contains(e.Observation, []byte(token.Value)) {
+					return fmt.Errorf("marker leaked")
+				}
+				if bytes.Contains(e.Observation, []byte(`"rule_id":"MCP-001"`)) {
+					foundRead = true
+				}
+				if bytes.Contains(e.Observation, []byte(`"rule_id":"COR-008"`)) {
+					foundReplay = true
+				}
+				return e.VerifyIntegrity()
+			}, func(_ string, err error) { t.Error(err) }); err != nil {
+				t.Fatal(err)
+			}
+			if !foundRead || !foundReplay {
+				t.Fatalf("read=%v correlation=%v", foundRead, foundReplay)
+			}
+		})
+	}
+}

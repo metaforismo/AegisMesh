@@ -7,6 +7,19 @@ import (
 
 func FuzzParseConfig(f *testing.F) {
 	f.Add([]byte(minimalValid))
+	f.Add([]byte(`api_version: aegismesh.io/v1alpha1
+honeytokens:
+ - {id: plant, kind: credential, value: synthetic-example-workspace-marker}
+sensors:
+ - id: workspace
+   kind: mcp
+   listen: 127.0.0.1:8002
+   environment:
+     depth_threshold: 4
+     files: [{name: .env, content: synthetic-example-workspace-marker, token_id: plant}]
+     env: [{name: API_KEY, content: synthetic-example-workspace-marker, token_id: plant}]
+     queries: {select: synthetic}
+`))
 	f.Add([]byte(minimalValid + "\nhoneytokens:\n - {id: synthetic-plant, value: synthetic-example-marker, kind: credential}\ncorrelation: {automation_threshold: 8, credential_threshold: 8}\n"))
 	f.Add([]byte(minimalValid + "\nhoneytokens:\n - {id: bad/id, value: tiny, kind: other}\ncorrelation: {automation_threshold: -1}\n"))
 	f.Add([]byte("api_version: bad\n"))

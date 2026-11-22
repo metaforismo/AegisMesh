@@ -216,6 +216,7 @@ func loadConfig(workDir string) (*config.Config, error) {
 		return nil, err
 	}
 	cfg.Honeytokens = ai.Honeytokens
+	cfg.Sensors[2].Environment = ai.Sensors[2].Environment
 	cfg.Sensors[0].Rules = append(cfg.Sensors[0].Rules, ai.Sensors[0].Rules[1:]...)
 	raw, err := json.Marshal(cfg)
 	if err != nil {
@@ -292,13 +293,34 @@ func interactHTTP(ctx context.Context, addr string) error {
 }
 
 func interactMCP(ctx context.Context, addr string) error {
-	body := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"canary_demo","arguments":{"scope":"synthetic"}}}`)
-	status, reply, err := request(ctx, http.MethodPost, "http://"+addr+"/mcp", body)
-	if err != nil {
-		return fmt.Errorf("demo: MCP sensor: %w", err)
+	transport := &http.Transport{Proxy: nil}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: requestTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("demo redirects are disabled") }}
+	calls := []struct {
+		name      string
+		arguments map[string]string
+	}{
+		{name: "canary_demo", arguments: map[string]string{"scope": "synthetic"}},
+		{name: "list_files", arguments: map[string]string{}},
+		{name: "read_file", arguments: map[string]string{"path": ".env"}},
+		{name: "get_env", arguments: map[string]string{"name": "API_KEY"}},
 	}
-	if status != http.StatusOK || !bytes.Contains(reply, []byte(`"ok":true`)) {
-		return fmt.Errorf("demo: MCP sensor returned an unexpected response")
+	for i, call := range calls {
+		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": i + 1, "method": "tools/call", "params": map[string]any{"name": call.name, "arguments": call.arguments}})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addr+"/mcp", bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("demo: MCP exploration: %w", err)
+		}
+		reply, readErr := io.ReadAll(io.LimitReader(resp.Body, maxReplyBytes+1))
+		resp.Body.Close()
+		if readErr != nil || len(reply) > maxReplyBytes || resp.StatusCode != 200 || !bytes.Contains(reply, []byte(`"result"`)) {
+			return errors.New("demo: MCP exploration returned an unexpected response")
+		}
 	}
 	return nil
 }
@@ -477,8 +499,8 @@ func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) 
 	if corruptErr != nil {
 		return Summary{}, fmt.Errorf("demo: corrupt evidence: %w", corruptErr)
 	}
-	if len(envelopes) != 8 {
-		return Summary{}, fmt.Errorf("demo: recorded %d observations, want 8", len(envelopes))
+	if len(envelopes) != 11 {
+		return Summary{}, fmt.Errorf("demo: recorded %d observations, want 11", len(envelopes))
 	}
 
 	counts := map[string]int{}
@@ -487,13 +509,16 @@ func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) 
 		counts[envelope.Classification]++
 		bySensor[envelope.Sensor.ID]++
 	}
-	if counts[event.ClassificationInteraction] != 7 || counts[event.ClassificationCanaryHit] != 1 {
+	if counts[event.ClassificationInteraction] != 7 || counts[event.ClassificationCanaryHit] != 4 {
 		return Summary{}, fmt.Errorf("demo: unexpected evidence classifications")
 	}
 	for _, kind := range sensorOrder {
 		want := 1
 		if kind == "http" {
 			want = 5
+		}
+		if kind == "mcp" {
+			want = 4
 		}
 		if bySensor["demo-"+kind] != want {
 			return Summary{}, fmt.Errorf("demo: sensor %s did not record the expected observations", kind)
@@ -503,8 +528,8 @@ func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) 
 	if err != nil {
 		return Summary{}, fmt.Errorf("demo: generate dry-run recommendations: %w", err)
 	}
-	if len(report.Recommendations) != 5 {
-		return Summary{}, fmt.Errorf("demo: generated %d recommendations, want 5", len(report.Recommendations))
+	if len(report.Recommendations) != 8 {
+		return Summary{}, fmt.Errorf("demo: generated %d recommendations, want 8", len(report.Recommendations))
 	}
 
 	hits := map[string]bool{}
@@ -531,7 +556,7 @@ func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) 
 			rules = append(rules, id)
 		}
 	}
-	for _, id := range []string{"LLM-001", "LLM-002", "LLM-004", "HT-001", "AGT-001"} {
+	for _, id := range []string{"LLM-001", "LLM-002", "LLM-004", "HT-001", "AGT-001", "MCP-001", "MCP-002"} {
 		if !hits[id] {
 			return Summary{}, fmt.Errorf("demo: missing expected observation %s", id)
 		}

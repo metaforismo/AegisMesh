@@ -101,7 +101,7 @@ func printValidateSummary(w io.Writer, cfg *config.Config) {
 		case config.SensorKindTCP:
 			extra = fmt.Sprintf("%d tcp_rule(s)", len(s.TCPResponseRule))
 		case config.SensorKindMCP:
-			extra = fmt.Sprintf("%d tool(s)", len(s.Tools))
+			extra = fmt.Sprintf("%d tool(s)", len(s.Tools)+config.MCPEnvironmentToolCount(s.Environment))
 		case config.SensorKindSSH:
 			extra = "synthetic-auth/no-channels"
 		}
@@ -275,7 +275,7 @@ func buildEffectiveReport(cfg *config.Config) effectiveReport {
 		s := &cfg.Sensors[i]
 		ss := sensorSummary{ID: s.ID, Kind: s.Kind, Listen: s.Listen,
 			HTTPRules: len(s.Rules), TCPRules: len(s.TCPResponseRule),
-			Tools: len(s.Tools), Resources: len(s.Resources), Prompts: len(s.Prompts),
+			Tools: len(s.Tools) + config.MCPEnvironmentToolCount(s.Environment), Resources: len(s.Resources), Prompts: len(s.Prompts),
 			Fallback: s.Fallback != nil && s.Fallback.Enabled,
 		}
 		if s.Kind == config.SensorKindSSH {

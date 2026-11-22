@@ -1,6 +1,7 @@
 package evidenceindex
 
 import (
+	"github.com/metaforismo/aegismesh/internal/rulecatalog"
 	"sort"
 	"time"
 )
@@ -69,6 +70,8 @@ type SensorCount struct {
 
 // RuleCount counts retained observations associated with one catalog rule.
 type RuleCount struct {
+	// Title is static catalog prose.
+	Title string `json:"title"`
 	// RuleID is the catalog rule identifier.
 	RuleID string `json:"rule_id"`
 	// Events counts observations referencing the rule.
@@ -89,6 +92,8 @@ type NodeCount struct {
 
 // Overview combines bounded window aggregates and recent correlation signals.
 type Overview struct {
+	// Index distinguishes empty history from a quiet window.
+	Index Stats `json:"index"`
 	// ByNode is added by accepting hubs and absent on single-node consoles.
 	ByNode *[]NodeCount `json:"by_node,omitempty"`
 	// Window is the selected window label.
@@ -257,6 +262,7 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 	current, previous := newTotalCounts(), newTotalCounts()
 	sources := sourceCounts{}
 	overview := Overview{
+		Index:       index.Stats(),
 		Window:      window,
 		GeneratedAt: now.UTC().Format(time.RFC3339Nano),
 		Buckets:     make([]Bucket, bucketCount),
@@ -332,7 +338,10 @@ func (index *Index) Overview(window string, now time.Time) (Overview, error) {
 			ruleCount := rules[id]
 			ruleCount.RuleID = id
 			ruleCount.Events++
-			ruleCount.Severity = summary.Severity
+			if rule, ok := rulecatalog.Lookup(id); ok {
+				ruleCount.Title = rule.Summary
+				ruleCount.Severity = rule.Severity
+			}
 			rules[id] = ruleCount
 		}
 	}
@@ -370,18 +379,21 @@ func (index *Index) ByNode(window string, now time.Time) []NodeCount {
 	duration, _, _ := Window(window)
 	counts := map[string]NodeCount{}
 	for _, item := range index.snapshot(now.Add(-duration), now, "") {
-		summary := index.resolved(item.summary)
-		id, name := "local", ""
-		if summary.Node != nil {
-			id, name = summary.Node.ID, summary.Node.Name
+		id := origin(item.summary)
+		if id == "" {
+			id = "local"
 		}
 		count := counts[id]
-		count.ID, count.Name = id, name
+		count.ID = id
 		count.Events++
 		counts[id] = count
 	}
 	out := make([]NodeCount, 0, len(counts))
+	// Resolve mutable registry names once per origin, outside the index lock.
 	for _, count := range counts {
+		if count.ID != "local" && index.nodeName != nil {
+			count.Name = index.nodeName(count.ID)
+		}
 		out = append(out, count)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

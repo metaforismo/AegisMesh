@@ -57,7 +57,7 @@ make build
 
 `demo` accepts no config, path, port, credential, API key or destination.
 It uses synthetic data and OS-assigned loopback ports, verifies every recorded
-observation hash, produces five dry-run recommendations, then stops and removes
+observation hash, produces eight dry-run recommendations, then stops and removes
 its private temporary workspace. It requires no cloud service, `curl`, `nc`,
 privileged port or external network access. `make demo` invokes the same path.
 `demo --console` keeps the scenario available until Ctrl-C and prints the console
@@ -244,3 +244,15 @@ site/                           static landing page and design-system reference 
 Apache-2.0 licensed (see [LICENSE](LICENSE), [NOTICE](NOTICE)). Start with
 [CONTRIBUTING.md](CONTRIBUTING.md), the [release process](docs/RELEASE.md), and the
 [license/supply-chain policy](docs/license-policy.md). Agents: read [AGENTS.md](AGENTS.md) first.
+
+
+### Round 3 local backend additions
+
+The current uncommitted backend branch adds [synthetic MCP workspaces](docs/mcp-environments.md),
+[local SIEM event formats](docs/siem-export.md), on-demand `digest --since 24h|7d`,
+and the [console contract additions](docs/architecture/console-api.md#round-3-additions-local-uncommitted).
+These are bounded observation tools: no shell/filesystem-backed workspace,
+automatic delivery or new network egress. OTLP is format only; AegisMesh does
+not ship an OTLP exporter. The console/hub [review scope and fixes](docs/security-review-2026-11.md)
+and [synthetic performance measurements](docs/architecture/performance.md) are
+separate from production, release or deployment evidence. See [verification](docs/verification.md).

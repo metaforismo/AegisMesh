@@ -21,11 +21,15 @@ func NewExportCmd(env *Env) Command { return &exportCmd{env: env} }
 func (c *exportCmd) Name() string { return "export" }
 
 func (c *exportCmd) Usage() string {
-	return "export indicators --data-dir DIR --format stix|csv|txt [--since RFC3339] [--identity FILE ...] [--require-sealed]"
+	return "export <indicators|events> --data-dir DIR --format FORMAT [flags]"
 }
 
 func (c *exportCmd) Help() string {
-	return `Export proposed IP indicators from verified local evidence to stdout.
+	return `Export local SIEM event files or proposed IP indicators from verified evidence.
+
+  export events --data-dir DIR --format cef|syslog-rfc5424|otlp-json|ecs [--out FILE]
+
+OTLP is format only; AegisMesh does not ship an OTLP exporter. Output files must not exist.
 
   export indicators --data-dir DIR --format stix [--since RFC3339]
   export indicators --data-dir DIR --format txt [--identity FILE ...] [--require-sealed]
@@ -41,8 +45,11 @@ incomplete), 1 read/output/size failure, 2 invalid arguments.`
 }
 
 func (c *exportCmd) Run(ctx context.Context, args []string) error {
+	if len(args) > 0 && args[0] == "events" {
+		return c.events(ctx, args[1:])
+	}
 	if len(args) == 0 || args[0] != "indicators" {
-		return Usagef("choose export indicators")
+		return Usagef("choose export indicators or events")
 	}
 	var dataDir, format, since strictValueFlag
 	var identities identityFilesFlag

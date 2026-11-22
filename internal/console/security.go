@@ -175,8 +175,20 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 		credentials := caller{}
 		if role != "" {
 			var ok bool
+			bearer := r.Header.Get("Authorization") != ""
+			if bearer && !s.auth.LoginAvailable("bearer:"+remote(r)) {
+				s.failures.Inc()
+				w.Header().Set("Retry-After", "60")
+				fail(w, 429, "rate_limited", "authentication attempt limit reached")
+				return
+			}
 			credentials, ok = s.caller(r)
 			if !ok {
+				if bearer && !s.auth.AllowLogin("bearer:"+remote(r)) {
+					w.Header().Set("Retry-After", "60")
+					fail(w, 429, "rate_limited", "authentication attempt limit reached")
+					return
+				}
 				s.failures.Inc()
 				fail(w, 401, "unauthenticated", "valid operator authentication is required")
 				return

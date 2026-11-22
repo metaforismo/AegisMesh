@@ -62,7 +62,7 @@ func TestAIRules(t *testing.T) {
 }
 
 func TestMetadataAndRegistryAppendOnly(t *testing.T) {
-	want := []string{"PI-001", "PI-002", "EXF-001", "ESC-001", "OBS-001", "RES-001", "LLM-001", "LLM-002", "LLM-003", "LLM-004", "HT-001", "AGT-001"}
+	want := []string{"PI-001", "PI-002", "EXF-001", "ESC-001", "OBS-001", "RES-001", "LLM-001", "LLM-002", "LLM-003", "LLM-004", "HT-001", "AGT-001", "MCP-001", "MCP-002", "MCP-003"}
 	if !reflect.DeepEqual(KnownRuleIDs(), want) {
 		t.Fatal(KnownRuleIDs())
 	}

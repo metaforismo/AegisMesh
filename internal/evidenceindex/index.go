@@ -42,6 +42,7 @@ type Index struct {
 	selectors       [selectorCount]map[string]*list.List
 	history         string
 	key             [32]byte
+	streams         map[chan *StreamEvent]struct{}
 	subscribers     map[chan Summary]struct{}
 	size            observe.Gauge
 }
@@ -94,6 +95,7 @@ func clone(envelope event.Envelope) event.Envelope {
 
 func copySummary(summary Summary) Summary {
 	summary.RuleIDs = append([]string{}, summary.RuleIDs...)
+	summary.TokenIDs = append([]string{}, summary.TokenIDs...)
 	if summary.Node != nil {
 		node := *summary.Node
 		summary.Node = &node
@@ -209,6 +211,18 @@ func (index *Index) add(envelope event.Envelope, node string) {
 			close(subscriber)
 		}
 	}
+	if len(index.streams) > 0 {
+		shared := &StreamEvent{summary: index.resolved(summary)}
+		for channel := range index.streams {
+			select {
+			case channel <- shared:
+			default:
+				delete(index.streams, channel)
+				close(channel)
+			}
+		}
+	}
+
 }
 
 // SetHistory records whether authoritative backfill is complete, truncated, or unavailable.
@@ -416,7 +430,7 @@ func (index *Index) Subscribe() (<-chan Summary, func(), bool) {
 	index.mu.Lock()
 	defer index.mu.Unlock()
 
-	if len(index.subscribers) >= MaxStreams {
+	if len(index.subscribers)+len(index.streams) >= MaxStreams {
 		return nil, nil, false
 	}
 

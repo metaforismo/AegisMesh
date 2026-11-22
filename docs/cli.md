@@ -90,9 +90,10 @@ answers. Use it before any production-ish deployment.
 
 Run one self-contained synthetic scenario through real HTTP, TCP, MCP and
 authentication-only SSH listeners. Every listener is bound to `127.0.0.1` on an
-OS-assigned unprivileged port. The command checks readiness, performs one fixed
-interaction per sensor, drains the event bus, validates all four native
-envelopes and their observation hashes, generates five dry-run recommendations,
+OS-assigned unprivileged port. The command checks readiness, performs a fixed
+AI enumeration/replay and multi-step MCP workspace sequence plus TCP/SSH
+interactions, drains the event bus, validates all eleven native envelopes and
+their observation hashes, generates eight dry-run recommendations,
 stops the runtime and removes its private temporary workspace.
 
 The stable summary contains no event ID, timestamp, path, process ID, port,
@@ -460,9 +461,10 @@ plain offline text, so it does not fabricate request method/path/headers or
 load honeytoken configuration. The checked-in structured corpus exercises
 those additional contexts through `internal/ruletest.EvaluateInteraction`.
 
-The demo records eight synthetic observations (seven interactions and one MCP
-canary invocation), prints LLM-001, LLM-002, LLM-004, HT-001 and AGT-001, and
-produces five dry-run proposals. All traffic stays on its own loopback sensors.
+The demo records eleven synthetic observations (seven interactions and four MCP
+canary invocations), prints LLM-001, LLM-002, LLM-004, HT-001, AGT-001,
+MCP-001 and MCP-002, and
+produces eight dry-run proposals. All traffic stays on its own loopback sensors.
 
 ## aegismesh export indicators
 
@@ -498,3 +500,38 @@ they are replaced. `init --profile ai-decoy` generates fresh random markers and
 needs no replacement. Never substitute real provider credentials. Generated
 values use realistic shapes without a synthetic substring; no provider ever
 registers or validates them, and random collision impossibility is not claimed.
+
+## Local event formats and on-demand digest
+
+```sh
+aegismesh export events --data-dir ./data --format cef
+aegismesh export events --data-dir ./data --format syslog-rfc5424 --out ./observations.log
+aegismesh export events --data-dir ./data --format otlp-json --since 2026-11-01T00:00:00Z
+aegismesh export events --data-dir ./data --format ecs --identity ./identity.txt --require-sealed
+aegismesh digest --since 24h --data-dir ./data --format md
+aegismesh digest --since 7d --data-dir ./data --format json --investigations-dir ./data/console/tenants/default
+```
+
+`export events` requires a format and data directory. Stdout is default;
+`--out` creates a new owner-only file, refusing existing files or symlinks.
+Verification, deterministic ordering, severity mappings, escaping and limits
+are in [siem-export.md](siem-export.md). OTLP is format only; AegisMesh does
+not ship an OTLP exporter. No export command sends data to a collector.
+
+`digest` requires `--since 24h|7d`; defaults are `--data-dir ./data` and
+`--format md` (`json` is the other format). It reads at most 8192 verified
+local events and fails closed above that input budget. It compares adjacent
+half-open windows at one captured UTC clock time. Open investigations are read
+without writes from the directory containing `investigations.json`, default
+`DATA/console/tenants/default`; use `--investigations-dir` for non-default
+configuration/tenants. An unavailable directory produces null and an explicit
+limit; corrupt, nonprivate or interrupted state fails closed. It does not infer
+another tenant from evidence. Recommendations use up to 4096 current-window
+local events, at most 20 proposals, never execute. All inputs, exclusions and
+history limits are reported. CLI history is marked unavailable because the
+reader cannot establish completeness of retained/on-disk history. New sources
+means absent from the preceding sampled window, not first-ever contact.
+Markdown goes through the existing JSON-quoting neutraliser. There is no timer,
+scheduler, saved digest or automatic delivery. Encryption read flags match
+`export events`; checkpoint notices remain on stderr. Exit codes are 0 success,
+1 read/output/verification failure, 2 argument error.

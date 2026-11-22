@@ -44,6 +44,16 @@ HT-001    detection    finding critical a credential that exists only in decoy m
 AGT-001   detection    finding high    interaction followed an instruction embedded in decoy content; consistent with an LLM-driven client
           relates to mitre-atlas AML.T0051 LLM Prompt Injection
           relates to owasp-llm-2025 LLM01 Prompt Injection
+MCP-001   detection    finding medium  declared synthetic credential content was requested
+          relates to mitre-attack T1552 Unsecured Credentials
+          relates to mitre-atlas AML.T0055 Unsecured Credentials
+          relates to owasp-llm-2025 LLM02 Sensitive Information Disclosure
+MCP-002   detection    finding low     connection reached the configured MCP exploration depth
+          relates to mitre-atlas AML.T0053 LLM Plugin Compromise
+          relates to owasp-llm-2025 LLM06 Excessive Agency
+MCP-003   detection    finding medium  write or execution shaped MCP tool was requested; nothing was executed
+          relates to mitre-atlas AML.T0053 LLM Plugin Compromise
+          relates to owasp-llm-2025 LLM06 Excessive Agency
 COR-001   correlation  signal  -       repeated injection findings from one source
           relates to mitre-atlas AML.T0051 LLM Prompt Injection
           relates to owasp-llm-2025 LLM01 Prompt Injection

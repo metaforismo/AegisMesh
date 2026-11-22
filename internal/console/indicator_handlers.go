@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	"unicode/utf8"
 
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
@@ -21,65 +20,14 @@ func (s *Server) exportIndicators(w http.ResponseWriter, r *http.Request, creden
 		invalid(w)
 		return
 	}
-	scopes := 0
-	for _, key := range []string{"session", "source", "investigation", "window"} {
-		if _, present := values[key]; present {
-			if values.Get(key) == "" {
-				invalid(w)
-				return
-			}
-			scopes++
-		}
-	}
-	if scopes != 1 || len(values.Get("source")) > 255 || !utf8.ValidString(values.Get("source")) {
+	if !validExportScope(values) {
 		invalid(w)
 		return
 	}
 
-	snapshot := s.index.Analysis()
-	events := []evidenceindex.Summary{}
-	switch {
-	case values.Get("session") != "":
-		if !evidenceindex.ValidID(values.Get("session")) {
-			invalid(w)
-			return
-		}
-		found := false
-		for _, session := range evidenceview.Sessions(s.tenantID, snapshot.Events) {
-			if session.ID == values.Get("session") {
-				events, found = session.Events, true
-				break
-			}
-		}
-		if !found {
-			fail(w, 404, "not_found", "session is no longer indexed")
-			return
-		}
-	case values.Get("investigation") != "":
-		investigation, err := s.cases.Get(values.Get("investigation"))
-		if err != nil {
-			s.caseError(w, err)
-			return
-		}
-		events = investigationEvents(snapshot.Events, investigation.EventIDs)
-	case values.Get("source") != "":
-		for _, e := range snapshot.Events {
-			if e.Source == values.Get("source") {
-				events = append(events, e)
-			}
-		}
-	default:
-		duration, _, err := evidenceindex.Window(values.Get("window"))
-		if err != nil {
-			invalid(w)
-			return
-		}
-		now := time.Now().UTC()
-		for _, e := range snapshot.Events {
-			if !evidenceview.Time(e).Before(now.Add(-duration)) && !evidenceview.Time(e).After(now) {
-				events = append(events, e)
-			}
-		}
+	snapshot, events, ok := s.exportScope(w, r)
+	if !ok {
+		return
 	}
 	body, result, err := indicatorexport.Render(events, format, s.instanceID+":"+s.tenantID)
 	if err != nil {
@@ -133,4 +81,55 @@ func attachment(w http.ResponseWriter, body []byte, contentType, name string) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(200)
 	_, _ = w.Write(body)
+}
+
+func (s *Server) exportScope(w http.ResponseWriter, r *http.Request) (evidenceindex.Snapshot, []evidenceindex.Summary, bool) {
+	values := r.URL.Query()
+	snapshot := s.index.Analysis()
+	events := []evidenceindex.Summary{}
+	switch {
+	case values.Get("session") != "":
+		if !evidenceindex.ValidID(values.Get("session")) {
+			invalid(w)
+			return evidenceindex.Snapshot{}, nil, false
+		}
+		found := false
+		for _, session := range evidenceview.Sessions(s.tenantID, snapshot.Events) {
+			if session.ID == values.Get("session") {
+				events, found = session.Events, true
+				break
+			}
+		}
+		if !found {
+			fail(w, 404, "not_found", "session is no longer indexed")
+			return evidenceindex.Snapshot{}, nil, false
+		}
+	case values.Get("investigation") != "":
+		investigation, err := s.cases.Get(values.Get("investigation"))
+		if err != nil {
+			s.caseError(w, err)
+			return evidenceindex.Snapshot{}, nil, false
+		}
+		events = investigationEvents(snapshot.Events, investigation.EventIDs)
+	case values.Get("source") != "":
+		for _, e := range snapshot.Events {
+			if e.Source == values.Get("source") {
+				events = append(events, e)
+			}
+		}
+	default:
+		duration, _, err := evidenceindex.Window(values.Get("window"))
+		if err != nil {
+			invalid(w)
+			return evidenceindex.Snapshot{}, nil, false
+		}
+		now := time.Now().UTC()
+		for _, e := range snapshot.Events {
+			if !evidenceview.Time(e).Before(now.Add(-duration)) && !evidenceview.Time(e).After(now) {
+				events = append(events, e)
+			}
+		}
+	}
+
+	return snapshot, events, true
 }

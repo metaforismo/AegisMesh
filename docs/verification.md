@@ -13,8 +13,78 @@ does not turn an unavailable local command into a local PASS.
 Dated entries are records of the state when they were written. Words such as
 "uncommitted", "candidate", "local" or "open, unmerged" in them describe that
 moment and are not rewritten; headings carry "(merged as #NN)" where a PR has
-since merged. Current merge status is in the 2026-11-16 audit entry directly
-below.
+since merged. Historical merge status is in the 2026-11-16 audit entry; the
+new local uncommitted slice is recorded first.
+
+## 2026-11-22 — round 3 backend (local, uncommitted)
+
+Branch `feat/decoy-environments-siem`, initial clean worktree at
+`29c6f421bfe0c52e87ebc27438dbe37bcf76515b`. All changes remain uncommitted.
+No push, tag, PR, merge, release, deployment or external provider/SIEM test was
+performed. `go.mod`, `go.sum`, UI and dev mock are unchanged. Machine: Apple M3,
+Darwin arm64, macOS 26.5.2 (25F84), Go 1.27.4. Disk remained about 12–13 GiB free,
+above the 2 GiB cleanup threshold; no `go clean -cache` was needed. All Go suites
+and benchmarks ran sequentially with `GOFLAGS=-p=1`.
+
+Built and exercised: exact-map MCP file/env/query tools, strict config and
+bounds, connection sequence/redaction, disabled/observe-only detection, pinned
+catalog mappings/prose, multi-step demo, read-then-cross-sensor replay including
+worker mode, deterministic SIEM formats/goldens/escaping, CLI staged output,
+digest comparison/limits/Markdown, all new route roles and tenant isolation,
+origin-qualified event/session/export behavior and retained-source histograms.
+Full final JSON contracts are in `architecture/console-api.md`; ADR-0023 records
+ownership and alternatives. The real perimeter source review and failing-first
+findings are in `security-review-2026-11.md`.
+
+| Check | Exact command / result |
+| --- | --- |
+| PASS | `GOFLAGS=-p=1 make lint` — gofmt and go vet; golangci-lint unavailable and explicitly skipped by the Makefile |
+| PASS | `GOFLAGS=-p=1 make test` — full `go test -race ./...`; final run includes the long-marker sequence regression and bounded authentication-table expiry case |
+| PASS | `GOFLAGS=-p=1 make secrets-scan` — existing tracked-file heuristic scanner |
+| PASS | `GOFLAGS=-p=1 make ui-test` — 169 tests, zero failed/skipped, no UI/mock edits |
+| PASS | `GOFLAGS=-p=1 go test ./internal/eventexport -run '^$' -fuzz '^FuzzEscapers$' -fuzztime=15s -fuzzminimizetime=0 -parallel=1` — 447,981 executions in this local run |
+| PASS | `GOFLAGS=-p=1 go test ./internal/sensor/mcpsensor -run '^$' -fuzz '^FuzzEnvironmentLookup$' -fuzztime=15s -fuzzminimizetime=0 -parallel=1` — 246,654 executions in this local run |
+| PASS | `GOFLAGS=-p=1 make bench BENCH_TIME=100ms BENCH_COUNT=1` — complete existing sequential backend benchmark target, including the accepting-hub fixture |
+| PASS | `git diff --check`; no changes under `internal/consoleui`, `go.mod`, `go.sum` |
+| PASS | Supplemental heuristic scan of tracked **and untracked** current files: 548 files at scan time, zero matches; no Git staging/index change used |
+| NOT RUN | `make sbom` — deliberately skipped as requested because the existing generator is broken in linked worktrees |
+| NOT RUN | Hosted CI, real SIEM/collector interoperability, external OIDC, public saturation/p99, releases/deployment/publication |
+
+Full local command output is retained in [round3-verification.log](round3-verification.log).
+The supplemental secret heuristic is a tripwire, not proof of secret absence.
+The final first-party suites also run config/environment/escaper fuzz seeds;
+the whole existing `make fuzz-seed` target was not run, only the two new targets
+received timed fuzzing. The Makefile now includes both in future `fuzz-seed` runs.
+
+Failing-first receipts for Bearer throttling, full-table expiry, early hub
+rejection headers, raw event audit and long-marker redaction are retained under
+`performance/2026-11-22/*-red.txt`; the final full race suite passes. The first
+complete race run failed a newly added test that required a handled-tool result
+for duplicated arguments, even though strict parsing had correctly rejected the
+whole object. That test was corrected to require rejection/no secret content;
+the failing run is retained in the log, not counted as PASS. Earlier focused
+contract/golden count drift was corrected with explicit backend fixtures; no UI
+or mock contract was edited.
+
+Performance uses three matching before/after samples, with raw logs/ranges in
+[performance/2026-11-22](performance/2026-11-22/README.md). Accepting-hub overview:
+median 7,427,986 → 2,923,616 ns/op, 2,850,836 → 1,159,193 B/op,
+38,916 → 5,770 allocs/op; eight real enrolled synthetic identities, 14,167
+retained of 50,000 offered envelopes. This is read-side work with acceptance
+enabled/live name resolution, not concurrent ingestion load. SSE sixteen-client
+allocation per 100 events: 1,741,952 → 643,920 B/op, 13,432 → 5,967 allocs/op;
+paced wall time remains about 101 ms. Single-client bytes increase
+554,048 → 608,032. An exploratory SSE after sample failed its healthy-client
+assertion under variable load; retained and excluded, then all comparison cases
+passed on retry. No capacity, statistical-significance or blanket speedup claim.
+
+Limits retained deliberately: digest is on demand with no delivery/scheduler;
+OTLP is format only with no exporter; history/source novelty is sample-relative;
+CLI missing investigation state is null; local catalogs do not infer remote
+config or external body-file planting; COR-008 remains cross-sensor contact
+plus marker presentation, not same-sensor read proof; public/real-provider
+behavior and hard tenancy remain unverified. No new runtime egress or execution
+capability was introduced.
 
 ## 2026-11-16 — v0.2.0 release-readiness audit
 

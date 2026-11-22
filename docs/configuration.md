@@ -718,3 +718,15 @@ including critical HT-001; existing severity/action semantics remain intact.
 markers and random persona variation, local provider and no fallback. See
 [ai-threat-detection.md](ai-threat-detection.md) for response surfaces, exact
 predicates, resource limits, memory-only credential distinctness and caveats.
+
+## Synthetic MCP environment (local round 3)
+
+MCP sensors may declare optional `environment` with `files`, `env`, `queries`
+and required `depth_threshold` (2..32). Each file/env entry has `name`,
+`content`, optional file `token_id` and required env `token_id`. References
+must identify configured credential honeytokens present in the static content.
+Strict decoding, per-entry/aggregate caps, reserved tools and examples are in
+[mcp-environments.md](mcp-environments.md). No field names a real filesystem,
+environment, SQL, shell or network capability. `init --profile ai-decoy` now
+adds the workspace listener on loopback port 8002; all runtime responses stay
+deterministic after scaffold-time variation.

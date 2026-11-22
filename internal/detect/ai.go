@@ -215,7 +215,7 @@ func aiRules() []rule {
 // ObserveOnly keeps new observations out of existing response enforcement.
 func ObserveOnly(id RuleID) bool {
 	switch id {
-	case RuleAISurface, RuleMinimalProbe, RuleAIManagement, RuleProviderKey, RuleHoneytoken, RuleAgentCanary:
+	case RuleAISurface, RuleMinimalProbe, RuleAIManagement, RuleProviderKey, RuleHoneytoken, RuleAgentCanary, RuleMCPSecret, RuleMCPDepth, RuleMCPWrite:
 		return true
 	}
 	return false

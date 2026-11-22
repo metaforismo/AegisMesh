@@ -60,3 +60,28 @@ func (index *Index) LocalEvidence(ids []string) ([]event.Envelope, int, error) {
 	}
 	return envelopes, missing, nil
 }
+
+// ExportEvidence returns origin-qualified copies with no related-event traversal.
+// Missing references fail the entire download rather than silently reducing scope.
+func (index *Index) ExportEvidence(selected []Summary) ([]event.OriginEnvelope, error) {
+	if len(selected) > AnalysisLimit {
+		return nil, ErrQuery
+	}
+	index.mu.RLock()
+	defer index.mu.RUnlock()
+	out := make([]event.OriginEnvelope, 0, len(selected))
+	bytes := 0
+	for _, summary := range selected {
+		item := index.ids[originKey(summary.ID, origin(summary))]
+		if item == nil {
+			return nil, ErrQuery
+		}
+		stored := item.Value.(*entry)
+		bytes += len(stored.envelope.Observation) + 1024
+		if bytes > 2<<20 {
+			return nil, ErrQuery
+		}
+		out = append(out, event.OriginEnvelope{Envelope: clone(stored.envelope), NodeID: origin(summary)})
+	}
+	return out, nil
+}

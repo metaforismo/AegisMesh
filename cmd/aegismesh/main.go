@@ -29,6 +29,7 @@ func main() {
 		cli.NewInspectCmd(env),
 		cli.NewRecommendCmd(env),
 		cli.NewExportCmd(env),
+		cli.NewDigestCmd(env),
 		cli.NewMigrateCmd(env),
 		cli.NewRulesCmd(env),
 		cli.NewHoneytokenCmd(env),

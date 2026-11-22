@@ -176,6 +176,9 @@ func TestEveryRouteTenantIsolation(t *testing.T) {
 					}
 					path = strings.ReplaceAll(path, "{id}", id)
 					path = strings.ReplaceAll(path, "{source}", "127.0.0.1")
+					if path == "/api/v1/export/events" {
+						path += "?window=24h&format=cef"
+					}
 					if path == "/api/v1/export/indicators" {
 						path += "?window=24h&format=txt"
 					}

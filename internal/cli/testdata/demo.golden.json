@@ -4,7 +4,9 @@
     "LLM-002",
     "LLM-004",
     "HT-001",
-    "AGT-001"
+    "AGT-001",
+    "MCP-001",
+    "MCP-002"
   ],
   "schema": "aegismesh.demo/v1",
   "mode": "synthetic",
@@ -16,11 +18,11 @@
     "mcp",
     "ssh"
   ],
-  "events": 8,
+  "events": 11,
   "interactions": 7,
-  "canary_invocations": 1,
+  "canary_invocations": 4,
   "integrity_verified": true,
-  "recommendations": 5,
+  "recommendations": 8,
   "dry_run": true,
   "enforcement": false,
   "signal_not_incident": true,

@@ -56,8 +56,8 @@ func TestValidateEffectiveHumanAndJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(ob.String()), &rep); err != nil {
 		t.Fatalf("--json not pure JSON: %q", ob.String())
 	}
-	if rep.Detection.RulesEnabled != 12 {
-		t.Fatalf("expected all 12 rules active by default, got %d", rep.Detection.RulesEnabled)
+	if rep.Detection.RulesEnabled != 15 {
+		t.Fatalf("expected all 15 rules active by default, got %d", rep.Detection.RulesEnabled)
 	}
 	if len(rep.Sensors) < 3 {
 		t.Fatalf("expected http/tcp/mcp sensors in report: %+v", rep.Sensors)
@@ -121,7 +121,7 @@ func TestValidateEffectiveHonorsDisabledRules(t *testing.T) {
 	os.WriteFile(cfg2, raw, 0o600)
 
 	code, out, _ := run(t, "validate", "--config", cfg2, "--effective")
-	if code != 0 || !strings.Contains(out, "11/12 rules active") || !strings.Contains(out, "OBS-001") {
+	if code != 0 || !strings.Contains(out, "14/15 rules active") || !strings.Contains(out, "OBS-001") {
 		t.Fatalf("disabled rule not reflected: code=%d\n%s", code, out)
 	}
 

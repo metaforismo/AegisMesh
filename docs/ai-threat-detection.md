@@ -198,3 +198,15 @@ reports with proposed, unexecuted recommendations. No model, enforcement or
 console egress is added. The newest-8192 scan, 200-event detail cap, 2 MiB response
 limit, formulas, roles and final field shapes are in
 [console-api.md](architecture/console-api.md), ADR-0022 and [cli.md](cli.md).
+
+## Multi-step MCP environment (round 3, local)
+
+The AI-decoy scaffold additionally declares a bounded synthetic workspace on
+`127.0.0.1:8002`. Five fixed tools select static in-memory file/env/query content,
+record connection steps and scrubbed sequences, and append observe-only
+MCP-001..003 findings. Configuration, limits, exact lookup semantics and the
+existing HT-001/COR-008 replay boundary are in
+[mcp-environments.md](mcp-environments.md). The demo now contains a short
+multi-step MCP exploration (eleven total observations, eight dry-run proposals).
+Local SIEM files and on-demand periodic summaries add no delivery/egress edge;
+see [siem-export.md](siem-export.md) and [console-api.md](architecture/console-api.md).

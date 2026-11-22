@@ -344,13 +344,14 @@ type Sensor struct {
 	TCPResponseRule []TCPRule   `yaml:"tcp_rules,omitempty"        json:"tcp_rules,omitempty"`
 
 	// MCP fields.
-	MCPPath      string        `yaml:"path,omitempty"            json:"path,omitempty"`
-	ServerName   string        `yaml:"server_name,omitempty"     json:"server_name,omitempty"`
-	ServerVer    string        `yaml:"server_version,omitempty"  json:"server_version,omitempty"`
-	Instructions string        `yaml:"instructions,omitempty"    json:"instructions,omitempty"`
-	Tools        []MCPTool     `yaml:"tools,omitempty"           json:"tools,omitempty"`
-	Resources    []MCPResource `yaml:"resources,omitempty"       json:"resources,omitempty"`
-	Prompts      []MCPPrompt   `yaml:"prompts,omitempty"         json:"prompts,omitempty"`
+	Environment  *MCPEnvironment `yaml:"environment,omitempty" json:"environment,omitempty"`
+	MCPPath      string          `yaml:"path,omitempty"            json:"path,omitempty"`
+	ServerName   string          `yaml:"server_name,omitempty"     json:"server_name,omitempty"`
+	ServerVer    string          `yaml:"server_version,omitempty"  json:"server_version,omitempty"`
+	Instructions string          `yaml:"instructions,omitempty"    json:"instructions,omitempty"`
+	Tools        []MCPTool       `yaml:"tools,omitempty"           json:"tools,omitempty"`
+	Resources    []MCPResource   `yaml:"resources,omitempty"       json:"resources,omitempty"`
+	Prompts      []MCPPrompt     `yaml:"prompts,omitempty"         json:"prompts,omitempty"`
 
 	// SSH fields.
 	SSH *SSHConfig `yaml:"ssh,omitempty" json:"ssh,omitempty"`

@@ -1,0 +1,17 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/metaforismo/aegismesh/internal/console
+cpu: Apple M3
+BenchmarkSSEFanout/One-8         	       1	 105558917 ns/op	     98142 append-ns/event	       100.0 events/op	       935.9 events/s	  718968 B/op	    6111 allocs/op
+BenchmarkSSEFanout/One-8         	       1	 103763416 ns/op	     68005 append-ns/event	       100.0 events/op	       957.2 events/s	  677392 B/op	    6010 allocs/op
+BenchmarkSSEFanout/One-8         	       1	 101272292 ns/op	     47678 append-ns/event	       100.0 events/op	       986.7 events/s	  690320 B/op	    6053 allocs/op
+BenchmarkSSEFanout/Sixteen-8     	       1	 101279417 ns/op	     31180 append-ns/event	       100.0 events/op	       986.5 events/s	  732560 B/op	    6345 allocs/op
+BenchmarkSSEFanout/Sixteen-8     	       1	 101556541 ns/op	     99208 append-ns/event	       100.0 events/op	       983.8 events/s	  714352 B/op	    6222 allocs/op
+BenchmarkSSEFanout/Sixteen-8     	       1	 101302917 ns/op	     61071 append-ns/event	       100.0 events/op	       986.2 events/s	  702048 B/op	    6133 allocs/op
+--- FAIL: BenchmarkSSEFanout/Slow
+    benchmark_test.go:178: healthy subscriber lost events
+--- FAIL: BenchmarkSSEFanout
+FAIL
+exit status 1
+FAIL	github.com/metaforismo/aegismesh/internal/console	14.009s
+FAIL

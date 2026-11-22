@@ -8,6 +8,14 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Bounded synthetic MCP workspaces with exact in-memory lookup tools,
+  per-connection sequences, observe-only MCP-001..003 and a multi-step demo.
+- Local CEF/RFC5424/OTLP-JSON/ECS event files and audited analyst attachments;
+  OTLP is format only, with no exporter or new network egress.
+- On-demand Markdown/JSON digest, value-free configured decoy/honeytoken APIs,
+  static rule descriptions/guidance/observe-only flags, overview index occupancy
+  and catalog titles/severities, event/session links and retained-source gap histograms.
+
 - Tenant-scoped source sessions with capped timelines/phases, cadence and explicit
   automation observations; catalog framework relation counts, including zeros.
 - Analyst STIX 2.1/CSV/TXT indicator and Markdown observation-report attachments,
@@ -27,6 +35,12 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Fixed
 
+- Bounded invalid Bearer authentication attempts, security headers on hub
+  capacity rejection, and audit-before-disclosure for raw event detail reads;
+  see `docs/security-review-2026-11.md` for scope and failing-first tests.
+- Shared SSE observation encoding and per-origin overview name resolution,
+  measured locally with an accepting hub; no capacity/throughput claim.
+
 - Provider-shaped random honeytokens use unbiased crypto/rand selection; the
   checked-in AI-decoy template rejects unreplaced placeholders. No offline
   guarantee against a provider-side random collision is claimed.
@@ -36,11 +50,11 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Compatibility
 
-- Existing rule IDs/order and their enforcement actions are preserved. The six
+- Existing rule IDs/order and their enforcement actions are preserved. The nine
   appended detection rules never enforce. HT-001 adds `critical` severity to
   catalog/evidence; JSON rule metadata adds a `frameworks` list. Native finding
   metadata may include `ai_family`, `credential_class`, `token_id`.
-- Demo now records eight observations and five dry-run proposals. COR-007
+- Demo now records eleven observations and eight dry-run proposals. COR-007
   distinctness cannot be replayed from disk; no auth-attempt digests persist.
 
 ## [v0.2.0] — 2026-11-16

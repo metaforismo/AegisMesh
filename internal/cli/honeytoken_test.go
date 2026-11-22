@@ -64,6 +64,11 @@ func TestRulesGoldenFrameworkOutput(t *testing.T) {
 		if code != 0 {
 			t.Fatal(stderr)
 		}
+		if os.Getenv("AEGISMESH_UPDATE_RULE_GOLDENS") == "1" {
+			if err := os.WriteFile(filepath.Join("testdata", tc.file), []byte(out), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		want, err := os.ReadFile(filepath.Join("testdata", tc.file))
 		if err != nil {
 			t.Fatal(err)
