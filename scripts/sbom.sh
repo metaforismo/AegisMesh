@@ -23,8 +23,10 @@ esac
 out_dir=$(dirname "$out")
 mkdir -p "$out_dir"
 tmp=$(mktemp "$out.tmp.XXXXXX")
+tooldir=$(mktemp -d "${TMPDIR:-/tmp}/aegismesh-sbom.XXXXXX")
 cleanup() {
   rm -f "$tmp"
+  rm -rf "$tooldir"
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -36,6 +38,18 @@ goos=${GOOS:-$(go env GOOS)}
 goarch=${GOARCH:-$(go env GOARCH)}
 cgo_enabled=${CGO_ENABLED:-$(go env CGO_ENABLED)}
 
+# Build the generator for the host, then run it with the target's build
+# constraints. `go run` would honor GOOS/GOARCH and cross-compile the generator
+# itself, which cannot execute when the target differs from the host.
+GOPROXY=https://proxy.golang.org \
+GOSUMDB=sum.golang.org \
+GONOSUMDB= \
+GOOS= \
+GOARCH= \
+GOBIN="$tooldir" \
+GOFLAGS=-mod=readonly \
+go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0
+
 GOPROXY=https://proxy.golang.org \
 GOSUMDB=sum.golang.org \
 GONOSUMDB= \
@@ -43,7 +57,7 @@ GOOS="$goos" \
 GOARCH="$goarch" \
 CGO_ENABLED="$cgo_enabled" \
 GOFLAGS=-mod=readonly \
-go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0 \
+"$tooldir/cyclonedx-gomod" \
   app \
   -main ./cmd/aegismesh \
   -licenses \
@@ -60,5 +74,6 @@ go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0 \
   exit 1
 }
 mv "$tmp" "$out"
+rm -rf "$tooldir"
 trap - EXIT HUP INT TERM
 echo "sbom.sh: wrote $out (${goos}/${goarch}, cgo=${cgo_enabled})"

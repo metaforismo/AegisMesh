@@ -35,6 +35,11 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Fixed
 
+- Release SBOM generation for targets other than the build host. The generator
+  was started with `go run` under the target's `GOOS`/`GOARCH`, so it was
+  cross-compiled and could not execute; the tag-triggered release workflow
+  failed at the first cross-platform SBOM and published nothing. The generator
+  is now built for the host and run with the target's build constraints.
 - Bounded invalid Bearer authentication attempts, security headers on hub
   capacity rejection, and audit-before-disclosure for raw event detail reads;
   see `docs/security-review-2026-11.md` for scope and failing-first tests.
