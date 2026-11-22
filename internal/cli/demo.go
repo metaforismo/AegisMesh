@@ -26,9 +26,10 @@ func (c *demoCmd) Help() string {
 	return `Run a self-contained, synthetic AegisMesh scenario on loopback.
 
 The command starts HTTP, TCP, MCP and authentication-only SSH sensors on
-OS-assigned unprivileged ports, drives one fixed interaction through each,
+OS-assigned unprivileged ports, drives synthetic interactions through each
+and an AI enumeration / one-token probe / honeytoken / agent marker sequence,
 verifies the stored evidence and its observation hashes, generates a dry-run
-recommendation, stops every listener, and removes its private temporary data.
+recommendations, stops every listener, and removes its private temporary data.
 
 With --console, retains the synthetic evidence on an OS-assigned loopback
 console until interrupted and prints a fresh admin token once. The embedded
@@ -88,6 +89,7 @@ func writeDemoHuman(output *bytes.Buffer, summary demo.Summary) {
 	fmt.Fprintf(output, "sensors: %s\n", strings.Join(summary.Sensors, ", "))
 	fmt.Fprintf(output, "evidence: %d observations (%d interaction, %d canary invocation)\n",
 		summary.Events, summary.Interactions, summary.CanaryInvocations)
+	fmt.Fprintf(output, "AI observations: %s\n", strings.Join(summary.DetectionRules, ", "))
 	fmt.Fprintln(output, "integrity: verified observation payload hashes")
 	fmt.Fprintf(output, "recommendations: %d dry-run proposal (no enforcement)\n", summary.Recommendations)
 	fmt.Fprintln(output, "semantics: observation, not incident")

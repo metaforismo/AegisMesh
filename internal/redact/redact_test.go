@@ -87,3 +87,59 @@ func TestSHA256HexKnownVector(t *testing.T) {
 		t.Fatalf("SHA256Hex(abc) = %s", got)
 	}
 }
+
+func TestProviderShapesAndMemoryOnlyAuthDigests(t *testing.T) {
+	for _, key := range []string{"sk-synthetic-example", "sk-ant-synthetic-example", "ghp_synthetic_example", "AKIA-SYNTHETIC-EXAMPLE"} {
+		if strings.Contains(Scrub("/path/"+key), key) {
+			t.Fatal("provider shape leaked")
+		}
+	}
+	a := AuthDigest("password", "ab", "c")
+	b := AuthDigest("password", "a", "bc")
+	if a == b || len(a) != 64 {
+		t.Fatal("digest framing is ambiguous")
+	}
+	headers := map[string][]string{"authorization": {"Basic YWI6Yw==", "Basic invalid!"}, "x-api-key": {"synthetic-key-example"}}
+	got := HTTPAuthAttempts(headers)
+	if len(got) != 2 || got[0] != a || got[1] != AuthDigest("key", "", "synthetic-key-example") {
+		t.Fatal("HTTP/SSH distinctness mismatch")
+	}
+}
+
+func FuzzHTTPAuthAttempts(f *testing.F) {
+	f.Add("Basic c3ludGhldGljOnR5cG8=")
+	f.Add("Bearer sk-synthetic-example")
+	f.Add("Basic invalid!")
+	f.Fuzz(func(t *testing.T, value string) {
+		if len(value) > 16385 {
+			return
+		}
+		attempts := HTTPAuthAttempts(map[string][]string{"authorization": {value}})
+		if len(attempts) > 1 {
+			t.Fatal("one header produced several attempts")
+		}
+		for _, digest := range attempts {
+			if len(digest) != 64 {
+				t.Fatal("unbounded digest")
+			}
+			for _, c := range digest {
+				if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+					t.Fatal("raw credential content escaped")
+				}
+			}
+		}
+	})
+}
+
+func TestPresentedKeyContextsRemoveWholeValues(t *testing.T) {
+	longKey := "sk-" + strings.Repeat("q", 400)
+	for _, tc := range []struct{ input, value string }{
+		{"AUTH ollama", "ollama"}, {" AUTH EMPTY ", "EMPTY"}, {"AUTH synthetic-user sk-xxxx", "sk-xxxx"},
+		{`{"key":"EMPTY"}`, "EMPTY"}, {"ollama", "ollama"}, {"AUTH " + longKey, longKey}, {longKey, longKey},
+	} {
+		scrubbed := Scrub(tc.input)
+		if strings.Contains(scrubbed, tc.value) {
+			t.Errorf("presented credential context was not fully scrubbed")
+		}
+	}
+}

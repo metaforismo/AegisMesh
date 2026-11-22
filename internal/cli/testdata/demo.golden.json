@@ -1,4 +1,11 @@
 {
+  "detection_rules": [
+    "LLM-001",
+    "LLM-002",
+    "LLM-004",
+    "HT-001",
+    "AGT-001"
+  ],
   "schema": "aegismesh.demo/v1",
   "mode": "synthetic",
   "network": "loopback-only",
@@ -9,11 +16,11 @@
     "mcp",
     "ssh"
   ],
-  "events": 4,
-  "interactions": 3,
+  "events": 8,
+  "interactions": 7,
   "canary_invocations": 1,
   "integrity_verified": true,
-  "recommendations": 1,
+  "recommendations": 5,
   "dry_run": true,
   "enforcement": false,
   "signal_not_incident": true,

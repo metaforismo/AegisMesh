@@ -32,7 +32,7 @@ func RunBuiltinWorker(ctx context.Context, input io.Reader, output io.Writer) er
 }
 
 func buildBuiltinSensor(d sensor.Deps, detection config.Detection) (sensor.Sensor, error) {
-	enforcer := policy.NewEnforcer(detection, d.Meter)
+	enforcer := policy.NewEnforcer(detection, d.Meter, d.Honeytokens...)
 	resolveBody := func(string) ([]byte, error) {
 		return nil, fmt.Errorf("sensorproc: worker cannot resolve body files")
 	}

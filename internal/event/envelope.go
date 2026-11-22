@@ -48,6 +48,10 @@ type Integrity struct {
 }
 
 type Envelope struct {
+	// AuthAttempts are memory-only digests for live correlation. JSON, storage,
+	// forwarding and exports must never serialize them.
+	AuthAttempts []string `json:"-"`
+
 	Schema         string          `json:"schema"`
 	ID             string          `json:"id"`
 	Time           time.Time       `json:"time"`

@@ -6,6 +6,28 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ## [Unreleased]
 
+### Added
+
+- `init --profile ai-decoy`: static synthetic Ollama, OpenAI-compatible,
+  LiteLLM and vLLM HTTP shapes with deployment variation and two fake markers;
+  no model, provider fallback or management backend.
+- Strict bounded `honeytokens` configuration, redaction before preview,
+  `honeytoken new`, and observe-only LLM-001..004, HT-001 and AGT-001 findings.
+- Opt-in COR-005..008 cadence, AI enumeration, memory-only credential
+  distinctness and cross-sensor replay observations, with validated thresholds.
+- Editorial framework references in the rule catalog, CLI and rules API;
+  pinned mapping table, synthetic benign/attack-shaped corpus, and an expanded
+  loopback-only demo. See ADR-0021 and `docs/ai-threat-detection.md`.
+
+### Compatibility
+
+- Existing rule IDs/order and their enforcement actions are preserved. The six
+  appended detection rules never enforce. HT-001 adds `critical` severity to
+  catalog/evidence; JSON rule metadata adds a `frameworks` list. Native finding
+  metadata may include `ai_family`, `credential_class`, `token_id`.
+- Demo now records eight observations and five dry-run proposals. COR-007
+  distinctness cannot be replayed from disk; no auth-attempt digests persist.
+
 ## [v0.2.0] — 2026-11-16
 
 This release adds a fourth (SSH) sensor, deterministic dry-run recommendations, optional evidence

@@ -86,6 +86,7 @@ func New(capacity int, meter observe.Meter) (*Index, error) {
 }
 
 func clone(envelope event.Envelope) event.Envelope {
+	envelope.AuthAttempts = nil // live distinctness metadata never belongs in an index
 	envelope.Observation = append(json.RawMessage(nil), envelope.Observation...)
 	envelope.Redaction.Rules = append([]string(nil), envelope.Redaction.Rules...)
 	return envelope

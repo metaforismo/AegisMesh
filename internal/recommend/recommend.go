@@ -28,7 +28,7 @@ const (
 	MaxLimit              = 1000
 	MaxEvidence           = 4096
 	MaxObservationBytes   = 64 << 10
-	MaxDetectionFindings  = 64
+	MaxDetectionFindings  = 128 // up to 64 token hits plus content/request rules
 	MaxSourceEventIDs     = 64
 	MaxRuleIDBytes        = 32
 	MaxActionBytes        = 32
@@ -375,10 +375,13 @@ type detectionBlock struct {
 }
 
 type detectionFinding struct {
-	RuleID     string `json:"rule_id"`
-	Severity   string `json:"severity"`
-	Confidence string `json:"confidence"`
-	Reason     string `json:"reason"`
+	AIFamily        string `json:"ai_family,omitempty"`
+	CredentialClass string `json:"credential_class,omitempty"`
+	TokenID         string `json:"token_id,omitempty"`
+	RuleID          string `json:"rule_id"`
+	Severity        string `json:"severity"`
+	Confidence      string `json:"confidence"`
+	Reason          string `json:"reason"`
 }
 
 type correlationObservation struct {
@@ -406,6 +409,9 @@ func parseDetection(fields map[string]json.RawMessage) ([]string, error) {
 	}
 	rules := make([]string, 0, len(block.Findings))
 	for _, finding := range block.Findings {
+		if !isBoundedString(finding.AIFamily, 64) || !isBoundedString(finding.CredentialClass, 64) || !isBoundedString(finding.TokenID, 64) {
+			return nil, errObservation
+		}
 		if !isBoundedString(finding.RuleID, MaxRuleIDBytes) {
 			return nil, errObservation
 		}

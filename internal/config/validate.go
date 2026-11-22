@@ -19,6 +19,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/egress"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 )
 
 var (
@@ -135,6 +136,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.validateProcessIsolation(); err != nil {
 		return err
+	}
+	if err := honeytoken.Validate(c.Honeytokens); err != nil {
+		return fmt.Errorf("%w: %w", errConfig, err)
 	}
 	if err := ValidateDetection(c.Detection); err != nil {
 		return fmt.Errorf("%w: %v", errConfig, err)
@@ -566,6 +570,23 @@ func (c *Config) ResolveExtensionManifestPath(rel string) (string, error) {
 // checks disabled rule ids against the engine's registry. A disabled section
 // may still be validated so typos never hide behind enabled=false.
 func ValidateCorrelation(c *Correlation) error {
+	cap := c.PerSourceEvents
+	if cap == 0 {
+		cap = DefaultCorrelationPerSrcEvents
+	}
+	for _, field := range []struct {
+		name       string
+		value, min int
+	}{{"automation_threshold", c.AutomationThreshold, 4}, {"credential_threshold", c.CredentialThreshold, 3}} {
+		value := field.value
+		if value == 0 {
+			value = 8
+		}
+		if value < field.min || value > cap {
+			return fmt.Errorf("correlation.%s must be within %d..per_source_events (0 = default 8)", field.name, field.min)
+		}
+	}
+
 	if len(c.DisabledRules) > 0 {
 		if err := correlate.ValidateRuleIDs(c.DisabledRules); err != nil {
 			return fmt.Errorf("correlation.disabled_rules: %v", err)

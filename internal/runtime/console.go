@@ -82,11 +82,12 @@ func (s *System) buildConsole() error {
 			}
 		}
 		rules = append(rules, console.Rule{
-			ID:       rule.ID,
-			Family:   rule.Family,
-			Title:    rule.Summary,
-			Severity: rule.Severity,
-			Enabled:  enabled,
+			ID:         rule.ID,
+			Frameworks: rule.Frameworks,
+			Family:     rule.Family,
+			Title:      rule.Summary,
+			Severity:   rule.Severity,
+			Enabled:    enabled,
 		})
 	}
 

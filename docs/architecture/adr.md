@@ -869,3 +869,61 @@ plans, independent deployments or self-service tenant creation. Timing classes
 for foreign IDs and absent IDs match, but constant-time HTTP response latency and
 absence of shared-resource inference are not claimed. Old bare-ID investigation
 references remain local-only; cross-node annotation semantics are deferred.
+## ADR-0021 — synthetic AI service decoys, honeytokens and editorial mappings
+
+**Status:** implemented in the uncommitted AI observation pack; verification is
+recorded in `docs/verification.md`. **Date:** 2026-11-22.
+
+**Context.** AI endpoint enumeration, small validation-shaped requests and
+instruction-following interactions are useful defensive observations. Request
+patterns alone cannot establish client identity, intent, stolen credentials or
+compromise. Existing sensors already own byte limits, static responses and
+redaction before the event bus; optional process workers preserve those seams.
+
+**Decision.** Reuse static HTTP rules for an `ai-decoy` scaffold. Generate only
+synthetic bodies, deployment persona variation and two crypto/rand markers.
+No inference or model/key management backend exists. Add a bounded, immutable
+literal honeytoken matcher through the injected policy enforcer. Sensors match
+separate acquired fields before preview truncation, retain only safe token ids
+in findings and replace values before evidence. Config is strictly decoded and
+validated (64 markers, 16..256-byte printable values, unique ids/values, slug
+ids, enumerated kinds). No configured regex, runtime-selected command/path,
+configuration mutation or enforcement action is introduced.
+
+Append LLM-001..004, HT-001 and AGT-001 after the published detection registry;
+all are observe-only even under aggressive existing severity actions. Append
+COR-005..008 to the existing bounded, opt-in correlation engine. Use event-time
+predicates, the existing cooldown and contributing event IDs. Cadence is not an
+AI attribution mechanism: scanners and scheduled clients may also match.
+Replay means the same peer host previously interacted with another sensor,
+not demonstrated disclosure by that sensor.
+
+Credential stuffing needs distinctness without retaining secrets. Carry
+length-framed SHA-256 digests only as ephemeral envelope metadata and private
+worker IPC, strip them before all storage/index/export/fan-out paths, and feed
+only the local correlation ring after a successful authoritative append. A
+stored COR-007 signal cannot be independently recomputed from saved credential
+values because neither values nor digests are saved. This explicit privacy
+tradeoff is preferable to durable password-verification material.
+
+Add catalog `frameworks` references from exactly the requested editorial
+ATT&CK/ATLAS/OWASP LLM 2025 table, with a pinned test covering every rule and
+empty cells. Expose them in CLI and console API; caller-owned slices cannot
+mutate the registry. Mappings mean "relates to", never coverage/completeness or
+compliance. AGT-001 mirrors a defender-planted instruction technique, not
+established attacker use. Runtime framework content is never fetched.
+
+**Rejected alternatives.** A bus-only matcher cannot recover dropped SSH
+credentials or truncated previews. Regexes from configured markers add no
+value over bounded literal matching. Persisting credential digests enables
+unnecessary offline guessing and increases disclosure. A new response engine
+or remote LLM adds execution/egress and state that static shapes do not need.
+
+**Consequences.** Fake marker secrecy and uniqueness within operator-owned decoy
+material are operational premises. A human or scanner can replay a marker.
+NAT groups clients; rotating addresses split them. Shared `/v1/*` paths cannot
+identify vLLM and default to `openai_compatible`. No unacquired, encoded or
+cross-field marker matching is claimed. Existing sensor limits, event/storage
+contracts and enforcement semantics for older rules are retained. New data is
+additive and no dependency is added. Exact predicates and the synthetic
+measurement scope are in `docs/ai-threat-detection.md`.

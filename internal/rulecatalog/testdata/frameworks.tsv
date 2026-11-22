@@ -1,0 +1,21 @@
+rule	mitre-attack	mitre-atlas	owasp-llm-2025
+PI-001		AML.T0051 LLM Prompt Injection;AML.T0054 LLM Jailbreak	LLM01 Prompt Injection
+PI-002	T1027 Obfuscated Files or Information	AML.T0051 LLM Prompt Injection	LLM01 Prompt Injection
+EXF-001	T1552 Unsecured Credentials	AML.T0057 LLM Data Leakage	LLM02 Sensitive Information Disclosure
+ESC-001	T1059 Command and Scripting Interpreter	AML.T0053 LLM Plugin Compromise	LLM06 Excessive Agency
+OBS-001	T1027 Obfuscated Files or Information		
+RES-001	T1499 Endpoint Denial of Service	AML.T0029 Denial of ML Service	LLM10 Unbounded Consumption
+LLM-001	T1595 Active Scanning	AML.T0006 Active Scanning	
+LLM-002	T1078 Valid Accounts	AML.T0012 Valid Accounts;AML.T0040 AI Model Inference API Access	LLM10 Unbounded Consumption
+LLM-003	T1496 Resource Hijacking	AML.T0034 Cost Harvesting	LLM10 Unbounded Consumption
+LLM-004	T1078 Valid Accounts	AML.T0012 Valid Accounts	
+HT-001	T1552 Unsecured Credentials;T1078 Valid Accounts	AML.T0055 Unsecured Credentials	LLM02 Sensitive Information Disclosure
+AGT-001		AML.T0051 LLM Prompt Injection	LLM01 Prompt Injection
+COR-001		AML.T0051 LLM Prompt Injection	LLM01 Prompt Injection
+COR-002	T1046 Network Service Discovery		
+COR-003	T1046 Network Service Discovery	AML.T0053 LLM Plugin Compromise	LLM06 Excessive Agency
+COR-004	T1595 Active Scanning	AML.T0006 Active Scanning	
+COR-005	T1595 Active Scanning		
+COR-006	T1595 Active Scanning	AML.T0006 Active Scanning	
+COR-007	T1110 Brute Force		
+COR-008	T1078 Valid Accounts	AML.T0012 Valid Accounts	LLM02 Sensitive Information Disclosure

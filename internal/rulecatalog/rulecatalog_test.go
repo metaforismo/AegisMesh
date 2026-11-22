@@ -75,7 +75,7 @@ func TestSeverityInvariantPerClass(t *testing.T) {
 		switch e.Class {
 		case ClassFinding:
 			switch e.Severity {
-			case "info", "low", "medium", "high":
+			case "info", "low", "medium", "high", "critical":
 			default:
 				t.Fatalf("finding %s has invalid severity %q", e.ID, e.Severity)
 			}
@@ -116,7 +116,7 @@ func TestEntryJSONShapeIsStable(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
 	}
-	wantKeys := map[string]bool{"id": true, "family": true, "class": true, "severity": true, "summary": true}
+	wantKeys := map[string]bool{"id": true, "family": true, "class": true, "severity": true, "summary": true, "frameworks": true}
 	if len(m) != len(wantKeys) || !reflect.DeepEqual(keySet(m), wantKeys) {
 		t.Fatalf("detection entry keys drifted: %v", m)
 	}

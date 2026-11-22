@@ -21,7 +21,9 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/detect"
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 	"github.com/metaforismo/aegismesh/internal/observe"
+	"github.com/metaforismo/aegismesh/internal/redact"
 )
 
 type Action string
@@ -68,6 +70,7 @@ const (
 // strings, never attacker data).
 type Enforcer struct {
 	engine *detect.Engine
+	tokens *honeytoken.Matcher
 	bySev  map[detect.Severity]Action
 
 	findings observe.LabeledCounter // label = stable rule id
@@ -81,7 +84,7 @@ type Enforcer struct {
 // NewEnforcer builds the shared enforcement layer from configuration. It
 // always returns a usable engine: when detection is disabled every rule is
 // inactive and all actions collapse to observe.
-func NewEnforcer(det config.Detection, m observe.Meter) *Enforcer {
+func NewEnforcer(det config.Detection, m observe.Meter, tokens ...honeytoken.Token) *Enforcer {
 	opts := detect.Options{
 		DisabledRules: det.DisabledRules,
 		MaxInputBytes: det.MaxInputBytes,
@@ -119,6 +122,7 @@ func NewEnforcer(det config.Detection, m observe.Meter) *Enforcer {
 	}
 	return &Enforcer{
 		engine:   detect.New(opts),
+		tokens:   honeytoken.New(tokens),
 		bySev:    actions,
 		findings: m.CounterVec("aegismesh_detect_findings_total", "detection rule hits", len(detect.KnownRuleIDs())),
 		actionsC: m.CounterVec("aegismesh_policy_actions_total", "policy actions applied", len(config.ValidActions)),
@@ -138,11 +142,19 @@ var severityRank = map[detect.Severity]int{
 // Evaluate runs detection and resolves one action. Deterministic per input;
 // safe for concurrent use across sensors.
 func (e *Enforcer) Evaluate(sensorID string, in detect.Input) Decision {
+	parts := in.RawParts
+	if parts == nil {
+		parts = []string{in.Text, in.Path, in.Body}
+	}
+	in.TokenMatches = e.tokens.Find(parts...)
 	findings := e.engine.Evaluate(in)
 	action := ActionObserve
 	top := -1
 	for _, f := range findings {
 		e.findings.Inc(string(f.RuleID))
+		if detect.ObserveOnly(f.RuleID) {
+			continue
+		}
 		if r := severityRank[f.Severity]; r > top {
 			top = r
 			action = e.bySev[f.Severity]
@@ -182,3 +194,7 @@ type volumeWindow struct {
 	start time.Time
 	count int
 }
+
+// Scrub removes synthetic markers before generic credential scrubbing and
+// truncation. Matching remains active even when detection findings are disabled.
+func (e *Enforcer) Scrub(s string) string { return redact.Scrub(e.tokens.Scrub(s)) }

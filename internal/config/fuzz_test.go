@@ -7,6 +7,8 @@ import (
 
 func FuzzParseConfig(f *testing.F) {
 	f.Add([]byte(minimalValid))
+	f.Add([]byte(minimalValid + "\nhoneytokens:\n - {id: synthetic-plant, value: synthetic-example-marker, kind: credential}\ncorrelation: {automation_threshold: 8, credential_threshold: 8}\n"))
+	f.Add([]byte(minimalValid + "\nhoneytokens:\n - {id: bad/id, value: tiny, kind: other}\ncorrelation: {automation_threshold: -1}\n"))
 	f.Add([]byte("api_version: bad\n"))
 	f.Add([]byte("api_version: aegismesh.io/v1alpha1\nsensors: [{id: x, kind: http, listen: \"1.2.3.4:1\"}]\n"))
 	f.Add([]byte{})

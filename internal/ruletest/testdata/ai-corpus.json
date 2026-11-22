@@ -1,0 +1,38 @@
+{
+ "benign": [
+  {"name":"browser root","input":{"Method":"GET","Path":"/","Headers":{"user-agent":["Mozilla/5.0"]}}},
+  {"name":"browser favicon","input":{"Method":"GET","Path":"/favicon.ico"}},
+  {"name":"browser style","input":{"Method":"GET","Path":"/assets/main.css"}},
+  {"name":"health check","input":{"Method":"GET","Path":"/healthz"}},
+  {"name":"uptime monitor","input":{"Method":"HEAD","Path":"/status","Headers":{"user-agent":["synthetic-uptime/1"]}}},
+  {"name":"ordinary API list","input":{"Method":"GET","Path":"/v1/orders?page=2"}},
+  {"name":"ordinary API post","input":{"Method":"POST","Path":"/v1/orders","Body":"{\"item\":\"paper\",\"quantity\":2}"}},
+  {"name":"normal SSH typo","input":{"Protocol":"ssh","Text":"alcie"}},
+  {"name":"normal SSH retry","input":{"Protocol":"ssh","Text":"synthetic-typo-pass"}},
+  {"name":"mention prompts","input":{"Text":"This guide describes prompts and API keys."}},
+  {"name":"mention path","input":{"Text":"The example refers to /v1/chat/completions and max_tokens = 1."}},
+  {"name":"mention placeholder","input":{"Text":"The guide calls this placeholder EMPTY or ollama."}},
+  {"name":"ordinary model list","input":{"Method":"GET","Path":"/v1/models"}},
+  {"name":"normal completion","input":{"Method":"POST","Path":"/v1/completions","Body":"{\"prompt\":\"Explain how photosynthesis works in a detailed paragraph.\",\"max_tokens\":128}"}},
+  {"name":"ordinary proxy health","input":{"Method":"GET","Path":"/health/liveliness"}},
+  {"name":"ordinary metrics","input":{"Method":"GET","Path":"/metrics"}},
+  {"name":"model version monitor","input":{"Method":"GET","Path":"/api/version"}},
+  {"name":"normal key placeholder client","input":{"Method":"GET","Path":"/v1/models","Headers":{"authorization":["Bearer EMPTY"]}}},
+  {"name":"documentation JSON","input":{"Method":"POST","Path":"/documentation","Body":"{\"prompt\":\"hi\",\"max_tokens\":1}"}},
+  {"name":"generic TCP ping","input":{"Protocol":"tcp","Text":"PING"}},
+  {"name":"ordinary auth","input":{"Method":"GET","Path":"/account","Headers":{"authorization":["Basic c3ludGhldGljOnR5cG8="]}}},
+  {"name":"long legitimate prompt tiny budget","input":{"Method":"POST","Path":"/v1/chat/completions","Body":"{\"messages\":[{\"role\":\"user\",\"content\":\"Classify this synthetic support request into the appropriate product category.\"}],\"max_tokens\":3}"}},
+  {"name":"static text prompt word","input":{"Text":"Prompts are displayed in the help page."}},
+  {"name":"browser resource","input":{"Method":"GET","Path":"/robots.txt"}}
+ ],
+ "attack_shaped": [
+  {"name":"enumeration","input":{"Method":"GET","Path":"/api/tags"},"want":["LLM-001"]},
+  {"name":"one-token validation","input":{"Method":"POST","Path":"/v1/chat/completions","Body":"{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}"},"want":["LLM-001","LLM-002"]},
+  {"name":"ollama minimal validation","input":{"Method":"POST","Path":"/api/generate","Body":"{\"prompt\":\"hi\",\"options\":{\"num_predict\":1}}"},"want":["LLM-002"]},
+  {"name":"model management","input":{"Method":"POST","Path":"/api/pull","Body":"{\"name\":\"synthetic-model\"}"},"want":["LLM-003"]},
+  {"name":"key generation","input":{"Method":"POST","Path":"/key/generate","Body":"{}"},"want":["LLM-003"]},
+  {"name":"provider-shaped presentation","input":{"Method":"GET","Path":"/v1/models","Headers":{"authorization":["Bearer sk-synthetic-example"]}},"want":["LLM-004"]},
+  {"name":"decoy credential replay","input":{"Method":"POST","Path":"/login","Body":"{\"password\":\"synthetic-corpus-credential\"}"},"want":["HT-001"]},
+  {"name":"canary followup","input":{"Method":"GET","Path":"/diagnostic/synthetic-corpus-agent-marker"},"want":["AGT-001"]}
+ ]
+}

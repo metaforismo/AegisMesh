@@ -494,3 +494,16 @@ returns 406. `/` (index.html) stays `no-store` with no ETag or compression.
 starts, length and classification fields as `overview.buckets`, including zeros.
 When more sensor IDs occur across a fleet, only the first 64 represented in
 newest-first evidence are detailed; the main totals still include all events.
+
+
+### AI pack rule metadata addition (uncommitted)
+
+`GET /api/v1/rules` adds `frameworks: [{framework, id, name}]` to each Rule,
+using the same catalog as `rules list`/`explain`. References are editorial
+"relates to" mappings, not coverage or completeness claims. AGT-001 reflects
+the defender-mirrored technique; it does not prove attacker use. HT-001 has
+severity `critical`; all six appended AI/token rules are observe-only.
+Native event observations may contain safe `ai_family`, `credential_class`,
+and `token_id` finding metadata. Auth-attempt digests are memory-only and are
+excluded from the index, API envelope JSON and all durable/exported evidence.
+See [../ai-threat-detection.md](../ai-threat-detection.md).

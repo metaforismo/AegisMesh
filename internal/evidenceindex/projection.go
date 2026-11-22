@@ -202,7 +202,7 @@ func Project(envelope event.Envelope) (Summary, []Finding, []string) {
 		var rawFindings []json.RawMessage
 		if raw := detection["findings"]; len(raw) > 0 && json.Unmarshal(raw, &rawFindings) == nil {
 			seen := map[string]bool{}
-			for _, raw := range rawFindings[:min(len(rawFindings), 64)] {
+			for _, raw := range rawFindings[:min(len(rawFindings), 128)] {
 				finding := object(raw)
 				id := text(finding, "rule_id", 32)
 				rule, ok := rulecatalog.Lookup(id)

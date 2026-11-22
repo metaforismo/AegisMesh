@@ -236,6 +236,12 @@ func (c *Config) applyDefaults() {
 	if c.Webhook.MaxRetries == 0 {
 		c.Webhook.MaxRetries = DefaultWebhookMaxRetries
 	}
+	if c.Correlation.AutomationThreshold == 0 {
+		c.Correlation.AutomationThreshold = 8
+	}
+	if c.Correlation.CredentialThreshold == 0 {
+		c.Correlation.CredentialThreshold = 8
+	}
 	if c.Correlation.WindowSeconds == 0 {
 		c.Correlation.WindowSeconds = DefaultCorrelationWindowSecs
 	}

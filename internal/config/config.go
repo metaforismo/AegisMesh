@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 	"gopkg.in/yaml.v3"
 )
 
@@ -119,20 +120,21 @@ const (
 
 // Config is the root configuration document.
 type Config struct {
-	APIVersion  string      `yaml:"api_version" json:"api_version"`
-	Runtime     Runtime     `yaml:"runtime"     json:"runtime"`
-	Storage     Storage     `yaml:"storage"     json:"storage"`
-	Fleet       Fleet       `yaml:"fleet,omitempty" json:"fleet,omitempty"`
-	Console     Console     `yaml:"console,omitempty" json:"console,omitempty"`
-	Admin       Admin       `yaml:"admin"       json:"admin"`
-	Logging     Logging     `yaml:"logging"     json:"logging"`
-	Security    Security    `yaml:"security"    json:"security"`
-	LLM         LLM         `yaml:"llm"         json:"llm"`
-	Detection   Detection   `yaml:"detection,omitempty" json:"detection,omitempty"`
-	Extensions  Extensions  `yaml:"extensions,omitempty" json:"extensions,omitempty"`
-	Webhook     Webhook     `yaml:"webhook,omitempty"    json:"webhook,omitempty"`
-	Correlation Correlation `yaml:"correlation,omitempty" json:"correlation,omitempty"`
-	Sensors     []Sensor    `yaml:"sensors"    json:"sensors"`
+	Honeytokens []honeytoken.Token `yaml:"honeytokens,omitempty" json:"honeytokens,omitempty"`
+	APIVersion  string             `yaml:"api_version" json:"api_version"`
+	Runtime     Runtime            `yaml:"runtime"     json:"runtime"`
+	Storage     Storage            `yaml:"storage"     json:"storage"`
+	Fleet       Fleet              `yaml:"fleet,omitempty" json:"fleet,omitempty"`
+	Console     Console            `yaml:"console,omitempty" json:"console,omitempty"`
+	Admin       Admin              `yaml:"admin"       json:"admin"`
+	Logging     Logging            `yaml:"logging"     json:"logging"`
+	Security    Security           `yaml:"security"    json:"security"`
+	LLM         LLM                `yaml:"llm"         json:"llm"`
+	Detection   Detection          `yaml:"detection,omitempty" json:"detection,omitempty"`
+	Extensions  Extensions         `yaml:"extensions,omitempty" json:"extensions,omitempty"`
+	Webhook     Webhook            `yaml:"webhook,omitempty"    json:"webhook,omitempty"`
+	Correlation Correlation        `yaml:"correlation,omitempty" json:"correlation,omitempty"`
+	Sensors     []Sensor           `yaml:"sensors"    json:"sensors"`
 
 	// SourcePath records where this config was loaded from; never decoded from YAML.
 	SourcePath string `yaml:"-" json:"-"`
@@ -303,11 +305,13 @@ type Webhook struct {
 func (w Webhook) IsEnabled() bool { return w.Enabled != nil && *w.Enabled }
 
 // Correlation configures the bounded in-memory correlation engine that turns
-// per-source observation streams into signals (COR-001..COR-004). Zero values
+// per-source observation streams into signals (COR-001..COR-008). Zero values
 // mean defaults; bounds mirror internal/correlate.Options clamps. Signals are
 // observations for operators, never automated enforcement inputs.
 type Correlation struct {
-	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	AutomationThreshold int   `yaml:"automation_threshold,omitempty" json:"automation_threshold,omitempty"`
+	CredentialThreshold int   `yaml:"credential_threshold,omitempty" json:"credential_threshold,omitempty"`
+	Enabled             *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	// DisabledRules lists rule ids (e.g. COR-004) to suppress; unknown ids
 	// are rejected at load time so typos never silently disable nothing.
 	DisabledRules []string `yaml:"disabled_rules,omitempty" json:"disabled_rules,omitempty"`

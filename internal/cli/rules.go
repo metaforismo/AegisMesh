@@ -28,7 +28,7 @@ func (c *rulesCmd) Usage() string {
 func (c *rulesCmd) Help() string {
 	return `List, explain, and test every rule the binaries can emit, read-only.
 
-Detection findings (PI-*/EXF-*/ESC-*/OBS-*/RES-*) and correlation signals
+Detection findings (PI/EXF/ESC/OBS/RES/LLM/HT/AGT) and correlation signals
 (COR-*) come from one catalog derived from the owning engine registries.
 Output order is deterministic; --json emits stable keys.
 
@@ -104,6 +104,9 @@ func (c *rulesCmd) list(args []string) error {
 			sev = "-"
 		}
 		fmt.Fprintf(c.env.Out, "%-9s %-12s %-7s %-7s %s\n", e.ID, e.Family, e.Class, sev, e.Summary)
+		for _, f := range e.Frameworks {
+			fmt.Fprintf(c.env.Out, "          relates to %s %s %s\n", f.Framework, f.ID, f.Name)
+		}
 	}
 	return nil
 }
@@ -147,6 +150,9 @@ func (c *rulesCmd) explain(args []string) error {
 	fmt.Fprintf(c.env.Out, "CLASS:     %s\n", entry.Class)
 	fmt.Fprintf(c.env.Out, "SEVERITY:  %s\n", sev)
 	fmt.Fprintf(c.env.Out, "SUMMARY:   %s\n", entry.Summary)
+	for _, f := range entry.Frameworks {
+		fmt.Fprintf(c.env.Out, "RELATES TO: %s %s %s\n", f.Framework, f.ID, f.Name)
+	}
 	return nil
 }
 

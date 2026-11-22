@@ -13,6 +13,7 @@ admin:      { enabled, listen }       # loopback-only invariant
 security:   { allow_public_bind, allow_privileged_ports }
 storage:    { max_file_bytes, max_event_bytes, encryption?, retention: { max_events, max_age_days } }
 llm:        { provider, system_prompt?, api_key_env?, base_url? }
+honeytokens: [ { id, value, kind } ] # optional synthetic markers; see below
 sensors:    [ ... ]                   # 1..64 entries
 ```
 
@@ -236,8 +237,10 @@ Each sensor instance generates one Ed25519 host key and keeps it in memory.
 There is deliberately no `host_key_file`, host-key path, or persisted key
 configuration; reconstructing the sensor rotates the advertised key. Password
 and public-key callbacks complete synthetic authentication only. They do not
-validate, reuse, compare, hash, log, or retain real credentials. Usernames and
-credential contents are omitted from evidence entirely, not hashed.
+validate, reuse or log credentials. Bounded username/password tuples now produce
+memory-only distinctness digests for live correlation (ADR-0021). Usernames,
+credential contents and those auth-attempt digests are omitted from evidence;
+only configured synthetic-marker ids may appear in findings.
 
 After synthetic authentication, every channel and global request is rejected.
 The sensor exposes no shell, PTY, subsystem, SFTP, forwarding, filesystem, or
@@ -357,11 +360,15 @@ correlation:
   window_seconds: 600           # event-time lookback per source (60..3600)
   per_source_events: 64         # ring cap per source (8..512)
   max_sources: 4096             # tracked sources, oldest-first eviction (64..65536)
+  automation_threshold: 8        # COR-005: 4..per_source_events; 0 = default 8
+  credential_threshold: 8        # COR-007: 3..per_source_events; 0 = default 8
 ```
 
 Turns per-source observation streams into signals — repeated injection
 (COR-001), protocol hopping (COR-002), tool probing (COR-003), sustained
-recon (COR-004). Semantics:
+recon (COR-004), cadence (COR-005), AI-family enumeration (COR-006), credential
+attempt distinctness (COR-007) and cross-sensor decoy-key replay (COR-008).
+See the exact new predicates below and in ai-threat-detection.md. Semantics:
 
 - **Event-time deterministic**: same input sequence always yields the same
   signals; late-but-in-window arrivals still count.
@@ -687,3 +694,27 @@ There is no cross-tenant administrator view. Logical isolation shares process,
 OS user, data directory, hub encryption recipient and signing/egress policy;
 host/process compromise crosses tenants. No per-tenant keys, billing, rate plans
 or self-service creation are included. See ADR-0019/0020 and the exact API contract.
+
+## Synthetic honeytokens and AI observations
+
+`honeytokens` is an optional top-level list of at most 64 `{id, value, kind}`
+entries. IDs are unique `[a-z0-9][a-z0-9-]{0,63}` slugs; values are unique
+16..256 printable ASCII bytes without spaces. `kind` is exactly `credential`
+or `agent_canary`; unknown fields fail validation. Never use real credentials.
+Inbound acquired bytes are matched literally; token ids, not values, are kept
+in HT-001/AGT-001 findings. Values are scrubbed before preview truncation,
+including when detection is disabled.
+
+`correlation.automation_threshold` (4..`per_source_events`) and
+`correlation.credential_threshold` (3..`per_source_events`) each default to 8
+when omitted or zero. They control COR-005 cadence and COR-007 distinct auth
+attempts. COR-006 requires two AI families; COR-008 requires a prior interaction
+from the same source with another sensor. `correlation.disabled_rules` now
+accepts COR-001..COR-008; `detection.disabled_rules` additionally accepts
+LLM-001..LLM-004, HT-001 and AGT-001. All new detection rules are observe-only,
+including critical HT-001; existing severity/action semantics remain intact.
+
+`init --profile ai-decoy` generates static AI HTTP responses with two synthetic
+markers and random persona variation, local provider and no fallback. See
+[ai-threat-detection.md](ai-threat-detection.md) for response surfaces, exact
+predicates, resource limits, memory-only credential distinctness and caveats.

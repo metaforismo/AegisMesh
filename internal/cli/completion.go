@@ -23,7 +23,7 @@ Install, e.g.:
   fish: aegismesh completion fish > ~/.config/fish/completions/aegismesh.fish`
 }
 
-var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "rules", "migrate", "version", "completion", "ext", "console"}
+var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "rules", "honeytoken", "migrate", "version", "completion", "ext", "console"}
 
 func (c *completionCmd) Run(_ context.Context, args []string) error {
 	if len(args) != 1 {
@@ -69,7 +69,7 @@ _aegismesh_completions() {
         --data-dir) COMPREPLY=( $(compgen -d -- "$cur") ) ;;
         --identity) COMPREPLY=( $(compgen -f -- "$cur") ) ;;
         --classification) COMPREPLY=( $(compgen -W "interaction canary_invocation correlation_signal" -- "$cur") ) ;;
-        --rule) COMPREPLY=( $(compgen -W "PI-001 PI-002 EXF-001 ESC-001 OBS-001 RES-001 COR-001 COR-002 COR-003 COR-004" -- "$cur") ) ;;
+        --rule) COMPREPLY=( $(compgen -W "PI-001 PI-002 EXF-001 ESC-001 OBS-001 RES-001 LLM-001 LLM-002 LLM-003 LLM-004 HT-001 AGT-001 COR-001 COR-002 COR-003 COR-004 COR-005 COR-006 COR-007 COR-008" -- "$cur") ) ;;
         *) COMPREPLY=( $(compgen -W "--data-dir --identity --require-sealed --limit --rule --sensor --classification --json" -- "$cur") ) ;;
       esac ;;
     migrate)

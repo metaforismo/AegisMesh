@@ -143,3 +143,20 @@ multi-tenancy, billing, public APIs or hosted operation ship today.
 - Treating a decoy activation or recommendation as proof of an incident.
 - Production-readiness, false-positive or compliance-certification claims
   without explicit independent evidence.
+
+
+## AI observation pack — local implementation for review
+
+- [x] Static synthetic AI-service profile with randomized scaffold persona and
+  fake markers; no inference backend or model/key-management execution.
+- [x] Bounded literal honeytokens, safe token-id evidence and generation CLI.
+- [x] Append-only observe-only LLM/HT/AGT findings and COR-005..008 correlations.
+- [x] Pinned editorial framework references in CLI and console API; structured
+  synthetic corpus and loopback demo extension.
+
+Verification and uncommitted status are recorded in `verification.md`.
+Follow-up: broader independent synthetic/field evaluation before any detection
+quality claim; no false-positive, attribution or coverage assertion follows
+from this implementation. Credential distinctness remains intentionally
+memory-only. Multi-step MCP environments, cross-node correlation and actual
+provider interoperability are separate work; this pack does not implement them.

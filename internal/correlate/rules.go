@@ -3,6 +3,7 @@ package correlate
 import (
 	"sort"
 	"strings"
+	"time"
 )
 
 // candidate is one rule's verdict for the current ring state.
@@ -23,6 +24,7 @@ func (e *Engine) evaluate(trigger Event, st *sourceState) []Signal {
 		e.checkProtocolHopping(st),
 		e.checkToolProbing(st),
 		e.checkSustainedRecon(st),
+		e.checkCadence(trigger, st), e.checkAIEnumeration(trigger, st), e.checkStuffing(trigger, st), e.checkReplay(trigger, st),
 	}
 	var out []Signal
 	for _, c := range cands { // fixed order => deterministic signal order
@@ -122,4 +124,96 @@ func capEvents(evs []Event) []Event {
 		return evs
 	}
 	return evs[len(evs)-MaxPerSourceEvents:]
+}
+
+// New rules consider [trigger-window, trigger], excluding future events on
+// out-of-order arrival without altering the historical rules' semantics.
+func (e *Engine) past(trigger Event, st *sourceState) []Event {
+	var events []Event
+	cutoff := trigger.Time.Add(-e.opts.Window)
+	for _, ev := range st.events {
+		if !ev.Time.After(trigger.Time) && !ev.Time.Before(cutoff) {
+			events = append(events, ev)
+		}
+	}
+	return events
+}
+func (e *Engine) checkCadence(trigger Event, st *sourceState) candidate {
+	events := e.past(trigger, st)
+	sort.SliceStable(events, func(i, j int) bool { return events[i].Time.Before(events[j].Time) })
+	n := e.opts.AutomationThreshold
+	if len(events) < n {
+		return candidate{id: RuleAutomationCadence}
+	}
+	events = events[len(events)-n:]
+	gaps := make([]time.Duration, 0, n-1)
+	for i := 1; i < len(events); i++ {
+		gaps = append(gaps, events[i].Time.Sub(events[i-1].Time))
+	}
+	sorted := append([]time.Duration(nil), gaps...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	median := sorted[len(sorted)/2]
+	if median < time.Second || median > 30*time.Second {
+		return candidate{id: RuleAutomationCadence}
+	}
+	// At most one gap may differ from the median by more than 25%.
+	outliers := 0
+	for _, gap := range gaps {
+		delta := gap - median
+		if delta < 0 {
+			delta = -delta
+		}
+		if delta > median/4 {
+			outliers++
+		}
+	}
+	return candidate{RuleAutomationCadence, outliers <= 1, events}
+}
+func (e *Engine) checkAIEnumeration(trigger Event, st *sourceState) candidate {
+	seen := map[string]bool{}
+	var events []Event
+	for _, ev := range e.past(trigger, st) {
+		if ev.AIFamily != "" && !seen[string(ev.AIFamily)] {
+			seen[string(ev.AIFamily)] = true
+			events = append(events, ev)
+		}
+	}
+	return candidate{RuleAIEnumeration, len(seen) >= 2, events}
+}
+func (e *Engine) checkStuffing(trigger Event, st *sourceState) candidate {
+	seen := map[string]bool{}
+	var events []Event
+	for _, ev := range e.past(trigger, st) {
+		if ev.SensorKind != "http" && ev.SensorKind != "ssh" {
+			continue
+		}
+		contributes := false
+		for _, digest := range ev.AuthAttempts {
+			if digest != "" && !seen[digest] {
+				seen[digest] = true
+				contributes = true
+			}
+		}
+		if contributes {
+			events = append(events, ev)
+		}
+	}
+	return candidate{RuleCredentialStuffing, len(seen) >= e.opts.CredentialThreshold, events}
+}
+func (e *Engine) checkReplay(trigger Event, st *sourceState) candidate {
+	hit := false
+	for _, id := range trigger.FindingIDs {
+		if id == "HT-001" {
+			hit = true
+		}
+	}
+	if !hit {
+		return candidate{id: RuleCredentialReplay}
+	}
+	for _, ev := range e.past(trigger, st) {
+		if ev.ID != trigger.ID && ev.SensorID != "" && ev.SensorID != trigger.SensorID && ev.Time.Before(trigger.Time) {
+			return candidate{RuleCredentialReplay, true, []Event{ev, trigger}}
+		}
+	}
+	return candidate{id: RuleCredentialReplay}
 }

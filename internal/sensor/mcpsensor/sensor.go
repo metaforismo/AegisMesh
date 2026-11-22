@@ -227,17 +227,19 @@ func (s *Sensor) Close(ctx context.Context) error {
 }
 
 type handler struct {
-	ref      event.SensorRef
-	cfg      *config.Sensor
-	enf      *policy.Enforcer
-	bus      *event.Bus
-	seq      *event.Sequencer
-	instance string
-	log      *slog.Logger
-	events   observe.Counter
-	lists    observe.Counter
-	reads    observe.Counter
-	prompts  observe.Counter
+	ref        event.SensorRef
+	cfg        *config.Sensor
+	enf        *policy.Enforcer
+	bus        *event.Bus
+	seq        *event.Sequencer
+	instance   string
+	log        *slog.Logger
+	emitted    bool
+	remoteHost string
+	events     observe.Counter
+	lists      observe.Counter
+	reads      observe.Counter
+	prompts    observe.Counter
 }
 
 const maxMessageBytes = 256 << 10
@@ -250,6 +252,21 @@ const maxMessageBytes = 256 << 10
 var methodRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9/_-]{0,63}$`)
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	copyHandler := *h
+	copyHandler.remoteHost = sensor.PeerHost(r.RemoteAddr)
+	h = &copyHandler
+	var body []byte
+	// Record planted markers even on an invalid method, content type or JSON
+	// envelope; no legacy content rules or response actions run in this fallback.
+	defer func() {
+		if h.emitted {
+			return
+		}
+		d := h.enf.Evaluate(h.ref.ID, detect.Input{RawParts: sensor.RequestParts(r, body)})
+		if len(d.Findings) > 0 {
+			h.emitWithClass("unparsed", event.ClassificationInteraction, &d)
+		}
+	}()
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -262,7 +279,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxMessageBytes))
+	var err error
+	body, err = io.ReadAll(io.LimitReader(r.Body, maxMessageBytes))
 	if err != nil || len(body) >= maxMessageBytes {
 		writeRPC(w, nil, &rpcError{Code: codeParseError, Message: "message too large or unreadable"})
 		return
@@ -301,6 +319,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	det := h.enf.Evaluate(h.ref.ID, detect.Input{
 		Text:       policy.BoundedDetectInput(req.Method+" "+string(req.Params), h.enf.EngineMaxInput()),
 		TotalBytes: len(req.Method) + len(req.Params),
+		Protocol:   "mcp", Method: r.Method, Path: r.URL.Path,
+		RawParts: sensor.RequestParts(r, body), Headers: sensor.RequestHeaders(r),
 	})
 	w.Header().Set("X-AegisMesh-Action", string(det.Action))
 
@@ -571,12 +591,13 @@ func writeRPC(w http.ResponseWriter, resp *rpcResponse, rpcErr *rpcError) {
 // emit records an MCP-level observation. Only tools/call is a canary hit;
 // listing or initializing against the endpoint is a plain interaction.
 func (h *handler) emitWithClass(method string, class string, det *policy.Decision) {
-	obs := observation{Method: method, Detection: newDetectionInfo(det)}
+	h.emitted = true
+	obs := observation{Method: h.enf.Scrub(method), RemoteHost: h.remoteHost, Detection: newDetectionInfo(det)}
 	raw, err := json.Marshal(obs)
 	if err != nil {
 		return
 	}
-	env, err := event.New(h.seq, h.instance, h.ref, class, raw, nil)
+	env, err := event.New(h.seq, h.instance, h.ref, class, raw, []string{"honeytoken_scrub"})
 	if err != nil {
 		return
 	}
@@ -584,17 +605,18 @@ func (h *handler) emitWithClass(method string, class string, det *policy.Decisio
 }
 
 func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rejected bool, det *policy.Decision, remoteHost string) {
+	h.emitted = true
 	argsPreview, truncated := "", false
 	argLen := 0
 	if len(args) > 0 {
 		argLen = len(args)
-		argsPreview, truncated = redact.Preview(args, redact.MaxPreviewBytes)
+		argsPreview, truncated = redact.Preview([]byte(h.enf.Scrub(string(args))), redact.MaxPreviewBytes)
 	}
 	sum := sha256.Sum256(args)
 
 	obs := observation{
 		Method:        "tools/call",
-		ToolName:      tool,
+		ToolName:      h.enf.Scrub(tool),
 		ArgsLength:    argLen,
 		ArgsTruncated: truncated,
 		ArgsPreview:   argsPreview,
@@ -610,7 +632,7 @@ func (h *handler) emitCall(tool string, args json.RawMessage, ruleID string, rej
 	if err != nil {
 		return
 	}
-	rules := []string{"credential_scrub"}
+	rules := []string{"credential_scrub", "honeytoken_scrub"}
 	if truncated {
 		rules = append(rules, "preview_truncated")
 	}

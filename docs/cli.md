@@ -92,7 +92,7 @@ Run one self-contained synthetic scenario through real HTTP, TCP, MCP and
 authentication-only SSH listeners. Every listener is bound to `127.0.0.1` on an
 OS-assigned unprivileged port. The command checks readiness, performs one fixed
 interaction per sensor, drains the event bus, validates all four native
-envelopes and their observation hashes, generates one dry-run recommendation,
+envelopes and their observation hashes, generates five dry-run recommendations,
 stops the runtime and removes its private temporary workspace.
 
 The stable summary contains no event ID, timestamp, path, process ID, port,
@@ -438,3 +438,28 @@ fleet command channel. For forwarded-evidence inspection the new trusted layout
 is `<fleet.hub.state_dir>/tenants/TENANT/evidence/NODE_ID/`; obtain TENANT from the
 active session and NODE_ID from its fleet inventory. Existing local evidence and
 agent identity paths are unchanged. Local logout does not log out of the IdP.
+
+## AI decoy profile and honeytokens
+
+`aegismesh init --profile ai-decoy --dir ./ai-lab` creates two loopback HTTP
+listeners with static synthetic AI API bodies, a fake credential and an agent
+marker. There is no inference backend or provider fallback. The generated
+README describes the listeners; see [ai-threat-detection.md](ai-threat-detection.md).
+
+`aegismesh honeytoken new --kind credential|agent_canary --format
+openai|anthropic|aws|github|generic --id <slug>` prints a YAML `honeytokens`
+snippet using crypto/rand. `--kind` and `--id` are required; `--format` defaults
+to `generic`. This command writes only stdout. Never use a real credential as
+a honeytoken; plant the fake value only in operator-owned decoy material.
+
+`rules list` and `rules explain RULE_ID` include editorial "relates to"
+framework references in text and JSON. JSON adds a `frameworks` list with
+`framework`, `id`, `name`. The console rules API exposes the same references.
+No coverage/completeness claim is implied. `rules test` continues to evaluate
+plain offline text, so it does not fabricate request method/path/headers or
+load honeytoken configuration. The checked-in structured corpus exercises
+those additional contexts through `internal/ruletest.EvaluateInteraction`.
+
+The demo records eight synthetic observations (seven interactions and one MCP
+canary invocation), prints LLM-001, LLM-002, LLM-004, HT-001 and AGT-001, and
+produces five dry-run proposals. All traffic stays on its own loopback sensors.

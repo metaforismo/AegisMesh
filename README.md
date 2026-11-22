@@ -22,8 +22,15 @@ The capabilities described here are backed by the checks recorded in
 [docs/verification.md](docs/verification.md); what was not run or not verified is listed there too. Changes since v0.1.0
 are in [CHANGELOG.md](CHANGELOG.md), and the plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+- Static AI-service decoy profile, synthetic credential/agent markers and
+  observe-only AI request/cadence/replay signals, with editorial framework
+  references and a checked-in synthetic corpus. See
+  [AI observations](docs/ai-threat-detection.md); no AI-client attribution or
+  field false-positive claim is implied.
+
 Optional capabilities below are **off by default**. Those marked *experimental* have been exercised only
 with the checks recorded in the verification ledger and carry the limits stated next to them.
+
 
 ## Five-minute demo
 
@@ -46,7 +53,7 @@ make build
 
 `demo` accepts no config, path, port, credential, API key or destination.
 It uses synthetic data and OS-assigned loopback ports, verifies every recorded
-observation hash, produces one dry-run recommendation, then stops and removes
+observation hash, produces five dry-run recommendations, then stops and removes
 its private temporary workspace. It requires no cloud service, `curl`, `nc`,
 privileged port or external network access. `make demo` invokes the same path.
 `demo --console` keeps the scenario available until Ctrl-C and prints the console
@@ -99,7 +106,7 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 | Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST). The SSH sensor completes synthetic authentication, records bounded metadata, rejects every channel and global request, and exposes no shell, PTY, SFTP, forwarding or filesystem ([ADR-0010](docs/architecture/adr.md)) |
 | Process isolation | Opt-in `process_isolation: true` per sensor runs a fixed same-binary worker with a minimal environment and a bounded stdio protocol. Fault containment only: the worker keeps the runtime's OS identity and namespaces; it is not a network, filesystem, CPU, memory or malware sandbox |
 | Responses | Static config rules and a deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
-| Detection | Deterministic prompt-injection and abuse rules, plus opt-in correlation signals (COR-001..COR-004); signals are observations, never verdicts. `aegismesh rules` lists and tests them |
+| Detection | Deterministic prompt-injection/abuse rules, observe-only AI and honeytoken findings, and opt-in correlation signals (COR-001..COR-008). Editorial framework references and synthetic corpus checks; observations, never verdicts. `aegismesh rules` lists and tests them |
 | Evidence | Versioned native envelope, integrity hashes, redaction before storage, rotation/retention, opt-in local ECS-compatible export that preserves the native envelope |
 | Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, no enforcement, no new egress |
 | Extensions and webhooks | Explicitly configured, digest-verified observer processes may return only an event-linked acknowledgement; opt-in HMAC-signed webhook delivery with a bounded queue and counted drops |

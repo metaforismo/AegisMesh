@@ -155,7 +155,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	body, truncated := readBounded(r, h.maxBody)
 
-	dec, err := h.gate.Resolve(r.Context(), r.Method, r.RequestURI, body)
+	dec, err := h.gate.Resolve(r.Context(), r.Method, r.RequestURI, body, sensor.RequestHeaders(r))
 	if err != nil {
 		h.log.Warn("policy resolution failed", "err", err)
 		http.Error(w, "error", http.StatusInternalServerError)
@@ -200,21 +200,25 @@ func (h *handler) emit(r *http.Request, body []byte, bodyTruncated bool, dec pol
 		if len(vals) == 0 {
 			continue
 		}
-		headers[name] = hp.Header(name, strings.Join(vals, ", "))
+		value := strings.Join(vals, ", ")
+		if hp.KeepValue[strings.ToLower(name)] {
+			value = h.gate.Scrub(value)
+		}
+		headers[h.gate.Scrub(name)] = hp.Header(name, value)
 	}
 	queryLen := len(r.URL.RawQuery)
 
-	preview, previewTruncated := redact.Preview(body, redact.MaxPreviewBytes)
+	preview, previewTruncated := redact.Preview([]byte(h.gate.Scrub(string(body))), redact.MaxPreviewBytes)
 	sum := sha256.Sum256(body)
 
 	obs := observation{
-		Method:            r.Method,
-		Path:              r.URL.Path,
+		Method:            h.gate.Scrub(r.Method),
+		Path:              h.gate.Scrub(r.URL.Path),
 		QueryRedacted:     queryLen > 0,
 		QueryLength:       queryLen,
 		Headers:           headers,
 		Proto:             r.Proto,
-		UserAgent:         truncate(hp.Header("User-Agent", r.UserAgent()), 160),
+		UserAgent:         truncate(hp.Header("User-Agent", h.gate.Scrub(r.UserAgent())), 160),
 		RemoteHost:        sensor.PeerHost(r.RemoteAddr),
 		BodyCapturedBytes: len(body),
 		BodyTruncated:     bodyTruncated || previewTruncated,
@@ -234,6 +238,7 @@ func (h *handler) emit(r *http.Request, body []byte, bodyTruncated bool, dec pol
 		h.log.Error("event construction failed", "err", err)
 		return
 	}
+	env.AuthAttempts = redact.HTTPAuthAttempts(sensor.RequestHeaders(r))
 	h.bus.Submit(env)
 }
 
@@ -277,7 +282,7 @@ func newDetectionInfo(dec policy.Decision) *detectionInfo {
 }
 
 func (o *observation) redactionRules() []string {
-	rules := []string{"header_values_policy"}
+	rules := []string{"header_values_policy", "honeytoken_scrub"}
 	if o.QueryRedacted {
 		rules = append(rules, "query_string_dropped")
 	}

@@ -25,12 +25,15 @@ type initCmd struct {
 
 func newInitCmd(env *Env) *initCmd { return &initCmd{env: env} }
 
-func (c *initCmd) Name() string  { return "init" }
-func (c *initCmd) Usage() string { return "init [--dir DIR] [--profile local|ollama|remote] [--force]" }
+func (c *initCmd) Name() string { return "init" }
+func (c *initCmd) Usage() string {
+	return "init [--dir DIR] [--profile local|ollama|remote|ai-decoy] [--force]"
+}
 func (c *initCmd) Help() string {
 	return `Scaffold a safe local AegisMesh workspace with a demo config.
 
 Profiles:
+  ai-decoy static synthetic AI APIs, fake credential and agent marker; no model
   local    deterministic offline provider, zero egress, no key (default)
   ollama   responses via a local Ollama daemon at its OpenAI-compatible
            endpoint (loopback cleartext http permitted for this profile)
@@ -45,7 +48,7 @@ func (c *initCmd) Run(_ context.Context, args []string) error {
 	fs := newFlagSet(c.Name())
 	addGlobalFlags(fs, &c.g)
 	dir := fs.String("dir", ".", "target directory for the workspace")
-	profile := fs.String("profile", "local", "provider profile: local|ollama|remote")
+	profile := fs.String("profile", "local", "provider profile: local|ollama|remote|ai-decoy")
 	force := fs.Bool("force", false, "overwrite existing files")
 	if err := fs.Parse(args); err != nil {
 		return Usagef("%v", err)

@@ -30,6 +30,7 @@ func main() {
 		cli.NewRecommendCmd(env),
 		cli.NewMigrateCmd(env),
 		cli.NewRulesCmd(env),
+		cli.NewHoneytokenCmd(env),
 		cli.NewExtCmd(env),
 		cli.NewVersionCmd(env),
 		cli.NewCompletionCmd(env),

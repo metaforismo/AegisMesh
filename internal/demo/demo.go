@@ -22,7 +22,9 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 	"github.com/metaforismo/aegismesh/internal/recommend"
 	"github.com/metaforismo/aegismesh/internal/runtime"
 	"github.com/metaforismo/aegismesh/internal/storage"
@@ -34,7 +36,7 @@ const (
 	requestTimeout  = 3 * time.Second
 	maxReplyBytes   = 16 << 10
 	maxTCPLineBytes = 128
-	maxEvents       = 8
+	maxEvents       = 16
 )
 
 var sensorOrder = [...]string{"http", "tcp", "mcp", "ssh"}
@@ -42,6 +44,7 @@ var sensorOrder = [...]string{"http", "tcp", "mcp", "ssh"}
 // Summary is deliberately free of random IDs, times, paths, ports and evidence
 // content so both human and JSON CLI output remain deterministic.
 type Summary struct {
+	DetectionRules    []string `json:"detection_rules"`
 	Schema            string   `json:"schema"`
 	Mode              string   `json:"mode"`
 	Network           string   `json:"network"`
@@ -152,6 +155,9 @@ func run(parent context.Context, ready func(string, string) error) (summary Summ
 		return Summary{}, err
 	}
 
+	if err := interactAI(ctx, addresses["http"], cfg.Honeytokens); err != nil {
+		return Summary{}, err
+	}
 	if ready != nil {
 		addr, e := sys.ConsoleAddr()
 		if e != nil {
@@ -168,7 +174,7 @@ func run(parent context.Context, ready func(string, string) error) (summary Summ
 	if err := verifyListenersReleased(addresses, adminAddr); err != nil {
 		return Summary{}, err
 	}
-	summary, err = verifyEvidence(cfg.Runtime.DataDir)
+	summary, err = verifyEvidence(cfg.Runtime.DataDir, cfg.Honeytokens)
 	if err != nil {
 		return Summary{}, err
 	}
@@ -205,6 +211,12 @@ func loadConfig(workDir string) (*config.Config, error) {
 			{ID: "demo-ssh", Kind: config.SensorKindSSH, Listen: "127.0.0.1:0"},
 		},
 	}
+	ai, err := config.AIDecoyConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Honeytokens = ai.Honeytokens
+	cfg.Sensors[0].Rules = append(cfg.Sensors[0].Rules, ai.Sensors[0].Rules[1:]...)
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("demo: encode internal config: %w", err)
@@ -291,7 +303,7 @@ func interactMCP(ctx context.Context, addr string) error {
 	return nil
 }
 
-func request(ctx context.Context, method, target string, body []byte) (int, []byte, error) {
+func request(ctx context.Context, method, target string, body []byte, headers ...map[string]string) (int, []byte, error) {
 	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(requestCtx, method, target, bytes.NewReader(body))
@@ -300,6 +312,11 @@ func request(ctx context.Context, method, target string, body []byte) (int, []by
 	}
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	if len(headers) > 0 {
+		for k, v := range headers[0] {
+			req.Header.Set(k, v)
+		}
 	}
 	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true}
 	defer transport.CloseIdleConnections()
@@ -417,7 +434,7 @@ func connectionDeadline(ctx context.Context) time.Time {
 	return deadline
 }
 
-func verifyEvidence(dataDir string) (Summary, error) {
+func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) {
 	reader, err := storage.NewReader(dataDir)
 	if err != nil {
 		return Summary{}, fmt.Errorf("demo: open evidence: %w", err)
@@ -438,7 +455,11 @@ func verifyEvidence(dataDir string) (Summary, error) {
 		if err != nil {
 			return fmt.Errorf("demo: encode evidence for redaction check: %w", err)
 		}
-		for _, secret := range []string{"aegismesh-demo-synthetic-user", "aegismesh-demo-synthetic-password"} {
+		secrets := []string{"aegismesh-demo-synthetic-user", "aegismesh-demo-synthetic-password"}
+		for _, token := range tokens {
+			secrets = append(secrets, token.Value)
+		}
+		for _, secret := range secrets {
 			if strings.Contains(string(raw), secret) {
 				return errors.New("demo: SSH synthetic credential content reached evidence")
 			}
@@ -456,8 +477,8 @@ func verifyEvidence(dataDir string) (Summary, error) {
 	if corruptErr != nil {
 		return Summary{}, fmt.Errorf("demo: corrupt evidence: %w", corruptErr)
 	}
-	if len(envelopes) != 4 {
-		return Summary{}, fmt.Errorf("demo: recorded %d observations, want 4", len(envelopes))
+	if len(envelopes) != 8 {
+		return Summary{}, fmt.Errorf("demo: recorded %d observations, want 8", len(envelopes))
 	}
 
 	counts := map[string]int{}
@@ -466,23 +487,57 @@ func verifyEvidence(dataDir string) (Summary, error) {
 		counts[envelope.Classification]++
 		bySensor[envelope.Sensor.ID]++
 	}
-	if counts[event.ClassificationInteraction] != 3 || counts[event.ClassificationCanaryHit] != 1 {
+	if counts[event.ClassificationInteraction] != 7 || counts[event.ClassificationCanaryHit] != 1 {
 		return Summary{}, fmt.Errorf("demo: unexpected evidence classifications")
 	}
 	for _, kind := range sensorOrder {
-		if bySensor["demo-"+kind] != 1 {
-			return Summary{}, fmt.Errorf("demo: sensor %s did not record exactly one observation", kind)
+		want := 1
+		if kind == "http" {
+			want = 5
+		}
+		if bySensor["demo-"+kind] != want {
+			return Summary{}, fmt.Errorf("demo: sensor %s did not record the expected observations", kind)
 		}
 	}
 	report, err := recommend.Generate(envelopes, recommend.Options{})
 	if err != nil {
 		return Summary{}, fmt.Errorf("demo: generate dry-run recommendations: %w", err)
 	}
-	if len(report.Recommendations) != 1 {
-		return Summary{}, fmt.Errorf("demo: generated %d recommendations, want 1", len(report.Recommendations))
+	if len(report.Recommendations) != 5 {
+		return Summary{}, fmt.Errorf("demo: generated %d recommendations, want 5", len(report.Recommendations))
 	}
 
+	hits := map[string]bool{}
+	for _, envelope := range envelopes {
+		var obs struct {
+			Detection *struct {
+				Findings []detect.Finding `json:"findings"`
+			} `json:"detection"`
+		}
+		if json.Unmarshal(envelope.Observation, &obs) != nil {
+			return Summary{}, errors.New("demo: invalid detection evidence")
+		}
+		if obs.Detection != nil {
+			for _, finding := range obs.Detection.Findings {
+				if detect.ObserveOnly(finding.RuleID) {
+					hits[string(finding.RuleID)] = true
+				}
+			}
+		}
+	}
+	var rules []string
+	for _, id := range detect.KnownRuleIDs() {
+		if hits[id] {
+			rules = append(rules, id)
+		}
+	}
+	for _, id := range []string{"LLM-001", "LLM-002", "LLM-004", "HT-001", "AGT-001"} {
+		if !hits[id] {
+			return Summary{}, fmt.Errorf("demo: missing expected observation %s", id)
+		}
+	}
 	return Summary{
+		DetectionRules:    rules,
 		Schema:            schema,
 		Mode:              "synthetic",
 		Network:           "loopback-only",
@@ -497,4 +552,28 @@ func verifyEvidence(dataDir string) (Summary, error) {
 		Enforcement:       false,
 		SignalNotIncident: true,
 	}, nil
+}
+
+func interactAI(ctx context.Context, addr string, tokens []honeytoken.Token) error {
+	if len(tokens) != 2 {
+		return errors.New("demo: missing synthetic markers")
+	}
+	for _, step := range []struct {
+		method, path, body string
+		headers            map[string]string
+	}{
+		{"GET", "/api/tags", "", nil},
+		{"POST", "/v1/chat/completions", `{"model":"synthetic","messages":[{"role":"user","content":"hi"}],"max_tokens":1}`, nil},
+		{"GET", "/v1/models", "", map[string]string{"Authorization": "Bearer " + tokens[0].Value}},
+		{"GET", "/diagnostic/" + tokens[1].Value, "", nil},
+	} {
+		status, _, err := request(ctx, step.method, "http://"+addr+step.path, []byte(step.body), step.headers)
+		if err != nil {
+			return fmt.Errorf("demo: synthetic AI sequence: %w", err)
+		}
+		if status != http.StatusOK && status != http.StatusNotFound {
+			return errors.New("demo: unexpected AI decoy response")
+		}
+	}
+	return nil
 }

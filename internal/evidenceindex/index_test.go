@@ -364,3 +364,20 @@ func TestSourceByteBound(t *testing.T) {
 		t.Fatal("source is not queryable within its decoded-byte limit")
 	}
 }
+
+func TestEphemeralAuthMetadataExcludedFromIndex(t *testing.T) {
+	index, err := New(100, observe.NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := envelope(t, &event.Sequencer{}, event.ClassificationInteraction, `{"path":"/"}`)
+	e.AuthAttempts = []string{strings.Repeat("a", 64)}
+	index.Add(e)
+	_, stored, _, _, ok := index.Get(e.ID)
+	if !ok {
+		t.Fatal("event missing")
+	}
+	if len(stored.AuthAttempts) != 0 {
+		t.Fatal("auth distinctness material retained in index")
+	}
+}
