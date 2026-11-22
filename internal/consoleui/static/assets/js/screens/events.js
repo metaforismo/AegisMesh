@@ -5,7 +5,9 @@ import { formatCount, localInputToRfc3339, rfc3339ToLocalInput } from '../lib/fo
 import { RingBuffer, createLiveStream } from '../lib/stream.js';
 import { createBatcher } from '../lib/batch.js';
 import { moveIndex, isTypingTarget } from '../lib/keys.js';
-import { pageHead, panel, selectField, inputField, empty, banner, pager, labelFor, errorState } from '../ui/components.js';
+import { pageHead, panel, selectField, inputField, empty, banner, pager, labelFor, errorState, filterChip, anchorPopover, openDialog, toast } from '../ui/components.js';
+import { activeFilterChips, addFilterHref, describeFilter, FILTER_NAMES } from '../lib/filters.js';
+import { loadViews, storeViews, addView, removeView, viewFilters } from '../lib/views.js';
 import { icon } from '../ui/icons.js';
 import { eventKey, parseEventKey, normalizeNodeFilter, nodeFilterOptions, originVisible, isNodeId } from '../lib/origin.js';
 import { eventTableView, historyBanner, forwardedNote, notFoundInTenant } from './shared.js';
@@ -35,8 +37,12 @@ const pageHref = (key) => {
   return node ? href('events', id, { node }) : href('events', id);
 };
 
-function filterForm(filters, sensors, onApply, { showOrigin = false, nodes = [] } = {}) {
-  const form = h('form', { class: 'filters', 'aria-label': 'Event filters' },
+// The filter bar: search always visible, active filters as removable chips,
+// saved views, and every other filter behind "All filters".
+function filterForm(filters, sensors, onApply, { showOrigin = false, nodes = [], live = false, views } = {}) {
+  const chips = activeFilterChips(filters, { live });
+  const more = EVENT_FILTER_KEYS.filter((k) => k !== 'q' && filters[k]).length;
+  const grid = h('div', { class: 'filters' },
     showOrigin ? selectField({ label: 'Node', name: 'node', value: filters.node || '', options: nodeFilterOptions(nodes, filters.node) }) : null,
     selectField({ label: 'Classification', name: 'classification', value: filters.classification || '', options: [['', 'Any'], ...CLASSIFICATIONS.map((c) => [c, classificationMeta(c).label])] }),
     selectField({ label: 'Minimum severity', name: 'severity', value: filters.severity || '', options: [['', 'Any (incl. no finding)'], ...SEVERITIES.map((s) => [s, `${severityLabel(s)} or higher`])] }),
@@ -46,15 +52,26 @@ function filterForm(filters, sensors, onApply, { showOrigin = false, nodes = [] 
     inputField({ label: 'Rule', name: 'rule', value: filters.rule || '', mono: true, placeholder: 'e.g. PI-001', maxlength: 64 }),
     inputField({ label: 'Since (UTC)', name: 'since', type: 'datetime-local', value: rfc3339ToLocalInput(filters.since) }),
     inputField({ label: 'Until (UTC)', name: 'until', type: 'datetime-local', value: rfc3339ToLocalInput(filters.until) }),
-    h('div', { class: ['field', 'filters__search'] },
-      h('label', { class: 'field__label', for: 'f-q' }, 'Search'),
-      h('span', { class: 'input-icon' },
-        icon('search', { size: 'sm' }),
-        h('input', { class: 'input', id: 'f-q', name: 'q', type: 'search', maxlength: 128, placeholder: 'Summary, source or rule id', prop: { value: filters.q || '' }, autocomplete: 'off', spellcheck: 'false', 'data-search': '', 'aria-keyshortcuts': '/' }),
-        h('kbd', { class: 'input-icon__kbd', 'aria-hidden': 'true' }, '/'))),
     h('div', { class: ['btn-row', 'filters__actions'] },
-      h('button', { class: ['btn', 'btn--primary'], type: 'submit' }, icon('filter'), 'Apply'),
-      h('a', { class: 'btn', href: '#/events' }, 'Clear')));
+      h('button', { class: ['btn', 'btn--primary'], type: 'submit' }, icon('filter'), 'Apply filters')));
+  const details = h('details', { class: 'filterbar__more' },
+    h('summary', null, icon('chevron-right', { size: 'sm' }), 'All filters', more ? h('span', { class: 'filterbar__count' }, ` · ${more} set`) : null),
+    grid);
+  const form = h('form', { class: 'filterbar', 'aria-label': 'Event filters' },
+    h('div', { class: 'filterbar__row' },
+      h('div', { class: ['field', 'filterbar__search'] },
+        h('label', { class: 'field__label', for: 'f-q' }, 'Search summaries, sources and rule ids'),
+        h('span', { class: 'input-icon' },
+          icon('search', { size: 'sm' }),
+          h('input', { class: 'input', id: 'f-q', name: 'q', type: 'search', maxlength: 128, placeholder: 'e.g. /admin, 203.0.113, PI-001', prop: { value: filters.q || '' }, autocomplete: 'off', spellcheck: 'false', 'data-search': '', 'aria-keyshortcuts': '/' }),
+          h('kbd', { class: 'input-icon__kbd', 'aria-hidden': 'true' }, '/'))),
+      h('button', { class: 'btn', type: 'submit' }, 'Search'),
+      views || null),
+    h('div', { class: 'filterbar__chips', role: 'group', 'aria-label': 'Active filters' },
+      chips.length
+        ? [...chips.map(filterChip), h('a', { class: ['btn', 'btn--ghost', 'btn--sm'], href: href('events', { live: live ? '1' : '' }) }, 'Clear all')]
+        : h('span', { class: 'muted' }, 'No filters: every stored event, newest first.')),
+    details);
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const el = form.elements;
@@ -68,9 +85,76 @@ function filterForm(filters, sensors, onApply, { showOrigin = false, nodes = [] 
   return form;
 }
 
+// Saved views: a menu of filter sets kept in this browser, per tenant.
+// Only non-evidence filters are stored (lib/views.js says why).
+function viewsControl(ctx, filters, { live }) {
+  const tenant = tenantInfo(ctx.session).active || 'default';
+  const store = (() => {
+    try {
+      return globalThis.localStorage || null;
+    } catch {
+      return null;
+    }
+  })();
+  let views = loadViews(store, tenant);
+  const button = h('button', { class: 'btn', type: 'button', popovertarget: 'views-menu' }, icon('bookmark'), 'Views');
+  const list = h('ul', { class: 'menu__list' });
+  const saveBtn = h('button', { class: ['btn', 'btn--sm', 'btn--block', 'menu__action'], type: 'button' }, icon('plus', { size: 'sm' }), 'Save current filters…');
+  const menu = h('div', { class: ['menu', 'views-menu'], id: 'views-menu', popover: 'auto', tabindex: '-1', 'aria-labelledby': 'views-menu-title' },
+    h('p', { class: 'menu__title', id: 'views-menu-title' }, 'Saved views'),
+    list, saveBtn,
+    h('p', { class: 'menu__note' }, 'Stored in this browser only, for this tenant. Source and search filters are never saved: they are attacker-supplied evidence.'));
+  const summary = (f) => Object.entries(f).map(([k, v]) => `${FILTER_NAMES[k] || k} ${describeFilter(k, v).text}`).join(' · ');
+  const paint = () => {
+    const savable = viewFilters(filters);
+    saveBtn.disabled = !store || !Object.keys(savable.filters).length;
+    saveBtn.title = !store ? 'This browser does not allow local storage' : (saveBtn.disabled ? 'Set a filter other than source or search first' : '');
+    mount(list, views.length ? views.map((v) => {
+      const remove = h('button', { class: ['btn', 'btn--ghost', 'btn--icon', 'btn--sm'], type: 'button', 'aria-label': `Delete view ${v.name}`, title: 'Delete view' }, icon('close', { size: 'sm' }));
+      remove.addEventListener('click', () => {
+        views = removeView(views, v.name);
+        storeViews(store, tenant, views);
+        paint();
+        toast('ok', `Deleted view “${v.name}”.`);
+      });
+      return h('li', { class: 'views-menu__row' },
+        h('a', { class: 'menu__item', href: href('events', { ...v.filters, live: live ? '1' : '' }) },
+          h('span', { class: 'stack-tight' }, h('span', { class: 'menu__label' }, v.name), h('span', { class: 'views-menu__summary' }, summary(v.filters)))),
+        remove);
+    }) : h('li', { class: 'views-menu__empty' }, 'No saved views yet. Set some filters, then save them here.'));
+  };
+  saveBtn.addEventListener('click', async () => {
+    menu.hidePopover?.();
+    const { dropped } = viewFilters(filters);
+    const name = await openDialog({
+      title: 'Save these filters as a view',
+      submitLabel: 'Save view',
+      build: () => [
+        inputField({ label: 'Name', name: 'viewname', maxlength: 48, required: true, hint: 'Shown only in this browser.' }),
+        h('p', { class: 'muted' }, summary(viewFilters(filters).filters)),
+        dropped.length ? h('p', { class: 'muted' }, `Not saved: ${dropped.map((k) => FILTER_NAMES[k].toLowerCase()).join(' and ')} (evidence never goes into browser storage).`) : null,
+      ],
+      onSubmit: async (form) => {
+        const next = addView(views, form.elements.viewname.value, filters);
+        if (!storeViews(store, tenant, next.views)) throw new Error('This browser refused to store the view (private mode or storage full).');
+        views = next.views;
+        return form.elements.viewname.value;
+      },
+    });
+    if (name) {
+      paint();
+      toast('ok', 'View saved in this browser.');
+    }
+  });
+  menu.addEventListener('click', (e) => { if (e.target.closest?.('a')) menu.hidePopover?.(); });
+  anchorPopover(menu, button, { align: 'right' });
+  paint();
+  return [button, menu];
+}
+
 // ---- Side panel (event detail over the list) --------------------------------
 
-function createDrawer({ onRequestClose, onStep, onFull }) {
+export function createDrawer({ onRequestClose, onStep, onFull }) {
   const titleText = h('span', { class: 'drawer__title-text' }, 'Event');
   const position = h('span', { class: 'muted' });
   const prev = h('button', { class: ['btn', 'btn--ghost', 'btn--icon', 'btn--sm'], type: 'button', 'aria-label': 'Previous event (k)', title: 'Previous event (k)' }, icon('chevron-up'));
@@ -141,7 +225,8 @@ export default {
     const cleanups = [];
 
     const rowHref = (ev) => withQuery(route, drawerQuery(eventKey(ev)));
-    const view = eventTableView(firstRows, { caption: 'Matching events', rowHref, origin: showOrigin });
+    const filterHref = (key, value) => (filters[key] === value ? null : addFilterHref(filters, key, value, { live: liveRequested }));
+    const view = eventTableView(firstRows, { caption: 'Matching events', rowHref, origin: showOrigin, filterHref });
     const tableSlot = h('div', { class: 'events-table' });
     const pagerSlot = h('div');
     const titleCount = h('span', null, formatCount(total));
@@ -164,9 +249,14 @@ export default {
           },
         }));
     };
+    const emptyChips = activeFilterChips(filters, { live: liveRequested });
     const paintTable = () => mount(tableSlot, view.size
       ? [pill, view.el]
-      : empty('No matching events', Object.keys(filters).length ? 'Nothing in the index matches these filters. Widen them or clear them.' : 'No event has been stored yet. Sensors record observations here as they arrive.', null, { icon: Object.keys(filters).length ? 'filter' : 'inbox' }));
+      : emptyChips.length
+        ? empty('No events match these filters', 'Nothing in the index matches all of them. Remove one to widen the list:',
+          h('div', { class: 'fchip-row' }, emptyChips.map(filterChip), h('a', { class: ['btn', 'btn--sm'], href: href('events', { live: liveRequested ? '1' : '' }) }, 'Clear all')), { icon: 'filter' })
+        : empty('No event has been stored yet', liveRequested ? 'Live mode is on: new observations appear here as sensors record them.' : 'Sensors record observations here as they arrive. Decoys have no legitimate users, so an empty list is a normal state.',
+          h('a', { class: 'btn', href: '#/guide?t=index' }, icon('guide', { size: 'sm' }), 'What the console can see'), { icon: 'inbox', art: true }));
     paintTable();
     paintPager();
 
@@ -443,18 +533,20 @@ export default {
       pageHead({
         title: 'Events',
         subtitle: 'Every stored observation, newest first. Text in tinted monospace is attacker-supplied evidence, shown exactly as received.',
+        hint: 'Search or filter, open a row in the side panel (j/k to step), or follow new events live.',
         actions: liveToggle,
       }),
       historyBanner(node, { accepting: fleet?.hub?.accept_evidence === true }),
       fleet?.hub?.accept_evidence === true ? forwardedNote('list') : null,
       rejected.length ? banner('warn', 'Some filters were ignored', `These link parameters were not valid and were dropped: ${[...new Set(rejected)].map((k) => FILTER_LABELS[k]).join(', ')}.`) : null,
-      panel({ title: 'Filters', body: filterForm(filters, sensorsRes.sensors || [], applyFilters, { showOrigin, nodes: fleetNodes }), meta: active.length ? `${active.length} active` : 'None active' }),
+      panel({ title: 'Filters', body: filterForm(filters, sensorsRes.sensors || [], applyFilters, { showOrigin, nodes: fleetNodes, live: liveRequested, views: viewsControl(ctx, filters, { live: liveRequested }) }), meta: active.length ? `${active.length} active · server-side` : 'None active' }),
       liveBar,
       panel({
+        primary: true,
         title: h('span', null, titleCount, ' matching'),
         meta: liveRequested
           ? (filters.node ? 'Live: the server narrows the stream to this origin; the other filters are re-applied in the browser.' : 'Live: the stream is unfiltered, so these filters are re-applied in the browser.')
-          : 'Newest first. Server-side filters apply. j and k move between rows.',
+          : 'Newest first. j and k move between rows, Enter opens one. Select a value to filter by it.',
         flush: true, body: tableSlot, foot: pagerSlot,
       }));
 

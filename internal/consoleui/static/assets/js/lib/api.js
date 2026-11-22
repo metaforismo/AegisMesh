@@ -56,10 +56,10 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
   let epoch = 0;
   let switching = false;
 
-  async function request(method, path, { query, body, signal, allow401 = false } = {}) {
+  async function request(method, path, { query, body, signal, allow401 = false, raw = false } = {}) {
     const startedAt = epoch;
     const qs = query ? toQuery(query) : '';
-    const headers = { Accept: 'application/json' };
+    const headers = { Accept: raw ? '*/*' : 'application/json' };
     const init = { method, headers, credentials: 'same-origin', cache: 'no-store', signal };
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -83,6 +83,7 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
       }
       throw err;
     }
+    if (raw) return res;
     try {
       return await res.json();
     } catch {
@@ -163,6 +164,26 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
 
     // Experimental fleet inventory (ADR-0018). Read-only except token
     // management and revocation; there is no route that controls a node.
+    // Derived views (ADR-0022). Downloads return the raw Response (an
+    // attachment); the caller reads it as a Blob and never trusts its
+    // Content-Disposition filename.
+    sessions: (window, source, cursor, limit, opts) => get('/sessions', { window, source, cursor, limit }, opts),
+    attackSession: (id, opts) => get(`/sessions/${seg(id)}`, undefined, opts),
+    coverage: (window, opts) => get('/coverage', { window }, opts),
+    exportIndicators: (scope, format, opts) => get('/export/indicators', { ...scope, format }, { ...opts, raw: true }),
+    sessionReport: (id, opts) => get(`/sessions/${seg(id)}/report`, undefined, { ...opts, raw: true }),
+    investigationReport: (id, opts) => get(`/investigations/${seg(id)}/report`, undefined, { ...opts, raw: true }),
+    // Local SIEM event files (CEF, RFC 5424 syslog, OTLP JSON, ECS): an
+    // audited analyst download of one scope. File formats only; nothing is sent.
+    exportEvents: (scope, format, opts) => get('/export/events', { ...scope, format }, { ...opts, raw: true }),
+
+    // Catalogs and the on-demand digest (round 3). Decoys and honeytokens
+    // describe this node's own configuration; honeytoken values never leave
+    // the server.
+    decoys: (window, opts) => get('/decoys', { window }, opts),
+    honeytokens: (window, opts) => get('/honeytokens', { window }, opts),
+    digest: (window, opts) => get('/digest', { window }, opts),
+
     fleet: (opts) => get('/fleet', undefined, opts),
     fleetNodes: (status, opts) => get('/fleet/nodes', { status }, opts),
     fleetNode: (id, opts) => get(`/fleet/nodes/${seg(id)}`, undefined, opts),

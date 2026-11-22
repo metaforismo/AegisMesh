@@ -43,6 +43,7 @@ export default {
       pageHead({
         title: 'Recommendations',
         subtitle: 'Deterministic review suggestions generated from stored signals. They are dry-run proposals: nothing here changes a sensor, a policy or a remote host.',
+        hint: 'Review each proposal against its linked evidence; applying anything is your decision, outside AegisMesh.',
         actions: selectField({ label: 'Show', name: 'limit', value: limit, options: LIMITS.map((l) => [l, `Up to ${l}`]), onChange: (l) => ctx.navigate(href('recommendations', { limit: l })) }),
       }),
       banner('info', 'How to read these', h('p', null, `Mode ${labelFor(report.mode || 'dry_run')} · interpretation “${labelFor(report.interpretation || 'signal_not_incident')}”. A recommendation is a prompt for a human to look, not a verdict.`)),

@@ -6,6 +6,7 @@ import { classificationMeta, isSeverity, severityLabel, capitalize } from '../li
 import { formatDateTime, formatRelative, truncate } from '../lib/format.js';
 import { describeError } from '../lib/api.js';
 import { sparkPath } from '../lib/chart.js';
+import { sparkMarks } from '../lib/viz.js';
 import { icon } from './icons.js';
 
 // ---- Severity, classification, badges ------------------------------------
@@ -48,10 +49,14 @@ export function evidence(value, { block = false, max = 0 } = {}) {
   }, shown);
 }
 
+// Relative times carry the absolute UTC time: in the peek on hover, and as
+// visually hidden text, so assistive tech reads both.
 export function timeEl(value, { relative = false, now } = {}) {
   const full = formatDateTime(value);
   if (full === '—') return h('span', { class: 'muted' }, '—');
-  return h('time', { datetime: value, title: full }, relative ? formatRelative(value, now) : full);
+  return relative
+    ? h('time', { class: 'reltime', datetime: value, title: full }, formatRelative(value, now), h('span', { class: 'visually-hidden' }, ` (${full})`))
+    : h('time', { datetime: value, title: full }, full);
 }
 
 export function link(href, ...children) {
@@ -60,17 +65,34 @@ export function link(href, ...children) {
 
 // ---- Layout ----------------------------------------------------------------
 
-export function pageHead({ title, subtitle, actions, eyebrow }) {
+// `crumbs` ([[label, href], …], the current page last and unlinked) replaces
+// the eyebrow on detail pages. `hint` is one line on what the operator can
+// do on this screen. Both are interface text; a crumb label may be a node
+// (an evidence span for a source key).
+export function pageHead({ title, subtitle, actions, eyebrow, crumbs, hint }) {
   return h('header', { class: 'page-head' },
     h('div', { class: 'page-head__text' },
-      eyebrow ? h('p', { class: 'page-head__eyebrow' }, eyebrow) : null,
+      crumbs ? breadcrumbs(crumbs) : eyebrow ? h('p', { class: 'page-head__eyebrow' }, eyebrow) : null,
       h('h1', { class: 'page-head__title', id: 'page-title', tabindex: '-1' }, title),
-      subtitle ? h('p', { class: 'page-head__sub' }, subtitle) : null),
+      subtitle ? h('p', { class: 'page-head__sub' }, subtitle) : null,
+      hint ? h('p', { class: 'page-head__hint' }, icon('chevron-right', { size: 'xs' }), h('span', null, hint)) : null),
     actions ? h('div', { class: 'btn-row page-head__actions' }, actions) : null);
 }
 
-export function panel({ title, meta, actions, body, flush = false, foot, id, headingLevel = 'h2' }) {
-  return h('section', { class: 'panel', id, 'aria-labelledby': id ? `${id}-title` : null },
+export function breadcrumbs(items) {
+  const list = items.filter(Boolean);
+  return h('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' },
+    h('ol', { class: 'crumbs__list' }, list.map(([label, target], i) => {
+      const last = i === list.length - 1;
+      return h('li', { class: 'crumbs__item' },
+        last || !target ? h('span', { class: 'crumbs__here', 'aria-current': last ? 'page' : null }, label) : h('a', { href: target }, label));
+    })));
+}
+
+// `primary` marks the one panel a screen is about (a stronger frame);
+// everything else is secondary by default.
+export function panel({ title, meta, actions, body, flush = false, foot, id, headingLevel = 'h2', primary = false }) {
+  return h('section', { class: ['panel', primary ? 'panel--primary' : ''], id, 'aria-labelledby': id ? `${id}-title` : null },
     title ? h('div', { class: 'panel__head' },
       h('div', null,
         h(headingLevel, { class: 'panel__title', id: id ? `${id}-title` : null }, title),
@@ -108,6 +130,7 @@ export function sparkline(values, { series = '', width = 88, height = 28, label 
   el.appendChild(svg('g', { class: 'spark__draw' },
     svg('path', { class: 'spark__area', d: p.area }),
     svg('path', { class: 'spark__line', d: p.line }),
+    sparkMarks(values, { width, height, pad: 2.5 }).filter((m) => m.kind !== 'end').map((m) => svg('circle', { class: ['spark__mark', `spark__mark--${m.kind}`], cx: m.x, cy: m.y, r: 1.6 })),
     p.last ? svg('circle', { class: 'spark__dot', cx: p.last.x, cy: p.last.y, r: 2 }) : null));
   return el;
 }
@@ -140,9 +163,61 @@ export function loading(label = 'Loading') {
     h('span', { class: 'btn-row' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), `${label}…`));
 }
 
-export function empty(title, detail, action, { icon: name = 'inbox' } = {}) {
+// A small lattice with one decoy node and a probe line that stops short of
+// it: the empty states' illustration, in the product's own motif.
+export function emptyArt() {
+  const grid = [];
+  for (let i = 0; i <= 5; i++) {
+    grid.push(svg('line', { class: 'empty-art__grid', x1: i * 24, x2: i * 24, y1: 0, y2: 72 }));
+    if (i <= 3) grid.push(svg('line', { class: 'empty-art__grid', x1: 0, x2: 120, y1: i * 24, y2: i * 24 }));
+  }
+  return svg('svg', { class: 'empty-art', viewBox: '0 0 120 72', 'aria-hidden': 'true', focusable: 'false' },
+    grid,
+    svg('path', { class: 'empty-art__probe', d: 'M12 60 C 36 60, 48 36, 66 30' }),
+    svg('circle', { class: 'empty-art__node', cx: 12, cy: 60, r: 3.5 }),
+    svg('circle', { class: 'empty-art__node', cx: 96, cy: 12, r: 3 }),
+    svg('circle', { class: 'empty-art__node', cx: 108, cy: 60, r: 3 }),
+    svg('rect', { class: 'empty-art__decoy', x: 66, y: 18, width: 24, height: 24, rx: 4 }));
+}
+
+// Variants for the catalog screens, in the same lattice: a decoy with its
+// listening ring (no probe yet), a returning key path that ends at a marker,
+// and a briefing sheet resting on the grid.
+export function emptyArtVariant(kind) {
+  if (kind !== 'decoys' && kind !== 'tokens' && kind !== 'digest') return emptyArt();
+  const grid = [];
+  for (let i = 0; i <= 5; i++) {
+    grid.push(svg('line', { class: 'empty-art__grid', x1: i * 24, x2: i * 24, y1: 0, y2: 72 }));
+    if (i <= 3) grid.push(svg('line', { class: 'empty-art__grid', x1: 0, x2: 120, y1: i * 24, y2: i * 24 }));
+  }
+  const parts = {
+    decoys: [
+      svg('circle', { class: 'empty-art__ring', cx: 60, cy: 36, r: 22 }),
+      svg('path', { class: 'empty-art__decoy', d: 'M60 22 74 36 60 50 46 36z' }),
+      svg('circle', { class: 'empty-art__node', cx: 60, cy: 36, r: 2.5 }),
+      svg('circle', { class: 'empty-art__node', cx: 12, cy: 12, r: 3 }),
+      svg('circle', { class: 'empty-art__node', cx: 108, cy: 60, r: 3 }),
+    ],
+    tokens: [
+      svg('path', { class: 'empty-art__probe', d: 'M14 58 C 40 58, 44 20, 72 20 S 100 40, 100 52' }),
+      svg('circle', { class: 'empty-art__node', cx: 14, cy: 58, r: 3.5 }),
+      svg('circle', { class: 'empty-art__ring', cx: 100, cy: 52, r: 7 }),
+      svg('path', { class: 'empty-art__decoy', d: 'M94 52h12M100 46v12' }),
+      svg('rect', { class: 'empty-art__decoy', x: 62, y: 12, width: 18, height: 14, rx: 3 }),
+    ],
+    digest: [
+      svg('rect', { class: 'empty-art__decoy', x: 40, y: 8, width: 40, height: 56, rx: 4 }),
+      svg('path', { class: 'empty-art__probe', d: 'M48 20h24M48 30h24M48 40h24M48 50h14' }),
+      svg('circle', { class: 'empty-art__node', cx: 12, cy: 60, r: 3 }),
+      svg('circle', { class: 'empty-art__node', cx: 108, cy: 12, r: 3 }),
+    ],
+  }[kind];
+  return svg('svg', { class: ['empty-art', `empty-art--${kind}`], viewBox: '0 0 120 72', 'aria-hidden': 'true', focusable: 'false' }, grid, parts);
+}
+
+export function empty(title, detail, action, { icon: name = 'inbox', art = false } = {}) {
   return h('div', { class: 'state' },
-    h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(name)),
+    art ? (typeof art === 'string' ? emptyArtVariant(art) : emptyArt()) : h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(name)),
     h('p', { class: 'state__title' }, title),
     detail ? h('p', null, detail) : null,
     action || null);
@@ -352,6 +427,8 @@ export function installPeek(root = document) {
     }
     target = el;
     box.textContent = full;
+    // A time is interface text: it must not borrow the evidence look.
+    box.classList.toggle('peek--plain', el.classList.contains('reltime'));
     box.classList.add('is-shown');
     place(el);
   };
@@ -364,7 +441,7 @@ export function installPeek(root = document) {
     target = null;
     box.classList.remove('is-shown');
   };
-  const find = (node) => node?.closest?.('.evidence[title], .evidence[data-peek]');
+  const find = (node) => node?.closest?.('.evidence[title], .evidence[data-peek], .reltime[title], .reltime[data-peek]');
 
   root.addEventListener('pointerover', (e) => {
     if (e.pointerType === 'touch') return;
@@ -426,6 +503,82 @@ export function openDialog({ title, build, submitLabel = 'Save', onSubmit, dange
     document.body.appendChild(dialog);
     dialog.showModal();
   });
+}
+
+// ---- "What is this?" tips ------------------------------------------------------
+
+// Place a native popover under the control that opens it (computed geometry
+// through CSSOM; allowed by style-src 'self'). Left-aligned to the control,
+// kept inside the viewport.
+export function anchorPopover(pop, button, { align = 'left' } = {}) {
+  pop.addEventListener('beforetoggle', (e) => {
+    if (e.newState !== 'open') return;
+    const r = button.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const width = Math.min(pop.offsetWidth || 320, vw - 16);
+    const left = align === 'right' ? r.right - width : r.left;
+    pop.style.left = `${Math.round(Math.max(8, Math.min(left, vw - width - 8)))}px`;
+    pop.style.top = `${Math.round(r.bottom + 6)}px`;
+  });
+  pop.addEventListener('toggle', (e) => button.setAttribute('aria-expanded', String(e.newState === 'open')));
+  button.setAttribute('aria-expanded', 'false');
+  return pop;
+}
+
+let tipSeq = 0;
+
+// A small "?" beside a non-obvious term. It opens a popover with the short
+// definition and a link to the full entry in the Guide. Interface text only.
+export function helpTip(entry) {
+  if (!entry) return null;
+  const id = `tip-${entry.id}-${++tipSeq}`;
+  const btn = h('button', {
+    class: 'help-tip', type: 'button', popovertarget: id,
+    'aria-label': `What is “${entry.term}”?`, title: 'What is this?',
+  }, icon('help', { size: 'sm' }));
+  const pop = h('span', { class: ['menu', 'tip-pop'], id, popover: 'auto', role: 'note', 'aria-labelledby': `${id}-t` },
+    h('span', { class: 'tip-pop__term', id: `${id}-t` }, entry.term),
+    h('span', { class: 'tip-pop__text' }, entry.short),
+    h('a', { class: 'tip-pop__more', href: `#/guide?t=${entry.id}` }, icon('guide', { size: 'sm' }), 'Read more in the guide'));
+  anchorPopover(pop, btn);
+  // Following the link closes the tip; the route change does the rest.
+  pop.addEventListener('click', (e) => { if (e.target.closest?.('a')) pop.hidePopover?.(); });
+  return h('span', { class: 'help' }, btn, pop);
+}
+
+// ---- Filter chip ---------------------------------------------------------------
+
+// An active filter: name, value and a remove link. `chip` comes from
+// lib/filters.js activeFilterChips(); evidence values keep their treatment.
+export function filterChip(chip) {
+  const value = chip.evidence
+    ? h('span', { class: ['evidence', 'fchip__value'], title: chip.text.length > 40 ? chip.text : null }, truncate(chip.text, 40))
+    : h(chip.mono ? 'code' : 'span', { class: 'fchip__value' }, chip.text);
+  return h('span', { class: 'fchip' },
+    h('span', { class: 'fchip__name' }, chip.name),
+    value,
+    h('a', { class: 'fchip__remove', href: chip.removeHref, 'aria-label': `Remove filter ${chip.name}`, title: `Remove ${chip.name.toLowerCase()} filter` }, icon('close', { size: 'xs' })));
+}
+
+// ---- Catalog marks (glyph plus word, never color alone) ----------------------
+
+// A decoy surface family: meta from lib/catalogs.js familyMeta().
+export function familyChip(meta) {
+  return h('span', { class: ['fam', `fam--${meta.shape}`] }, h('span', { class: 'fam__glyph', 'aria-hidden': 'true' }), meta.label);
+}
+
+// A honeytoken kind: meta from tokenKindMeta().
+export function tokenKindChip(meta) {
+  return h('span', { class: ['tkind', `tkind--${meta.shape}`] }, icon(meta.shape === 'flag' ? 'flag' : 'key', { size: 'sm' }), meta.label);
+}
+
+// Observe only (hollow ring) or can select an action (filled square): meta
+// from ruleActionMeta(). The hint is the title and visually hidden text.
+export function actionChip(meta) {
+  if (!meta) return h('span', { class: 'muted', title: 'This server does not report it' }, 'Not reported');
+  return h('span', { class: ['ract', `ract--${meta.key}`], title: meta.hint },
+    h('span', { class: 'ract__mark', 'aria-hidden': 'true' }), meta.label,
+    h('span', { class: 'visually-hidden' }, `. ${meta.hint}`));
 }
 
 export function labelFor(value) {

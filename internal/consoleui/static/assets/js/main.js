@@ -18,7 +18,7 @@ import { roleAtLeast } from './lib/taxonomy.js';
 import { h, clear } from './lib/dom.js';
 import { createSwr, abortable } from './lib/swr.js';
 import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
-import { createShell, applyTheme, cycleTheme, isApple, NAV } from './ui/shell.js';
+import { createShell, applyTheme, applyDensity, applyRail, cycleTheme, isApple, NAV } from './ui/shell.js';
 import { errorState, installPeek, toast } from './ui/components.js';
 import { loginErrorCode, loginErrorMessage } from './lib/auth.js';
 import { tenantInfo, switchTargets, routeAfterSwitch, switchBody } from './lib/tenant.js';
@@ -37,6 +37,8 @@ const loadLogin = () => import('./screens/login.js');
 const toggleShortcuts = () => loadPalette().then((m) => m.toggleShortcuts());
 
 applyTheme();
+applyDensity();
+applyRail();
 
 const appRoot = document.getElementById('app');
 const state = {
@@ -61,9 +63,12 @@ const rawApi = createApi({ onUnauthenticated: () => endSession('Your session end
 const CACHEABLE = {
   overview: 1, events: 3, event: 2, sources: 2, source: 3, sensors: 0, rules: 0, recommendations: 1,
   node: 0, investigations: 1, investigation: 1, fleet: 0, fleetNodes: 1, fleetNode: 1,
+  sessions: 2, attackSession: 1, coverage: 1, decoys: 1, honeytokens: 1, digest: 1,
 };
-const CURSOR_ARG = { events: 1, source: 1 }; // later pages are never cached
-const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'switchTenant', 'audit', 'verifyAudit', 'enrollmentTokens']);
+const CURSOR_ARG = { events: 1, source: 1, sessions: 2 }; // later pages are never cached
+// Downloads are audited reads: never cached or prefetched, and not writes.
+const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'switchTenant', 'audit', 'verifyAudit', 'enrollmentTokens',
+  'exportIndicators', 'sessionReport', 'investigationReport', 'exportEvents']);
 
 const nav = { back: false, used: new Set() };
 const swr = createSwr({
@@ -167,15 +172,34 @@ const progress = (() => {
   };
 })();
 
+// Replace whatever view is on screen with `next`. The current view is looked
+// up when the swap actually runs (a View Transition defers it), and any
+// other stray view is removed, so a navigation that overtakes another can
+// never leave two screens stacked. A running transition is skipped first.
+let activeTransition = null;
 function swapView(main, next, { animate, dir, fade }) {
-  const prev = [...main.children].find((c) => c.classList.contains('view'));
   const doSwap = () => {
-    if (prev) prev.replaceWith(next);
-    else main.appendChild(next);
+    const olds = [...main.children].filter((c) => c.classList.contains('view') && c !== next);
+    if (olds.length) {
+      olds[0].replaceWith(next);
+      for (const o of olds.slice(1)) o.remove();
+    } else if (next.parentNode !== main) {
+      main.appendChild(next);
+    }
   };
+  try {
+    activeTransition?.skipTransition?.();
+  } catch {
+    // Already finished.
+  }
+  activeTransition = null;
+  const hasPrev = [...main.children].some((c) => c.classList.contains('view'));
   document.documentElement.dataset.navDir = dir === 'back' ? 'back' : 'forward';
-  if (animate && prev && typeof document.startViewTransition === 'function') {
-    return document.startViewTransition(doSwap).updateCallbackDone.catch(() => {});
+  if (animate && hasPrev && typeof document.startViewTransition === 'function') {
+    const vt = document.startViewTransition(doSwap);
+    activeTransition = vt;
+    vt.finished.catch(() => {}).finally(() => { if (activeTransition === vt) activeTransition = null; });
+    return vt.updateCallbackDone.catch(() => {});
   }
   doSwap();
   if (animate || fade) {
@@ -284,11 +308,12 @@ async function openPalette() {
   togglePalette({
     api,
     role: state.session.principal?.role,
+    tenant: tenantInfo(state.session).active || 'default',
     navigate: (target) => { location.hash = target; },
     actions: [
-      { label: 'Follow live events', icon: 'live', hint: 'Events in live mode', keywords: ['stream', 'tail'], run: (p) => p.navigate('#/events?live=1') },
-      { label: 'Switch color theme', icon: 'sun', hint: 'System, light, dark', keywords: ['dark', 'light', 'appearance'], run: () => cycleTheme() },
-      { label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: ['keys', 'help'], run: () => toggleShortcuts() },
+      { label: 'Follow live events', icon: 'live', hint: 'Events in live mode', keywords: ['stream', 'tail'], recentId: 'live', run: (p) => p.navigate('#/events?live=1') },
+      { label: 'Switch color theme', icon: 'sun', hint: 'System, light, dark', keywords: ['dark', 'light', 'appearance'], recentId: 'theme', run: () => cycleTheme() },
+      { label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: ['keys', 'help'], recentId: 'shortcuts', run: () => toggleShortcuts() },
       ...switchTargets(state.session).map((t) => ({
         label: `Switch tenant: ${t}`, icon: 'tenant', hint: `Act in tenant ${t}`, keywords: ['tenant', 'switch', t],
         run: () => switchTenant(t),

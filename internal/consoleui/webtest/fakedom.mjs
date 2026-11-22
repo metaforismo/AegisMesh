@@ -15,7 +15,7 @@ class Node {
 class Text extends Node { constructor(doc, v) { super(doc); this.nodeType = 3; this.data = v; } get textContent() { return this.data; } }
 class Fragment extends Node { constructor(doc) { super(doc); this.nodeType = 11; } }
 class Element extends Node {
-  constructor(doc, tag, ns) { super(doc); this.nodeType = 1; this.tagName = tag; this.namespaceURI = ns; this.attributes = new Map(); this.listeners = {}; }
+  constructor(doc, tag, ns) { super(doc); this.nodeType = 1; this.tagName = tag; this.namespaceURI = ns; this.attributes = new Map(); this.listeners = {}; if (!('style' in this)) this.style = {}; }
   setAttribute(k, v) { this.attributes.set(k, String(v)); }
   getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
   addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); }

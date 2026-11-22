@@ -132,7 +132,7 @@ export default {
       h('div', { class: 'login__card' },
         h('div', { class: 'brand' }, brandMark(), 'AegisMesh'),
         h('h1', { id: 'page-title', tabindex: '-1' }, 'Operator console'),
-        h('p', { class: 'muted' }, 'A read-mostly view of evidence your sensors observed.'),
+        h('p', { class: 'login__lede' }, 'Decoys record what attackers try. This console reads it back to you: observations, never verdicts.'),
         notice ? banner('info', null, notice) : null,
         errorBlock,
         parts),

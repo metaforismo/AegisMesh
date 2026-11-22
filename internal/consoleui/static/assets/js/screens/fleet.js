@@ -303,7 +303,7 @@ export default {
     const hubOn = Boolean(f?.hub?.enabled);
     const agentOn = Boolean(f?.agent?.enabled);
     const status = normalizeFleetStatus(ctx.route.query.status);
-    const head = pageHead({ title: 'Fleet', eyebrow: h('span', { class: 'chip' }, 'Experimental'), subtitle: FLEET_SUBTITLE });
+    const head = pageHead({ title: 'Fleet', eyebrow: h('span', { class: 'chip' }, 'Experimental'), subtitle: FLEET_SUBTITLE, hint: 'Read each node’s self-reported state and forwarding; admins manage enrollment tokens and revocation.' });
 
     if (!hubOn && !agentOn) {
       mount(root, head, teachingState());

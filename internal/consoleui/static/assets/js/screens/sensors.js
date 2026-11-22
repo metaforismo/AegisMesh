@@ -108,6 +108,7 @@ export default {
       pageHead({
         title: 'Sensors',
         subtitle: 'Configured decoys and their runtime state. The console reports state only; it cannot start, stop or reconfigure a sensor.',
+        hint: 'Check each sensor is running and when it last recorded an event; see what each imitates on Decoys.',
       }),
       // On a hub that accepts forwarded evidence, by_sensor groups by sensor
       // id across origins, so an enrolled node's sensor with the same id

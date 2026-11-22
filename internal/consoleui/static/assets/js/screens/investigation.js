@@ -2,8 +2,8 @@ import { h, mount } from '../lib/dom.js';
 import { INVESTIGATION_STATUSES, PRIORITIES } from '../lib/taxonomy.js';
 import { formatDateTime, formatCount } from '../lib/format.js';
 import { pageHead, panel, kv, selectField, inputField, empty, toast, openDialog, timeEl, labelFor, banner, copyable } from '../ui/components.js';
-import { icon } from '../ui/icons.js';
 import { eventTable, statusBadge, priorityChip } from './shared.js';
+import { downloadActions } from '../ui/downloads.js';
 
 const NOTE_MAX = 4000;
 const MAX_EVIDENCE = 200;
@@ -172,7 +172,8 @@ export default {
 
     mount(root,
       pageHead({
-        eyebrow: h('a', { href: '#/investigations' }, icon('arrow-left', { size: 'xs' }), 'Investigations'),
+        crumbs: [['Investigations', '#/investigations'], ['Investigation', null]],
+        hint: 'Change status or priority, add notes, attach or detach evidence, and download a report.',
         title: titleText,
         subtitle: h('span', { class: 'btn-row' }, statusSlot, prioritySlot,
           h('span', { class: 'muted' }, `Opened by ${inv.created_by || 'unknown'} · ${formatDateTime(inv.created_at)}`)),
@@ -193,6 +194,7 @@ export default {
         title: notesTitle, meta: 'Oldest first',
         body: [noteList, notesEmpty, noteForm],
       }),
+      panel({ title: 'Downloads', meta: 'Report with notes and attached events; indicators from the attached local events', body: downloadActions(ctx, { scope: { investigation: inv.id }, report: () => ctx.api.investigationReport(inv.id), what: 'this investigation' }) }),
       panel({ title: 'Record', body: kv([['Investigation id', copyable(inv.id, { label: 'investigation id' })], ['Last updated', updated]]) }));
   },
 };

@@ -16,6 +16,11 @@ reference. `site/design-system.html` shows every component rendered.
 | `site/assets/css/site.css` | Landing page and reference-page layout |
 | `internal/consoleui/static/assets/js/ui/icons.js` | The icon set and the brand mark (the site's static SVGs are generated from it) |
 | `internal/consoleui/static/assets/js/lib/{palette,keys,batch,swr,chart}.js` | Pure logic behind the palette, keyboard navigation, live batching, the read cache and the small charts; unit-tested in `webtest/` |
+| `internal/consoleui/static/assets/js/lib/{brief,filters,views,cadence,glossary}.js` | The Overview's situation brief, filter chips and click-to-filter links, saved views and palette recents (browser storage, validated on read), source cadence statistics, and the Guide's glossary; unit-tested in `webtest/brief.test.mjs` and `webtest/understanding.test.mjs` |
+| `internal/consoleui/static/assets/js/lib/{story,download}.js`, `ui/{story,downloads}.js` | Attacker-session wording and story layout (assessment, evidence codes, stages, phases, idle markers, the pace log scale, bounds sentence); authenticated downloads with fixed file names. Tested in `webtest/story.test.mjs` |
+| `internal/consoleui/devserver/mock-analysis.mjs` | The mock's twin of the backend's sessions, framework relations, indicator downloads and reports (ADR-0022), with scripted sessions; tested in `webtest/mockanalysis.test.mjs` |
+| `internal/consoleui/static/assets/js/lib/catalogs.js` | Decoy and honeytoken catalog logic, the rule action indicator, the server inter-arrival histogram, the SIEM event formats, and the digest (lead sentences, figures, limits, Markdown export with fenced server strings); tested in `webtest/catalogs.test.mjs` |
+| `internal/consoleui/devserver/mock-catalogs.mjs` | The mock's twin of the round-3 API: `/decoys`, `/honeytokens`, `/digest`, `/export/events`, rule prose and `observe_only`, `overview.index`, `session_id`, `inter_arrival`, with a scripted MCP decoy-environment session; tested in `webtest/mockcatalogs.test.mjs` |
 | `internal/consoleui/static/assets/js/lib/{auth,tenant}.js` | Sign-in option selection and OIDC error codes; tenant visibility, switch targets and where a switch lands; unit-tested in `webtest/` |
 
 There is no build step, no npm dependency and no third-party code. The console
@@ -62,6 +67,7 @@ Ratios are WCAG 2 contrast, computed from the token values (not estimated).
 | `--color-evidence-ink` | 13.18:1 on evidence-bg | 12.27:1 | Evidence text |
 | `--color-border-strong` | 3.59:1 on surface, 3.14:1 on canvas | 3.44:1, 3.22:1 on surface-2, 3.74:1 on canvas | Control edges (WCAG 1.4.11) |
 | `--color-accent` on `--color-accent-soft` | 5.68:1 | 6.00:1 | Selected palette row, open table row |
+| `--color-ink` / `--color-ink-2` on `--color-accent-soft` | 13.69:1 / 7.51:1 | 11.73:1 / 7.72:1 | Filter chip value and name, remove icon |
 | Status inks (`ok`, `warn`, `danger`, `info`) | ≥ 4.69:1 on their `-soft` fill | ≥ 6.00:1 | Badges and banners |
 | Severity fills `--sev-*` | ≥ 3.41:1 on surface, ≥ 3.20:1 on surface-2 | ≥ 4.75:1; ≥ 3.40:1 on the meter track | Meter segments |
 
@@ -82,6 +88,12 @@ normal-vision floor, contrast) against the surface each theme actually uses:
 
 Color follows the entity: a filter never repaints the remaining series.
 
+The filter chip's edge (`--color-accent-line` on `--color-accent-soft`,
+1.41:1 light, 1.71:1 dark) is decorative: the chip is not a control, and its
+remove link is identified by its icon at 7.51:1 / 7.72:1. The cadence fill
+and the brief's left rule use `--color-accent` (6.82:1 / 7.39:1 on surface).
+Ratios for the new pairs were computed with the WCAG 2 formula on 2026-11-22.
+
 Values measured with the WCAG 2 formula on 2026-11-15 after the canvas and
 hairline tokens were retuned (`--color-canvas` light `#edf0f4`, dark `#0d1218`;
 `--color-border` is a decorative hairline and carries no information alone).
@@ -93,6 +105,9 @@ hairline tokens were retuned (`--color-canvas` light `#edf0f4`, dark `#0d1218`;
   28px (`--text-2xl`) with `--tracking-figure`; page titles 22px. All numerals
   are tabular (`font-variant-numeric: tabular-nums` on the body), so counts
   do not jitter as they change.
+- `--tracking-caps` (0.08em) spaces the uppercase monospace micro-labels
+  (`.caps`, the brief's "Situation", the readout head, Guide groups). They
+  name a readout; they are interface text and never evidence.
 - Space is a 4px grid (`--space-1` = 4px … `--space-24` = 96px).
 - Radii encode hierarchy: chips 2px, controls 5px, panels 8px, dialogs,
   drawers and the palette 12px.
@@ -135,14 +150,17 @@ Rules:
 
 - **Never animates:** the command palette and shortcut sheet (keyboard,
   many times a day), j/k row and event stepping, navigation driven from the
-  keyboard (g-sequences, the palette, Enter on a link), filters, paging,
-  numbers changing, an in-place refresh (it never replays entrances).
+  keyboard (g-sequences, the palette, Enter on a link), filters, filter
+  chips and saved views, help tips, the situation brief and the chart
+  readout, paging, numbers changing, an in-place refresh (it never replays
+  entrances).
 - **Animates briefly:** pointer route changes (a 10px directional slide of
   the content area only; View Transitions API with a keyframe fallback),
   dialogs and the side panel (interruptible transitions on `[open]` with
   `display`/`overlay` discrete; exits shorter than entries), toasts
   (transitions, so bursts retarget), the nav indicator, the copy icon
-  morphing into a check, chart entry (bars rise in an eased 260ms wave) and
+  morphing into a check, chart entry (bars rise in an eased 260ms wave; the
+  source cadence columns rise once, `--duration-chart`) and
   hover (crosshair, dimming, a tooltip that glides), live rows (a color wash,
   never movement), the audit chain reflecting a verification.
 - **Ambient:** only the very slow opacity breathing of mesh nodes (sign-in
@@ -172,8 +190,11 @@ the full set, generated from the module.
 
 Light by default, dark when the OS prefers it, and an explicit
 `data-theme="light|dark"` on `<html>` always wins. The console's theme button
-cycles System → Light → Dark and remembers the choice in `localStorage`
-(a convenience only; nothing else is stored in the browser).
+opens a menu with an explicit choice (Match the system, Light, Dark; the
+current one checked and labelled "Current") and remembers it in
+`localStorage` (a convenience only). The palette's "Switch color theme"
+still cycles System → Light → Dark. The only other things kept in the browser are saved
+event views and palette recents; see "Console security rules".
 
 ## Component inventory
 
@@ -215,6 +236,32 @@ cycles System → Light → Dark and remembers the choice in `localStorage`
 | `.route-progress` | Thin progress bar | Only when a screen takes more than ~140ms |
 | `.live-pill` | "N new events" | Appears when rows arrive out of view |
 | `.menu` (`__title`, `__list`, `__item`, `__check`, `__hint`, `__note`, `__head`, `__kv`) | Top-bar menu | A native `popover` (light dismiss, Esc, top layer from the platform), placed under its button by CSSOM. Opened many times a day, so it never animates. The current item carries `aria-current`, a check and the word "Current". Route changes close it |
+| `.caps` | Uppercase monospace micro-label | Interface text only |
+| `.panel--primary` | The one panel a screen is about | A firmer, decorative edge and a 16px title; every other panel is secondary |
+| `.brief` (`__head`, `__eyebrow`, `__dot`, `__meta`, `__text`, `__clause`, `__num`, `__foot`) | Situation brief (Overview) | Sentences from `lib/brief.js` only. Each clause links to the view that shows it; numbers are semibold ink; a source key is `.evidence`; a missing field is said, never zeroed |
+| `.readout` (`__head`, `__list`, `__value`, `__total`) | Readout legend | Glyph, series name and value. Whole window at rest; the hovered or focused bucket otherwise. Not a live region: the focused bar's label already announces the values |
+| `.help`, `.help-tip`, `.tip-pop` (`__term`, `__text`, `__more`) | "What is this?" tip | A `?` button beside a non-obvious term opening a native popover with the Guide's short definition and a link to the entry. Never animates |
+| `.fchip-row`, `.fchip` (`__name`, `__value`, `__remove`) | Active filter | Name, value, remove link. Evidence values keep `.evidence` inside the chip |
+| `.cell-link`, `.cell-filter` | Click-to-filter on a table value | Pointer convenience, out of the tab order (`tabindex="-1"`); the event's "Narrow the list" panel is the keyboard path. Hidden on devices without hover |
+| `.cadence` (`__col`, `__bar`, `__fill`, `__count`, `__label`) | Gap histogram (Source) | Every column prints its count; the peak column is also named in text. Caption states how many loaded events it used |
+| `.peek--plain` | Absolute time behind a relative time | Same floating element as the evidence peek, without the evidence look |
+| `.assess` (`--filled`, `--ring`, `--dash`, `--compact`) | Automation observation | Shape plus words: filled diamond "Consistent with automation", hollow ring "No pattern established", dash "Too few events", always with the observation count. Never a verdict badge ("AI attacker", "bot") |
+| `.cstrip` | Pace strip | Log scale 10 ms … 1 h: min-to-p90 range, a median tick, and the printed median beside it |
+| `.stage` (`--discovery`, `--credential_access`, `--ai_service_abuse`, `--decoy_credential_replay`), `.ribbon` | Session stages | Word plus shape (ring, hatched square, diamond, triangle); the ribbon's segments are textured, and its legend prints each stage's event count |
+| `.story` (`__phase`, `__event`, `__when`, `__gap`, `__node`, `__body`, `__summary`, `__meta`, `__idle`) | Attack story timeline | Time with milliseconds and the gap before each event in a left rail; a spine with the classification glyph; summary as evidence opening the side panel; gaps over 5 minutes collapse into a dashed "quiet" marker. Below 720px the rail folds above the summary |
+| `.story-hero`, `.story-layout`, `.story-side` | Session detail layout | Hero: assessment, figures, stage ribbon. Two columns from 1200px, one below |
+| `.figures` (`__item`, `__note`) | Labelled numbers | Pace figures; the note explains the formulas |
+| `.obs-list`, `.obs` (`--quiet`) | Automation observations | Console title and explanation, a "what is this?" tip, and the server's fixed sentence labelled "Server" |
+| `.fw-groups`, `.fw-group`, `.chip--fw`, `.fw-link` | Framework references | Grouped by framework in fixed order; each chip opens the matrix at that technique. Editorial "relates to", stated beside them |
+| `.tgrid`, `.tcell` (`--observed`, `--quiet`) | Technique matrix | Observed: solid edge, accent rule, a count, last seen, a link to the events. Not observed: dashed edge, no fill, the words "not observed" |
+| `.downloads` | Report and indicator downloads | Analyst only (viewers see why); fixed file names; status line with skip counts and scan bounds; "proposed, never applied" for the blocklist |
+| `.fam` (`--ai`, `--mcp`, `--proto`, `__glyph`), `.fam-row` | Decoy surface family | Hexagon (AI-service shape), bracketed square (MCP), ring (protocol), always with the family's word |
+| `.tkind` (`--key`, `--flag`) | Honeytoken kind | Key or flag icon plus "Decoy credential" / "Agent canary" |
+| `.ract` (`--observe`, `--act`, `__mark`) | Rule action | Hollow ring "Observe only"; filled square "Can select an action"; the hint is the title and visually hidden text |
+| `.activity-mark` (`__fill`) | Share bar beside a printed count | Decorative (`aria-hidden`); the count is the number of record. Fill width by CSSOM |
+| `.crumbs` (`__list`, `__item`, `__here`) | Breadcrumbs on detail pages | `nav[aria-label=Breadcrumb]`, the current page last with `aria-current="page"`; a source key stays evidence |
+| `.page-head__hint` | "What you can do here" | One line under every screen's subtitle; interface text |
+| `.empty-art--decoys`, `--tokens`, `--digest`, `.empty-art__ring` | Empty-state art variants | `emptyArtVariant(kind)`: a decoy in its listening ring, a key path returning to a marker, a briefing sheet; all in the lattice |
 | `.top-tenant`, `--static` | Active tenant in the top bar | A button that opens the tenant menu with several tenants; a static label with one tenant not named `default`; absent otherwise |
 
 ## Console security rules
@@ -232,7 +279,17 @@ The console server sends
   vocabularies before they reach a request, a class name or a link
   (`lib/route.js`).
 - The CSRF token lives only in the API client's closure; the session is an
-  HttpOnly cookie. Nothing sensitive goes into `localStorage`. A tenant
+  HttpOnly cookie. Nothing sensitive goes into `localStorage`. Besides the
+  theme it holds, per tenant (`aegismesh.views.<tenant>`,
+  `aegismesh.recent.<tenant>`): saved event views, with only non-evidence
+  filters (node, class, sensor, kind, rule, severity, since, until; source
+  keys and search text are attacker-influenced and never written), and up to
+  six palette recents by kind and id (screens, actions, rules, sensors,
+  investigations, Guide entries; never sources or events). Both are read
+  back as untrusted input: parsed defensively, names stripped of control and
+  bidi characters and capped, filters re-validated by
+  `normalizeEventFilters` before they reach a URL or a request. The UI says
+  "stored in this browser only". A tenant
   switch replaces the token with the rotated one from the response. A 401
   for a request that was already in flight with the old cookie during a
   switch is treated as an answer, not as a sign-out.
@@ -268,11 +325,177 @@ it is an audited action.
 ## Screens
 
 Sign-in, Overview, Events (with live mode), Event detail, Sources, Source
-detail, Sensors, Rules, Recommendations, Node, Investigations, Investigation
-detail, Audit trail (admin only), Fleet and Fleet node (experimental).
+detail, Sessions, Session detail, Digest, Investigations, Investigation
+detail, Techniques, Recommendations, Decoys, Honeytokens, Sensors, Rules,
+Node, Fleet and Fleet node (experimental), Audit trail (admin only), and the
+Guide.
 Analyst-only actions (create, rename, change status or priority, attach and
 detach evidence, add notes) are hidden for viewers; the server enforces the
 same rules.
+
+### Understanding aids (2026-11-22)
+
+- **Overview situation brief.** The first panel under the page head. A few
+  sentences from `buildBrief` (`lib/brief.js`), in a fixed order: volume
+  against the previous window (neutral "more than" / "fewer than"), canary
+  invocations, correlation signals, the highest finding severity present,
+  the most active source (its share of the window and how many sensors saw
+  it), the most cited rule, open investigations. Every clause links to the
+  filtered view, with `since` set to the window start so the list matches
+  what was counted. A field the server did not send produces a sentence
+  saying so. With no events in the window, the brief shows first-run steps
+  instead: `aegismesh doctor --config mesh.yaml`, `aegismesh run --config
+  mesh.yaml --dry-run`, `aegismesh demo --console`, and a link to the 7-day
+  window and the Guide; it says a quiet console is a normal state.
+- **Hierarchy.** The chart is the primary panel (`.panel--primary`); the
+  others are secondary. Panel titles for non-obvious terms carry a tip.
+- **Chart readout.** The legend is a readout: whole-window totals at rest,
+  the hovered or focused bucket's values otherwise, plus the existing
+  crosshair, tooltip and table view.
+- **Events filter bar.** Search is always visible; active filters are
+  removable chips with "Clear all"; the full form is behind "All filters
+  (n set)". Class, sensor, source and rule values in the table are
+  click-to-filter links (pointer only, see `.cell-link`); the event's
+  "Narrow the list" panel offers the same filters from the keyboard. An
+  empty filtered list shows the chips so one can be removed in place; an
+  empty index says an empty list is normal and links to the Guide.
+- **Saved views.** "Views" next to search lists views saved in this browser
+  for this tenant, opens one, deletes one, and saves the current filters
+  under a name. Source and search filters are dropped and the save dialog
+  says so.
+- **Palette as global search.** Groups: Recent (on an empty query), Go to,
+  Actions, Investigations, Rules (`GET /rules`), Nodes, Sensors, Sources,
+  Guide; when the query has two or more characters, "Search all events for
+  …" and up to six events from `GET /events?q=` (debounced, the same
+  substring match as the Events list), each opening the event in the side
+  panel over the filtered list. Results are grouped; a group sits where its
+  best match ranks.
+- **Guide** (`#/guide`, `g h`, nav "Help"). The glossary from
+  `lib/glossary.js`: observation vs incident, classification, canary
+  invocation, severity, finding, findings vs correlation signals, rule,
+  evidence text, source, cadence, recommendations (proposed, not executed),
+  investigation, index bounds, integrity, audit trail. `?t=<id>` scrolls to
+  and marks an entry; CLI commands have a copy button.
+- **Source cadence.** Beside the activity strip: the gaps between
+  consecutive loaded events in seven ranges (under 1 s to over 1 h), the
+  median, the 10th–90th percentile range and the share within a quarter of
+  the median, captioned "from the N loaded events" with how many were not
+  loaded. It says regular short gaps are typical of scripts and agent tool
+  loops and that it is an observation, not a verdict.
+- **Relative times** carry the absolute UTC time in the peek on hover and in
+  visually hidden text.
+- **Touch.** Under `(pointer: coarse)` buttons, nav links, segmented
+  controls, menu and palette items, copy buttons and chip remove links are
+  at least 44px; the help tip's hit area grows to 44px.
+
+Extension points for later screens: a screen is an item in `NAV`
+(`ui/shell.js`), a route in `lib/route.js`, and a descriptor in
+`screens/index.js`; the palette picks up `NAV` automatically. Nothing is
+listed before it exists.
+
+### Identity pass (2026-11-22)
+
+Art direction: **a written briefing inside an instrument.** The console keeps
+its calm graphite-and-cobalt instrument, and adds one bold move: page titles
+and the situation brief are set in the platform's serif (`--font-display`:
+New York on Apple systems, then Iowan Old Style, Charter, Georgia), the
+voice of a briefing a defender reads, while every operational surface stays
+in the sans with tabular numerals. The mesh appears as a faint 24px lattice
+(`--lattice-line`, `--lattice-node`) behind the top of each screen and the
+landing hero, and the evidence inset gains a 2px "tag" notch, the only
+ornament in the product and reserved for attacker-supplied text. Mono text
+uses a slashed zero.
+
+| Token | Value | Notes |
+|---|---|---|
+| `--font-display` | system serif stack | Titles, brief, session sentence. No font is fetched |
+| `--text-display`, `--leading-display` | 30px, 1.12 | Page titles (24px below 720px) |
+| `--lattice-line`, `--lattice-node` | cobalt at 5.5% / 12% (light), 4% / 10% (dark) | Decorative only; carries no information |
+
+Contrast: the display face uses the existing ink tokens, so text ratios are
+unchanged. New marks are non-text and redundant with printed values: mesh
+node edges use `--color-ink-3` (4.95:1 on canvas light, 6.15:1 dark) or the
+accent; tempo ticks use the classification slots (light signal green is
+2.82:1, so the list beside it carries the data, as for the main chart).
+
+New pieces:
+
+- **Sparkline marks** (`.spark__mark`, `lib/viz.js sparkMarks`): the start
+  point, the interior maximum and a nonzero interior minimum, on the same
+  geometry as the line; the last point keeps its dot.
+- **Sensor mesh** (Overview, `.mesh`, `meshLayout`): sensors from
+  `overview.by_sensor` as nodes around the console core; node area follows
+  events in the window; a pulsing ring and a solid edge only for sensors with
+  events in the newest bucket (`lastBucketActive`), dashed when that bucket was
+  empty, plain when the API sent no buckets. Every node is a link to the
+  sensor's events with its name and count in text. The pulse stops under
+  reduced motion.
+- **Sessions tile** beside Investigations on the Overview.
+- **Tempo ribbon** (session story, `.tempo`, `tempoLayout`): every timeline
+  event on one axis, gaps on a log scale, quiet stretches over 5 minutes as
+  labelled breaks, stage bands underneath, taller ticks for correlation
+  signals. One tab stop, arrow keys, Enter opens the event; hover or focus
+  highlights the matching event in the list.
+- **"How this session unfolded"** (`unfoldSentence`): one sentence in the
+  display serif composed only from the session's fields; the source stays
+  evidence.
+- **Row density** (top bar): comfortable or compact, remembered in this
+  browser (`aegismesh.density`, parsed against a closed list) and applied as
+  `html[data-density]`. Stacking tables gain a low-specificity zebra.
+- **Empty-state art** (`emptyArt`, `.empty-art`): a lattice, one decoy and a
+  probe line, drawn inline; used where an empty list is a normal state.
+- **Stat hierarchy**: the all-events tile leads (accent top rule, larger value).
+
+Motion fix: route transitions no longer crossfade. The old view leaves in
+`--duration-instant`, the new one enters after it, and the transition group
+no longer morphs between page heights; `swapView` finds the current view when
+the swap actually runs, removes any stray view and skips a running
+transition, so a navigation that overtakes another cannot leave two screens
+stacked (the ghosting seen in phase 2).
+
+### Attacker sessions, the attack story and techniques (2026-11-22)
+
+Built on `GET /sessions`, `/sessions/{id}`, `/coverage`, `/export/indicators`,
+`/sessions/{id}/report` and `/investigations/{id}/report`
+(docs/architecture/console-api.md, ADR-0022).
+
+- **Sessions** (`#/sessions`, nav Observe, `g c`, palette): source (evidence)
+  with last seen, duration, events, surfaces, max severity, rules, a pace
+  strip and the automation observation ("Consistent with automation · 3").
+  Window and exact-source filters, cursor paging, the API's `bounds` as one
+  sentence (scan size, scan limit reached, index history, "a source key is
+  not an actor identity"). Rows consistent with automation carry an accent
+  edge; the text says the same. The table scrolls in its panel.
+- **Session detail** (`#/sessions/<id>`): hero with the assessment, figures
+  and the stage ribbon; the timeline grouped by `phases`, gaps as durations
+  (sub-second gaps in semibold), idles over 5 minutes collapsed, events
+  opening the shared event side panel (`?event=`, j/k, Esc); "Automation
+  observations" (each code in plain words, a tip, the server's sentence);
+  "Pace" (min, median, p90, events per minute, regularity, the formulas, a
+  gap histogram from the timeline); "Frameworks" (chips into the matrix);
+  "Downloads"; "New investigation with these events" (analyst, local event
+  ids only, at most 200). A truncated timeline says what it covers.
+- **Techniques** (`#/techniques`, nav Investigate, `g t`): tabs for MITRE
+  ATT&CK, MITRE ATLAS and OWASP LLM 2025 (arrow keys move), the API's
+  `interpretation` verbatim in a "Not a coverage claim" banner plus what
+  observed and unobserved mean, one cell per technique. An observed cell
+  opens events citing its first rule since the window start.
+- **Rules**: grouped by family with what each family does, framework
+  references per rule, and (on servers without `observe_only`) a statement
+  that the API does not report per rule whether a match only observes; see
+  the catalogs pass below for the indicator that replaced it.
+- **Integrations**: Source links to its sessions; Investigation has
+  "Downloads"; the Overview brief adds "N sessions with pace or rules
+  consistent with automation" ("At least" when more pages exist) when the
+  endpoint answers; the palette lists sessions (source as evidence) and
+  techniques; the Guide gains session, pace and regularity, automation
+  observation, honeytoken, agent canary, LLMjacking pattern, technique
+  mapping and proposed blocklist.
+- **Downloads** go through the API client (session cookie, same origin;
+  GETs need no CSRF token). The response is read as a Blob and saved under
+  one of the server's fixed names chosen by kind; `Content-Disposition` is
+  never read. They are never cached or prefetched (audited reads). Viewers
+  see "Reports, indicator exports and event files need the analyst role".
 
 ### Sign-in (operator token and experimental single sign-on)
 
@@ -427,16 +650,126 @@ On a hub that accepts forwarded evidence, an event summary may carry `node:
   events in the browser (the API sorts by id); each row opens Events filtered
   to that origin and to the overview window.
 
+### Decoys, honeytokens, digest and the filled API gaps (2026-11-22)
+
+Built on the round-3 contract (`docs/architecture/console-api.md`, "Round 3
+additions"): `GET /decoys`, `/honeytokens`, `/digest`, `/export/events`, rule
+`description`/`guidance`/`observe_only`, `overview.index` and
+`top_rules[].title`, event `session_id`, and source `inter_arrival`.
+
+- **Decoys** (`#/decoys`, nav System, `g d`, palette): "What attackers see,
+  and what is real" first (nothing behind a decoy is real, no model runs, tool
+  calls never execute, the record is the only real thing), four counts
+  (decoys, AI-service shapes, MCP environments, planted ids), then one card
+  per decoy: kind, listen address, surface families (`.fam`), static rules,
+  tools and fake files where they apply, planted honeytoken ids (each opens
+  the Honeytokens row), events in the window with an activity mark, last
+  activity, "View its events" (sensor and `since` set to the window start)
+  and "Runtime state". The page note words the API's `bounds` and says
+  planting is detected only in inline response material. Window 1h/24h/7d.
+- **Honeytokens** (`#/honeytokens`, nav System, `g k`): a "Values are never
+  shown" banner (the API returns ids and kinds only), four counts, a table
+  (token, kind, planted in, hits, last hit, presented by), ranked by hits
+  then recency, `?t=<id>` marks a row. Sources are evidence, each linking to
+  the source and its sessions. "What a hit means" states, per kind, what a
+  hit means and does not mean. The empty state (and "Mint another") gives the
+  CLI commands from `docs/cli.md` with copy buttons and "Never use a real
+  credential".
+- **Digest** (`#/digest`, nav Observe, `g b`; "Read the 24-hour digest" in
+  the Overview brief): a written briefing in the display serif. Masthead,
+  lead sentences (`digestLead`: neutral comparisons, a missing count said,
+  never zeroed), Volume (this window, the window before, a signed difference
+  in ink), Sources and sessions, Most cited rules (id, catalog title,
+  severity meter or "Signal", count; each opens its events since the window
+  start), Newly observed techniques (grouped by framework, editorial),
+  Planted markers and open work (a `null` open-investigations count is "not
+  available"), and Limits (the server's `interpretation` and
+  `source_comparison` quoted verbatim and marked "server text", then index
+  history, scan, recommendation exclusions, "Nothing is scheduled, stored or
+  sent"). Window 24h/7d. "Copy as Markdown" composes the same fields in the
+  browser (`digestMarkdown`); every server string, the rule titles included,
+  is an inline code span with control, bidi and zero-width characters
+  removed, a fence longer than any backtick run inside and escaped table
+  pipes. When the browser refuses the clipboard, the Markdown opens selected
+  in a read-only field. "Print" uses the print stylesheet: no navigation, top
+  bar, actions, hints, tips or lattice; light ink on paper; sections avoid
+  page breaks.
+- **Rules:** a column "On a match" (`.ract`) and, per rule, the catalog
+  description with "Check next" guidance. "Can select an action" means a
+  match may tag, throttle, isolate or refuse the decoy's own connection under
+  the configured severity mapping; nothing outside the decoy is touched.
+  Without `observe_only` the column is omitted and the banner says the server
+  does not report it.
+- **Overview:** the brief's most-cited-rule clause and the Top rules list use
+  the catalog title. The empty state reads `index.events`: 0 is "Nothing
+  indexed yet" (first-run steps and a link to Decoys); a nonzero index with
+  an empty window is "A quiet window" (links to the 7-day overview, the
+  7-day digest and every indexed event); no `index` keeps the combined copy.
+- **Event detail and side panel:** a "Session" row links to the session
+  story when `session_id` is a session id, says "Not in a retained session"
+  when it is empty, and is absent on servers that do not send it. The full
+  page adds a "Session story" button and breadcrumbs.
+- **Source cadence:** the server's histogram over all retained events from
+  the source (signals included, independent of paging) when `inter_arrival`
+  is well formed, labelled as such, with the browser's median and spread from
+  the loaded events underneath; otherwise the browser's histogram as before.
+- **Downloads** (sessions and investigations) gain "Event files for a SIEM":
+  CEF, Syslog (RFC 5424), OTLP JSON and ECS NDJSON, saved under the server's
+  fixed names. The group says "File formats only: AegisMesh sends nothing and
+  ships no exporter or collector"; the OTLP button's hint says "File format
+  only: AegisMesh sends nothing and ships no exporter".
+- **Polish:** breadcrumbs on Event, Source, Session, Investigation and Fleet
+  node; a "what you can do here" hint under every screen's subtitle; sticky
+  first cells take the row's tint (`--row-tint` for hover, zebra, cursor,
+  open), row headers in a table body read as cells, and numeric columns stay
+  on one line; the theme is an explicit menu; the digest's copy icon morphs
+  into a check like every copy button.
+- **Guide** gains Decoy, AI-service decoy, MCP decoy environment, Honeytoken
+  hit, Digest and SIEM event formats (group "Decoys and planted markers").
+  The first-run tour has six steps (Digest added after Sessions).
+
+Motion: the request also listed number changes and palette and popover
+entrances. The motion rules above keep those still on purpose (the palette,
+menus and changing numbers are used many times a day), so they were not
+added; nothing in this pass animates except the copy-to-check morph, which
+uses the duration tokens and is instant under reduced motion.
+
+Contrast for the new pairs (WCAG 2, computed from the tokens on 2026-11-22;
+no color token was added):
+
+| Pair | Light | Dark |
+|---|---|---|
+| `.fam--ai` glyph (`--color-accent`) on surface | 6.82:1 | 7.39:1 |
+| `.ract--observe` ring (`--color-ink-3`) / `.ract--act` square (`--color-ink`) on surface | 5.66:1 / 16.43:1 | 6.15:1 / 14.46:1 |
+| `.activity-mark__fill` (`--color-accent`) on its track (`--sev-track`) | 5.24:1 | 5.29:1 |
+| Ink / ink-2 on the "what is real" fill (`--color-accent-soft` 55% over surface) | 14.85:1 / 8.15:1 | 13.03:1 / 8.58:1 |
+| Muted text (`--color-ink-3`) on a focused honeytoken row (`--color-accent-soft`) | 4.71:1 | 4.99:1 |
+| `.decoy__mark` icon (`--color-accent`) on `--color-accent-soft` | 5.68:1 | 6.00:1 |
+| Crumb separator (`--color-border-strong`), "what is real" edge (`--color-accent-line`) | decorative | decorative |
+
+### Verification: catalogs, digest and API gaps (2026-11-22, Node 25, Go toolchain, Chromium in the Claude browser pane, mock on port 9135)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (233 tests: the 210 before plus catalog, digest, Markdown fencing, histogram and empty-state logic, the three new screens rendered into the fake DOM with hostile strings, the theme menu, and the mock's round-3 routes) | PASS |
+| `go test ./internal/consoleui` (embed safety: three new screens, literal `import()`s) | PASS |
+| Dark 1440px: Decoys, Honeytokens (7d), Digest (all sections), Rules, Overview (brief title, top rules, digest link), event detail (breadcrumbs, session row and button), Source cadence from the server histogram; theme menu open and choosing Light | PASS |
+| Light 1440px: Decoys, Digest (7d) | PASS |
+| 375×812: no horizontal page scroll on Decoys, Honeytokens, Digest, Rules, Overview, Source, Sessions, Investigations, Events, Guide; Decoys, Honeytokens and Digest viewed (found and fixed: rule ids breaking in the digest, a boxed first cell in stacked honeytoken rows) | PASS |
+| "Copy as Markdown" | PARTIAL: the pane refused the clipboard, so the fallback (selected read-only field) was checked; the success path is covered by unit tests only |
+| Print stylesheet, reduced motion, light at 375px for the new screens, Firefox and Safari, the real Go console server | NOT RUN: the pane cannot emulate print or reduced motion; only Chromium was available; verified against the mock and the contract only |
+
 ## Interaction
 
 - **Command palette** (Cmd/Ctrl+K, or the search button): screens, actions
   (live events, theme, shortcuts, "Switch tenant: …" with several tenants,
   sign out), sensors, the top 50 sources of
-  the last 24 hours and investigations. Ranking: exact, prefix, word start,
+  the last 24 hours, investigations, rules, Guide entries, recents, and a
+  server-side event search (see "Understanding aids"). Ranking: exact, prefix, word start,
   substring, then fuzzy; tested in `webtest/palette.test.mjs`. A pasted
   32-hex event id offers to open that event.
-- **Shortcuts** (`?` shows them): `g` then `o/e/s/i/r/n/a` to go to a
-  screen, `/` to search events, `j`/`k` to move through the events list,
+- **Shortcuts** (`?` shows them): `g` then `o/e/s/c/b/i/t/r/d/k/n/a/h` to go
+  to a screen (`b` Digest, `d` Decoys, `k` Honeytokens), `/` to search events, `j`/`k` to move through the events list,
   Enter to open a row, `o` to open the side panel's event as a full page,
   Esc to close. Single-letter shortcuts never fire inside text fields.
 - **Event side panel:** rows on the events list open the event over the
@@ -585,3 +918,76 @@ and does not ship.
 | Reduced motion | NOT RUN in the browser: the pane cannot emulate it. The menus never animate; nothing new animates |
 | Firefox and Safari (native `popover`, `<details>`) | NOT RUN: only Chromium was available |
 | Real identity providers and the real Go console server | NOT RUN: verified against the contract and the mock's fake provider only |
+
+### Verification: understanding aids (2026-11-22, macOS, Node 25, Chromium in the Claude browser pane)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (191 tests: the 169 before plus the situation brief, filter chips and click-to-filter links, saved views and recents parsing as untrusted input, cadence statistics, glossary cross-references and copy checks, chip/tip/relative-time rendering, the Guide route) | PASS |
+| `go test ./internal/consoleui` (embed safety, literal `import()` for the Guide) | NOT RUN: another task was using the Go cache on a nearly full disk. The new code was checked by hand against the embed test's forbidden patterns (no markup sinks, no `localStorage.setItem` with token, csrf or session in the call, one new literal `import('./guide.js')`) |
+| Browser against the mock, dark at 1440px: Overview brief with linked clauses, chart readout following a hovered bucket, help tip popover and its Guide link; Events filter chips, saved view stored and listed (only `sensor` and `severity` written), click-to-filter on a rule chip without opening the row, side panel "Narrow the list"; palette event search ("Search all events for …" and six results) and Guide entries; Source cadence beside the activity strip; Guide at `?t=severity` | PASS |
+| Light at 1440px: Overview (brief, readout on a hovered bucket), Events side panel | PASS |
+| 375px (mobile emulation, coarse pointer): Overview and Events, no horizontal page scroll | PASS |
+| Site: style guide "Understanding aids" section and landing showcase brief, light, 1440px | PASS |
+| Reduced motion, Firefox, Safari, the real Go console server, an empty index (first-run steps) in the browser | NOT RUN: the pane cannot emulate reduced motion, only Chromium was available, and the mock always has events (the empty brief is covered by unit tests) |
+
+### Verification: attacker sessions and techniques (2026-11-22, macOS, Node 25, Go toolchain, Chromium in the Claude browser pane)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (204 tests: the 191 before plus story wording and layout, downloads, routes, the brief's session clause, and the mock's sessions, details, coverage, downloads and formulas) | PASS |
+| `go test ./internal/consoleui` (embed safety: new screens, literal `import()`s) | PASS |
+| Browser against the mock (port 9133), dark 1440px: Sessions, the LLMjacking story (phases, gaps, idle markers, observations, pace, side panel by click, a proposed-blocklist download), Techniques | PASS |
+| Light 1440px: Techniques (ATT&CK with unobserved cells), Rules | PASS |
+| 375px: the SSH story (light), Sessions, Techniques, Rules and Overview (dark); no horizontal page scroll (found and fixed: the framework tabs and the bounds note widened the page) | PASS |
+| Session detail in light at 1440px, reduced motion, Firefox and Safari, the real Go server | NOT RUN |
+
+### Verification: identity pass (2026-11-22, Chromium in the Claude browser pane, mock on port 9133)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (209 tests, adding sparkline marks, mesh layout, last-bucket activity, tempo layout, density parsing, the unfold sentence) | PASS |
+| `go test ./internal/consoleui` | PASS |
+| Overview dark and light at 1440px (display titles, brief, lattice, lead tile, sensor mesh); LLMjacking session dark at 1440px (unfold sentence, tempo ribbon, timeline) | PASS |
+| 375px light: session story and Overview; no horizontal page scroll on Overview, Events, Sessions, Techniques, Rules, Guide (found and fixed: a help tip's enlarged hit area poking past the content edge) | PASS |
+| Ghosting fix in a visible, motion-enabled browser; reduced motion; site pages after the identity change; dark at 375px for this pass | NOT RUN: the pane is hidden (View Transitions and animations do not progress), cannot emulate reduced motion, and refused the static site server |
+
+### Identity pass, continued (2026-11-22)
+
+- **Stage bar regression fixed.** The session hero's stage bar used the
+  `reveal-x` clip-path entrance; where that reveal did not complete, the bar
+  stayed clipped to a fraction of its width. The bar is now static and
+  full-width, and the discovery segment has a visible fill. Checked in dark and
+  light at 1440px and at 375px.
+- **Sign-in:** the title and a one-line statement in the display serif, a
+  lattice field behind the card, an accent top edge on the card.
+- **Sidebar rail:** "Collapse sidebar" at the foot of the nav switches to an
+  icon rail (`html[data-rail]`, remembered as `aegismesh.rail`, desktop widths
+  only). Labels stay in each link's accessible name and tooltip.
+- **First-run tour** (`ui/tour.js`): six steps (situation brief, counts,
+  Sessions, Digest, search, Guide; Digest added in the catalogs pass) in a
+  non-modal popover. No overlay, nothing behind
+  it is inert, focus moves to the step title, Esc or "Skip tour" ends it,
+  finishing or skipping is remembered (`aegismesh.tour`), steps whose target
+  is hidden (the nav drawer on phones) are skipped, and the Guide has "Take
+  the six-step tour again".
+- **Tables:** while a table scrolls sideways in its wrapper, the first column
+  sticks to the left edge.
+- **Site:** `site/index.html` is rebuilt: a serif headline on a lattice field,
+  a composed showcase from the real components (situation brief, sensor mesh,
+  a story slice) with synthetic data and a caption that says so, one card per
+  shipped capability, "What it is not", and a quick start whose commands are
+  taken from `docs/cli.md` (`make build`, `demo --console`, `init --profile
+  ai-decoy`, `honeytoken new`, `run --dry-run`). `site/design-system.html`
+  gains "Identity" and "Mesh, tempo, density" sections; the earlier sections
+  remain. The dev mock serves `site/` read-only under `/__site/` so the pages
+  can be checked with the console's security headers.
+
+| Check | Result |
+|---|---|
+| `make ui-test` (210 tests) and `go test ./internal/consoleui` | PASS |
+| Stage bar: session hero, dark and light 1440px, 375px (DOM width and screenshot) | PASS |
+| Landing: dark 1440px (hero, capabilities, what it is not, quick start), light 375px (hero, showcase); no horizontal scroll | PASS |
+| Style guide: dark 1440px, Identity and Mesh/tempo/density sections; no horizontal scroll | PASS |
+| Sign-in dark 1440px; tour and rail on Overview dark 1440px; no horizontal scroll at 375px on Overview, Guide, Sessions, a session | PASS |
+| Landing light 1440px and dark 375px; style guide light and 375px; sign-in light and 375px; tour at 375px; reduced motion | NOT RUN |

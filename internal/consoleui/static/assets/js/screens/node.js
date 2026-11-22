@@ -21,6 +21,7 @@ export default {
       pageHead({
         title: 'Node',
         subtitle: 'Health of this AegisMesh instance. Other enrolled nodes appear on the experimental Fleet screen, as self-reported inventory.',
+        hint: 'Check that sensors started, the bus dropped nothing and the index still covers the history you need.',
         actions: badge(n.healthy ? 'ok' : 'danger', n.healthy ? 'Healthy' : 'Unhealthy'),
       }),
       historyBanner(n),

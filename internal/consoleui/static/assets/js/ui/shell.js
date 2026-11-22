@@ -1,30 +1,43 @@
 // Application frame: navigation, top bar, theme switch.
 
-import { h } from '../lib/dom.js';
+import { h, mount } from '../lib/dom.js';
 import { roleAtLeast, capitalize } from '../lib/taxonomy.js';
 import { tenantInfo } from '../lib/tenant.js';
 import { authMethodLabel } from '../lib/auth.js';
 import { formatDateTime } from '../lib/format.js';
 import { icon, brandMark } from './icons.js';
+import { parseDensity, nextDensity } from '../lib/viz.js';
 
 export { brandMark };
 
+// Navigation is data: a screen appears here and in the palette by adding an
+// item (and a route in lib/route.js plus a descriptor in screens/index.js).
+// Screens for new API endpoints slot into the group they belong to; nothing
+// is listed before it exists.
 export const NAV = [
   { group: 'Observe', items: [
     { route: 'overview', label: 'Overview', href: '#/overview', icon: 'overview', keys: 'g o' },
     { route: 'events', label: 'Events', href: '#/events', also: ['event'], icon: 'events', keys: 'g e' },
     { route: 'sources', label: 'Sources', href: '#/sources', also: ['source'], icon: 'sources', keys: 'g s' },
+    { route: 'sessions', label: 'Sessions', href: '#/sessions', also: ['attack_session'], icon: 'story', keys: 'g c' },
+    { route: 'digest', label: 'Digest', href: '#/digest', icon: 'digest', keys: 'g b' },
   ] },
   { group: 'Investigate', items: [
     { route: 'investigations', label: 'Investigations', href: '#/investigations', also: ['investigation'], icon: 'investigations', keys: 'g i' },
+    { route: 'techniques', label: 'Techniques', href: '#/techniques', icon: 'matrix', keys: 'g t' },
     { route: 'recommendations', label: 'Recommendations', href: '#/recommendations', icon: 'recommendations', keys: 'g r' },
   ] },
   { group: 'System', items: [
+    { route: 'decoys', label: 'Decoys', href: '#/decoys', icon: 'decoy', keys: 'g d' },
+    { route: 'honeytokens', label: 'Honeytokens', href: '#/honeytokens', icon: 'key', keys: 'g k' },
     { route: 'sensors', label: 'Sensors', href: '#/sensors', icon: 'sensors', keys: 'g n' },
     { route: 'rules', label: 'Rules', href: '#/rules', icon: 'rules' },
     { route: 'node', label: 'Node', href: '#/node', icon: 'node' },
     { route: 'fleet', label: 'Fleet', href: '#/fleet', also: ['fleet_node'], icon: 'fleet', tag: 'Experimental' },
     { route: 'audit', label: 'Audit trail', href: '#/audit', role: 'admin', icon: 'audit', keys: 'g a' },
+  ] },
+  { group: 'Help', items: [
+    { route: 'guide', label: 'Guide', href: '#/guide', icon: 'guide', keys: 'g h' },
   ] },
 ];
 
@@ -54,29 +67,137 @@ export function applyTheme(theme = readTheme()) {
 
 const themeListeners = new Set();
 
-export function cycleTheme() {
-  const next = THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length];
+export function setTheme(next) {
+  const theme = THEMES.includes(next) ? next : 'system';
   try {
-    globalThis.localStorage?.setItem(THEME_KEY, next);
+    globalThis.localStorage?.setItem(THEME_KEY, theme);
   } catch {
     // Storage may be unavailable; the choice still applies to this page.
   }
-  applyTheme(next);
-  for (const fn of themeListeners) fn(next);
-  return next;
+  applyTheme(theme);
+  for (const fn of themeListeners) fn(theme);
+  return theme;
 }
 
+export function cycleTheme() {
+  return setTheme(THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length]);
+}
+
+const THEME_LABEL = { system: 'Match the system', light: 'Light', dark: 'Dark' };
+const THEME_HINT = { system: 'Follows the operating system', light: 'Always light', dark: 'Always dark' };
+
+// An explicit choice: System, Light or Dark, in a top-bar menu (a native
+// popover; it opens many times a day, so it never animates). The current
+// choice carries a check and the word "Current".
 function themeControl() {
-  const btn = h('button', { class: ['btn', 'btn--ghost', 'btn--icon'], type: 'button' });
-  const paint = (current) => {
-    btn.replaceChildren(icon(THEME_ICON[current]));
-    const label = `Color theme: ${capitalize(current)}. Activate to change.`;
-    btn.setAttribute('aria-label', label);
-    btn.setAttribute('title', `Theme: ${capitalize(current)}`);
+  const btn = h('button', { class: ['btn', 'btn--ghost', 'btn--icon'], type: 'button', popovertarget: 'theme-menu' });
+  // References kept here, so painting never queries the DOM.
+  const items = THEMES.map((t) => {
+    const check = h('span', { class: 'menu__check', 'aria-hidden': 'true' });
+    const hint = h('span', { class: 'menu__hint' });
+    const button = h('button', { class: 'menu__item', type: 'button', 'data-theme-choice': t },
+      check, icon(THEME_ICON[t], { size: 'sm' }), h('span', { class: 'menu__label' }, THEME_LABEL[t]), hint);
+    button.addEventListener('click', () => { hideMenu(menu); setTheme(t); btn.focus(); });
+    return { t, button, check, hint };
+  });
+  const menu = h('div', { class: 'menu', id: 'theme-menu', popover: 'auto', tabindex: '-1', 'aria-labelledby': 'theme-menu-title' },
+    h('p', { class: 'menu__title', id: 'theme-menu-title' }, 'Color theme'),
+    h('ul', { class: 'menu__list' }, items.map((i) => h('li', null, i.button))),
+    h('p', { class: 'menu__note' }, 'Remembered in this browser only.'));
+  let current = readTheme();
+  const paint = (theme) => {
+    current = theme;
+    mount(btn, icon(THEME_ICON[theme]));
+    btn.setAttribute('aria-label', `Color theme: ${THEME_LABEL[theme]}. Choose a theme.`);
+    btn.setAttribute('title', `Theme: ${capitalize(theme)}`);
+    for (const i of items) {
+      const on = i.t === theme;
+      i.button.setAttribute('aria-current', on ? 'true' : 'false');
+      mount(i.check, on ? icon('check', { size: 'sm' }) : null);
+      i.hint.textContent = on ? 'Current' : THEME_HINT[i.t];
+    }
   };
-  btn.addEventListener('click', () => cycleTheme());
+  anchoredMenu(menu, btn, { focusOnOpen: () => items.find((i) => i.t === current)?.button });
   themeListeners.add(paint);
   paint(readTheme());
+  return [btn, menu];
+}
+
+// ---- Row density -----------------------------------------------------------
+// Comfortable or compact rows, remembered in this browser (a convenience,
+// like the theme). The stored value is parsed against a closed list.
+
+const DENSITY_KEY = 'aegismesh.density';
+
+function readDensity() {
+  try {
+    return parseDensity(globalThis.localStorage?.getItem(DENSITY_KEY));
+  } catch {
+    return 'comfortable';
+  }
+}
+
+export function applyDensity(d = readDensity()) {
+  document.documentElement.setAttribute('data-density', parseDensity(d));
+}
+
+function densityControl() {
+  const btn = h('button', { class: ['btn', 'btn--ghost', 'btn--icon'], type: 'button' });
+  const paint = (d) => {
+    btn.replaceChildren(icon(d === 'compact' ? 'rules' : 'menu'));
+    btn.setAttribute('aria-label', `Row density: ${d}. Activate for ${nextDensity(d)} rows.`);
+    btn.setAttribute('title', `Rows: ${d}`);
+    btn.setAttribute('aria-pressed', String(d === 'compact'));
+  };
+  btn.addEventListener('click', () => {
+    const next = nextDensity(readDensity());
+    try {
+      globalThis.localStorage?.setItem(DENSITY_KEY, next);
+    } catch {
+      // Storage may be unavailable; the choice still applies to this page.
+    }
+    applyDensity(next);
+    paint(next);
+  });
+  paint(readDensity());
+  return btn;
+}
+
+// ---- Sidebar rail ------------------------------------------------------------
+// A collapsed sidebar shows icons only (labels stay in the accessible name
+// and a tooltip). Remembered in this browser; '1' or nothing.
+
+const RAIL_KEY = 'aegismesh.rail';
+const readRail = () => {
+  try {
+    return globalThis.localStorage?.getItem(RAIL_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+export function applyRail(on = readRail()) {
+  document.documentElement.toggleAttribute('data-rail', Boolean(on));
+}
+
+function railToggle() {
+  const btn = h('button', { class: ['btn', 'btn--ghost', 'btn--sm', 'rail-toggle'], type: 'button' });
+  const paint = (on) => {
+    btn.replaceChildren(icon(on ? 'chevron-right' : 'chevron-left', { size: 'sm' }), h('span', { class: 'rail-toggle__label' }, on ? 'Expand' : 'Collapse sidebar'));
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Expand the sidebar' : 'Collapse the sidebar to icons');
+  };
+  btn.addEventListener('click', () => {
+    const next = !readRail();
+    try {
+      globalThis.localStorage?.setItem(RAIL_KEY, next ? '1' : '0');
+    } catch {
+      // Storage may be unavailable; the choice still applies to this page.
+    }
+    applyRail(next);
+    paint(next);
+  });
+  paint(readRail());
   return btn;
 }
 
@@ -190,7 +311,7 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     if (!items.length) return null;
     const indicator = h('span', { class: 'nav-indicator', 'aria-hidden': 'true' });
     const list = h('ul', { class: 'nav-list' }, indicator, items.map((i) => {
-      const a = h('a', { class: 'nav-link', href: i.href, 'data-route': i.route },
+      const a = h('a', { class: 'nav-link', href: i.href, 'data-route': i.route, title: i.label },
         icon(i.icon),
         h('span', { class: 'nav-link__label' }, i.label),
         i.tag ? h('span', { class: 'nav-link__tag' }, i.tag) : null);
@@ -206,8 +327,9 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     h('a', { class: 'brand', href: '#/overview' }, brandMark(), 'AegisMesh'),
     groups,
     h('div', { class: 'nav-foot' },
-      h('p', { class: 'muted' }, 'Times in UTC'),
-      h('p', { class: 'muted' }, `Version ${meta?.version || 'unknown'}`),
+      railToggle(),
+      h('p', { class: 'muted nav-foot__meta' }, 'Times in UTC'),
+      h('p', { class: 'muted nav-foot__meta' }, `Version ${meta?.version || 'unknown'}`),
       h('a', { href: 'https://github.com/metaforismo/AegisMesh/blob/master/docs/architecture/console-api.md' }, 'API contract')));
 
   const scrim = h('div', { class: 'nav-scrim', 'aria-hidden': 'true' });
@@ -243,6 +365,7 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     search,
     h('div', { class: 'top-spacer' }),
     liveSlot,
+    densityControl(),
     themeControl(),
     tenantControl(session, onSwitchTenant),
     accountControl(session, meta, onLogout));

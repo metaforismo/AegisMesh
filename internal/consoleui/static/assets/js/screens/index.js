@@ -7,7 +7,8 @@
 // embed test checks each one resolves.
 
 import { h, mount } from '../lib/dom.js';
-import { normalizeWindow, normalizeEventFilters, normalizeStatus } from '../lib/route.js';
+import { normalizeWindow, normalizeEventFilters, normalizeStatus, normalizeSessionFilters } from '../lib/route.js';
+import { normalizeDigestWindow } from '../lib/catalogs.js';
 import { pageHead, panel, empty, link } from '../ui/components.js';
 
 function lazy(title, loader, extra = {}) {
@@ -56,6 +57,32 @@ export const SCREENS = Object.freeze({
   audit: lazy('Audit trail', () => import('./audit.js'), { role: 'admin', skeleton: 'table' }),
   fleet: lazy('Fleet', () => import('./fleet.js'), { skeleton: 'table' }),
   fleet_node: lazy('Fleet node', () => import('./fleet-node.js')),
+  // The guide's `t` (the term in focus) scrolls within the open screen.
+  guide: lazy('Guide', () => import('./guide.js'), { viewIgnore: ['t'] }),
+  sessions: lazy('Sessions', () => import('./sessions.js'), {
+    skeleton: 'table',
+    prefetch: (api, r) => { const f = normalizeSessionFilters(r.query); api.sessions(f.window, f.source || '', '', 50); },
+  }),
+  // The story keeps the event side panel's `event` (and `event_node`) in place.
+  attack_session: lazy('Session', () => import('./session.js'), { viewIgnore: ['event', 'event_node'] }),
+  techniques: lazy('Techniques', () => import('./techniques.js'), {
+    skeleton: 'cards',
+    viewIgnore: ['f'],
+    prefetch: (api, r) => { api.coverage(normalizeWindow(r.query.window)); },
+  }),
+  decoys: lazy('Decoys', () => import('./decoys.js'), {
+    skeleton: 'cards',
+    prefetch: (api, r) => { api.decoys(normalizeWindow(r.query.window)); },
+  }),
+  // The honeytoken in focus (`t`) is marked within the open screen.
+  honeytokens: lazy('Honeytokens', () => import('./honeytokens.js'), {
+    skeleton: 'table',
+    viewIgnore: ['t'],
+    prefetch: (api, r) => { api.honeytokens(normalizeWindow(r.query.window)); api.decoys(normalizeWindow(r.query.window)); },
+  }),
+  digest: lazy('Digest', () => import('./digest.js'), {
+    prefetch: (api, r) => { api.digest(normalizeDigestWindow(r.query.window)); },
+  }),
 });
 
 export const notFoundScreen = {

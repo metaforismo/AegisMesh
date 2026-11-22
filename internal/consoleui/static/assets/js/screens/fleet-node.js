@@ -40,7 +40,7 @@ export default {
       ]);
     } catch (err) {
       if (!(err instanceof ApiError && err.code === 'unavailable')) throw err;
-      mount(root, pageHead({ eyebrow: h('a', { href: href('fleet') }, '← Fleet'), title: 'Fleet node' }),
+      mount(root, pageHead({ crumbs: [['Fleet', href('fleet')], ['Node', null]], title: 'Fleet node' }),
         panel({ body: hubUnavailable(err, () => ctx.rerender()) }));
       return;
     }
@@ -75,7 +75,7 @@ export default {
 
     mount(root,
       pageHead({
-        eyebrow: h('a', { href: href('fleet') }, '← Fleet'),
+        crumbs: [['Fleet', href('fleet')], ['Node', null]],
         title: h('code', null, n.name || '(unnamed)'),
         subtitle: h('span', { class: 'btn-row' }, fleetStatusBadge(n.status), chip('Self-reported'), h('span', { class: 'muted' },
           receives

@@ -21,6 +21,46 @@ export function legend() {
     CLASSIFICATIONS.map((c) => h('li', null, glyph(c), classificationMeta(c).label)));
 }
 
+const sumOf = (buckets, key) => buckets.reduce((n, b) => n + (Number(b?.[key]) || 0), 0);
+
+// Readout legend: glyph, series name and a value per series, plus a total.
+// At rest it shows the whole window; while a bucket is hovered or focused
+// it shows that bucket, so the numbers are readable without the tooltip and
+// from the keyboard. It repeats what the focused bar announces, so it is not
+// a live region.
+function readout(buckets) {
+  const window = { head: 'Whole window', values: Object.fromEntries(CLASSIFICATIONS.map((c) => [c, sumOf(buckets, c)])) };
+  const head = h('span', { class: 'readout__head' });
+  const cells = new Map();
+  const total = h('span', { class: 'readout__value' });
+  const el = h('div', { class: 'readout' },
+    head,
+    h('ul', { class: ['legend', 'readout__list'], 'aria-label': 'Series' },
+      CLASSIFICATIONS.map((c) => {
+        const v = h('span', { class: 'readout__value' });
+        cells.set(c, v);
+        return h('li', null, glyph(c), h('span', null, classificationMeta(c).label), v);
+      }),
+      h('li', { class: 'readout__total' }, h('span', null, 'Total'), total)));
+  const paint = ({ head: text, values }, active) => {
+    head.textContent = text;
+    let sum = 0;
+    for (const c of CLASSIFICATIONS) {
+      const n = Number(values[c]) || 0;
+      sum += n;
+      cells.get(c).textContent = formatCount(n);
+    }
+    total.textContent = formatCount(sum);
+    el.classList.toggle('is-bucket', active);
+  };
+  paint(window, false);
+  return {
+    el,
+    show: (b) => paint({ head: formatDateTime(b.start), values: b }, true),
+    reset: () => paint(window, false),
+  };
+}
+
 function bucketLabel(b) {
   return `${formatDateTime(b.start)}: ${formatCount(bucketTotal(b))} events (` +
     CLASSIFICATIONS.map((c) => `${classificationMeta(c).label} ${formatCount(b[c] || 0)}`).join(', ') + ')';
@@ -52,6 +92,7 @@ export function stackedBarChart(buckets, window, { title = 'Observations over ti
   }
 
   const cross = svg('line', { class: 'chart__cross', x1: 0, x2: 0, y1: L.plot.y, y2: L.plot.y + L.plot.h });
+  const read = readout(buckets);
   const wrap = h('div', { class: 'chart' });
   const delays = waveDelays(L.bars.length, 260);
   const groups = [];
@@ -103,6 +144,7 @@ export function stackedBarChart(buckets, window, { title = 'Observations over ti
     cross.classList.toggle('is-placed', active < 0);
     cross.style.transform = `translateX(${bar.x + bar.slot / 2}px)`;
     active = i;
+    read.show(b);
     wrap.classList.add('is-active');
     tip.classList.add('is-shown');
     placeTip(bar);
@@ -112,6 +154,7 @@ export function stackedBarChart(buckets, window, { title = 'Observations over ti
     if (active >= 0) groups[active]?.classList.remove('is-active');
     active = -1;
     tipPlaced = false;
+    read.reset();
     wrap.classList.remove('is-active');
     tip.classList.remove('is-shown');
   };
@@ -172,8 +215,8 @@ export function stackedBarChart(buckets, window, { title = 'Observations over ti
     }));
 
   return h('figure', { class: 'chart-figure' },
-    h('div', { class: 'chart-figure__top' }, legend(),
-      onSelect ? h('p', { class: 'chart-figure__hint' }, 'Select a bar to open its events') : null),
+    h('div', { class: 'chart-figure__top' }, read.el,
+      onSelect ? h('p', { class: 'chart-figure__hint' }, 'Hover or use the arrow keys to read a bucket; select it to open its events') : null),
     wrap, tableView);
 }
 

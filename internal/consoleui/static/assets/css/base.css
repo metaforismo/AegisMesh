@@ -59,6 +59,8 @@ samp,
 pre {
   font-family: var(--font-mono);
   font-size: 0.92em;
+  /* Instrument detail: a slashed zero, so 0 and O never blur in ids. */
+  font-variant-numeric: slashed-zero tabular-nums;
 }
 
 pre { margin: 0; }
