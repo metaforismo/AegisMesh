@@ -210,3 +210,124 @@ existing HT-001/COR-008 replay boundary are in
 multi-step MCP exploration (eleven total observations, eight dry-run proposals).
 Local SIEM files and on-demand periodic summaries add no delivery/egress edge;
 see [siem-export.md](siem-export.md) and [console-api.md](architecture/console-api.md).
+
+## Actor profile
+
+Every session (`GET /api/v1/sessions`, `/sessions/{id}`, campaign detail)
+carries `actor: {assessment, summary, signals}`. It is a hedged observation
+derived from retained, redacted summaries; it never names a person, tool,
+model or organisation, and it does not replace the existing `automation`
+field, which keeps its earlier semantics. Signals are small pure functions in
+`internal/evidenceview/actor.go`; **all ten are always listed**, with
+`present:false` when evaluated and not observed. Timing uses interactions
+only (correlation signals excluded), as for `automation`.
+
+| Code | Strength | Present when (constants in `actor.go`) |
+|---|---|---|
+| `regular_cadence` | moderate | >= 8 interactions, upper-median gap <= 30 s and at most 1 gap outside median ±25%; or COR-005 fired |
+| `sub_second_bursts` | moderate | >= 8 interactions and upper-median gap < 1 s |
+| `agent_canary_followed` | strong | AGT-001 fired (an `agent_canary` marker came back) |
+| `honeytoken_replayed` | moderate | HT-001 or COR-008 fired |
+| `tool_call_chaining` | strong | MCP `tools/list` before the first `tools/call`, >= 3 calls, >= 2 distinct tools, and at least one tool reused (a one-call-per-tool sweep does not qualify) |
+| `sdk_client_family` | moderate | an HTTP User-Agent self-identifies as an LLM SDK or agent framework (OpenAI, Anthropic, LangChain, LlamaIndex, LiteLLM, Ollama client, MCP client) |
+| `adaptive_after_error` | strong | a decoy 400/405/415/422 followed, within the next 3 interactions and <= 3 s, by a 2xx on the same sensor and path |
+| `human_think_time` | moderate | >= 8 interactions, upper-median gap 2 s..2 min, <= 50% of gaps within ±25% of it, <= 25% of gaps under 1 s |
+| `typo_corrections` | moderate | a 404 followed 1..60 s later, same sensor, by a path >= 4 characters within edit distance 2 |
+| `multi_surface_sweep` | weak | COR-002 or COR-006 fired |
+
+Assessment rule, first match wins:
+
+1. `possibly_ai_agent`: >= 3 interactions and any of `agent_canary_followed`,
+   `tool_call_chaining`, `adaptive_after_error`. Fast or regular traffic alone
+   never reaches this level.
+2. `inconclusive`: fewer than 8 interactions.
+3. `inconclusive`: automation signals (`regular_cadence`, `sub_second_bursts`,
+   `sdk_client_family`) and human signals both present.
+4. `likely_automated`: any automation signal.
+5. `likely_human`: `human_think_time` or `typo_corrections`. Absence of
+   automation is never enough.
+6. `inconclusive` otherwise.
+
+Caveats. A source key is a peer address: NAT, proxies and shared egress can
+merge clients (making timing look irregular or fast) and one client can
+rotate addresses. A person can copy a canary, retry quickly with shell
+history, or drive an agent; an agent can add jitter. The User-Agent is
+client-controlled and only mapped to a closed family vocabulary (the raw value
+is not retained by the index). Small samples are inconclusive by design. These
+are observations to prioritise review, not attribution or verdicts.
+
+## Campaigns
+
+`GET /api/v1/campaigns` groups sessions from **different source keys** that
+followed the same behaviour. Each session's interactions become *shapes*:
+
+- HTTP: method (uppercase A–Z, else `OTHER`) plus path template. Per segment:
+  digits-only `{n}`, UUID `{uuid}`, hex >= 8 chars `{hex}`, > 32 runes
+  `{token}`, >= 10 bytes with >= 3 digits `{id}`, `[honeytoken:…]`
+  `{honeytoken}`, `[redacted…]` `{redacted}`; at most 12 segments then `/…`.
+  The decoy status suffix is removed using the stored status, never parsed
+  from text. Query strings are never stored.
+- MCP: method plus tool name (same segment rule). SSH: `login <method> ·
+  <outcome>`; commands are not captured by the authentication-only sensor.
+  TCP: `exchange · rule <name>` or `exchange · no rule`; banners and line
+  content are not part of the index projection, so no banner class exists.
+- Correlation signals are not steps.
+
+Shapes come from already scrubbed stored fields, are scrubbed again with
+`redact.Scrub`, control characters are replaced and they are capped at 120
+runes. They remain attacker-influenced text. Consecutive repeats are collapsed
+and a session keeps at most 32 steps.
+
+**Rule.** A session with >= 3 collapsed steps has fingerprint = its first
+`min(len, 8)` kind/shape pairs. Sessions with equal fingerprints form a
+campaign when they span >= 2 distinct source keys. Shorter sequences must
+therefore match exactly; longer ones share the first eight steps. `basis` is
+`same_step_sequence` (every member has the identical full sequence) or
+`same_step_prefix`, plus `same_client_family` when every member reported one
+identical, non-`other` client family. The ID is `cmp_` + the first 12 hex of
+SHA-256 over the JSON array `[tenant, fingerprint]`: stable while the
+fingerprint exists, different per tenant. Each session belongs to at most one
+campaign (`campaign_id`, otherwise `null`). Bounds: newest 4096 sessions of
+the newest-8192-event sample, 100 campaigns per list, 20 sources and 50
+session references per campaign, 32 steps.
+
+Limits. A five-step session does not join a campaign whose members share
+eight steps; similarity scoring was rejected for explainability (ADR-0024).
+Public scanners and common tools produce identical sequences, so a campaign is
+shared behaviour, never a shared operator.
+
+## Posture review
+
+`GET /api/v1/posture` and `aegismesh posture --config FILE [--json]` run fixed
+checks over a secret-free snapshot of the validated configuration and the
+retained sample. Statuses are `attention`, `ok` or `info`; `ok` carries no
+recommendation. It is advisory, never a security guarantee. Details never
+include token values, digests, URLs or secret references. For a console tenant
+other than `local_tenant`, only POS-017 is evaluated (`scope: evidence_only`).
+
+| ID | Area | Attention / info when |
+|---|---|---|
+| POS-001 | exposure | info: a sensor binds beyond loopback (intended for decoys; anything on that network can reach it) |
+| POS-002 | exposure | info: `allow_public_bind`, `allow_privileged_ports` or `allow_private_llm_egress` is set |
+| POS-003 | exposure | info: console beyond loopback with TLS; attention without TLS (validation normally prevents it) |
+| POS-004 | exposure | attention: a sensor's LLM fallback sends attacker prompts to a non-loopback provider; info for loopback |
+| POS-005 | exposure | info: webhook or fleet evidence forwarding enabled (notes a hub without `hub_ca_file`) |
+| POS-006 | access | attention: every token operator is admin, or a single token without OIDC; info if console disabled |
+| POS-007 | deception | attention: no honeytokens |
+| POS-008 | deception | attention: honeytokens but no `agent_canary` |
+| POS-009 | deception | attention: a token found in no inline decoy content (body files are not read) |
+| POS-010 | deception | info: no configured token observed in the retained sample (normal when quiet) |
+| POS-011 | deception | attention: no AI-family HTTP surface and no MCP sensor |
+| POS-012 | deception | info: an MCP sensor without a synthetic environment, or no MCP sensor |
+| POS-013 | detection | attention: detection disabled; info: rules disabled |
+| POS-014 | detection | attention: correlation disabled; info: rules disabled |
+| POS-015 | detection | info: a severity maps to throttle/isolate/refuse (decoy-only, but observable) |
+| POS-016 | evidence | info: a configured sensor has no local observations in the sample |
+| POS-017 | evidence | attention: the newest-8192 analysis sample is saturated, older evidence is not analysed |
+| POS-018 | evidence | info: evidence encryption at rest is off |
+
+The CLI reads the newest 8192 verified envelopes from `--data-dir` (default
+`runtime.data_dir`); when evidence is missing, encrypted without `--identity`
+or contains unverifiable lines, POS-010/016/017 report "Not evaluated". There
+are no configurable redaction or evidence-verification settings, so no check
+claims to review them.

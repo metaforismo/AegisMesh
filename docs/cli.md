@@ -535,3 +535,32 @@ Markdown goes through the existing JSON-quoting neutraliser. There is no timer,
 scheduler, saved digest or automatic delivery. Encryption read flags match
 `export events`; checkpoint notices remain on stderr. Exit codes are 0 success,
 1 read/output/verification failure, 2 argument error.
+
+## Campaigns and posture review
+
+```sh
+aegismesh campaigns --data-dir ./data
+aegismesh campaigns --data-dir ./data --id cmp_3f9a1c2b7d10 --json
+aegismesh posture --config mesh.yaml
+aegismesh posture --config mesh.yaml --data-dir ./data --identity ./identity.txt --json
+```
+
+`campaigns` requires `--data-dir`; it follows `digest`/`recommend`: at most
+8192 verified local envelopes, failing closed above that, encryption read flags
+as for `export events`. It builds sessions and campaigns with the console's
+rules (see [ai-threat-detection.md](ai-threat-detection.md#campaigns)) and
+prints the console list shape with `--json`. `--id` prints one campaign with
+representative steps, member sessions and caveats; an unknown ID exits 1. The
+CLI uses tenant `local`, so its campaign IDs differ from console IDs for the
+same evidence. Shapes are attacker-influenced text with control characters
+replaced.
+
+`posture` requires `--config`; evidence defaults to the config's
+`runtime.data_dir`. It evaluates POS-001..POS-018 over a secret-free snapshot
+of the validated config and the newest 8192 verified envelopes (larger
+directories are sampled, and POS-017 reports the saturation). Missing,
+undecryptable or unverifiable evidence turns POS-010/016/017 into "Not
+evaluated" and prints the read error on stderr. Exit codes: 0 when a review is
+printed regardless of statuses, 1 config/output failure, 2 argument error. It
+starts, contacts and changes nothing; a clean review is not a security
+guarantee.
