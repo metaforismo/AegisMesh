@@ -1,0 +1,111 @@
+{
+  "id": "bundle--e9f5cbee-dea4-5076-bd34-1f72b630b6ee",
+  "objects": [
+    {
+      "created": "2026-01-01T00:00:00.000000000Z",
+      "id": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "identity_class": "system",
+      "modified": "2026-01-01T00:00:00.000000000Z",
+      "name": "AegisMesh synthetic instance a14528e0",
+      "spec_version": "2.1",
+      "type": "identity"
+    },
+    {
+      "created": "2026-01-01T00:00:00.000000000Z",
+      "created_by_ref": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "description": "Editorial rule relation; observation does not establish technique execution.",
+      "external_references": [
+        {
+          "external_id": "AML.T0006",
+          "source_name": "mitre-atlas"
+        }
+      ],
+      "id": "attack-pattern--1fce7700-b738-512e-b555-58a482113941",
+      "modified": "2026-01-01T00:00:00.000000000Z",
+      "name": "Active Scanning",
+      "spec_version": "2.1",
+      "type": "attack-pattern"
+    },
+    {
+      "created": "2026-01-01T00:00:00.000000000Z",
+      "created_by_ref": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "description": "Editorial rule relation; observation does not establish technique execution.",
+      "external_references": [
+        {
+          "external_id": "T1595",
+          "source_name": "mitre-attack"
+        }
+      ],
+      "id": "attack-pattern--8daa3ee1-a858-5b01-8cda-aaf4d49b77e2",
+      "modified": "2026-01-01T00:00:00.000000000Z",
+      "name": "Active Scanning",
+      "spec_version": "2.1",
+      "type": "attack-pattern"
+    },
+    {
+      "confidence": 15,
+      "created": "2026-01-02T03:04:05.000000000Z",
+      "created_by_ref": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "description": "Proposed operator-review indicator. Decoy contact alone does not prove malice, compromise or attribution.",
+      "id": "indicator--92ed227f-6c85-5283-a022-f01de573ad0e",
+      "indicator_types": [
+        "anomalous-activity"
+      ],
+      "modified": "2026-01-02T03:04:05.000000000Z",
+      "name": "Decoy contact observation: 192.0.2.8",
+      "pattern": "[ipv4-addr:value = '192.0.2.8']",
+      "pattern_type": "stix",
+      "pattern_version": "2.1",
+      "spec_version": "2.1",
+      "type": "indicator",
+      "valid_from": "2026-01-02T03:04:05.000000000Z"
+    },
+    {
+      "content": "Redacted evidence references (origin:event_id): local:00000000000000000000000000000001. Observations, not incidents.",
+      "created": "2026-01-02T03:04:05.000000000Z",
+      "created_by_ref": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "id": "note--b7336fef-5608-51bc-9941-b98c84454c1c",
+      "modified": "2026-01-02T03:04:05.000000000Z",
+      "object_refs": [
+        "indicator--92ed227f-6c85-5283-a022-f01de573ad0e"
+      ],
+      "spec_version": "2.1",
+      "type": "note"
+    },
+    {
+      "created": "2026-01-02T03:04:05.000000000Z",
+      "created_by_ref": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "id": "relationship--6a57fc78-ab1d-5a4b-a4c9-8b69517554c7",
+      "modified": "2026-01-02T03:04:05.000000000Z",
+      "relationship_type": "related-to",
+      "source_ref": "indicator--92ed227f-6c85-5283-a022-f01de573ad0e",
+      "spec_version": "2.1",
+      "target_ref": "attack-pattern--1fce7700-b738-512e-b555-58a482113941",
+      "type": "relationship"
+    },
+    {
+      "created": "2026-01-02T03:04:05.000000000Z",
+      "created_by_ref": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "id": "relationship--cbe46206-e3aa-546a-bb63-f1e9673d9844",
+      "modified": "2026-01-02T03:04:05.000000000Z",
+      "relationship_type": "related-to",
+      "source_ref": "indicator--92ed227f-6c85-5283-a022-f01de573ad0e",
+      "spec_version": "2.1",
+      "target_ref": "attack-pattern--8daa3ee1-a858-5b01-8cda-aaf4d49b77e2",
+      "type": "relationship"
+    },
+    {
+      "content": "Proposed indicators for operator review; never applied. Confidence 15/100. Skipped non-IP sources: 0; events: 0. Retained redacted observations only; bounded index or local read, at most 8192 events. No incident or completeness claim.",
+      "created": "2026-01-01T00:00:00.000000000Z",
+      "created_by_ref": "identity--a14528e0-c505-5a3a-b54d-3762fb869d99",
+      "id": "note--f5f582c0-07ff-50f0-ad90-8028bc0f7c1d",
+      "modified": "2026-01-01T00:00:00.000000000Z",
+      "object_refs": [
+        "identity--a14528e0-c505-5a3a-b54d-3762fb869d99"
+      ],
+      "spec_version": "2.1",
+      "type": "note"
+    }
+  ],
+  "type": "bundle"
+}

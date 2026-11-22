@@ -111,7 +111,7 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 		return nil, fmt.Errorf("%w: %v", errRuntime, err)
 	}
 
-	enf := policy.NewEnforcer(cfg.Detection, reg)
+	enf := policy.NewEnforcer(cfg.Detection, reg, cfg.Honeytokens...)
 
 	sys := &System{
 		cfg:       cfg,
@@ -192,7 +192,8 @@ func Build(cfg *config.Config, log *slog.Logger) (*System, error) {
 
 	if cfg.Correlation.IsEnabled() {
 		sys.corr = newCorrelateAdapter(correlateOptions{
-			WindowSeconds:   cfg.Correlation.WindowSeconds,
+			WindowSeconds:       cfg.Correlation.WindowSeconds,
+			AutomationThreshold: cfg.Correlation.AutomationThreshold, CredentialThreshold: cfg.Correlation.CredentialThreshold,
 			PerSourceEvents: cfg.Correlation.PerSourceEvents,
 			MaxSources:      cfg.Correlation.MaxSources,
 			DisabledRules:   cfg.Correlation.DisabledRules,

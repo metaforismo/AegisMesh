@@ -20,14 +20,16 @@ type evidenceSink struct {
 }
 
 func (s evidenceSink) Append(ctx context.Context, e event.Envelope) error {
-	if err := s.primary.Append(ctx, e); err != nil {
+	safe := e
+	safe.AuthAttempts = nil
+	if err := s.primary.Append(ctx, safe); err != nil {
 		return err
 	}
 	if s.mgr != nil {
-		s.mgr.Deliver(e)
+		s.mgr.Deliver(safe)
 	}
 	if s.hook != nil {
-		_ = s.hook.Offer(e)
+		_ = s.hook.Offer(safe)
 	}
 	if s.corr != nil {
 		s.corr.observe(e)

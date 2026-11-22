@@ -1,0 +1,547 @@
+{
+  "rules": [
+    {
+      "description": "Instruction override phrasing was observed.",
+      "guidance": "Review the redacted request and surrounding session for legitimate diagnostic context.",
+      "observe_only": false,
+      "frameworks": [
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0051",
+          "name": "LLM Prompt Injection"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0054",
+          "name": "LLM Jailbreak"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM01",
+          "name": "Prompt Injection"
+        }
+      ],
+      "id": "PI-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "high",
+      "summary": "instruction-override phrasing directed at an automated agent"
+    },
+    {
+      "description": "Hidden channel characters were observed in an interaction.",
+      "guidance": "Check the redacted preview and encoding context before interpreting the observation.",
+      "observe_only": false,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1027",
+          "name": "Obfuscated Files or Information"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0051",
+          "name": "LLM Prompt Injection"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM01",
+          "name": "Prompt Injection"
+        }
+      ],
+      "id": "PI-002",
+      "family": "detection",
+      "class": "finding",
+      "severity": "high",
+      "summary": "hidden-channel characters present (unicode tag block, zero-width controls, or ANSI escapes)"
+    },
+    {
+      "description": "A credential or environment disclosure request pattern was observed.",
+      "guidance": "Check which synthetic surface was contacted and whether a planted token was later presented.",
+      "observe_only": false,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1552",
+          "name": "Unsecured Credentials"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0057",
+          "name": "LLM Data Leakage"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM02",
+          "name": "Sensitive Information Disclosure"
+        }
+      ],
+      "id": "EXF-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "high",
+      "summary": "request pattern consistent with credential/environment disclosure or exfiltration"
+    },
+    {
+      "description": "Tool escalation phrasing was observed.",
+      "guidance": "Review the requested tool name and the recorded response action.",
+      "observe_only": false,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1059",
+          "name": "Command and Scripting Interpreter"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0053",
+          "name": "LLM Plugin Compromise"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM06",
+          "name": "Excessive Agency"
+        }
+      ],
+      "id": "ESC-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "medium",
+      "summary": "phrasing steering toward privileged tool or command invocation"
+    },
+    {
+      "description": "A large encoded blob or repeated encoding marker was observed.",
+      "guidance": "Check payload size and protocol context without executing or decoding it into behavior.",
+      "observe_only": false,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1027",
+          "name": "Obfuscated Files or Information"
+        }
+      ],
+      "id": "OBS-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "low",
+      "summary": "large encoded blob or repeated double-encoding markers"
+    },
+    {
+      "description": "The interaction exceeded the detection evaluation bound.",
+      "guidance": "Check retained length and truncation flags before drawing conclusions from partial evidence.",
+      "observe_only": false,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1499",
+          "name": "Endpoint Denial of Service"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0029",
+          "name": "Denial of ML Service"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM10",
+          "name": "Unbounded Consumption"
+        }
+      ],
+      "id": "RES-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "info",
+      "summary": "interaction exceeded the detection evaluation bound"
+    },
+    {
+      "description": "An AI service shaped endpoint was contacted.",
+      "guidance": "Review other surfaces contacted by the same retained source.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1595",
+          "name": "Active Scanning"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0006",
+          "name": "Active Scanning"
+        }
+      ],
+      "id": "LLM-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "low",
+      "summary": "request targeted a known AI inference or management API surface"
+    },
+    {
+      "description": "A small completion shaped probe was observed.",
+      "guidance": "Check nearby enumeration requests and normal health monitoring context.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1078",
+          "name": "Valid Accounts"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0012",
+          "name": "Valid Accounts"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0040",
+          "name": "AI Model Inference API Access"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM10",
+          "name": "Unbounded Consumption"
+        }
+      ],
+      "id": "LLM-002",
+      "family": "detection",
+      "class": "finding",
+      "severity": "medium",
+      "summary": "short completion request with a tiny token budget; consistent with minimal-cost credential validation"
+    },
+    {
+      "description": "An AI management shaped request was observed.",
+      "guidance": "Review the static response and adjacent requests; no management operation occurred.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1496",
+          "name": "Resource Hijacking"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0034",
+          "name": "Cost Harvesting"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM10",
+          "name": "Unbounded Consumption"
+        }
+      ],
+      "id": "LLM-003",
+      "family": "detection",
+      "class": "finding",
+      "severity": "medium",
+      "summary": "model or key management attempt on an AI surface; consistent with resource hijacking"
+    },
+    {
+      "description": "A provider shaped credential was presented.",
+      "guidance": "Check credential class metadata and planted-token matches without seeking credential values.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1078",
+          "name": "Valid Accounts"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0012",
+          "name": "Valid Accounts"
+        }
+      ],
+      "id": "LLM-004",
+      "family": "detection",
+      "class": "finding",
+      "severity": "low",
+      "summary": "a provider-shaped API key or known placeholder was presented to a decoy"
+    },
+    {
+      "description": "A planted synthetic credential was presented to a sensor.",
+      "guidance": "Follow the token identifier across retained observations and verify its configured planting.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1552",
+          "name": "Unsecured Credentials"
+        },
+        {
+          "framework": "mitre-attack",
+          "id": "T1078",
+          "name": "Valid Accounts"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0055",
+          "name": "Unsecured Credentials"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM02",
+          "name": "Sensitive Information Disclosure"
+        }
+      ],
+      "id": "HT-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "critical",
+      "summary": "a credential that exists only in decoy material was presented"
+    },
+    {
+      "description": "A planted agent marker was presented to a sensor.",
+      "guidance": "Review the originating synthetic response and subsequent request sequence.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0051",
+          "name": "LLM Prompt Injection"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM01",
+          "name": "Prompt Injection"
+        }
+      ],
+      "id": "AGT-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "high",
+      "summary": "interaction followed an instruction embedded in decoy content; consistent with an LLM-driven client"
+    },
+    {
+      "description": "Declared synthetic credential content was requested from the workspace.",
+      "guidance": "Check the connection tool sequence and later HT-001 or COR-008 observations.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1552",
+          "name": "Unsecured Credentials"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0055",
+          "name": "Unsecured Credentials"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM02",
+          "name": "Sensitive Information Disclosure"
+        }
+      ],
+      "id": "MCP-001",
+      "family": "detection",
+      "class": "finding",
+      "severity": "medium",
+      "summary": "declared synthetic credential content was requested"
+    },
+    {
+      "description": "A connection reached the configured workspace exploration depth.",
+      "guidance": "Review tool order and cadence; depth alone does not identify an automated client.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0053",
+          "name": "LLM Plugin Compromise"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM06",
+          "name": "Excessive Agency"
+        }
+      ],
+      "id": "MCP-002",
+      "family": "detection",
+      "class": "finding",
+      "severity": "low",
+      "summary": "connection reached the configured MCP exploration depth"
+    },
+    {
+      "description": "A write or execution shaped tool name was requested.",
+      "guidance": "Review the tool name and not-found response; no write or execution was performed.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0053",
+          "name": "LLM Plugin Compromise"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM06",
+          "name": "Excessive Agency"
+        }
+      ],
+      "id": "MCP-003",
+      "family": "detection",
+      "class": "finding",
+      "severity": "medium",
+      "summary": "write or execution shaped MCP tool was requested; nothing was executed"
+    },
+    {
+      "description": "Repeated injection findings were observed for a retained source.",
+      "guidance": "Review the linked observations and their detection limits.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0051",
+          "name": "LLM Prompt Injection"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM01",
+          "name": "Prompt Injection"
+        }
+      ],
+      "id": "COR-001",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "repeated injection findings from one source"
+    },
+    {
+      "description": "A retained source contacted multiple sensor kinds.",
+      "guidance": "Check whether an authorized scanner or monitoring client explains the sequence.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1046",
+          "name": "Network Service Discovery"
+        }
+      ],
+      "id": "COR-002",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "one source probing multiple decoy protocols"
+    },
+    {
+      "description": "Tool escalation findings were observed across retained interactions.",
+      "guidance": "Review the linked tool calls and their static responses.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1046",
+          "name": "Network Service Discovery"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0053",
+          "name": "LLM Plugin Compromise"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM06",
+          "name": "Excessive Agency"
+        }
+      ],
+      "id": "COR-003",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "one source invoking many distinct canary tools"
+    },
+    {
+      "description": "A retained source showed repeated decoy enumeration.",
+      "guidance": "Check the linked requests and expected scanner schedules.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1595",
+          "name": "Active Scanning"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0006",
+          "name": "Active Scanning"
+        }
+      ],
+      "id": "COR-004",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "sustained interaction across several sensors"
+    },
+    {
+      "description": "A retained source showed a cadence consistent with automation.",
+      "guidance": "Inspect timing gaps and clock precision; this is not client attribution.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1595",
+          "name": "Active Scanning"
+        }
+      ],
+      "id": "COR-005",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "short regular interaction gaps; consistent with scripted or agent-driven activity"
+    },
+    {
+      "description": "A retained source enumerated multiple AI surface families.",
+      "guidance": "Compare contacted families with normal client and monitoring behavior.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1595",
+          "name": "Active Scanning"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0006",
+          "name": "Active Scanning"
+        }
+      ],
+      "id": "COR-006",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "one source touched multiple AI API families"
+    },
+    {
+      "description": "Multiple distinct credential presentations were observed.",
+      "guidance": "Review counts and credential classes without seeking raw credential values.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1110",
+          "name": "Brute Force"
+        }
+      ],
+      "id": "COR-007",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "one source presented many distinct credential attempts; consistent with credential stuffing"
+    },
+    {
+      "description": "A planted credential was presented across sensor contexts.",
+      "guidance": "Trace the token identifier and linked sensor observations within retained evidence.",
+      "observe_only": true,
+      "frameworks": [
+        {
+          "framework": "mitre-attack",
+          "id": "T1078",
+          "name": "Valid Accounts"
+        },
+        {
+          "framework": "mitre-atlas",
+          "id": "AML.T0012",
+          "name": "Valid Accounts"
+        },
+        {
+          "framework": "owasp-llm-2025",
+          "id": "LLM02",
+          "name": "Sensitive Information Disclosure"
+        }
+      ],
+      "id": "COR-008",
+      "family": "correlation",
+      "class": "signal",
+      "summary": "a decoy-only credential was presented after the same source interacted with a different sensor"
+    }
+  ]
+}

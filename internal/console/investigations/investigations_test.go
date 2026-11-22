@@ -1,6 +1,7 @@
 package investigations
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -73,5 +74,34 @@ func TestAtomicPersistenceAndBounds(t *testing.T) {
 	again, _ := store.Get(investigation.ID)
 	if again.EventIDs[0] != id {
 		t.Fatal("returned alias modified state")
+	}
+}
+
+func TestReadOpenCountDoesNotWriteAndRejectsBadState(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"one", "two"} {
+		if _, err := store.Create(Create{Title: title}, "synthetic"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	count, err := ReadOpenCount(dir)
+	if err != nil || count == nil || *count != 2 {
+		t.Fatal(count, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "investigations.json.tmp"), []byte("incomplete"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadOpenCount(dir); err == nil {
+		t.Fatal("accepted interrupted state")
 	}
 }

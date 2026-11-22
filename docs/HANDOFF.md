@@ -241,3 +241,15 @@ Pushing branches and opening PRs does not imply approval to merge.
 
 `docs/BACKLOG.md` is the authoritative current queue. The previous cumulative
 queue and verification ledger are preserved in timestamped history files.
+
+
+## Backend round 3 continuation (local, uncommitted)
+
+On `feat/decoy-environments-siem`: static exact-map MCP workspace, appended
+MCP-001..003, local SIEM formats/analyst downloads, on-demand digest, catalog
+and console API fields, perimeter regression fixes, shared SSE and measured
+accepting-hub overview name resolution. ADR-0023 and `console-api.md` define
+the final contracts. `security-review-2026-11.md` records checked controls and
+limits; `verification.md` owns current local gate receipts. Nothing in this
+slice is committed, pushed, published, tagged, merged or deployed. No dependency
+or egress destination was added; UI/dev mock files remain untouched.

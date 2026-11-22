@@ -6,6 +6,62 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ## [Unreleased]
 
+### Added
+
+- Bounded synthetic MCP workspaces with exact in-memory lookup tools,
+  per-connection sequences, observe-only MCP-001..003 and a multi-step demo.
+- Local CEF/RFC5424/OTLP-JSON/ECS event files and audited analyst attachments;
+  OTLP is format only, with no exporter or new network egress.
+- On-demand Markdown/JSON digest, value-free configured decoy/honeytoken APIs,
+  static rule descriptions/guidance/observe-only flags, overview index occupancy
+  and catalog titles/severities, event/session links and retained-source gap histograms.
+
+- Tenant-scoped source sessions with capped timelines/phases, cadence and explicit
+  automation observations; catalog framework relation counts, including zeros.
+- Analyst STIX 2.1/CSV/TXT indicator and Markdown observation-report attachments,
+  audited before download; local `export indicators` with verified reads and
+  golden tests. Bounded snapshots, conservative confidence and no new egress.
+
+- `init --profile ai-decoy`: static synthetic Ollama, OpenAI-compatible,
+  LiteLLM and vLLM HTTP shapes with deployment variation and two fake markers;
+  no model, provider fallback or management backend.
+- Strict bounded `honeytokens` configuration, redaction before preview,
+  `honeytoken new`, and observe-only LLM-001..004, HT-001 and AGT-001 findings.
+- Opt-in COR-005..008 cadence, AI enumeration, memory-only credential
+  distinctness and cross-sensor replay observations, with validated thresholds.
+- Editorial framework references in the rule catalog, CLI and rules API;
+  pinned mapping table, synthetic benign/attack-shaped corpus, and an expanded
+  loopback-only demo. See ADR-0021 and `docs/ai-threat-detection.md`.
+
+### Fixed
+
+- Release SBOM generation for targets other than the build host. The generator
+  was started with `go run` under the target's `GOOS`/`GOARCH`, so it was
+  cross-compiled and could not execute; the tag-triggered release workflow
+  failed at the first cross-platform SBOM and published nothing. The generator
+  is now built for the host and run with the target's build constraints.
+- Bounded invalid Bearer authentication attempts, security headers on hub
+  capacity rejection, and audit-before-disclosure for raw event detail reads;
+  see `docs/security-review-2026-11.md` for scope and failing-first tests.
+- Shared SSE observation encoding and per-origin overview name resolution,
+  measured locally with an accepting hub; no capacity/throughput claim.
+
+- Provider-shaped random honeytokens use unbiased crypto/rand selection; the
+  checked-in AI-decoy template rejects unreplaced placeholders. No offline
+  guarantee against a provider-side random collision is claimed.
+- Generic version/metrics/SSE paths no longer establish AI surface families.
+  COR-005 now includes sub-second bursts and documents zero-gap caveats.
+- Expanded dense AI rule/config literals and named helpers for readability.
+
+### Compatibility
+
+- Existing rule IDs/order and their enforcement actions are preserved. The nine
+  appended detection rules never enforce. HT-001 adds `critical` severity to
+  catalog/evidence; JSON rule metadata adds a `frameworks` list. Native finding
+  metadata may include `ai_family`, `credential_class`, `token_id`.
+- Demo now records eleven observations and eight dry-run proposals. COR-007
+  distinctness cannot be replayed from disk; no auth-attempt digests persist.
+
 ## [v0.2.0] — 2026-11-16
 
 This release adds a fourth (SSH) sensor, deterministic dry-run recommendations, optional evidence

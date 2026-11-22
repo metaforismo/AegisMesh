@@ -55,7 +55,8 @@ acceptance gates are complete.
    event-linked acknowledgements; extension output cannot affect evidence,
    policy, responses, paths, configuration or enforcement.
 7. [x] **Self-contained demo.** Synthetic HTTP/TCP/MCP/SSH flow on OS-assigned
-   loopback ports with verified evidence, one dry-run proposal and cleanup.
+   loopback ports with verified evidence, eight dry-run proposals and cleanup (current
+   local round 3 demo; see verification).
 8. [x] **Optional per-sensor process isolation.** Merged in PR #54 as
    `eef2b93`. The exact default remains in-process. Opted-in sensors use a fixed
    same-binary worker, challenge-bound bounded IPC and parent-authoritative
@@ -104,7 +105,8 @@ none is implemented.
    stronger than logical isolation.
 6. Console performance follow-ups (shared SSE encoding, overview latency under an
    accepting hub, remaining measured items) in [BACKLOG.md](BACKLOG.md).
-7. OTLP and SIEM export, as explicit opt-in egress.
+7. OTLP/SIEM delivery remains future explicit opt-in egress; local file encodings are
+   implemented in the uncommitted round 3 slice below.
 8. Real-cluster Kubernetes evidence for image, persistence, upgrades, rollback,
    NetworkPolicy and failure paths before any cluster-support claim.
 9. Additional AI-agent deception sensors (multi-step synthetic MCP
@@ -143,3 +145,50 @@ multi-tenancy, billing, public APIs or hosted operation ship today.
 - Treating a decoy activation or recommendation as proof of an incident.
 - Production-readiness, false-positive or compliance-certification claims
   without explicit independent evidence.
+
+
+## AI observation pack — local implementation for review
+
+- [x] Static synthetic AI-service profile with randomized scaffold persona and
+  fake markers; no inference backend or model/key-management execution.
+- [x] Bounded literal honeytokens, safe token-id evidence and generation CLI.
+- [x] Append-only observe-only LLM/HT/AGT findings and COR-005..008 correlations.
+- [x] Pinned editorial framework references in CLI and console API; structured
+  synthetic corpus and loopback demo extension.
+
+Verification and uncommitted status are recorded in `verification.md`.
+Follow-up: broader independent synthetic/field evaluation before any detection
+quality claim; no false-positive, attribution or coverage assertion follows
+from this implementation. Credential distinctness remains intentionally
+memory-only. Multi-step MCP environments are implemented locally in round 3; cross-node correlation and actual
+provider interoperability are separate work; this pack does not implement them.
+
+
+## Local backend continuation (uncommitted, ADR-0022)
+
+- Implemented: bounded tenant-scoped source sessions, cadence/evidence/phase
+  projections and catalog technique observations; conservative analyst indicator
+  and Markdown report downloads; local verified `export indicators`.
+- Verification: current exact commands/results are in `docs/verification.md`.
+  No merge, release or deployment is implied.
+- Deferred to frontend owner: sessions/coverage/export/report UI and dev mock
+  integration. No mock change was required by existing contract tests.
+- Future decisions: durable history/session identity beyond eviction, hard
+  tenant boundaries and independently exercised SIEM interoperability. Current
+  sampled observations are not completeness, attribution or incident verdicts.
+
+## Round 3 backend — local implementation, uncommitted (ADR-0023)
+
+Synthetic MCP environments, CEF/RFC5424/OTLP-JSON/ECS **local file formats**,
+on-demand digest, value-free configured decoy/token catalogs and the console
+contract additions are implemented in this branch. MCP read/replay uses the
+existing observation/correlation boundary. Console/hub review fixes and
+measured shared-SSE / accepting-hub overview work are documented in
+`security-review-2026-11.md` and `architecture/performance.md`; final local gates
+are in `verification.md`. This does not mark release/merge/deployment items done.
+
+Remaining: scheduled digest delivery, real SIEM ingestion/interoperability,
+same-sensor read/replay correlation, catalogs for remote effective configs,
+external body-file planting inference, hard tenancy, cross-node correlation,
+public saturation/p99 measurements and external IdP validation. No automatic
+export/delivery or new runtime network destination exists.

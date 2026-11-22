@@ -1,0 +1,2 @@
+ok  	github.com/metaforismo/aegismesh/internal/console	0.440s
+ok  	github.com/metaforismo/aegismesh/internal/fleet/hub	0.438s

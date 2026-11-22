@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
+	"github.com/metaforismo/aegismesh/internal/evidenceview"
 )
 
 func (s *Server) events(w http.ResponseWriter, r *http.Request, _ caller) {
@@ -33,7 +34,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request, _ caller) {
 	send(w, 200, page)
 }
 
-func (s *Server) eventDetail(w http.ResponseWriter, r *http.Request, _ caller) {
+func (s *Server) eventDetail(w http.ResponseWriter, r *http.Request, credentials caller) {
 	id := r.PathValue("id")
 	if !evidenceindex.ValidID(id) {
 		invalid(w)
@@ -90,8 +91,21 @@ func (s *Server) eventDetail(w http.ResponseWriter, r *http.Request, _ caller) {
 		"integrity":      integrity,
 		"investigations": cases,
 	}
+	detail["session_id"] = ""
+	for _, session := range evidenceview.Sessions(s.tenantID, s.index.Analysis().Events) {
+		for _, e := range session.Events {
+			if evidenceview.EventKey(e) == evidenceview.EventKey(summary) {
+				detail["session_id"] = session.ID
+				break
+			}
+		}
+	}
 	if summary.Node != nil {
 		detail["node"] = summary.Node
+	}
+	if s.record(r, credentials.session.Principal, "event.read", evidenceview.EventKey(summary), "ok") != nil {
+		fail(w, 503, "unavailable", "audit trail is unavailable")
+		return
 	}
 	send(w, 200, detail)
 }
@@ -117,7 +131,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 		return
 	}
 
-	observations, cancel, ok := s.index.Subscribe()
+	observations, cancel, ok := s.index.SubscribeEncoded()
 	if !ok {
 		fail(w, 503, "unavailable", "stream capacity reached")
 		return
@@ -183,10 +197,16 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 					return
 				}
 			}
-			if !filter.Matches(observation) {
+			if !observation.Matches(filter) {
 				continue
 			}
-			if !write("observation", observation) {
+			if controller.SetWriteDeadline(time.Now().Add(5*time.Second)) != nil {
+				return
+			}
+			if _, err := observation.WriteTo(w); err != nil {
+				return
+			}
+			if controller.Flush() != nil {
 				return
 			}
 		case tick := <-heartbeat.C:

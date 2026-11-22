@@ -1,0 +1,315 @@
+{
+  "benign": [
+    {
+      "name": "browser burst",
+      "events": [
+        {
+          "offset_seconds": 0.0,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 0.1,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 0.2,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 0.3,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 0.4,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 0.5,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 0.6,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 0.7,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        }
+      ]
+    },
+    {
+      "name": "minute uptime monitor",
+      "events": [
+        {
+          "offset_seconds": 0,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 60,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 120,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 180,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 240,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 300,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 360,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 420,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        }
+      ]
+    },
+    {
+      "name": "normal SSH typos",
+      "events": [
+        {
+          "offset_seconds": 0,
+          "source": "synthetic-source",
+          "sensor_id": "ssh-one",
+          "sensor_kind": "ssh",
+          "auth_label": "synthetic-typo-0"
+        },
+        {
+          "offset_seconds": 20,
+          "source": "synthetic-source",
+          "sensor_id": "ssh-one",
+          "sensor_kind": "ssh",
+          "auth_label": "synthetic-typo-1"
+        }
+      ]
+    },
+    {
+      "name": "ordinary clients of two AI families",
+      "events": [
+        {
+          "offset_seconds": 0,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "ai_family": "ollama"
+        },
+        {
+          "offset_seconds": 120,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "ai_family": "openai_compatible"
+        }
+      ]
+    }
+  ],
+  "attack_shaped": [
+    {
+      "name": "regular action cadence",
+      "want": [
+        "COR-005"
+      ],
+      "events": [
+        {
+          "offset_seconds": 0,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 10,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 20,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 30,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 40,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 50,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 60,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 70,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        }
+      ]
+    },
+    {
+      "name": "multi-family enumeration",
+      "want": [
+        "COR-006"
+      ],
+      "events": [
+        {
+          "offset_seconds": 0,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "ai_family": "ollama"
+        },
+        {
+          "offset_seconds": 5,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "ai_family": "litellm"
+        }
+      ]
+    },
+    {
+      "name": "distinct credential attempts",
+      "want": [
+        "COR-007"
+      ],
+      "events": [
+        {
+          "offset_seconds": 0.0,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "auth_label": "synthetic-attempt-0"
+        },
+        {
+          "offset_seconds": 0.1,
+          "source": "synthetic-source",
+          "sensor_id": "ssh-one",
+          "sensor_kind": "ssh",
+          "auth_label": "synthetic-attempt-1"
+        },
+        {
+          "offset_seconds": 0.2,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "auth_label": "synthetic-attempt-2"
+        },
+        {
+          "offset_seconds": 0.3,
+          "source": "synthetic-source",
+          "sensor_id": "ssh-one",
+          "sensor_kind": "ssh",
+          "auth_label": "synthetic-attempt-3"
+        },
+        {
+          "offset_seconds": 0.4,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "auth_label": "synthetic-attempt-4"
+        },
+        {
+          "offset_seconds": 0.5,
+          "source": "synthetic-source",
+          "sensor_id": "ssh-one",
+          "sensor_kind": "ssh",
+          "auth_label": "synthetic-attempt-5"
+        },
+        {
+          "offset_seconds": 0.6,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http",
+          "auth_label": "synthetic-attempt-6"
+        },
+        {
+          "offset_seconds": 0.7,
+          "source": "synthetic-source",
+          "sensor_id": "ssh-one",
+          "sensor_kind": "ssh",
+          "auth_label": "synthetic-attempt-7"
+        }
+      ]
+    },
+    {
+      "name": "decoy replay after other sensor",
+      "want": [
+        "COR-008"
+      ],
+      "events": [
+        {
+          "offset_seconds": 0,
+          "source": "synthetic-source",
+          "sensor_id": "http-one",
+          "sensor_kind": "http"
+        },
+        {
+          "offset_seconds": 5,
+          "source": "synthetic-source",
+          "sensor_id": "tcp-one",
+          "sensor_kind": "tcp",
+          "finding_ids": [
+            "HT-001"
+          ]
+        }
+      ]
+    }
+  ]
+}

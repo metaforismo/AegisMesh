@@ -642,7 +642,7 @@ func tcpLine(t *testing.T, addr, line, want string) {
 
 func waitForEvents(t *testing.T, dataDir string, n int) []event.Envelope {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(2 * flushEvery)
 	for {
 		events := readEvents(t, dataDir)
 		if len(events) >= n {

@@ -1,0 +1,1 @@
+CEF:0|AegisMesh|AegisMesh|1|interaction|GET /a\|b=c\\d "]|7|externalId=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa cs3Label=source cs3=192.0.2.4 cs1Label=node_id cs1=local cs2Label=sensor_id cs2=synthetic rt=1795348800123 cs4Label=rule_ids cs4=PI-001 msg=GET /a|b\=c\\d "]

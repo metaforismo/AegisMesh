@@ -55,12 +55,13 @@ func RunWorker(ctx context.Context, input io.Reader, output io.Writer, build Sen
 		bus.Close()
 	}()
 	deps := sensor.Deps{
-		Config:   workerConfig,
-		Bus:      bus,
-		Meter:    reg,
-		Log:      log,
-		Seq:      &event.Sequencer{},
-		Instance: start.Spec.Instance,
+		Config:      workerConfig,
+		Honeytokens: start.Spec.Honeytokens,
+		Bus:         bus,
+		Meter:       reg,
+		Log:         log,
+		Seq:         &event.Sequencer{},
+		Instance:    start.Spec.Instance,
 	}
 
 	s, err := build(deps, start.Spec.Detection)
@@ -263,6 +264,7 @@ func (s *workerSink) Append(_ context.Context, e event.Envelope) error {
 		return nil
 	}
 	obs := Observation{
+		AuthAttempts:   e.AuthAttempts,
 		SensorID:       e.Sensor.ID,
 		Kind:           e.Sensor.Kind,
 		Classification: e.Classification,

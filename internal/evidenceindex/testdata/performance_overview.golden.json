@@ -1,5 +1,11 @@
 {
   "1h": {
+    "index": {
+      "events": 64,
+      "capacity": 200,
+      "oldest": "2026-11-01T12:00:00.123456788Z",
+      "history": "complete"
+    },
     "window": "1h",
     "generated_at": "2026-11-15T12:00:00.123456789Z",
     "totals": {
@@ -1493,11 +1499,13 @@
     },
     "top_rules": [
       {
+        "title": "instruction-override phrasing directed at an automated agent",
         "rule_id": "PI-001",
         "events": 8,
         "severity": "high"
       },
       {
+        "title": "repeated injection findings from one source",
         "rule_id": "COR-001",
         "events": 4,
         "severity": ""
@@ -1634,6 +1642,12 @@
     }
   ],
   "24h": {
+    "index": {
+      "events": 64,
+      "capacity": 200,
+      "oldest": "2026-11-01T12:00:00.123456788Z",
+      "history": "complete"
+    },
     "window": "24h",
     "generated_at": "2026-11-15T12:00:00.123456789Z",
     "totals": {
@@ -2839,11 +2853,13 @@
     },
     "top_rules": [
       {
+        "title": "instruction-override phrasing directed at an automated agent",
         "rule_id": "PI-001",
         "events": 16,
         "severity": "high"
       },
       {
+        "title": "repeated injection findings from one source",
         "rule_id": "COR-001",
         "events": 8,
         "severity": ""
@@ -3056,6 +3072,12 @@
     }
   ],
   "7d": {
+    "index": {
+      "events": 64,
+      "capacity": 200,
+      "oldest": "2026-11-01T12:00:00.123456788Z",
+      "history": "complete"
+    },
     "window": "7d",
     "generated_at": "2026-11-15T12:00:00.123456789Z",
     "totals": {
@@ -4453,11 +4475,13 @@
     },
     "top_rules": [
       {
+        "title": "instruction-override phrasing directed at an automated agent",
         "rule_id": "PI-001",
         "events": 24,
         "severity": "high"
       },
       {
+        "title": "repeated injection findings from one source",
         "rule_id": "COR-001",
         "events": 12,
         "severity": ""

@@ -61,8 +61,8 @@ func TestOptionsValidateRejectsOutOfBounds(t *testing.T) {
 }
 
 func TestRegistryValidation(t *testing.T) {
-	if got := len(KnownRuleIDs()); got != 4 {
-		t.Fatalf("expected 4 rules, got %d", got)
+	if got := len(KnownRuleIDs()); got != 8 {
+		t.Fatalf("expected 8 rules, got %d", got)
 	}
 	if err := ValidateRuleIDs([]string{"COR-001", "COR-004"}); err != nil {
 		t.Fatalf("known ids rejected: %v", err)

@@ -254,6 +254,24 @@ func (manager *Manager) Logout(id string) {
 	delete(manager.sessions, id)
 }
 
+// LoginAvailable checks an existing attempt budget without charging successful API calls.
+func (manager *Manager) LoginAvailable(remote string) bool {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	now := manager.now()
+	if attempts, exists := manager.attempts[remote]; exists {
+		return now.Sub(attempts.start) >= time.Minute || attempts.count < 10
+	}
+	if len(manager.attempts) >= MaxRemotes {
+		for key, attempts := range manager.attempts {
+			if now.Sub(attempts.start) >= time.Minute {
+				delete(manager.attempts, key)
+			}
+		}
+	}
+	return len(manager.attempts) < MaxRemotes
+}
+
 // AllowLogin admits at most ten attempts per remote per minute with bounded remote state.
 func (manager *Manager) AllowLogin(remote string) bool {
 	manager.mu.Lock()

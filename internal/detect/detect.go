@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 )
 
 // RuleID values are stable identifiers published in operator documentation.
@@ -44,6 +46,8 @@ func KnownRuleIDs() []string {
 		string(RuleToolEscalation),
 		string(RuleEncodedPayload),
 		string(RuleExcessInput),
+		string(RuleAISurface), string(RuleMinimalProbe), string(RuleAIManagement), string(RuleProviderKey), string(RuleHoneytoken), string(RuleAgentCanary),
+		string(RuleMCPSecret), string(RuleMCPDepth), string(RuleMCPWrite),
 	}
 }
 
@@ -65,10 +69,11 @@ func ValidateRuleIDs(ids []string) error {
 type Severity string
 
 const (
-	SevInfo   Severity = "info"
-	SevLow    Severity = "low"
-	SevMedium Severity = "medium"
-	SevHigh   Severity = "high"
+	SevInfo     Severity = "info"
+	SevLow      Severity = "low"
+	SevMedium   Severity = "medium"
+	SevHigh     Severity = "high"
+	SevCritical Severity = "critical"
 )
 
 type Confidence string
@@ -82,10 +87,13 @@ const (
 // Finding is one rule hit. It describes the WHY in fixed operator-facing
 // language; it never quotes the matched text.
 type Finding struct {
-	RuleID     RuleID     `json:"rule_id"`
-	Severity   Severity   `json:"severity"`
-	Confidence Confidence `json:"confidence"`
-	Reason     string     `json:"reason"`
+	Family          AIFamily   `json:"ai_family,omitempty"`
+	CredentialClass string     `json:"credential_class,omitempty"`
+	TokenID         string     `json:"token_id,omitempty"`
+	RuleID          RuleID     `json:"rule_id"`
+	Severity        Severity   `json:"severity"`
+	Confidence      Confidence `json:"confidence"`
+	Reason          string     `json:"reason"`
 }
 
 // Input carries one bounded interaction for evaluation.
@@ -95,6 +103,17 @@ type Finding struct {
 // interaction so RES-001 can fire on overflow even though the engine never
 // sees the excess bytes.
 type Input struct {
+	MCPSecretRead   bool
+	MCPDepth        bool
+	MCPWriteAttempt bool
+	Method          string
+	Path            string
+	Protocol        string
+	Headers         map[string][]string // lowercased selected header names
+	Body            string
+	TokenMatches    []honeytoken.Match
+	RawParts        []string // acquired, sensor-bounded fields, consumed only by Enforcer
+
 	Text       string
 	TotalBytes int
 }
@@ -153,23 +172,50 @@ func New(opts Options) *Engine {
 func (e *Engine) MaxInputBytes() int { return e.maxInput }
 
 // Evaluate runs every active rule in registration order. Findings are stable:
-// same input, same order, no deduplication needed because each rule fires at
-// most once per call (patterns are existence checks, not counters).
+// same input, same order. Content rules fire once per call; token rules emit
+// one finding per matched configured id, in configuration order.
 func (e *Engine) Evaluate(in Input) []Finding {
 	var out []Finding
 	text := in.Text
 	if len(text) > hardMaxScanBytes {
 		text = text[:hardMaxScanBytes]
 	}
+	in.Text = text
+	if len(in.Path) > hardMaxScanBytes {
+		in.Path = in.Path[:hardMaxScanBytes]
+	}
+	if len(in.Body) > e.maxInput {
+		in.Body = ""
+	} // incomplete JSON is not a probe
+	in.Headers = boundedHeaders(in.Headers)
 	lower := strings.ToLower(text)
 	for _, r := range e.rules {
-		if r.match(Input{Text: text, TotalBytes: in.TotalBytes}, lower) {
-			out = append(out, Finding{
+		if r.match(in, lower) {
+			f := Finding{
 				RuleID:     r.id,
 				Severity:   r.severity,
 				Confidence: r.confidence,
 				Reason:     r.reason,
-			})
+			}
+			switch r.id {
+			case RuleAISurface:
+				f.Family = SurfaceFamily(in)
+			case RuleProviderKey:
+				f.CredentialClass = presentedKeyClass(in)
+			case RuleHoneytoken, RuleAgentCanary:
+				kind := honeytoken.Credential
+				if r.id == RuleAgentCanary {
+					kind = honeytoken.AgentCanary
+				}
+				for _, m := range in.TokenMatches {
+					if m.Kind == kind {
+						f.TokenID = m.ID
+						out = append(out, f)
+					}
+				}
+				continue
+			}
+			out = append(out, f)
 		}
 	}
 	return out
@@ -238,7 +284,7 @@ func excessiveInputThreshold(max int) func(Input, string) bool {
 }
 
 func allRules(maxInput int) []rule {
-	return []rule{
+	return append([]rule{
 		{
 			id:         RuleDirectInjection,
 			severity:   SevHigh,
@@ -290,5 +336,21 @@ func allRules(maxInput int) []rule {
 			reason:     "interaction exceeded the detection evaluation bound",
 			match:      excessiveInputThreshold(maxInput),
 		},
+	}, append(aiRules(), mcpRules()...)...)
+}
+
+func boundedHeaders(headers map[string][]string) map[string][]string {
+	out := map[string][]string{}
+	for _, name := range []string{"authorization", "proxy-authorization", "x-api-key", "api-key"} {
+		values := headers[name]
+		if len(values) > 16 {
+			values = values[:16]
+		}
+		for _, v := range values {
+			if len(v) <= 1024 {
+				out[name] = append(out[name], v)
+			}
+		}
 	}
+	return out
 }

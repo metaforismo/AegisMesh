@@ -1,0 +1,5 @@
+--- FAIL: TestLoginAvailableHonorsCapacityAndPrunesExpiredKeys (0.00s)
+    auth_test.go:249: full throttle table admitted unknown remote
+FAIL
+FAIL	github.com/metaforismo/aegismesh/internal/console/auth	0.396s
+FAIL

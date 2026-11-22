@@ -14,6 +14,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/event"
+	"github.com/metaforismo/aegismesh/internal/honeytoken"
 )
 
 const (
@@ -63,6 +64,7 @@ const (
 // creating one. API keys, provider destinations, models, and credential
 // references are intentionally absent.
 type WorkerSpec struct {
+	Honeytokens        []honeytoken.Token `json:"honeytokens,omitempty"`
 	Sensor             config.Sensor      `json:"sensor"`
 	Detection          config.Detection   `json:"detection"`
 	Instance           string             `json:"instance"`
@@ -80,6 +82,9 @@ type MaterializedBody struct {
 // validation. It rejects unsupported identity and any filesystem path that
 // must have been materialized before launch.
 func ValidateWorkerSpec(s WorkerSpec) error {
+	if err := honeytoken.Validate(s.Honeytokens); err != nil {
+		return err
+	}
 	if s.Sensor.ID == "" || len(s.Sensor.ID) > 128 {
 		return fmt.Errorf("sensorproc: sensor id is empty or too long")
 	}
@@ -140,6 +145,7 @@ type readyPayload struct {
 // Observation is intentionally a projection of an event. IDs, time, sequence
 // and integrity are never accepted from a worker; the parent owns those.
 type Observation struct {
+	AuthAttempts   []string        `json:"auth_attempts,omitempty"` // private IPC only, never observation JSON
 	SensorID       string          `json:"sensor_id"`
 	Kind           string          `json:"kind"`
 	Classification string          `json:"classification"`
@@ -240,6 +246,19 @@ func decodePayload(raw json.RawMessage, dst any) error {
 }
 
 func validateObservation(o Observation, spec WorkerSpec) error {
+	if len(o.AuthAttempts) > 16 {
+		return fmt.Errorf("sensorproc: too many auth digests")
+	}
+	for _, digest := range o.AuthAttempts {
+		if len(digest) != 64 {
+			return fmt.Errorf("sensorproc: invalid auth digest")
+		}
+		for _, c := range digest {
+			if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+				return fmt.Errorf("sensorproc: invalid auth digest")
+			}
+		}
+	}
 	if o.SensorID != spec.Sensor.ID || o.Kind != spec.Sensor.Kind {
 		return fmt.Errorf("sensorproc: observation identity mismatch")
 	}
@@ -323,7 +342,7 @@ func walkUniqueJSONValue(dec *json.Decoder, depth int) error {
 
 func validRedactionRule(rule string) bool {
 	switch rule {
-	case "header_values_policy", "query_string_dropped", "credential_scrub", "preview_truncated",
+	case "honeytoken_scrub", "header_values_policy", "query_string_dropped", "credential_scrub", "preview_truncated",
 		"username_content_dropped", "credential_content_dropped", "request_payload_dropped",
 		"channel_payload_dropped", "input_truncated":
 		return true

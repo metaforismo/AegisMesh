@@ -26,6 +26,11 @@ func TestDemoGoldenOutputs(t *testing.T) {
 			if code != 0 || stderr != "" {
 				t.Fatalf("demo failed: code=%d stderr=%q", code, stderr)
 			}
+			if os.Getenv("AEGISMESH_UPDATE_DEMO_GOLDENS") == "1" {
+				if err := os.WriteFile(filepath.Join("testdata", tc.golden), []byte(got), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			want, err := os.ReadFile(filepath.Join("testdata", tc.golden))
 			if err != nil {
 				t.Fatal(err)
@@ -137,8 +142,9 @@ func runInjectedDemo(ctx context.Context, runner func(context.Context) (demo.Sum
 func successfulDemo(context.Context) (demo.Summary, error) {
 	return demo.Summary{
 		Schema: "aegismesh.demo/v1", Mode: "synthetic", Network: "loopback-only", Egress: "none",
-		Sensors: []string{"http", "tcp", "mcp", "ssh"}, Events: 4, Interactions: 3, CanaryInvocations: 1,
-		IntegrityVerified: true, Recommendations: 1, DryRun: true, Enforcement: false,
+		DetectionRules: []string{"LLM-001", "LLM-002", "LLM-004", "HT-001", "AGT-001", "MCP-001", "MCP-002"},
+		Sensors:        []string{"http", "tcp", "mcp", "ssh"}, Events: 11, Interactions: 7, CanaryInvocations: 4,
+		IntegrityVerified: true, Recommendations: 8, DryRun: true, Enforcement: false,
 		SignalNotIncident: true, ListenersReleased: true, CleanupComplete: true,
 	}, nil
 }

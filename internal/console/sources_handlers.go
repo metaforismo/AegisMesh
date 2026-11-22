@@ -63,8 +63,9 @@ func (s *Server) source(w http.ResponseWriter, r *http.Request, _ caller) {
 	}
 
 	send(w, 200, map[string]any{
-		"source":      summary,
-		"events":      page.Events,
-		"next_cursor": page.NextCursor,
+		"source":        summary,
+		"inter_arrival": s.index.InterArrival(source),
+		"events":        page.Events,
+		"next_cursor":   page.NextCursor,
 	})
 }

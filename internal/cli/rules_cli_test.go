@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestRulesListJSONShapeStable(t *testing.T) {
 		t.Fatalf("got %d rules, want %d", len(rep.Rules), len(want))
 	}
 	for i := range want {
-		if rep.Rules[i] != want[i] {
+		if !reflect.DeepEqual(rep.Rules[i], want[i]) {
 			t.Fatalf("rule %d drifted: %+v vs %+v", i, rep.Rules[i], want[i])
 		}
 	}
@@ -149,7 +150,7 @@ func TestRulesExplainSignalShowsDashAndJSONOmitsSeverity(t *testing.T) {
 		t.Fatalf("invalid json: %v\n%s", err, out)
 	}
 	want, ok := rulecatalog.Lookup("COR-002")
-	if !ok || e != want {
+	if !ok || !reflect.DeepEqual(e, want) {
 		t.Fatalf("json entry drifted: %+v vs %+v", e, want)
 	}
 	raw, _ := json.Marshal(e)

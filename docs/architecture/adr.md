@@ -869,3 +869,187 @@ plans, independent deployments or self-service tenant creation. Timing classes
 for foreign IDs and absent IDs match, but constant-time HTTP response latency and
 absence of shared-resource inference are not claimed. Old bare-ID investigation
 references remain local-only; cross-node annotation semantics are deferred.
+## ADR-0021 — synthetic AI service decoys, honeytokens and editorial mappings
+
+**Status:** implemented in the uncommitted AI observation pack; verification is
+recorded in `docs/verification.md`. **Date:** 2026-11-22.
+
+**Context.** AI endpoint enumeration, small validation-shaped requests and
+instruction-following interactions are useful defensive observations. Request
+patterns alone cannot establish client identity, intent, stolen credentials or
+compromise. Existing sensors already own byte limits, static responses and
+redaction before the event bus; optional process workers preserve those seams.
+
+**Decision.** Reuse static HTTP rules for an `ai-decoy` scaffold. Generate only
+synthetic bodies, deployment persona variation and two crypto/rand markers.
+No inference or model/key management backend exists. Add a bounded, immutable
+literal honeytoken matcher through the injected policy enforcer. Sensors match
+separate acquired fields before preview truncation, retain only safe token ids
+in findings and replace values before evidence. Config is strictly decoded and
+validated (64 markers, 16..256-byte printable values, unique ids/values, slug
+ids, enumerated kinds). No configured regex, runtime-selected command/path,
+configuration mutation or enforcement action is introduced.
+
+Append LLM-001..004, HT-001 and AGT-001 after the published detection registry;
+all are observe-only even under aggressive existing severity actions. Append
+COR-005..008 to the existing bounded, opt-in correlation engine. Use event-time
+predicates, the existing cooldown and contributing event IDs. Cadence is not an
+AI attribution mechanism: scanners and scheduled clients may also match.
+Replay means the same peer host previously interacted with another sensor,
+not demonstrated disclosure by that sensor.
+
+Credential stuffing needs distinctness without retaining secrets. Carry
+length-framed SHA-256 digests only as ephemeral envelope metadata and private
+worker IPC, strip them before all storage/index/export/fan-out paths, and feed
+only the local correlation ring after a successful authoritative append. A
+stored COR-007 signal cannot be independently recomputed from saved credential
+values because neither values nor digests are saved. This explicit privacy
+tradeoff is preferable to durable password-verification material.
+
+Add catalog `frameworks` references from exactly the requested editorial
+ATT&CK/ATLAS/OWASP LLM 2025 table, with a pinned test covering every rule and
+empty cells. Expose them in CLI and console API; caller-owned slices cannot
+mutate the registry. Mappings mean "relates to", never coverage/completeness or
+compliance. AGT-001 mirrors a defender-planted instruction technique, not
+established attacker use. Runtime framework content is never fetched.
+
+**Rejected alternatives.** A bus-only matcher cannot recover dropped SSH
+credentials or truncated previews. Regexes from configured markers add no
+value over bounded literal matching. Persisting credential digests enables
+unnecessary offline guessing and increases disclosure. A new response engine
+or remote LLM adds execution/egress and state that static shapes do not need.
+
+**Consequences.** Fake marker secrecy and uniqueness within operator-owned decoy
+material are operational premises. A human or scanner can replay a marker.
+NAT groups clients; rotating addresses split them. Shared `/v1/*` paths cannot
+identify vLLM and default to `openai_compatible`. No unacquired, encoded or
+cross-field marker matching is claimed. Existing sensor limits, event/storage
+contracts and enforcement semantics for older rules are retained. New data is
+additive and no dependency is added. Exact predicates and the synthetic
+measurement scope are in `docs/ai-threat-detection.md`.
+
+## ADR-0022 — bounded session stories, framework relations and operator downloads
+
+**Status:** implemented locally, uncommitted; verification in `docs/verification.md`.
+
+**Context.** Operators need a chronological account and portable observations
+without granting the console another control or egress path. The disposable
+index has count/byte bounds and incomplete history; source keys are not actors.
+
+**Alternatives considered.** Implementing each projection directly in HTTP
+handlers would couple transport, grouping and rendering and duplicate CLI
+indicator behavior. Persisting sessions as another mutable index would add
+backfill, eviction and transactional ownership. A shared pure projection over
+one bounded snapshot provides the smaller interface and preserves read-only
+console ownership.
+
+**Decision.** `evidenceindex.Analysis()` copies at most 8192 newest summaries
+and consistent index stats under one read lock. `evidenceview` groups source
+sessions at an idle gap greater than 30 minutes, computes deterministic cadence,
+explicit automation evidence and catalog relation counts. `indicatorexport`
+renders conservative IP proposals in STIX/CSV/TXT for the HTTP and local CLI
+seams. `evidencereport` owns inert Markdown; the console supplies already scoped
+annotations, summaries and verified local dry-run recommendations. No new
+dependency, configuration field, model call, sensor control or runtime egress.
+The final wire contracts and formulas are in `console-api.md`.
+
+Session IDs hash tenant/source/first retained origin+event; they are stable
+only while that anchor remains first. List cursors bind an immutable snapshot
+digest and selection under the tenant's process HMAC key; stale reads restart.
+A 200-event timeline also bounds phase runs. Sensor/kind lists cap at 64 with
+an explicit flag. Responses/downloads cap at 2 MiB, with no partial downloads;
+STIX additionally stops object construction near 2048 objects. Source reports
+and assessments disclose every omitted/capped count. Credential/provider output
+and arbitrary observation text never become exec, paths, policy or enforcement.
+
+Automation requires eight non-signal events; correlated outputs cannot create
+fast timing evidence. Sub-second median or regular 1..30-second timing and
+listed marker/signal predicates are observations, not verdicts. Framework
+relations are catalog editorial references, not execution or completeness claims.
+STIX notes carry origin-qualified evidence references and conservative 15/100
+confidence; no automatic blocklist application or delivery connector exists.
+
+Report data is bounded, JSON quoted on a single line inside fixed text fences;
+only static strings supply Markdown headings. Existing recommendation generation
+is local-only, verified and capped; missing/forwarded references are disclosed.
+All successful sensitive downloads are audited before bytes are released.
+
+**Review corrections carried forward.** Honeytokens use crypto/rand rejection
+sampling in provider-shaped formats without a visible synthetic marker. They
+are never registered or validated with a provider. It is impossible to prove
+offline that random strings never collide with provider credentials; do not
+claim that guarantee. Committed examples reject explicit unreplaced placeholders.
+Generic `/version`, `/metrics`, `/sse` paths no longer identify AI surfaces.
+COR-005 accepts sub-second upper medians, or medians <=30 seconds with its
+at-most-one-outlier test; zero gaps are included with timestamp caveats.
+
+**Consequences and deferred work.** Session reconstruction is sample-dependent,
+not durable actor tracking. No complete-history, hard tenancy, external SIEM
+interoperability, attribution or production-capacity claim is made. UI/dev mock
+integration belongs to the frontend workstream. Native evidence remains the
+source of truth. No push, tag, PR, merge, release or deployment is implied.
+
+## ADR-0023 — static MCP environments, local SIEM formats and bounded digest
+
+**Status:** implemented locally, uncommitted; final local checks in
+`docs/verification.md`. No publication or deployment is implied.
+
+**Grounding.** Sensors pass bounded interactions through the existing policy
+engine before redacted authoritative append. The console index receives only
+successful appends and partitions by authenticated tenant. `evidenceview`
+already owns retained sessions; native envelopes remain authoritative.
+`ecsexport` and Markdown neutralisation already define read boundaries.
+
+**Two designs considered.** (A) Make each MCP tool a callback to arbitrary
+workspace/file/query adapters, and implement format/digest logic separately in
+CLI and HTTP. This expands authority and duplicates behavior. (B) Compile
+strict declarative entries into exact in-memory maps, keep connection-local
+observation state, and share pure render/analysis packages between CLI and
+HTTP. B has the smaller authority surface and one testable format contract.
+No new dependency, plugin, interpreter, transport or mutable environment is
+needed. A persistent attacker-selected MCP session table was also rejected:
+connection context bounds ownership without a new identity/retention protocol.
+
+**Usage and module contract.** Operators declare `Sensor.Environment` or scaffold
+`init --profile ai-decoy`; sensors expose only five fixed synthetic tools.
+`eventexport.Render([]event.OriginEnvelope, format)` verifies and stages
+bounded bytes. `digest.Build(Input)` consumes an anchored snapshot plus explicit
+operator/recommendation counts; `digest.Render` emits JSON/inert Markdown.
+Console handlers own authentication/scoping/audit; CLI owns explicit local
+reader/identity/output flags. `DecoyCatalog` projects configuration to value-free
+metadata before the console retains it. No handler receives token values.
+
+**Decision.** Files/env/query results remain declared static data. Names are
+exact map keys, never OS paths/environment access, SQL, regexes or commands.
+A server-created HTTP connection owns up to 256 steps and the first 32 scrubbed
+tool names. MCP-001..003 append to detection order and cannot select policy
+actions; framework mappings use existing catalog IDs only. Replay reuses
+HT-001/COR-008 without upgrading cross-sensor contact into proven disclosure.
+
+Exports support CEF, RFC5424, OTLP JSON encoding and ECS locally; 8192 inputs,
+2 MiB staged bytes, origin-qualified resolution, fixed attachment names and
+audit-before-disclosure. OTLP is format only; no exporter/collector is added.
+Digest compares adjacent sampled windows at one anchor; source novelty is
+relative, automation is evidence-consistent, recommendations are unexecuted.
+CLI investigation reads are fixed-name, bounded and read-only; unavailable state
+is null, not a zero. New catalog APIs are local-tenant-only and value-free.
+
+**Perimeter decisions.** Separately budget invalid Bearer attempts using the
+existing bounded throttle state; install hub rejection headers at the response
+writer; audit raw event detail before bytes, including viewer reads. The real
+review and failing-first evidence are in `security-review-2026-11.md`.
+
+**Measured performance.** Share one lazy immutable SSE frame per tenant/event,
+leaving filtering/admission/write deadlines per subscriber. Resolve overview
+node names once per origin after counting. Matching before/after harnesses,
+including a real accepting hub and enrolled synthetic identities, are in
+`performance/2026-11-22`. Keep allocation/latency evidence separate; a paced
+SSE workload cannot show throughput gains and single-stream overhead remains.
+
+**Consequences.** Data contracts are additive; overview rule severity is now
+catalog severity rather than an unrelated highest finding. Native event schema
+is unchanged, with optional MCP observation fields. Source histograms include
+all retained events independently of page size; digest/catalog/session work
+uses the bounded newest sample. No hard tenant, complete-history, real SIEM,
+automation attribution, production performance or perimeter-security claim.
+UI/mock changes remain outside this backend task.

@@ -90,9 +90,10 @@ answers. Use it before any production-ish deployment.
 
 Run one self-contained synthetic scenario through real HTTP, TCP, MCP and
 authentication-only SSH listeners. Every listener is bound to `127.0.0.1` on an
-OS-assigned unprivileged port. The command checks readiness, performs one fixed
-interaction per sensor, drains the event bus, validates all four native
-envelopes and their observation hashes, generates one dry-run recommendation,
+OS-assigned unprivileged port. The command checks readiness, performs a fixed
+AI enumeration/replay and multi-step MCP workspace sequence plus TCP/SSH
+interactions, drains the event bus, validates all eleven native envelopes and
+their observation hashes, generates eight dry-run recommendations,
 stops the runtime and removes its private temporary workspace.
 
 The stable summary contains no event ID, timestamp, path, process ID, port,
@@ -438,3 +439,99 @@ fleet command channel. For forwarded-evidence inspection the new trusted layout
 is `<fleet.hub.state_dir>/tenants/TENANT/evidence/NODE_ID/`; obtain TENANT from the
 active session and NODE_ID from its fleet inventory. Existing local evidence and
 agent identity paths are unchanged. Local logout does not log out of the IdP.
+
+## AI decoy profile and honeytokens
+
+`aegismesh init --profile ai-decoy --dir ./ai-lab` creates two loopback HTTP
+listeners with static synthetic AI API bodies, a fake credential and an agent
+marker. There is no inference backend or provider fallback. The generated
+README describes the listeners; see [ai-threat-detection.md](ai-threat-detection.md).
+
+`aegismesh honeytoken new --kind credential|agent_canary --format
+openai|anthropic|aws|github|generic --id <slug>` prints a YAML `honeytokens`
+snippet using crypto/rand. `--kind` and `--id` are required; `--format` defaults
+to `generic`. This command writes only stdout. Never use a real credential as
+a honeytoken; plant the fake value only in operator-owned decoy material.
+
+`rules list` and `rules explain RULE_ID` include editorial "relates to"
+framework references in text and JSON. JSON adds a `frameworks` list with
+`framework`, `id`, `name`. The console rules API exposes the same references.
+No coverage/completeness claim is implied. `rules test` continues to evaluate
+plain offline text, so it does not fabricate request method/path/headers or
+load honeytoken configuration. The checked-in structured corpus exercises
+those additional contexts through `internal/ruletest.EvaluateInteraction`.
+
+The demo records eleven synthetic observations (seven interactions and four MCP
+canary invocations), prints LLM-001, LLM-002, LLM-004, HT-001, AGT-001,
+MCP-001 and MCP-002, and
+produces eight dry-run proposals. All traffic stays on its own loopback sensors.
+
+## aegismesh export indicators
+
+```sh
+aegismesh export indicators --data-dir ./data --format stix
+aegismesh export indicators --data-dir ./data --format csv --since 2026-01-01T00:00:00Z
+aegismesh export indicators --data-dir ./data --format txt --identity ./read-identity.txt --require-sealed
+```
+
+`--data-dir` and `--format stix|csv|txt` are required; `--since` is an inclusive
+RFC3339 bound. `--identity FILE` is repeatable for encryption key rotation.
+Output is the complete attachment content on stdout; scanned/selected and skipped
+non-IP counts go to stderr. No network request or enforcement occurs. TXT is a
+PROPOSED blocklist for operator review, never applied. STIX is a deterministic
+2.1 bundle with a synthetic local instance identity, confidence 15/100 IP
+indicators, event-reference notes and editorial ATT&CK/ATLAS relationships.
+CSV/TXT contain one indicator per row/line. Source hostnames, zones, ports and
+other non-IP keys are skipped. Console shapes and CSV columns are documented in
+[console-api.md](architecture/console-api.md).
+
+All native input is verified before output; corrupt evidence, more than 8192
+read events (even before `--since`), approximately 2048 STIX objects or output
+above 2 MiB fails closed. Exit 0 means read/render success, possibly incomplete:
+open encrypted v3 segments expose their last checkpoint prefix and a stderr
+notice; `--require-sealed` rejects them. Exit 1 means read/output/limit failure;
+2 means invalid arguments. There is no `--out`: operators select any redirection
+path themselves. Golden tests cover all formats without storing provider keys.
+
+The checked-in `examples/ai-decoy.yaml` is a template: both clearly marked
+placeholders must be replaced everywhere (including response bodies) using
+`aegismesh honeytoken new`. Validation fails with an actionable message until
+they are replaced. `init --profile ai-decoy` generates fresh random markers and
+needs no replacement. Never substitute real provider credentials. Generated
+values use realistic shapes without a synthetic substring; no provider ever
+registers or validates them, and random collision impossibility is not claimed.
+
+## Local event formats and on-demand digest
+
+```sh
+aegismesh export events --data-dir ./data --format cef
+aegismesh export events --data-dir ./data --format syslog-rfc5424 --out ./observations.log
+aegismesh export events --data-dir ./data --format otlp-json --since 2026-11-01T00:00:00Z
+aegismesh export events --data-dir ./data --format ecs --identity ./identity.txt --require-sealed
+aegismesh digest --since 24h --data-dir ./data --format md
+aegismesh digest --since 7d --data-dir ./data --format json --investigations-dir ./data/console/tenants/default
+```
+
+`export events` requires a format and data directory. Stdout is default;
+`--out` creates a new owner-only file, refusing existing files or symlinks.
+Verification, deterministic ordering, severity mappings, escaping and limits
+are in [siem-export.md](siem-export.md). OTLP is format only; AegisMesh does
+not ship an OTLP exporter. No export command sends data to a collector.
+
+`digest` requires `--since 24h|7d`; defaults are `--data-dir ./data` and
+`--format md` (`json` is the other format). It reads at most 8192 verified
+local events and fails closed above that input budget. It compares adjacent
+half-open windows at one captured UTC clock time. Open investigations are read
+without writes from the directory containing `investigations.json`, default
+`DATA/console/tenants/default`; use `--investigations-dir` for non-default
+configuration/tenants. An unavailable directory produces null and an explicit
+limit; corrupt, nonprivate or interrupted state fails closed. It does not infer
+another tenant from evidence. Recommendations use up to 4096 current-window
+local events, at most 20 proposals, never execute. All inputs, exclusions and
+history limits are reported. CLI history is marked unavailable because the
+reader cannot establish completeness of retained/on-disk history. New sources
+means absent from the preceding sampled window, not first-ever contact.
+Markdown goes through the existing JSON-quoting neutraliser. There is no timer,
+scheduler, saved digest or automatic delivery. Encryption read flags match
+`export events`; checkpoint notices remain on stderr. Exit codes are 0 success,
+1 read/output/verification failure, 2 argument error.

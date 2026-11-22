@@ -1,0 +1,79 @@
+ID        FAMILY       CLASS   SEV     SUMMARY
+PI-001    detection    finding high    instruction-override phrasing directed at an automated agent
+          relates to mitre-atlas AML.T0051 LLM Prompt Injection
+          relates to mitre-atlas AML.T0054 LLM Jailbreak
+          relates to owasp-llm-2025 LLM01 Prompt Injection
+PI-002    detection    finding high    hidden-channel characters present (unicode tag block, zero-width controls, or ANSI escapes)
+          relates to mitre-attack T1027 Obfuscated Files or Information
+          relates to mitre-atlas AML.T0051 LLM Prompt Injection
+          relates to owasp-llm-2025 LLM01 Prompt Injection
+EXF-001   detection    finding high    request pattern consistent with credential/environment disclosure or exfiltration
+          relates to mitre-attack T1552 Unsecured Credentials
+          relates to mitre-atlas AML.T0057 LLM Data Leakage
+          relates to owasp-llm-2025 LLM02 Sensitive Information Disclosure
+ESC-001   detection    finding medium  phrasing steering toward privileged tool or command invocation
+          relates to mitre-attack T1059 Command and Scripting Interpreter
+          relates to mitre-atlas AML.T0053 LLM Plugin Compromise
+          relates to owasp-llm-2025 LLM06 Excessive Agency
+OBS-001   detection    finding low     large encoded blob or repeated double-encoding markers
+          relates to mitre-attack T1027 Obfuscated Files or Information
+RES-001   detection    finding info    interaction exceeded the detection evaluation bound
+          relates to mitre-attack T1499 Endpoint Denial of Service
+          relates to mitre-atlas AML.T0029 Denial of ML Service
+          relates to owasp-llm-2025 LLM10 Unbounded Consumption
+LLM-001   detection    finding low     request targeted a known AI inference or management API surface
+          relates to mitre-attack T1595 Active Scanning
+          relates to mitre-atlas AML.T0006 Active Scanning
+LLM-002   detection    finding medium  short completion request with a tiny token budget; consistent with minimal-cost credential validation
+          relates to mitre-attack T1078 Valid Accounts
+          relates to mitre-atlas AML.T0012 Valid Accounts
+          relates to mitre-atlas AML.T0040 AI Model Inference API Access
+          relates to owasp-llm-2025 LLM10 Unbounded Consumption
+LLM-003   detection    finding medium  model or key management attempt on an AI surface; consistent with resource hijacking
+          relates to mitre-attack T1496 Resource Hijacking
+          relates to mitre-atlas AML.T0034 Cost Harvesting
+          relates to owasp-llm-2025 LLM10 Unbounded Consumption
+LLM-004   detection    finding low     a provider-shaped API key or known placeholder was presented to a decoy
+          relates to mitre-attack T1078 Valid Accounts
+          relates to mitre-atlas AML.T0012 Valid Accounts
+HT-001    detection    finding critical a credential that exists only in decoy material was presented
+          relates to mitre-attack T1552 Unsecured Credentials
+          relates to mitre-attack T1078 Valid Accounts
+          relates to mitre-atlas AML.T0055 Unsecured Credentials
+          relates to owasp-llm-2025 LLM02 Sensitive Information Disclosure
+AGT-001   detection    finding high    interaction followed an instruction embedded in decoy content; consistent with an LLM-driven client
+          relates to mitre-atlas AML.T0051 LLM Prompt Injection
+          relates to owasp-llm-2025 LLM01 Prompt Injection
+MCP-001   detection    finding medium  declared synthetic credential content was requested
+          relates to mitre-attack T1552 Unsecured Credentials
+          relates to mitre-atlas AML.T0055 Unsecured Credentials
+          relates to owasp-llm-2025 LLM02 Sensitive Information Disclosure
+MCP-002   detection    finding low     connection reached the configured MCP exploration depth
+          relates to mitre-atlas AML.T0053 LLM Plugin Compromise
+          relates to owasp-llm-2025 LLM06 Excessive Agency
+MCP-003   detection    finding medium  write or execution shaped MCP tool was requested; nothing was executed
+          relates to mitre-atlas AML.T0053 LLM Plugin Compromise
+          relates to owasp-llm-2025 LLM06 Excessive Agency
+COR-001   correlation  signal  -       repeated injection findings from one source
+          relates to mitre-atlas AML.T0051 LLM Prompt Injection
+          relates to owasp-llm-2025 LLM01 Prompt Injection
+COR-002   correlation  signal  -       one source probing multiple decoy protocols
+          relates to mitre-attack T1046 Network Service Discovery
+COR-003   correlation  signal  -       one source invoking many distinct canary tools
+          relates to mitre-attack T1046 Network Service Discovery
+          relates to mitre-atlas AML.T0053 LLM Plugin Compromise
+          relates to owasp-llm-2025 LLM06 Excessive Agency
+COR-004   correlation  signal  -       sustained interaction across several sensors
+          relates to mitre-attack T1595 Active Scanning
+          relates to mitre-atlas AML.T0006 Active Scanning
+COR-005   correlation  signal  -       short regular interaction gaps; consistent with scripted or agent-driven activity
+          relates to mitre-attack T1595 Active Scanning
+COR-006   correlation  signal  -       one source touched multiple AI API families
+          relates to mitre-attack T1595 Active Scanning
+          relates to mitre-atlas AML.T0006 Active Scanning
+COR-007   correlation  signal  -       one source presented many distinct credential attempts; consistent with credential stuffing
+          relates to mitre-attack T1110 Brute Force
+COR-008   correlation  signal  -       a decoy-only credential was presented after the same source interacted with a different sensor
+          relates to mitre-attack T1078 Valid Accounts
+          relates to mitre-atlas AML.T0012 Valid Accounts
+          relates to owasp-llm-2025 LLM02 Sensitive Information Disclosure

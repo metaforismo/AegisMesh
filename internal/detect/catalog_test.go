@@ -15,7 +15,7 @@ func TestRuleCatalogMatchesRegistry(t *testing.T) {
 			t.Fatalf("entry %d = %q, want registry order %q", i, info.ID, known[i])
 		}
 		switch info.Severity {
-		case SevInfo, SevLow, SevMedium, SevHigh:
+		case SevInfo, SevLow, SevMedium, SevHigh, SevCritical:
 		default:
 			t.Fatalf("rule %s has invalid severity %q", info.ID, info.Severity)
 		}

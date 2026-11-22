@@ -1,0 +1,2 @@
+indicator,type,first_seen,last_seen,event_count,confidence,interpretation,skipped_non_ip_sources,skipped_non_ip_events
+192.0.2.8,ipv4-addr,2026-01-02T03:04:05.000000000Z,2026-01-02T03:04:05.000000000Z,1,15,observation_not_incident,0,0

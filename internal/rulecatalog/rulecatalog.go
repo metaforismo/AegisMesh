@@ -1,5 +1,5 @@
 // Package rulecatalog exposes one read-only catalog of every rule the
-// binaries can emit: detection findings (PI-*/EXF-*/ESC-*/OBS-*/RES-*) and
+// binaries can emit: per-interaction detection findings and
 // correlation signals (COR-*). Metadata is derived from the owning engine
 // registries — this package owns no rule truth of its own, so summaries and
 // severities cannot drift from what engines actually produce. Order is the
@@ -27,11 +27,15 @@ const (
 
 // Entry is one rule's stable operator-facing metadata.
 type Entry struct {
-	ID       string `json:"id"`
-	Family   string `json:"family"`
-	Class    string `json:"class"`
-	Severity string `json:"severity,omitempty"` // detection only; signals carry none
-	Summary  string `json:"summary"`
+	Description string             `json:"description"`
+	Guidance    string             `json:"guidance"`
+	ObserveOnly bool               `json:"observe_only"`
+	Frameworks  []FrameworkMapping `json:"frameworks"`
+	ID          string             `json:"id"`
+	Family      string             `json:"family"`
+	Class       string             `json:"class"`
+	Severity    string             `json:"severity,omitempty"` // detection only; signals carry none
+	Summary     string             `json:"summary"`
 }
 
 // Entries derive once from compile-time engine registries. There is no runtime
@@ -39,11 +43,23 @@ type Entry struct {
 var entries = buildEntries()
 
 // All returns every entry in deterministic owner-defined order as a fresh slice.
-func All() []Entry { return append([]Entry(nil), entries...) }
+func All() []Entry {
+	out := append([]Entry(nil), entries...)
+	for i := range out {
+		out[i] = cloneEntry(out[i])
+	}
+	return out
+}
+
+func cloneEntry(e Entry) Entry {
+	e.Frameworks = append([]FrameworkMapping{}, e.Frameworks...)
+	return e
+}
 
 func buildEntries() []Entry {
 	det := detect.RuleCatalog()
-	out := make([]Entry, 0, len(det)+4)
+	signals := correlate.SignalCatalog()
+	out := make([]Entry, 0, len(det)+len(signals))
 	for _, r := range det {
 		out = append(out, Entry{
 			ID:       string(r.ID),
@@ -53,7 +69,7 @@ func buildEntries() []Entry {
 			Summary:  r.Summary,
 		})
 	}
-	for _, s := range correlate.SignalCatalog() {
+	for _, s := range signals {
 		out = append(out, Entry{
 			ID:      string(s.ID),
 			Family:  FamilyCorrelation,
@@ -61,19 +77,23 @@ func buildEntries() []Entry {
 			Summary: s.Summary,
 		})
 	}
+	for i := range out {
+		out[i].Frameworks = frameworks(out[i].ID)
+		enrich(&out[i])
+	}
 	return out
 }
 
 // Lookup resolves one id with exact byte matching only: no case folding, no
-// trimming, no prefixes. The catalogs are tiny (~10 entries), so a linear
-// scan over immutable metadata is allocation-free for hits and misses.
+// trimming, no prefixes. The catalogs are tiny (20 entries), so a linear
+// scan over immutable metadata returns independent nested mapping slices.
 func Lookup(id string) (Entry, bool) {
 	if id == "" {
 		return Entry{}, false
 	}
 	for _, e := range entries {
 		if e.ID == id {
-			return e, true
+			return cloneEntry(e), true
 		}
 	}
 	return Entry{}, false

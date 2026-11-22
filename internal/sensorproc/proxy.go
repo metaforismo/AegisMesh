@@ -380,6 +380,7 @@ func (p *Proxy) submitObservation(o Observation) error {
 	if err != nil {
 		return fmt.Errorf("%w: construct event: %v", errProtocol, err)
 	}
+	env.AuthAttempts = o.AuthAttempts
 	if !d.Bus.Submit(env) {
 		// Bus drops are an existing bounded data-plane behavior; do not turn
 		// backpressure into a worker protocol failure or restart signal.

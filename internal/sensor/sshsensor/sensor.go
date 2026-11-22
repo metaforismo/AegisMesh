@@ -19,8 +19,10 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/observe"
+	"github.com/metaforismo/aegismesh/internal/policy"
 	"github.com/metaforismo/aegismesh/internal/redact"
 	"github.com/metaforismo/aegismesh/internal/sensor"
 )
@@ -55,6 +57,7 @@ type settings struct {
 
 // Sensor is a long-running SSH decoy listener.
 type Sensor struct {
+	enf    *policy.Enforcer
 	id     string
 	cfg    settings
 	signer ssh.Signer
@@ -83,7 +86,7 @@ type Sensor struct {
 // a fresh in-memory Ed25519 host key. The private key is intentionally not
 // accepted from configuration or persisted to disk; reconstructing the sensor
 // therefore rotates its decoy host identity.
-func New(c config.Sensor) (*Sensor, error) {
+func New(c config.Sensor, enforcers ...*policy.Enforcer) (*Sensor, error) {
 	if c.Kind != config.SensorKindSSH {
 		return nil, fmt.Errorf("sshsensor %s: kind must be %q", c.ID, config.SensorKindSSH)
 	}
@@ -98,6 +101,10 @@ func New(c config.Sensor) (*Sensor, error) {
 	}
 	if c.SSH.MaxAuthAttempts <= 0 || c.SSH.MaxAuthAttempts > config.MaxSSHAuthAttempts {
 		return nil, fmt.Errorf("sshsensor %s: max auth attempts must be within 1..%d", c.ID, config.MaxSSHAuthAttempts)
+	}
+	var enf *policy.Enforcer
+	if len(enforcers) > 0 {
+		enf = enforcers[0]
 	}
 	sensorSettings := settings{
 		ID:               c.ID,
@@ -121,6 +128,7 @@ func New(c config.Sensor) (*Sensor, error) {
 	}
 	return &Sensor{
 		id:     sensorSettings.ID,
+		enf:    enf,
 		cfg:    sensorSettings,
 		signer: signer,
 		listen: net.Listen,
@@ -293,7 +301,11 @@ func (s *Sensor) serve(ctx context.Context, conn net.Conn, sem chan struct{}, d 
 
 	state.authenticated = true
 	state.outcome = outcomeAuthenticated
-	state.clientVersion, state.clientVersionTruncated = boundedPreview(serverConn.ClientVersion(), maxClientVersion)
+	clientVersion := string(serverConn.ClientVersion())
+	if s.enf != nil {
+		clientVersion = s.enf.Scrub(clientVersion)
+	}
+	state.clientVersion, state.clientVersionTruncated = boundedPreview([]byte(clientVersion), maxClientVersion)
 	if err := conn.SetDeadline(time.Now().Add(s.cfg.SessionTimeout)); err != nil {
 		return
 	}
@@ -363,6 +375,7 @@ func (s *Sensor) serverConfig(state *connectionState) *ssh.ServerConfig {
 		ServerVersion:           s.cfg.ServerVersion,
 		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			state.recordUsername(conn.User())
+			s.observeAuth(state, conn.User(), string(password))
 			if len(conn.User()) > maxUsernameBytes {
 				return nil, errInputCap
 			}
@@ -370,8 +383,11 @@ func (s *Sensor) serverConfig(state *connectionState) *ssh.ServerConfig {
 			if len(password) > maxPasswordBytes {
 				return nil, errInputCap
 			}
-			// Synthetic authentication deliberately accepts any bounded password;
-			// the bytes are not copied, compared, hashed, logged, or emitted.
+			if len(state.authDigests) < config.MaxSSHAuthAttempts {
+				state.authDigests = append(state.authDigests, redact.AuthDigest("password", conn.User(), string(password)))
+			}
+			// Synthetic authentication accepts bounded passwords; only memory-only
+			// distinctness digests and safe token findings survive this callback.
 			state.authMethod = "password"
 			return nil, nil
 		},
@@ -380,6 +396,7 @@ func (s *Sensor) serverConfig(state *connectionState) *ssh.ServerConfig {
 			if len(conn.User()) > maxUsernameBytes {
 				return nil, errInputCap
 			}
+			s.observeAuth(state, conn.User(), "")
 			keyWire := key.Marshal()
 			keyBytes, truncated := boundedLength(len(keyWire), maxPublicKeyBytes)
 			state.publicKeyBytes = keyBytes
@@ -396,6 +413,7 @@ func (s *Sensor) serverConfig(state *connectionState) *ssh.ServerConfig {
 		},
 		AuthLogCallback: func(conn ssh.ConnMetadata, method string, authErr error) {
 			state.recordUsername(conn.User())
+			s.observeAuth(state, conn.User(), "")
 			if state.authAttempts < maxRejectedRequests {
 				state.authAttempts++
 			}
@@ -411,6 +429,7 @@ func (s *Sensor) serverConfig(state *connectionState) *ssh.ServerConfig {
 
 func (s *Sensor) emit(d sensor.Deps, state *connectionState, started time.Time) {
 	obs := observation{
+		Detection:              sshDetection(state.detection),
 		Outcome:                state.outcome,
 		Authenticated:          state.authenticated,
 		AuthMethod:             state.authMethod,
@@ -436,7 +455,7 @@ func (s *Sensor) emit(d sensor.Deps, state *connectionState, started time.Time) 
 		d.Log.Error("ssh observation marshal failed", "sensor", s.id)
 		return
 	}
-	rules := []string{"username_content_dropped", "credential_content_dropped", "request_payload_dropped", "channel_payload_dropped"}
+	rules := []string{"honeytoken_scrub", "username_content_dropped", "credential_content_dropped", "request_payload_dropped", "channel_payload_dropped"}
 	if state.usernameTruncated || state.passwordTruncated || state.publicKeyTruncated || state.clientVersionTruncated {
 		rules = append(rules, "input_truncated")
 	}
@@ -452,6 +471,7 @@ func (s *Sensor) emit(d sensor.Deps, state *connectionState, started time.Time) 
 		d.Log.Error("ssh event construction failed", "sensor", s.id)
 		return
 	}
+	env.AuthAttempts = state.authDigests
 	d.Bus.Submit(env)
 }
 
@@ -520,6 +540,8 @@ func (s *Sensor) closeError() error {
 }
 
 type connectionState struct {
+	detection     *policy.Decision
+	authDigests   []string
 	outcome       string
 	authenticated bool
 	authMethod    string
@@ -556,25 +578,26 @@ const (
 )
 
 type observation struct {
-	Outcome                string `json:"outcome"`
-	Authenticated          bool   `json:"authenticated"`
-	AuthMethod             string `json:"auth_method,omitempty"`
-	LastAuthMethod         string `json:"last_auth_method,omitempty"`
-	AuthAttempts           int    `json:"auth_attempts,omitempty"`
-	AuthFailures           int    `json:"auth_failures,omitempty"`
-	UsernameBytes          int    `json:"username_bytes,omitempty"`
-	UsernameTruncated      bool   `json:"username_truncated,omitempty"`
-	PasswordBytes          int    `json:"password_bytes,omitempty"`
-	PasswordTruncated      bool   `json:"password_truncated,omitempty"`
-	PublicKeyType          string `json:"public_key_type,omitempty"`
-	PublicKeyBytes         int    `json:"public_key_bytes,omitempty"`
-	PublicKeyTruncated     bool   `json:"public_key_truncated,omitempty"`
-	ClientVersionPreview   string `json:"client_version_preview,omitempty"`
-	ClientVersionTruncated bool   `json:"client_version_truncated,omitempty"`
-	RemoteHost             string `json:"remote_host,omitempty"`
-	GlobalRequestsRejected int    `json:"global_requests_rejected,omitempty"`
-	ChannelsRejected       int    `json:"channels_rejected,omitempty"`
-	DurationMS             int64  `json:"duration_ms"`
+	Detection              *sshDetectionInfo `json:"detection,omitempty"`
+	Outcome                string            `json:"outcome"`
+	Authenticated          bool              `json:"authenticated"`
+	AuthMethod             string            `json:"auth_method,omitempty"`
+	LastAuthMethod         string            `json:"last_auth_method,omitempty"`
+	AuthAttempts           int               `json:"auth_attempts,omitempty"`
+	AuthFailures           int               `json:"auth_failures,omitempty"`
+	UsernameBytes          int               `json:"username_bytes,omitempty"`
+	UsernameTruncated      bool              `json:"username_truncated,omitempty"`
+	PasswordBytes          int               `json:"password_bytes,omitempty"`
+	PasswordTruncated      bool              `json:"password_truncated,omitempty"`
+	PublicKeyType          string            `json:"public_key_type,omitempty"`
+	PublicKeyBytes         int               `json:"public_key_bytes,omitempty"`
+	PublicKeyTruncated     bool              `json:"public_key_truncated,omitempty"`
+	ClientVersionPreview   string            `json:"client_version_preview,omitempty"`
+	ClientVersionTruncated bool              `json:"client_version_truncated,omitempty"`
+	RemoteHost             string            `json:"remote_host,omitempty"`
+	GlobalRequestsRejected int               `json:"global_requests_rejected,omitempty"`
+	ChannelsRejected       int               `json:"channels_rejected,omitempty"`
+	DurationMS             int64             `json:"duration_ms"`
 }
 
 func (s *connectionState) recordUsername(username string) {
@@ -658,4 +681,44 @@ func canonicalAuthMethod(method string) string {
 func timeoutError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+type sshDetectionInfo struct {
+	Action   string           `json:"action"`
+	Findings []detect.Finding `json:"findings,omitempty"`
+}
+
+func sshDetection(d *policy.Decision) *sshDetectionInfo {
+	if d == nil || len(d.Findings) == 0 {
+		return nil
+	}
+	return &sshDetectionInfo{string(d.Action), d.Findings}
+}
+func (s *Sensor) observeAuth(state *connectionState, user, password string) {
+	if s.enf == nil {
+		return
+	}
+	if len(user) > maxUsernameBytes {
+		user = user[:maxUsernameBytes]
+	}
+	if len(password) > maxPasswordBytes {
+		password = password[:maxPasswordBytes]
+	}
+	d := s.enf.Evaluate(s.id, detect.Input{RawParts: []string{user, password}, Headers: map[string][]string{"x-api-key": {password}}})
+	if state.detection == nil {
+		state.detection = &d
+		return
+	}
+	for _, f := range d.Findings {
+		seen := false
+		for _, old := range state.detection.Findings {
+			if old == f {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			state.detection.Findings = append(state.detection.Findings, f)
+		}
+	}
 }

@@ -22,8 +22,19 @@ The capabilities described here are backed by the checks recorded in
 [docs/verification.md](docs/verification.md); what was not run or not verified is listed there too. Changes since v0.1.0
 are in [CHANGELOG.md](CHANGELOG.md), and the plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+- Console source sessions, catalog technique observations, conservative STIX/CSV/TXT
+  indicator downloads and Markdown observation reports; deterministic and bounded,
+  with proposed recommendations only. See [API contracts](docs/architecture/console-api.md)
+  and [`export indicators`](docs/cli.md). Frontend integration is separate.
+- Static AI-service decoy profile, synthetic credential/agent markers and
+  observe-only AI request/cadence/replay signals, with editorial framework
+  references and a checked-in synthetic corpus. See
+  [AI observations](docs/ai-threat-detection.md); no AI-client attribution or
+  field false-positive claim is implied.
+
 Optional capabilities below are **off by default**. Those marked *experimental* have been exercised only
 with the checks recorded in the verification ledger and carry the limits stated next to them.
+
 
 ## Five-minute demo
 
@@ -46,7 +57,7 @@ make build
 
 `demo` accepts no config, path, port, credential, API key or destination.
 It uses synthetic data and OS-assigned loopback ports, verifies every recorded
-observation hash, produces one dry-run recommendation, then stops and removes
+observation hash, produces eight dry-run recommendations, then stops and removes
 its private temporary workspace. It requires no cloud service, `curl`, `nc`,
 privileged port or external network access. `make demo` invokes the same path.
 `demo --console` keeps the scenario available until Ctrl-C and prints the console
@@ -99,7 +110,7 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 | Sensors | `http`, `tcp`, authentication-only `ssh`, and `mcp` (JSON-RPC 2.0 over streamable HTTP POST). The SSH sensor completes synthetic authentication, records bounded metadata, rejects every channel and global request, and exposes no shell, PTY, SFTP, forwarding or filesystem ([ADR-0010](docs/architecture/adr.md)) |
 | Process isolation | Opt-in `process_isolation: true` per sensor runs a fixed same-binary worker with a minimal environment and a bounded stdio protocol. Fault containment only: the worker keeps the runtime's OS identity and namespaces; it is not a network, filesystem, CPU, memory or malware sandbox |
 | Responses | Static config rules and a deterministic local provider; opt-in OpenAI-compatible and Ollama adapters keep provider output untrusted |
-| Detection | Deterministic prompt-injection and abuse rules, plus opt-in correlation signals (COR-001..COR-004); signals are observations, never verdicts. `aegismesh rules` lists and tests them |
+| Detection | Deterministic prompt-injection/abuse rules, observe-only AI and honeytoken findings, and opt-in correlation signals (COR-001..COR-008). Editorial framework references and synthetic corpus checks; observations, never verdicts. `aegismesh rules` lists and tests them |
 | Evidence | Versioned native envelope, integrity hashes, redaction before storage, rotation/retention, opt-in local ECS-compatible export that preserves the native envelope |
 | Recommendations | Deterministic, evidence-linked operator-review proposals from verified local evidence; dry-run only, no enforcement, no new egress |
 | Extensions and webhooks | Explicitly configured, digest-verified observer processes may return only an event-linked acknowledgement; opt-in HMAC-signed webhook delivery with a bounded queue and counted drops |
@@ -233,3 +244,15 @@ site/                           static landing page and design-system reference 
 Apache-2.0 licensed (see [LICENSE](LICENSE), [NOTICE](NOTICE)). Start with
 [CONTRIBUTING.md](CONTRIBUTING.md), the [release process](docs/RELEASE.md), and the
 [license/supply-chain policy](docs/license-policy.md). Agents: read [AGENTS.md](AGENTS.md) first.
+
+
+### Round 3 local backend additions
+
+The current uncommitted backend branch adds [synthetic MCP workspaces](docs/mcp-environments.md),
+[local SIEM event formats](docs/siem-export.md), on-demand `digest --since 24h|7d`,
+and the [console contract additions](docs/architecture/console-api.md#round-3-additions-local-uncommitted).
+These are bounded observation tools: no shell/filesystem-backed workspace,
+automatic delivery or new network egress. OTLP is format only; AegisMesh does
+not ship an OTLP exporter. The console/hub [review scope and fixes](docs/security-review-2026-11.md)
+and [synthetic performance measurements](docs/architecture/performance.md) are
+separate from production, release or deployment evidence. See [verification](docs/verification.md).
