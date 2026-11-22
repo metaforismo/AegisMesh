@@ -463,3 +463,8 @@ body { font-size: var(--text-md); }
 .ds-mesh { max-width: 18rem; }
 .ds-section h1 { font-family: var(--font-display); font-weight: var(--weight-semibold); letter-spacing: -0.015em; }
 .ds-demo .tempo { max-width: 34rem; }
+
+/* Catalogs & digest demos (design-system.html). */
+.ds-mark { width: 10rem; }
+.ds-mark__fill { transform: scaleX(0.62); }
+.lp-cap--full { grid-column: 1 / -1; }

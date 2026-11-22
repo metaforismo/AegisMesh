@@ -69,6 +69,14 @@ const PATHS = {
   // Technique matrix: a 3×3 grid with one cell filled in outline.
   matrix: 'M2 2h3.5v3.5H2zM6.25 2h3.5v3.5h-3.5zM10.5 2H14v3.5h-3.5zM2 6.25h3.5v3.5H2zM6.25 6.25h3.5v3.5h-3.5zM10.5 6.25H14v3.5h-3.5zM2 10.5h3.5V14H2zM6.25 10.5h3.5V14h-3.5zM10.5 10.5H14V14h-3.5z',
   download: 'M8 2v8.5M4.75 7.25 8 10.5l3.25-3.25M2.5 13.5h11',
+  // Decoy: a lure (diamond) with a core; nothing real inside.
+  decoy: `M8 1.75 14.25 8 8 14.25 1.75 8z${circle(8, 8, 1.6)}`,
+  // Digest: a briefing sheet with a headline rule and lines of text.
+  digest: `${rrect(3, 1.75, 10, 12.5, 1.25)}M5.5 4.75h5M5.5 7.5h5M5.5 9.75h5M5.5 12h3`,
+  // Agent canary: a marker flag.
+  flag: 'M3.75 14.25V2.25M3.75 2.75h8.5l-2 3 2 3h-8.5',
+  // Print: a printer with a sheet.
+  print: `${rrect(1.75, 6, 12.5, 5.5, 1.2)}M4.5 6V2h7v4M4.5 9.5h7V14h-7z`,
   // Cadence: evenly spaced ticks on a baseline.
   cadence: 'M1.75 13h12.5M3.5 13V8M6.5 13V5M9.5 13V8.5M12.5 13V6',
 };

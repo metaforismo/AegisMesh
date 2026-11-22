@@ -75,6 +75,7 @@ export default {
       pageHead({
         title: h('span', { class: 'title-help' }, 'Techniques', helpTip(glossaryEntry('mapping'))),
         subtitle: 'The framework techniques the detection and correlation rules relate to, and how many indexed events in the window cited those rules.',
+        hint: 'Switch frameworks with the tabs, then open an observed cell to see the events that cited it.',
         actions: segmented({ label: 'Time window', options: WINDOWS, value: window, onChange: (w) => ctx.navigate(href('techniques', { window: w, f: active })) }),
       }),
       banner('info', 'Not a coverage claim',

@@ -1,5 +1,5 @@
 import { h, mount } from '../lib/dom.js';
-import { href, isOpaqueId } from '../lib/route.js';
+import { href, isOpaqueId, isSessionId } from '../lib/route.js';
 import { formatDateTime } from '../lib/format.js';
 import { jsonTokens, tokensToText } from '../lib/json.js';
 import { addFilterHref } from '../lib/filters.js';
@@ -66,6 +66,14 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
     const invs = Array.isArray(d.investigations) ? d.investigations : [];
     const viewer = jsonViewer(d.envelope ?? null);
     const isSignal = s.classification === 'correlation_signal';
+    // The retained analysis session holding this event (newer servers).
+    // "" means outside the retained sessions; absent means not reported.
+    const sessionId = isSessionId(d.session_id) ? d.session_id : '';
+    const sessionRow = typeof d.session_id === 'string'
+      ? ['Session', sessionId
+        ? h('span', { class: 'btn-row' }, link(href('sessions', sessionId), h('span', null, icon('story', { size: 'sm' }), ' Open the session story')), h('span', { class: 'muted' }, 'this source’s events grouped by idle gaps'))
+        : h('span', { class: 'muted' }, 'Not in a retained session (outside the newest analysed events)')]
+      : null;
 
     // Investigations annotate bare event ids, which resolve to local
     // observations only; a forwarded copy cannot be attached.
@@ -84,11 +92,11 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
 
     mount(root,
       pageHead({
-        eyebrow: inDrawer ? null : h('a', { href: '#/events' }, icon('arrow-left', { size: 'xs' }), 'Events'),
+        crumbs: inDrawer ? null : [['Events', '#/events'], s.source ? [evidence(s.source, { max: 28 }), href('sources', s.source)] : null, ['Event', null]],
         title: h('span', { class: 'event-title' }, evidence(s.summary || '(no summary)')),
         subtitle: h('span', { class: 'btn-row' }, clsChip(s.classification), sevChip(s.severity), iv.seal,
           forwarded ? h('span', { class: 'chip' }, 'Forwarded') : null),
-        actions: attach,
+        actions: [sessionId && !inDrawer ? h('a', { class: 'btn', href: href('sessions', sessionId) }, icon('story', { size: 'sm' }), 'Session story') : null, attach],
       }),
       integrity.verified ? null : banner('danger', 'Payload hash does not match', h('p', null, forwarded ? 'The forwarded payload does not match its recorded hash. Treat this copy as untrustworthy and compare it with the node’s own store. ' : 'The stored payload does not match its recorded hash. Treat this envelope as untrustworthy. ', integrity.error ? evidence(integrity.error) : null)),
       forwarded ? banner('info', 'Forwarded by another node',
@@ -105,6 +113,7 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
             ['Sensor', h('span', { class: 'btn-row' }, link(href('events', { sensor: s.sensor?.id }), h('code', null, s.sensor?.id ?? '—')), s.sensor?.kind ? chip(s.sensor.kind) : null)],
             ['Sensor listen', s.sensor?.listen ? h('code', null, s.sensor.listen) : ''],
             ['Source', s.source ? link(href('sources', s.source), evidence(s.source)) : h('span', { class: 'muted' }, 'unknown')],
+            sessionRow,
             ['Detection action', s.action ? chip(s.action, { mono: true }) : ''],
             ['Rules', ruleChips(s.rule_ids)],
             ...(iv.note ? [['Integrity', h('span', { class: 'kv-note' }, iv.note)]] : []),

@@ -28,6 +28,7 @@ export default {
       pageHead({
         title: 'Investigations',
         subtitle: 'Operator-authored cases that collect evidence and notes. They are the only state the console writes, and every change is audited.',
+        hint: 'Open a case to add notes and evidence, or start a new one from any event.',
         actions: [
           segmented({ label: 'Status', options: [['', 'All'], ...INVESTIGATION_STATUSES.map((s) => [s, labelFor(s)])], value: status, onChange: (s) => ctx.navigate(href('investigations', { status: s })) }),
           create,

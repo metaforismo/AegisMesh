@@ -108,6 +108,16 @@
               <p><span class="evidence">POST /api/pull name="llama3:70b"</span> <span class="chip chip--mono">LLM-003</span></p>
             </div>
           </article>
+          <article class="lp-cap" id="mcp-environments">
+            <h3>MCP decoy environments</h3>
+            <p>A synthetic MCP workspace with five tools over declared fake files, environment values and lookups. Nothing real sits behind it: arguments are lookup keys, never paths or commands, and write- or execution-shaped calls get a fixed “not found”. Reading a planted secret, reaching the exploration depth and asking to execute are recorded, observe-only.</p>
+            <div class="lp-cap__demo">
+              <p><span class="evidence">tools/call read_file path=".env"</span> <span class="chip chip--mono">MCP-001</span></p>
+              <p><span class="evidence">tools/call get_env name="OPENAI_API_KEY"</span> <span class="chip chip--mono">MCP-002</span></p>
+              <p><span class="evidence">tools/call run_shell cmd="env"</span> <span class="chip chip--mono">MCP-003</span></p>
+              <p><span class="fam fam--mcp"><span class="fam__glyph" aria-hidden="true"></span>MCP environment</span> <span class="ract ract--observe"><span class="ract__mark" aria-hidden="true"></span>Observe only</span></p>
+            </div>
+          </article>
           <article class="lp-cap" id="tokens">
             <h3>Honeytokens and agent canaries</h3>
             <p>Plant fake credentials and diagnostic instructions in decoy text. A replayed credential (HT-001) or a followed instruction (AGT-001) is recorded by token id; the value never reaches evidence. A hit is consistent with an LLM client, never proof of one.</p>
@@ -139,10 +149,15 @@
             </div>
           </article>
           <article class="lp-cap" id="exports">
-            <h3>Reports and indicators</h3>
-            <p>Analysts download a Markdown observation report, or IP indicators as STIX 2.1, CSV or a plain list. Confidence is 15/100 on purpose, and every download is audited.</p>
+            <h3>Reports, indicators and SIEM files</h3>
+            <p>Analysts download a Markdown observation report, IP indicators as STIX 2.1, CSV or a plain list, or the observations themselves as CEF, RFC 5424 syslog, OTLP JSON or ECS files. These are file formats only: AegisMesh ships no exporter and sends nothing. Every download is audited.</p>
             <pre class="lp-cap__code"># PROPOSED blocklist for operator review; never applied by AegisMesh
 203.0.113.66</pre>
+          </article>
+          <article class="lp-cap" id="digest">
+            <h3>A digest, on demand</h3>
+            <p>A short briefing for the last 24 hours or 7 days against the window before: new and returning sources, sessions consistent with automation, the most cited rules, newly cited techniques and planted-marker hits, with its limits stated. Computed when asked, from the console or the CLI; nothing is scheduled or delivered.</p>
+            <pre class="lp-cap__code">./bin/aegismesh digest --since 24h --data-dir ./data --format md</pre>
           </article>
           <article class="lp-cap" id="evidence">
             <h3>Evidence you can check</h3>
@@ -152,7 +167,7 @@
               <p><span class="evidence">GET /&lt;script&gt;alert(1)&lt;/script&gt; → 404</span></p>
             </div>
           </article>
-          <article class="lp-cap lp-cap--wide" id="experimental">
+          <article class="lp-cap lp-cap--wide lp-cap--full" id="experimental">
             <h3>Experimental: fleet, sign-on, tenants</h3>
             <p>Off by default and labelled experimental: a fleet inventory with best-effort evidence forwarding and counted loss, OpenID Connect sign-in, and logical tenant isolation in one process. Tenant isolation is logical, not a hard boundary.</p>
             <div class="lp-cap__demo"><p><span class="badge badge--warn">Not forwarded: 3 dropped, 1 gap</span></p></div>
@@ -171,6 +186,7 @@
           <li><strong>No enforcement.</strong> Nothing in AegisMesh blocks, isolates or changes a real asset. Recommendations are dry-run proposals; the blocklist is proposed, never applied.</li>
           <li><strong>Observations, not incidents.</strong> Classification is mechanical. Deciding that something matters is a person’s call, recorded in an investigation.</li>
           <li><strong>No verdicts about who.</strong> A source key is not an identity, and an automation reading says the pace and rules fit automation, not that an AI or a particular actor was behind it.</li>
+          <li><strong>No delivery.</strong> Event files are formats you import; there is no exporter, collector client or scheduler, and the digest is computed only when someone asks for it.</li>
           <li><strong>Not a coverage claim.</strong> Framework references are editorial. A technique with events means a related rule fired, not that the technique was used or succeeded.</li>
           <li><strong>Not production-ready.</strong> This is an early release built from source; no container image or signed binary is published.</li>
         </ul>
@@ -186,7 +202,7 @@
         <ol class="lp-steps">
           <li><h3>Build</h3><pre class="lp-cmd">make build</pre></li>
           <li><h3>See it with synthetic evidence</h3><p>A self-contained scenario behind a local console, with a one-time token printed once.</p><pre class="lp-cmd">./bin/aegismesh demo --console</pre></li>
-          <li><h3>Scaffold AI-service decoys</h3><p>Two loopback listeners with static AI API shapes, a fake credential and an agent marker.</p><pre class="lp-cmd">./bin/aegismesh init --profile ai-decoy --dir ./ai-lab</pre></li>
+          <li><h3>Scaffold AI-service decoys</h3><p>Two loopback listeners with static AI API shapes and an MCP workspace, with fresh fake credentials and an agent marker.</p><pre class="lp-cmd">./bin/aegismesh init --profile ai-decoy --dir ./ai-lab</pre></li>
           <li><h3>Mint another honeytoken</h3><p>Prints a YAML snippet; it writes nothing and contacts nobody.</p><pre class="lp-cmd">./bin/aegismesh honeytoken new --kind credential --format openai --id planted-key</pre></li>
           <li><h3>Check, then run</h3><pre class="lp-cmd">./bin/aegismesh run --config ./ai-lab/mesh.yaml --dry-run
 ./bin/aegismesh run --config ./ai-lab/mesh.yaml</pre></li>

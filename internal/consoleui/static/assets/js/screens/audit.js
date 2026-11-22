@@ -158,6 +158,7 @@ export default {
       pageHead({
         title: 'Audit trail',
         subtitle: `Append-only, hash-chained record of console sign-ins, tenant switches, investigation changes and fleet administration. Reading it is itself audited.${tenants.show ? ` Each tenant keeps its own chain; this is the chain of tenant ${tenants.active}.` : ''}`,
+        hint: 'Verify the chain, then filter by action or actor to see who did what.',
       }),
       panel({ title: 'Chain integrity', actions: verifyBtn, body: verifySlot }),
       panel({ title: 'Filters', body: form }),

@@ -533,6 +533,7 @@ export default {
       pageHead({
         title: 'Events',
         subtitle: 'Every stored observation, newest first. Text in tinted monospace is attacker-supplied evidence, shown exactly as received.',
+        hint: 'Search or filter, open a row in the side panel (j/k to step), or follow new events live.',
         actions: liveToggle,
       }),
       historyBanner(node, { accepting: fleet?.hub?.accept_evidence === true }),

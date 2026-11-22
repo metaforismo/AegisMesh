@@ -88,6 +88,8 @@ function topRule(ov, since) {
   const top = rows.find((r) => typeof r?.rule_id === 'string' && r.rule_id !== '' && isCount(r.events) && r.events > 0);
   if (!top) return null;
   const segs = [t('Most cited rule: '), { t: 'code', v: top.rule_id }];
+  // The catalog title (static rule prose, not evidence), when the server sends it.
+  if (typeof top.title === 'string' && top.title.trim()) segs.push(t(`, “${top.title.trim().slice(0, 120)}”`));
   if (isSeverity(top.severity)) segs.push(t(` (${severityLabel(top.severity)})`));
   segs.push(t(', cited by '), num(top.events), t(` ${plural(top.events, 'event', 'events')}.`));
   return { id: 'rule', segments: segs, route: { name: 'events', query: { rule: top.rule_id, since } } };
@@ -155,6 +157,19 @@ export function buildBrief(ov, window, { sessions = null } = {}) {
     investigations(ov),
   );
   return out.filter(Boolean);
+}
+
+// Which empty state the Overview shows, from the window totals and the
+// overview's `index` occupancy: 'empty' (nothing indexed yet: first run),
+// 'quiet' (the index holds events, none in this window), 'unknown' (no
+// events in the window and the server did not report occupancy), or null
+// (the window has events).
+export function emptyKind(ov) {
+  const n = ov?.totals?.events;
+  if (!isCount(n) || n > 0) return null;
+  const idx = ov?.index?.events;
+  if (!isCount(idx)) return 'unknown';
+  return idx === 0 ? 'empty' : 'quiet';
 }
 
 // Plain text of a brief, for tests and for the document's accessible name.

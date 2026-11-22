@@ -186,8 +186,13 @@ test('top bar: several tenants open a switcher that names the current one in wor
   const button = all(cls('top-tenant'))[0];
   assert.equal(button.tagName, 'button');
   assert.equal(button.getAttribute('popovertarget'), 'tenant-menu');
-  const items = all(cls('menu__item'));
+  const items = all((n) => cls('menu__item')(n) && n.getAttribute('data-tenant') !== null);
   assert.deepEqual(items.map((i) => i.getAttribute('data-tenant')), ['alpha', 'bravo']);
+  // The theme is an explicit menu too: System, Light, Dark, the current one in words.
+  const themes = all((n) => cls('menu__item')(n) && n.getAttribute('data-theme-choice') !== null);
+  assert.deepEqual(themes.map((i) => i.getAttribute('data-theme-choice')), ['system', 'light', 'dark']);
+  assert.equal(themes.filter((i) => i.getAttribute('aria-current') === 'true').length, 1);
+  assert.match(themes.find((i) => i.getAttribute('aria-current') === 'true').textContent, /Current/);
   assert.equal(items[0].getAttribute('aria-current'), 'true');
   assert.match(items[0].textContent, /Current/, 'never color alone');
   items[0].dispatch('click');

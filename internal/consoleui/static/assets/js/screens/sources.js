@@ -18,6 +18,7 @@ export default {
       pageHead({
         title: 'Sources',
         subtitle: 'Remote hosts and correlation keys that reached a sensor, ranked by event count. A source address is what the sensor saw; it can be spoofed or relayed.',
+        hint: 'Open a source to see its activity, cadence and sessions.',
         actions: [
           segmented({ label: 'Time window', options: [['1h', '1h'], ['24h', '24h'], ['7d', '7d']], value: window, onChange: (w) => go({ window: w }) }),
         ],

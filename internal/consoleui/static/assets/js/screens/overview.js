@@ -9,7 +9,7 @@ import { stackedBarChart, severityShare, activityTrace, SEVERITY_ORDER } from '.
 import { icon } from '../ui/icons.js';
 import { rankByNode, describeOrigin } from '../lib/origin.js';
 import { historyBanner, eventHref, forwardedNote } from './shared.js';
-import { buildBrief } from '../lib/brief.js';
+import { buildBrief, emptyKind } from '../lib/brief.js';
 import { glossaryEntry } from '../lib/glossary.js';
 
 const tip = (id) => helpTip(glossaryEntry(id));
@@ -33,26 +33,39 @@ function clauseNode(c) {
 
 // What to do when the index holds nothing yet. Commands are the CLI's own
 // (docs/cli.md); nothing here claims the sensors are misconfigured.
-function firstRun() {
+// `kind` comes from emptyKind(): the overview's index occupancy tells a
+// first run (nothing indexed yet) from a quiet window.
+function firstRun(kind, ov) {
   const step = (title, text, cmd) => h('li', { class: 'firstrun__step' },
     h('p', { class: 'firstrun__title' }, title), h('p', { class: 'muted' }, text), cmd ? h('code', { class: 'firstrun__cmd' }, cmd) : null);
+  if (kind === 'quiet') {
+    return h('div', { class: 'firstrun' },
+      h('p', { class: 'firstrun__lead' }, `A quiet window. The index holds ${formatCount(ov?.index?.events)} earlier event${ov?.index?.events === 1 ? '' : 's'}, none in this one. Decoys have no legitimate users, so a quiet window is a normal state.`),
+      h('p', { class: 'muted' }, 'Wider windows hold the earlier events: try ', h('a', { href: href('overview', { window: '7d' }) }, 'the last 7 days'), ', ', h('a', { href: href('digest', { window: '7d' }) }, 'the 7-day digest'), ' or ', h('a', { href: href('events') }, 'every indexed event'), '.'));
+  }
+  const lead = kind === 'empty'
+    ? 'Nothing indexed yet: no decoy has recorded an event since the console’s index started. Decoys have no legitimate users, so a quiet console is a normal state. If you expected traffic:'
+    : 'Nothing has touched a decoy in this window, or the index is still empty. Decoys have no legitimate users, so a quiet console is a normal state. If you expected traffic:';
   return h('div', { class: 'firstrun' },
-    h('p', { class: 'firstrun__lead' }, 'Nothing has touched a decoy in this window, or the index is still empty. Decoys have no legitimate users, so a quiet console is a normal state. If you expected traffic:'),
+    h('p', { class: 'firstrun__lead' }, lead),
     h('ol', { class: 'firstrun__steps' },
       step('Check the runtime', 'Validates the config, the data directory and that the sensor ports are free or bound.', 'aegismesh doctor --config mesh.yaml'),
       step('Check the listeners', 'Binds every sensor once and prints its address, without recording anything.', 'aegismesh run --config mesh.yaml --dry-run'),
       step('See the console with synthetic evidence', 'Runs a self-contained scenario on loopback and prints a console URL and a one-time token.', 'aegismesh demo --console')),
-    h('p', { class: 'muted' }, 'Wider windows may hold older events: try ', h('a', { href: href('overview', { window: '7d' }) }, 'the last 7 days'), '. ', h('a', { href: '#/guide' }, 'Read the guide'), ' for what each screen shows.'));
+    kind === 'empty'
+      ? h('p', { class: 'muted' }, 'See what is deployed on ', h('a', { href: href('decoys') }, 'Decoys'), '. ', h('a', { href: '#/guide' }, 'Read the guide'), ' for what each screen shows.')
+      : h('p', { class: 'muted' }, 'Wider windows may hold older events: try ', h('a', { href: href('overview', { window: '7d' }) }, 'the last 7 days'), '. ', h('a', { href: '#/guide' }, 'Read the guide'), ' for what each screen shows.'));
 }
 
-function briefPanel(ov, window, windowText, empty, sessions) {
+function briefPanel(ov, window, windowText, kind, sessions) {
   const clauses = buildBrief(ov, window, { sessions });
   return h('section', { class: 'brief', 'aria-labelledby': 'brief-title' },
     h('div', { class: 'brief__head' },
       h('h2', { class: 'brief__eyebrow', id: 'brief-title' }, h('span', { class: 'brief__dot', 'aria-hidden': 'true' }), 'Situation'),
-      h('p', { class: 'brief__meta' }, `${windowText} · generated `, timeEl(ov.generated_at))),
+      h('p', { class: 'brief__meta' }, `${windowText} · generated `, timeEl(ov.generated_at)),
+      h('a', { class: 'brief__digest', href: href('digest', { window: window === '7d' ? '7d' : '24h' }) }, icon('digest', { size: 'sm' }), window === '7d' ? 'Read the 7-day digest' : 'Read the 24-hour digest')),
     h('p', { class: 'brief__text' }, clauses.flatMap((c, i) => (i ? [' ', clauseNode(c)] : [clauseNode(c)]))),
-    empty ? firstRun() : h('p', { class: 'brief__foot' },
+    kind ? firstRun(kind, ov) : h('p', { class: 'brief__foot' },
       'Computed in your browser from this overview only. Events are observations, not incidents. ',
       h('a', { href: '#/guide?t=classification' }, 'What do the classes mean?')));
 }
@@ -175,16 +188,17 @@ export default {
     const hasByNode = Array.isArray(ov.by_node);
     const knownFrom = indexKnownFrom(node);
 
-    const isEmpty = Number(t.events) === 0 && ov.totals && typeof t.events === 'number';
+    const quietKind = emptyKind(ov);
     mount(root,
       pageHead({
         title: 'Overview',
         subtitle: `What the decoy sensors observed in the ${windowText}, compared with the window before it.`,
+        hint: 'Read the situation, then follow any clause, bar or node to the events behind it.',
         actions: segmented({ label: 'Time window', options: WINDOW_LABELS.map(([w]) => [w, w]), value: window, onChange: (w) => ctx.navigate(href('overview', { window: w })) }),
       }),
       historyBanner(node, { accepting: hasByNode }),
       hasByNode ? forwardedNote('counts') : null,
-      briefPanel(ov, window, WINDOW_LABELS.find(([w]) => w === window)[1], isEmpty, sessions),
+      briefPanel(ov, window, WINDOW_LABELS.find(([w]) => w === window)[1], quietKind, sessions),
       tiles,
       panel({
         primary: true,
@@ -198,7 +212,12 @@ export default {
         panel({
           title: titled('Top rules', 'finding'), meta: 'Rules cited by the most events',
           body: rules.length
-            ? barList(rules.map((r) => ({ label: h('span', { class: 'btn-row' }, h('code', null, r.rule_id), r.severity ? sevChip(r.severity) : null), value: r.events, valueText: formatCount(r.events), href: href('events', { rule: r.rule_id }) })))
+            ? barList(rules.map((r) => ({
+              label: h('span', { class: 'rule-label' }, h('code', null, r.rule_id),
+                typeof r.title === 'string' && r.title ? h('span', { class: 'rule-label__title', title: r.title }, r.title) : null,
+                r.severity ? sevChip(r.severity) : null),
+              value: r.events, valueText: formatCount(r.events), href: href('events', { rule: r.rule_id }),
+            })))
             : empty('No rule matched', 'No event in this window cited a detection or correlation rule.'),
         })),
       h('div', { class: 'grid grid--2' },

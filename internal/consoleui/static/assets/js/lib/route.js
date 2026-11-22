@@ -90,6 +90,9 @@ const ROUTES = [
   { name: 'sessions', pattern: ['sessions'] },
   { name: 'attack_session', pattern: ['sessions', ':id'], valid: (p) => isSessionId(p.id) },
   { name: 'techniques', pattern: ['techniques'] },
+  { name: 'decoys', pattern: ['decoys'] },
+  { name: 'honeytokens', pattern: ['honeytokens'] },
+  { name: 'digest', pattern: ['digest'] },
   { name: 'login', pattern: ['login'] },
 ];
 

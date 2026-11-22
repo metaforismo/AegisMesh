@@ -25,6 +25,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFleet } from './mock-fleet.mjs';
 import { snapshot, sessionsOf, publicSession, sessionDetail, coverageOf, indicatorsOf, renderIndicators, renderReport, RULE_FRAMEWORKS, INTERPRETATION } from './mock-analysis.mjs';
+import { ruleRecord, decoyCatalog, tokenCatalog, decoysView, honeytokensView, interArrival, digestOf, renderEvents, EXPORT_FORMATS, EXPORT_NAMES, EXPORT_TYPES, CATALOG_WINDOWS, DIGEST_WINDOWS } from './mock-catalogs.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
@@ -129,11 +130,26 @@ const AI_RULES = [
   { id: 'COR-006', family: 'correlation', title: 'One source touched several AI families', severity: '' },
   { id: 'COR-007', family: 'correlation', title: 'Distinct credential attempts from one source', severity: '' },
   { id: 'COR-008', family: 'correlation', title: 'Decoy credential replayed after contact elsewhere', severity: '' },
+  // MCP decoy environment observations (titles from the backend catalog).
+  { id: 'MCP-001', family: 'detection', title: 'declared synthetic credential content was requested', severity: 'medium' },
+  { id: 'MCP-002', family: 'detection', title: 'connection reached the configured MCP exploration depth', severity: 'low' },
+  { id: 'MCP-003', family: 'detection', title: 'write or execution shaped MCP tool was requested; nothing was executed', severity: 'medium' },
 ];
 const AI_SENSORS = [
   { id: 'ai-ollama', kind: 'http', listen: '127.0.0.1:11434', state: 'running', process_isolation: false },
   { id: 'ai-litellm', kind: 'http', listen: '127.0.0.1:8001', state: 'running', process_isolation: false },
+  // A synthetic MCP workspace (environment: list_files, read_file, get_env,
+  // search, run_query over declared fake entries; nothing real behind it).
+  { id: 'ai-workspace', kind: 'mcp', listen: '127.0.0.1:8002', state: 'running', process_isolation: false },
 ];
+
+// Every catalog rule with family, title and severity ('' for correlations).
+const CATALOG_RULES = [
+  ...DETECTION_RULES.map((r) => ({ ...r, family: 'detection' })),
+  ...CORRELATION_RULES.map((r) => ({ ...r, family: 'correlation', severity: '' })),
+  ...AI_RULES,
+];
+const RULE_BY_ID = new Map(CATALOG_RULES.map((r) => [r.id, r]));
 
 const now = Date.now();
 let seq = 0;
@@ -147,13 +163,14 @@ function storyEvents() {
   const out = [];
   const sensorOf = (id) => [...SENSORS, ...AI_SENSORS].find((x) => x.id === id);
   const sevOf = (rules) => rules.map((r) => AI_RULES.find((x) => x.id === r)?.severity || DETECTION_RULES.find((x) => x.id === r)?.severity || '').reduce((m, v) => (['', 'info', 'low', 'medium', 'high', 'critical'].indexOf(v) > ['', 'info', 'low', 'medium', 'high', 'critical'].indexOf(m) ? v : m), '');
-  const add = (label, t, sensorId, summary, rules = [], classification = 'interaction', source) => {
+  const add = (label, t, sensorId, summary, rules = [], classification = 'interaction', source, tokens) => {
     const sn = sensorOf(sensorId) || { id: 'correlator', kind: '', listen: '' };
     const signal = classification === 'correlation_signal';
     out.push({
       id: createHash('sha256').update(`story:${label}`).digest('hex').slice(0, 32), time: new Date(t).toISOString(), seq: 0,
       sensor: signal ? { id: 'correlator', kind: '', listen: '' } : { id: sn.id, kind: sn.kind, listen: sn.listen },
       classification, source, summary, severity: signal ? '' : sevOf(rules), rule_ids: rules, action: rules.length ? 'observe' : '', _integrity: true, _story: true,
+      ...(tokens ? { _tokens: tokens } : {}),
     });
   };
   // 1. LLMjacking-style: ~0.7 s apart, 25 minutes ago.
@@ -175,7 +192,29 @@ function storyEvents() {
     ['ai-ollama', 'POST /api/pull name="llama3:70b" → 200 (static)', ['LLM-001', 'LLM-003']],
     ['sig', 'COR-005: consistent with scripted or agent-driven activity', ['COR-005']],
   ];
-  llm.forEach(([sid, summary, rules], i) => add(`llm-${i}`, step(i), sid, summary, rules, sid === 'sig' ? 'correlation_signal' : 'interaction', A));
+  // Planted ids presented inbound (the values never exist in the mock).
+  const llmTokens = { 7: ['planted-key'], 10: ['diagnostic-echo'] };
+  llm.forEach(([sid, summary, rules], i) => add(`llm-${i}`, step(i), sid, summary, rules, sid === 'sig' ? 'correlation_signal' : 'interaction', A, llmTokens[i]));
+  // 4. MCP decoy environment exploration, 50 minutes ago, ~0.8 s apart on one
+  // connection: list files, read a secret-shaped file, read a fake env value,
+  // try an execution-shaped tool, then replay the planted credential on
+  // another sensor 40 s later (HT-001, then COR-008).
+  const D = '198.51.100.140';
+  t = now - 50 * 60e3;
+  const mcp = [
+    ['ai-workspace', 'initialize client="workspace-agent/0.1"', [], 'interaction'],
+    ['ai-workspace', 'tools/list → 5 environment tools', [], 'interaction'],
+    ['ai-workspace', 'tools/call list_files → README.md, .env, deploy/notes.md', [], 'canary_invocation'],
+    ['ai-workspace', 'tools/call read_file path="README.md"', [], 'canary_invocation'],
+    ['ai-workspace', 'tools/call read_file path=".env" → [synthetic credential content]', ['MCP-001'], 'canary_invocation'],
+    ['ai-workspace', 'tools/call get_env name="OPENAI_API_KEY" → [synthetic credential content]', ['MCP-001', 'MCP-002'], 'canary_invocation'],
+    ['ai-workspace', 'tools/call search query="password"', ['MCP-002'], 'canary_invocation'],
+    ['ai-workspace', 'tools/call run_shell cmd="env | grep KEY" → not found (nothing executed)', ['MCP-002', 'MCP-003'], 'canary_invocation'],
+  ];
+  mcp.forEach(([sid, summary, rules, cls], i) => { t += 760 + ((i * 41) % 7) * 30; add(`mcp-${i}`, t, sid, summary, rules, cls, D); });
+  t += 40e3;
+  add('mcp-replay', t, 'ai-litellm', 'POST /v1/chat/completions Authorization: Bearer [honeytoken:workspace-key] max_tokens=1 → 200', ['HT-001', 'LLM-001', 'LLM-002'], 'interaction', D, ['workspace-key']);
+  add('mcp-cor8', t + 4, 'sig', 'COR-008: decoy credential presented on ai-litellm after contact on ai-workspace', ['COR-008'], 'correlation_signal', D);
   // 2. SSH credential stuffing: ~2 s apart, 3 hours ago.
   const B = '198.51.100.77';
   t = now - 3 * 3600e3;
@@ -313,7 +352,7 @@ const tenants = new Map(TENANTS.map((name, i) => [name, buildTenant(name, i === 
 const localTenant = tenants.get(LOCAL_TENANT);
 
 const summaryOf = (e) => {
-  const { _integrity, _cites, _story, ...pub } = e;
+  const { _integrity, _cites, _story, _tokens, ...pub } = e;
   return pub;
 };
 
@@ -502,22 +541,31 @@ function overview(t, w) {
   for (const e of inWin) bySev[e.severity || 'none']++;
   const ruleCounts = new Map();
   for (const e of inWin) for (const r of e.rule_ids) ruleCounts.set(r, (ruleCounts.get(r) || 0) + 1);
-  const ruleSev = new Map(DETECTION_RULES.map((r) => [r.id, r.severity]));
+  // Title and severity come from the rule's own catalog entry ('' for
+  // correlations), not from another finding on the same event.
   return {
     window: w, generated_at: new Date(end).toISOString().replace(/\.\d+Z$/, 'Z'),
     totals: totals(inWin), previous_totals: totals(prev), buckets,
     by_sensor: [...bySensor.values()].sort((a, b) => b.events - a.events),
     by_severity: bySev,
-    top_rules: [...ruleCounts].map(([rule_id, n2]) => ({ rule_id, events: n2, severity: ruleSev.get(rule_id) || '' })).sort((a, b) => b.events - a.events).slice(0, 8),
+    top_rules: [...ruleCounts].map(([rule_id, n2]) => ({ rule_id, title: RULE_BY_ID.get(rule_id)?.title || '', events: n2, severity: RULE_BY_ID.get(rule_id)?.severity || '' })).sort((a, b) => b.events - a.events || (a.rule_id < b.rule_id ? -1 : 1)).slice(0, 8),
     top_sources: sourceSummaries(inWin).slice(0, 10),
     recent_signals: inWin.filter((e) => e.classification === 'correlation_signal').slice(0, 10).map(summaryOf),
     open_investigations: [...t.investigations.values()].filter((i) => i.status === 'open').length,
+    index: indexStats(t),
     ...(t.fleet.accepting ? { by_node: byNode(inWin) } : {}),
   };
 }
 
 // Accepting hubs only: events per origin in the window, sorted by id, with
 // "local" (name "") for this node's own observations.
+// Index occupancy: events == 0 means the index is empty (first run); a
+// nonzero index with zero window totals is a quiet window.
+function indexStats(t) {
+  const ev = t.events;
+  return { events: ev.length, capacity: 50000, oldest: ev.length ? ev[ev.length - 1].time : '', history: t.fleet.accepting ? 'unavailable' : 'complete' };
+}
+
 function byNode(list) {
   const map = new Map();
   for (const e of list) {
@@ -727,9 +775,15 @@ async function api(req, res, url) {
     });
     const integrity = e._integrity ? { verified: true, algorithm: 'sha256', error: '' } : { verified: false, algorithm: 'sha256', error: 'payload hash mismatch' };
     if (e.node) Object.assign(integrity, { scope: 'hub_payload_hash_consistency', description: 'Verified on the hub against the envelope payload hash; consistency, not provenance.' });
+    // The retained analysis session containing this event (origin-qualified),
+    // or "" when it is outside the analysis snapshot.
+    // Raw detail reads are sensitive reads: audited before the response.
+    audit(who.name, who.role, 'event.read', `${origin}:${e.id}`, 'ok', remote);
+    const session = sessionsOf(T.name, snapshot(events).events).find((x) => x._events.some((y) => y.id === e.id && originOf(y) === origin));
     return send(res, 200, {
       ...(e.node ? { node: e.node } : {}),
       summary: summaryOf(e), envelope: envelope(e), integrity, findings, related,
+      session_id: session ? session.id : '',
       // Investigations annotate bare ids that resolve to local observations only.
       investigations: e.node ? [] : [...T.investigations.values()].filter((i) => i.event_ids.includes(e.id)).map((i) => ({ id: i.id, title: i.title, status: i.status })),
     });
@@ -751,7 +805,7 @@ async function api(req, res, url) {
     if (!list.length) return fail(res, 'not_found', 'source not in index');
     const pg = paginate(list, url);
     if (pg.error) return fail(res, 'invalid_argument', pg.error);
-    return send(res, 200, { source: sourceSummaries(list)[0], events: pg.page.map(summaryOf), next_cursor: pg.next });
+    return send(res, 200, { source: sourceSummaries(list)[0], events: pg.page.map(summaryOf), next_cursor: pg.next, inter_arrival: interArrival(list) });
   }
 
   if (m === 'GET' && p === '/sensors') {
@@ -767,11 +821,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/rules') {
     if (!T.local) return send(res, 200, { rules: [] });
     return send(res, 200, {
-      rules: [
-        ...DETECTION_RULES.map((r) => ({ frameworks: RULE_FRAMEWORKS[r.id] || [], id: r.id, family: 'detection', title: r.title, description: `Flags ${r.title.toLowerCase()}.`, severity: r.severity, enabled: true })),
-        ...CORRELATION_RULES.map((r, i) => ({ frameworks: [], id: r.id, family: 'correlation', title: r.title, description: i ? '' : 'Emits a signal when one source reaches two or more sensors within the correlation window.', severity: '', enabled: i === 0 })),
-        ...AI_RULES.map((r) => ({ frameworks: RULE_FRAMEWORKS[r.id] || [], id: r.id, family: r.family, title: r.title, description: '', severity: r.severity, enabled: true })),
-      ],
+      rules: CATALOG_RULES.map((r) => ruleRecord({ frameworks: RULE_FRAMEWORKS[r.id] || [], id: r.id, family: r.family, title: r.title, severity: r.severity, enabled: r.id !== 'CR-CANARY-AFTER-SCAN' })),
     });
   }
 
@@ -861,6 +911,73 @@ async function api(req, res, url) {
     const until = Date.now();
     const since = until - WINDOW_MS[w];
     return send(res, 200, { frameworks: coverageOf(sn.events, since, until), bounds: sn.bounds, since: new Date(since).toISOString(), until: new Date(until).toISOString(), interpretation: INTERPRETATION });
+  }
+
+  // ---- Round 3: catalogs, digest, local SIEM event formats ------------------
+  const catalogWindow = (allowed) => {
+    if (!strictQuery(['window'])) return null;
+    const w = url.searchParams.get('window') ?? '24h';
+    if (!allowed.includes(w)) { fail(res, 'invalid_argument', `window must be ${allowed.join(', ')}`); return null; }
+    return w;
+  };
+  // Local configuration belongs to the local tenant; others get empty lists.
+  const localSensors = () => (T.local ? [...SENSORS, ...AI_SENSORS] : []);
+
+  if (m === 'GET' && p === '/decoys') {
+    const w = catalogWindow(CATALOG_WINDOWS);
+    if (!w) return;
+    const sn = snap();
+    return send(res, 200, { decoys: decoysView(decoyCatalog(localSensors()), sn.events, w), bounds: sn.bounds });
+  }
+
+  if (m === 'GET' && p === '/honeytokens') {
+    const w = catalogWindow(CATALOG_WINDOWS);
+    if (!w) return;
+    const sn = snap();
+    const tokens = T.local ? tokenCatalog(decoyCatalog(localSensors())) : [];
+    return send(res, 200, { honeytokens: honeytokensView(tokens, sn.events, w), bounds: sn.bounds });
+  }
+
+  if (m === 'GET' && p === '/digest') {
+    const w = catalogWindow(DIGEST_WINDOWS);
+    if (!w) return;
+    const sn = snap();
+    return send(res, 200, digestOf({
+      window: w, snap: sn, sessions: sessionsOf(T.name, sn.events), rules: CATALOG_RULES,
+      investigations: [...T.investigations.values()],
+    }));
+  }
+
+  if (m === 'GET' && p === '/export/events') {
+    if (!strictQuery(['session', 'source', 'investigation', 'window', 'format'])) return;
+    const format = url.searchParams.get('format');
+    if (!EXPORT_FORMATS.includes(format)) return fail(res, 'invalid_argument', 'format must be cef, syslog-rfc5424, otlp-json or ecs');
+    const scopes = ['session', 'source', 'investigation', 'window'].filter((k) => url.searchParams.has(k));
+    if (scopes.length !== 1 || !url.searchParams.get(scopes[0])) return fail(res, 'invalid_argument', 'exactly one scope is required');
+    if (!need('analyst', 'export.events', scopes[0] === 'source' ? '' : url.searchParams.get(scopes[0]))) return;
+    const sn = snap();
+    const v = url.searchParams.get(scopes[0]);
+    let scoped;
+    let target = '';
+    if (scopes[0] === 'session') {
+      const found = findSession(v);
+      if (!found) return;
+      scoped = found.session._events;
+      target = v;
+    } else if (scopes[0] === 'source') {
+      if (Buffer.byteLength(v) > 255) return fail(res, 'invalid_argument', 'source too long');
+      scoped = sn.events.filter((e) => e.source === v);
+    } else if (scopes[0] === 'investigation') {
+      const inv = T.investigations.get(v);
+      if (!inv) return fail(res, 'not_found', 'investigation not found');
+      scoped = inv.event_ids.map((id) => T.localById(id)).filter(Boolean);
+      target = v;
+    } else {
+      if (!WINDOW_MS[v]) return fail(res, 'invalid_argument', 'window must be 1h, 24h or 7d');
+      scoped = sn.events.filter((e) => Date.parse(e.time) >= Date.now() - WINDOW_MS[v]);
+    }
+    audit(who.name, who.role, 'export.events', target, 'ok', remote);
+    return attachment(renderEvents(format, scoped.map(summaryOf)), EXPORT_TYPES[format], EXPORT_NAMES[format], sn);
   }
 
   if (m === 'GET' && p === '/export/indicators') {

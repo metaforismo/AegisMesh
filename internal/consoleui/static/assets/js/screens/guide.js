@@ -36,6 +36,7 @@ export default {
       pageHead({
         title: 'Guide',
         subtitle: 'What the console shows, in plain words: the terms on every screen, what they do and do not mean, and the limits of what the console can see.',
+        hint: 'Look up a term, copy a CLI command, or restart the short tour.',
       }),
       h('div', { class: 'guide' },
         toc,
@@ -47,7 +48,7 @@ export default {
           panel({
             title: 'Tour',
             body: (() => {
-              const b = h('button', { class: 'btn', type: 'button' }, icon('guide', { size: 'sm' }), 'Take the five-step tour again');
+              const b = h('button', { class: 'btn', type: 'button' }, icon('guide', { size: 'sm' }), 'Take the six-step tour again');
               b.addEventListener('click', () => import('../ui/tour.js').then((m) => { m.resetTour(); ctx.navigate('#/overview'); }));
               return h('div', { class: 'stack' }, h('p', { class: 'guide__body' }, 'A short walk over the Overview and the shell: the situation brief, the counts, sessions, search and this guide. It never blocks the page; Esc ends it.'), b);
             })(),

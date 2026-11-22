@@ -271,6 +271,78 @@ export const GLOSSARY = Object.freeze([
     ],
     see: ['recommendation', 'source'],
   },
+  {
+    id: 'decoy',
+    term: 'Decoy',
+    group: 'Decoys and planted markers',
+    short: 'A synthetic service that exists only to be found. Nothing behind it is real, so any contact is an observation worth reading.',
+    body: [
+      'Each configured sensor is a decoy: an HTTP, TCP, SSH or MCP listener that answers from static configuration. The Decoys screen lists them with what they imitate, their static rules, tools and fake files, and the honeytoken ids planted in their responses.',
+      'The console reads the catalog from the running configuration and cannot add, change or stop a decoy. Response bodies, prompts, file contents and token values are never returned by the API.',
+    ],
+    cli: 'aegismesh run --config mesh.yaml --dry-run',
+    see: ['aidecoy', 'mcpenv', 'honeytoken'],
+  },
+  {
+    id: 'aidecoy',
+    term: 'AI-service decoy',
+    group: 'Decoys and planted markers',
+    short: 'A decoy shaped like an Ollama, OpenAI-compatible, LiteLLM or vLLM endpoint. No model runs behind it.',
+    body: [
+      'The surface family is derived from the configured request paths, never from prose or a user agent. Responses are static bodies: a model list, a tiny completion, a key-information page carrying a planted credential.',
+      'Contact is recorded as LLM-001 to LLM-004 observations. They describe the request shape; they do not establish that a model was used or that a key was valid.',
+    ],
+    cli: 'aegismesh init --profile ai-decoy --dir ./ai-lab',
+    see: ['llmjacking', 'decoy', 'honeytoken'],
+  },
+  {
+    id: 'mcpenv',
+    term: 'MCP decoy environment',
+    group: 'Decoys and planted markers',
+    short: 'A synthetic MCP workspace with five tools (list_files, read_file, get_env, search, run_query) over declared fake entries.',
+    body: [
+      'Every answer is exact declared content: there is no file system, environment, shell or database behind the tools. Arguments are lookup keys, never paths or commands; anything unknown gets a fixed “not found”.',
+      'MCP-001 observes a read of a declared credential-bearing file or env entry; MCP-002 a connection reaching the configured exploration depth; MCP-003 a write- or execution-shaped tool name (nothing is executed). All three are observe-only. A later presentation of the planted value is HT-001, and COR-008 can link it to the earlier contact on another sensor.',
+      'The sequence is tracked per connection only; it is not identity tracking across reconnects or proxies.',
+    ],
+    see: ['decoy', 'honeytokenhit', 'session'],
+  },
+  {
+    id: 'honeytokenhit',
+    term: 'Honeytoken hit',
+    group: 'Decoys and planted markers',
+    short: 'An event whose detection metadata names a planted id: the fake value came back. An observation, not proof of successful use.',
+    body: [
+      'A decoy-credential hit (HT-001) means the fake value only present in decoy material was presented to a sensor. It cannot have worked anywhere, because it is fake. An agent-canary hit (AGT-001) means a planted instruction marker came back, which is consistent with a client acting on what it read.',
+      'The Honeytokens screen counts hits per id in the window and lists the source keys that presented it. A source key is not an actor identity, and a hit does not say which response disclosed the value. Values are never shown by the console.',
+    ],
+    cli: 'aegismesh honeytoken new --kind credential --format openai --id planted-key',
+    see: ['honeytoken', 'agentcanary', 'mcpenv'],
+  },
+  {
+    id: 'digest',
+    term: 'Digest',
+    group: 'Decoys and planted markers',
+    short: 'A briefing for the last 24 hours or 7 days against the window before, computed on demand. Nothing is scheduled or sent.',
+    body: [
+      'Totals by class, new and returning sources (new means absent from the window before, not first ever), sessions consistent with automation, the most cited rules, related techniques cited for the first time in the comparison, planted-marker hits, open investigations and dry-run recommendations, followed by the server’s limits.',
+      'The console can copy it as Markdown (server strings fenced as code) or print it. The CLI produces the same digest from local evidence.',
+    ],
+    cli: 'aegismesh digest --since 24h --data-dir ./data --format md',
+    see: ['incident', 'automation', 'recommendation'],
+  },
+  {
+    id: 'siemformats',
+    term: 'SIEM event formats',
+    group: 'Decoys and planted markers',
+    short: 'CEF, RFC 5424 syslog, OTLP JSON and ECS files of the observations, for import into your own tools. AegisMesh sends nothing.',
+    body: [
+      'Analysts can download one session, source, investigation or window as a file. The server reads at most the newest 8192 events, caps the output at 2 MiB, records the download in the audit trail and uses a fixed file name.',
+      'OTLP JSON is a file format only: AegisMesh ships no exporter or collector client. Severity in each file is the rule catalog’s, not an incident rating. No external SIEM was tested.',
+    ],
+    cli: 'aegismesh export events --data-dir ./data --format cef',
+    see: ['blocklist', 'audit'],
+  },
 ]);
 
 const BY_ID = new Map(GLOSSARY.map((e) => [e.id, e]));

@@ -63,12 +63,12 @@ const rawApi = createApi({ onUnauthenticated: () => endSession('Your session end
 const CACHEABLE = {
   overview: 1, events: 3, event: 2, sources: 2, source: 3, sensors: 0, rules: 0, recommendations: 1,
   node: 0, investigations: 1, investigation: 1, fleet: 0, fleetNodes: 1, fleetNode: 1,
-  sessions: 2, attackSession: 1, coverage: 1,
+  sessions: 2, attackSession: 1, coverage: 1, decoys: 1, honeytokens: 1, digest: 1,
 };
 const CURSOR_ARG = { events: 1, source: 1, sessions: 2 }; // later pages are never cached
 // Downloads are audited reads: never cached or prefetched, and not writes.
 const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'switchTenant', 'audit', 'verifyAudit', 'enrollmentTokens',
-  'exportIndicators', 'sessionReport', 'investigationReport']);
+  'exportIndicators', 'sessionReport', 'investigationReport', 'exportEvents']);
 
 const nav = { back: false, used: new Set() };
 const swr = createSwr({

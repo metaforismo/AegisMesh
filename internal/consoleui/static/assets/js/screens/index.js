@@ -8,6 +8,7 @@
 
 import { h, mount } from '../lib/dom.js';
 import { normalizeWindow, normalizeEventFilters, normalizeStatus, normalizeSessionFilters } from '../lib/route.js';
+import { normalizeDigestWindow } from '../lib/catalogs.js';
 import { pageHead, panel, empty, link } from '../ui/components.js';
 
 function lazy(title, loader, extra = {}) {
@@ -68,6 +69,19 @@ export const SCREENS = Object.freeze({
     skeleton: 'cards',
     viewIgnore: ['f'],
     prefetch: (api, r) => { api.coverage(normalizeWindow(r.query.window)); },
+  }),
+  decoys: lazy('Decoys', () => import('./decoys.js'), {
+    skeleton: 'cards',
+    prefetch: (api, r) => { api.decoys(normalizeWindow(r.query.window)); },
+  }),
+  // The honeytoken in focus (`t`) is marked within the open screen.
+  honeytokens: lazy('Honeytokens', () => import('./honeytokens.js'), {
+    skeleton: 'table',
+    viewIgnore: ['t'],
+    prefetch: (api, r) => { api.honeytokens(normalizeWindow(r.query.window)); api.decoys(normalizeWindow(r.query.window)); },
+  }),
+  digest: lazy('Digest', () => import('./digest.js'), {
+    prefetch: (api, r) => { api.digest(normalizeDigestWindow(r.query.window)); },
   }),
 });
 

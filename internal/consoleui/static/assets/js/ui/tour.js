@@ -1,4 +1,4 @@
-// First-run tour: five short steps over the Overview and the shell. It is a
+// First-run tour: six short steps over the Overview and the shell. It is a
 // non-modal popover (nothing behind it is inert, no dark overlay), every
 // step names a real control, Esc or "Skip tour" ends it, and finishing or
 // skipping is remembered in this browser. The Guide can start it again.
@@ -12,6 +12,7 @@ const STEPS = [
   { target: '.brief', title: 'Start with the situation', text: 'A few sentences computed from this overview only. Every underlined clause opens the events behind it.' },
   { target: '.grid--stats', title: 'Counts, not alarms', text: 'Changes against the previous window are printed in neutral ink: more observations are not “worse”.' },
   { target: 'a.nav-link[data-route="sessions"]', title: 'Read a session as a story', text: 'Sessions group one source’s events and show the stages, the pace, and an automation reading stated as an observation.' },
+  { target: 'a.nav-link[data-route="digest"]', title: 'A briefing on demand', text: 'The Digest compares the last 24 hours or 7 days with the window before, in plain sentences you can copy as Markdown or print.' },
   { target: '.top-search', title: 'Search everything', text: () => `Press ${isApple() ? '⌘' : 'Ctrl'} K to search events, sources, rules, sessions, techniques and the guide.` },
   { target: 'a.nav-link[data-route="guide"]', title: 'Every term, explained', text: 'The Guide explains each word the console uses and its limits. You can restart this tour from there.' },
 ];

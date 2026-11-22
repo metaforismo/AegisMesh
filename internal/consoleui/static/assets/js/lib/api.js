@@ -173,6 +173,16 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     exportIndicators: (scope, format, opts) => get('/export/indicators', { ...scope, format }, { ...opts, raw: true }),
     sessionReport: (id, opts) => get(`/sessions/${seg(id)}/report`, undefined, { ...opts, raw: true }),
     investigationReport: (id, opts) => get(`/investigations/${seg(id)}/report`, undefined, { ...opts, raw: true }),
+    // Local SIEM event files (CEF, RFC 5424 syslog, OTLP JSON, ECS): an
+    // audited analyst download of one scope. File formats only; nothing is sent.
+    exportEvents: (scope, format, opts) => get('/export/events', { ...scope, format }, { ...opts, raw: true }),
+
+    // Catalogs and the on-demand digest (round 3). Decoys and honeytokens
+    // describe this node's own configuration; honeytoken values never leave
+    // the server.
+    decoys: (window, opts) => get('/decoys', { window }, opts),
+    honeytokens: (window, opts) => get('/honeytokens', { window }, opts),
+    digest: (window, opts) => get('/digest', { window }, opts),
 
     fleet: (opts) => get('/fleet', undefined, opts),
     fleetNodes: (status, opts) => get('/fleet/nodes', { status }, opts),

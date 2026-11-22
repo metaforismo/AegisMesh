@@ -318,7 +318,8 @@ export default {
     const total = Number(d.event_count) || timeline.length;
     mount(root,
       pageHead({
-        eyebrow: h('a', { href: href('sessions', { source: d.source }) }, icon('arrow-left', { size: 'xs' }), 'Sessions'),
+        crumbs: [['Sessions', href('sessions')], [evidence(d.source, { max: 28 }), href('sources', d.source)], ['Session', null]],
+        hint: 'Read the story in order, open any event in the side panel (j/k to step), then download or start an investigation.',
         title: h('span', { class: 'session-title' }, evidence(d.source)),
         subtitle: `${formatDateTime(d.first_seen)} to ${formatDateTime(d.last_seen)} · ${formatDurationMs(d.duration_ms)} · ${formatCount(total)} event${total === 1 ? '' : 's'}. The source key is what the sensors recorded, not a verified identity.`,
         actions: [investigate, link(href('sources', d.source), 'Source profile'), link(href('events', { source: d.source }), 'All events from this source')],

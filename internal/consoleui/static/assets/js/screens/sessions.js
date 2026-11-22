@@ -89,6 +89,7 @@ export default {
       pageHead({
         title: h('span', { class: 'title-help' }, 'Sessions', tip('session')),
         subtitle: 'Runs of events from one source key, split where it went quiet for more than 30 minutes. Each one reads like a short story: what it touched, how fast, and which rules fired.',
+        hint: 'Open a session to read its story, pace and automation observations.',
         actions: segmented({ label: 'Time window', options: WINDOWS, value: f.window, onChange: (w) => ctx.navigate(href('sessions', { window: w, source: f.source || '' })) }),
       }),
       h('p', { class: 'page-note' }, icon('info', { size: 'sm' }), h('span', null, boundsNote(res.bounds)), tip('index')),

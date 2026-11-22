@@ -11,6 +11,11 @@ export const DOWNLOAD_NAMES = Object.freeze({
   csv: 'aegismesh-indicators.csv',
   txt: 'aegismesh-indicators.txt',
   report: 'aegismesh-observation-report.md',
+  // Local SIEM event files (GET /export/events), the server's fixed names.
+  cef: 'aegismesh-events-cef.log',
+  'syslog-rfc5424': 'aegismesh-events-syslog-rfc5424.log',
+  'otlp-json': 'aegismesh-events-otlp-json.json',
+  ecs: 'aegismesh-events-ecs.ndjson',
 });
 
 const int = (v) => {

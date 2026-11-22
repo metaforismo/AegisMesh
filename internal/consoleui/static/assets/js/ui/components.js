@@ -65,13 +65,28 @@ export function link(href, ...children) {
 
 // ---- Layout ----------------------------------------------------------------
 
-export function pageHead({ title, subtitle, actions, eyebrow }) {
+// `crumbs` ([[label, href], …], the current page last and unlinked) replaces
+// the eyebrow on detail pages. `hint` is one line on what the operator can
+// do on this screen. Both are interface text; a crumb label may be a node
+// (an evidence span for a source key).
+export function pageHead({ title, subtitle, actions, eyebrow, crumbs, hint }) {
   return h('header', { class: 'page-head' },
     h('div', { class: 'page-head__text' },
-      eyebrow ? h('p', { class: 'page-head__eyebrow' }, eyebrow) : null,
+      crumbs ? breadcrumbs(crumbs) : eyebrow ? h('p', { class: 'page-head__eyebrow' }, eyebrow) : null,
       h('h1', { class: 'page-head__title', id: 'page-title', tabindex: '-1' }, title),
-      subtitle ? h('p', { class: 'page-head__sub' }, subtitle) : null),
+      subtitle ? h('p', { class: 'page-head__sub' }, subtitle) : null,
+      hint ? h('p', { class: 'page-head__hint' }, icon('chevron-right', { size: 'xs' }), h('span', null, hint)) : null),
     actions ? h('div', { class: 'btn-row page-head__actions' }, actions) : null);
+}
+
+export function breadcrumbs(items) {
+  const list = items.filter(Boolean);
+  return h('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' },
+    h('ol', { class: 'crumbs__list' }, list.map(([label, target], i) => {
+      const last = i === list.length - 1;
+      return h('li', { class: 'crumbs__item' },
+        last || !target ? h('span', { class: 'crumbs__here', 'aria-current': last ? 'page' : null }, label) : h('a', { href: target }, label));
+    })));
 }
 
 // `primary` marks the one panel a screen is about (a stronger frame);
@@ -165,9 +180,44 @@ export function emptyArt() {
     svg('rect', { class: 'empty-art__decoy', x: 66, y: 18, width: 24, height: 24, rx: 4 }));
 }
 
+// Variants for the catalog screens, in the same lattice: a decoy with its
+// listening ring (no probe yet), a returning key path that ends at a marker,
+// and a briefing sheet resting on the grid.
+export function emptyArtVariant(kind) {
+  if (kind !== 'decoys' && kind !== 'tokens' && kind !== 'digest') return emptyArt();
+  const grid = [];
+  for (let i = 0; i <= 5; i++) {
+    grid.push(svg('line', { class: 'empty-art__grid', x1: i * 24, x2: i * 24, y1: 0, y2: 72 }));
+    if (i <= 3) grid.push(svg('line', { class: 'empty-art__grid', x1: 0, x2: 120, y1: i * 24, y2: i * 24 }));
+  }
+  const parts = {
+    decoys: [
+      svg('circle', { class: 'empty-art__ring', cx: 60, cy: 36, r: 22 }),
+      svg('path', { class: 'empty-art__decoy', d: 'M60 22 74 36 60 50 46 36z' }),
+      svg('circle', { class: 'empty-art__node', cx: 60, cy: 36, r: 2.5 }),
+      svg('circle', { class: 'empty-art__node', cx: 12, cy: 12, r: 3 }),
+      svg('circle', { class: 'empty-art__node', cx: 108, cy: 60, r: 3 }),
+    ],
+    tokens: [
+      svg('path', { class: 'empty-art__probe', d: 'M14 58 C 40 58, 44 20, 72 20 S 100 40, 100 52' }),
+      svg('circle', { class: 'empty-art__node', cx: 14, cy: 58, r: 3.5 }),
+      svg('circle', { class: 'empty-art__ring', cx: 100, cy: 52, r: 7 }),
+      svg('path', { class: 'empty-art__decoy', d: 'M94 52h12M100 46v12' }),
+      svg('rect', { class: 'empty-art__decoy', x: 62, y: 12, width: 18, height: 14, rx: 3 }),
+    ],
+    digest: [
+      svg('rect', { class: 'empty-art__decoy', x: 40, y: 8, width: 40, height: 56, rx: 4 }),
+      svg('path', { class: 'empty-art__probe', d: 'M48 20h24M48 30h24M48 40h24M48 50h14' }),
+      svg('circle', { class: 'empty-art__node', cx: 12, cy: 60, r: 3 }),
+      svg('circle', { class: 'empty-art__node', cx: 108, cy: 12, r: 3 }),
+    ],
+  }[kind];
+  return svg('svg', { class: ['empty-art', `empty-art--${kind}`], viewBox: '0 0 120 72', 'aria-hidden': 'true', focusable: 'false' }, grid, parts);
+}
+
 export function empty(title, detail, action, { icon: name = 'inbox', art = false } = {}) {
   return h('div', { class: 'state' },
-    art ? emptyArt() : h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(name)),
+    art ? (typeof art === 'string' ? emptyArtVariant(art) : emptyArt()) : h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(name)),
     h('p', { class: 'state__title' }, title),
     detail ? h('p', null, detail) : null,
     action || null);
@@ -508,6 +558,27 @@ export function filterChip(chip) {
     h('span', { class: 'fchip__name' }, chip.name),
     value,
     h('a', { class: 'fchip__remove', href: chip.removeHref, 'aria-label': `Remove filter ${chip.name}`, title: `Remove ${chip.name.toLowerCase()} filter` }, icon('close', { size: 'xs' })));
+}
+
+// ---- Catalog marks (glyph plus word, never color alone) ----------------------
+
+// A decoy surface family: meta from lib/catalogs.js familyMeta().
+export function familyChip(meta) {
+  return h('span', { class: ['fam', `fam--${meta.shape}`] }, h('span', { class: 'fam__glyph', 'aria-hidden': 'true' }), meta.label);
+}
+
+// A honeytoken kind: meta from tokenKindMeta().
+export function tokenKindChip(meta) {
+  return h('span', { class: ['tkind', `tkind--${meta.shape}`] }, icon(meta.shape === 'flag' ? 'flag' : 'key', { size: 'sm' }), meta.label);
+}
+
+// Observe only (hollow ring) or can select an action (filled square): meta
+// from ruleActionMeta(). The hint is the title and visually hidden text.
+export function actionChip(meta) {
+  if (!meta) return h('span', { class: 'muted', title: 'This server does not report it' }, 'Not reported');
+  return h('span', { class: ['ract', `ract--${meta.key}`], title: meta.hint },
+    h('span', { class: 'ract__mark', 'aria-hidden': 'true' }), meta.label,
+    h('span', { class: 'visually-hidden' }, `. ${meta.hint}`));
 }
 
 export function labelFor(value) {
