@@ -64,6 +64,11 @@ const PATHS = {
   guide: 'M8 4.25C6.9 3.3 5.1 2.9 2.25 3v9.5c2.85-.1 4.65.3 5.75 1.25 1.1-.95 2.9-1.35 5.75-1.25V3C10.9 2.9 9.1 3.3 8 4.25zM8 4.25v9.5',
   // Saved views: a bookmark ribbon.
   bookmark: 'M4.25 2.25h7.5v11.5L8 10.9l-3.75 2.85z',
+  // Session story: a vertical spine with three stops.
+  story: `${circle(4, 3.5, 1.5)}${circle(4, 8, 1.5)}${circle(4, 12.5, 1.5)}M4 5v1.5M4 9.5V11M7.5 3.5h6M7.5 8h4.5M7.5 12.5h6`,
+  // Technique matrix: a 3×3 grid with one cell filled in outline.
+  matrix: 'M2 2h3.5v3.5H2zM6.25 2h3.5v3.5h-3.5zM10.5 2H14v3.5h-3.5zM2 6.25h3.5v3.5H2zM6.25 6.25h3.5v3.5h-3.5zM10.5 6.25H14v3.5h-3.5zM2 10.5h3.5V14H2zM6.25 10.5h3.5V14h-3.5zM10.5 10.5H14V14h-3.5z',
+  download: 'M8 2v8.5M4.75 7.25 8 10.5l3.25-3.25M2.5 13.5h11',
   // Cadence: evenly spaced ticks on a baseline.
   cadence: 'M1.75 13h12.5M3.5 13V8M6.5 13V5M9.5 13V8.5M12.5 13V6',
 };

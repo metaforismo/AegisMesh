@@ -99,7 +99,7 @@ export default {
         eyebrow: h('a', { href: '#/sources' }, icon('arrow-left', { size: 'xs' }), 'Sources'),
         title: evidence(key),
         subtitle: 'Everything observed from this source. The value is attacker-influenced: it is what the sensor recorded, not a verified identity.',
-        actions: link(href('events', { source: key }), 'Filter events by this source'),
+        actions: [h('a', { class: 'btn', href: href('sessions', { source: key, window: '7d' }) }, icon('story', { size: 'sm' }), 'Sessions from this source'), link(href('events', { source: key }), 'Filter events by this source')],
       }),
       panel({
         title: 'Summary',

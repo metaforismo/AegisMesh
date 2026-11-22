@@ -568,3 +568,62 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 .cadence-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-3); font-size: var(--text-xs); color: var(--color-ink-2); }
 .cadence-note { margin-top: var(--space-3); color: var(--color-ink-2); font-size: var(--text-sm); }
 .cadence-caveat { margin-top: var(--space-1); color: var(--color-ink-3); font-size: var(--text-xs); }
+
+/* ---- Sessions and the attack story ---------------------------------------- */
+
+.session-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.session-filter .field { flex: 1 1 16rem; }
+.table tbody tr.row--noted > td:first-child { box-shadow: inset 2px 0 0 var(--color-accent); }
+.session-title .evidence { font-size: var(--text-lg); }
+
+.story-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: var(--space-4) var(--space-8);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--elev-1), var(--highlight);
+}
+.story-hero__lead { display: flex; flex-direction: column; gap: var(--space-2); }
+.story-hero__lead .muted { font-size: var(--text-xs); max-width: 44ch; }
+.story-hero__assess .assess { font-size: var(--text-md); white-space: normal; }
+.story-hero__assess .assess__mark { width: 11px; height: 11px; }
+.story-hero__figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); gap: var(--space-3) var(--space-4); align-content: start; }
+.story-hero__figures dt { color: var(--color-ink-3); font-size: var(--text-2xs); }
+.story-hero__figures dd { font-size: var(--text-lg); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-figure); }
+.story-hero__figures dd .sev, .story-hero__figures dd .chip { font-size: var(--text-xs); letter-spacing: normal; font-weight: var(--weight-medium); }
+.story-hero .ribbon { grid-column: 1 / -1; }
+
+.story-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(19rem, 1fr); gap: var(--space-4); align-items: start; }
+.story-side { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.story-side .panel + .panel { margin-top: 0; }
+.cadence--compact .cadence__bar { height: 2.75rem; }
+.cadence--compact { margin-top: var(--space-3); }
+
+.downloads { display: flex; flex-direction: column; gap: var(--space-3); }
+.downloads__group { display: flex; flex-direction: column; gap: var(--space-1); }
+.downloads__note, .downloads__status { font-size: var(--text-xs); }
+.downloads .muted .icon { vertical-align: -2px; }
+
+.tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); }
+.tgrid__summary { margin-bottom: var(--space-3); color: var(--color-ink-2); font-size: var(--text-sm); }
+.tab__count { color: var(--color-ink-3); font-variant-numeric: tabular-nums; }
+.panel__title .tabs { border-bottom: 0; }
+
+@media (max-width: 75rem) {
+  .story-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 45rem) {
+  .story-hero { grid-template-columns: minmax(0, 1fr); padding: var(--space-4); }
+}
+.kinds { color: var(--color-ink-2); font-size: var(--text-xs); white-space: nowrap; }
+.table .col-title { min-width: 12rem; }
+.table .col-desc { min-width: 14rem; color: var(--color-ink-2); }
+.table .fw-groups { min-width: 13rem; }
+/* A tab strip in a panel title scrolls inside the panel, never the page. */
+.panel__head > div { min-width: 0; max-width: 100%; }
+.panel__title .tabs { max-width: 100%; }
+.page-note { flex-wrap: nowrap; align-items: flex-start; }
+.page-note > span { min-width: 0; }

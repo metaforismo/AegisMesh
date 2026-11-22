@@ -7,7 +7,7 @@
 // embed test checks each one resolves.
 
 import { h, mount } from '../lib/dom.js';
-import { normalizeWindow, normalizeEventFilters, normalizeStatus } from '../lib/route.js';
+import { normalizeWindow, normalizeEventFilters, normalizeStatus, normalizeSessionFilters } from '../lib/route.js';
 import { pageHead, panel, empty, link } from '../ui/components.js';
 
 function lazy(title, loader, extra = {}) {
@@ -58,6 +58,17 @@ export const SCREENS = Object.freeze({
   fleet_node: lazy('Fleet node', () => import('./fleet-node.js')),
   // The guide's `t` (the term in focus) scrolls within the open screen.
   guide: lazy('Guide', () => import('./guide.js'), { viewIgnore: ['t'] }),
+  sessions: lazy('Sessions', () => import('./sessions.js'), {
+    skeleton: 'table',
+    prefetch: (api, r) => { const f = normalizeSessionFilters(r.query); api.sessions(f.window, f.source || '', '', 50); },
+  }),
+  // The story keeps the event side panel's `event` (and `event_node`) in place.
+  attack_session: lazy('Session', () => import('./session.js'), { viewIgnore: ['event', 'event_node'] }),
+  techniques: lazy('Techniques', () => import('./techniques.js'), {
+    skeleton: 'cards',
+    viewIgnore: ['f'],
+    prefetch: (api, r) => { api.coverage(normalizeWindow(r.query.window)); },
+  }),
 });
 
 export const notFoundScreen = {

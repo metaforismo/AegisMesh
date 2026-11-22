@@ -122,7 +122,23 @@ function investigations(ov) {
   };
 }
 
-export function buildBrief(ov, window) {
+// Sessions consistent with automation, from GET /sessions for the same
+// window. `sessions` is that response or null (endpoint absent or failed):
+// then the clause is simply left out.
+function automationClause(res, window) {
+  const list = Array.isArray(res?.sessions) ? res.sessions : null;
+  if (!list) return null;
+  const n = list.filter((s) => s?.automation?.assessment === 'consistent_with_automation').length;
+  if (!n) return null;
+  const more = Boolean(res.next_cursor);
+  return {
+    id: 'automation',
+    segments: [t(more ? 'At least ' : ''), num(n), t(` ${plural(n, 'session', 'sessions')} with pace or rules consistent with automation (an observation, not a verdict).`)],
+    route: { name: 'sessions', query: { window } },
+  };
+}
+
+export function buildBrief(ov, window, { sessions = null } = {}) {
   const since = briefWindowStart(ov?.generated_at, window);
   const out = [volume(ov, window, since)];
   if (!isCount(ov?.totals?.events) || ov.totals.events === 0) {
@@ -135,6 +151,7 @@ export function buildBrief(ov, window) {
     topSeverity(ov, since),
     topSource(ov),
     topRule(ov, since),
+    automationClause(sessions, window),
     investigations(ov),
   );
   return out.filter(Boolean);

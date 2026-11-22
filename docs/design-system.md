@@ -17,6 +17,8 @@ reference. `site/design-system.html` shows every component rendered.
 | `internal/consoleui/static/assets/js/ui/icons.js` | The icon set and the brand mark (the site's static SVGs are generated from it) |
 | `internal/consoleui/static/assets/js/lib/{palette,keys,batch,swr,chart}.js` | Pure logic behind the palette, keyboard navigation, live batching, the read cache and the small charts; unit-tested in `webtest/` |
 | `internal/consoleui/static/assets/js/lib/{brief,filters,views,cadence,glossary}.js` | The Overview's situation brief, filter chips and click-to-filter links, saved views and palette recents (browser storage, validated on read), source cadence statistics, and the Guide's glossary; unit-tested in `webtest/brief.test.mjs` and `webtest/understanding.test.mjs` |
+| `internal/consoleui/static/assets/js/lib/{story,download}.js`, `ui/{story,downloads}.js` | Attacker-session wording and story layout (assessment, evidence codes, stages, phases, idle markers, the pace log scale, bounds sentence); authenticated downloads with fixed file names. Tested in `webtest/story.test.mjs` |
+| `internal/consoleui/devserver/mock-analysis.mjs` | The mock's twin of the backend's sessions, framework relations, indicator downloads and reports (ADR-0022), with scripted sessions; tested in `webtest/mockanalysis.test.mjs` |
 | `internal/consoleui/static/assets/js/lib/{auth,tenant}.js` | Sign-in option selection and OIDC error codes; tenant visibility, switch targets and where a switch lands; unit-tested in `webtest/` |
 
 There is no build step, no npm dependency and no third-party code. The console
@@ -239,6 +241,16 @@ event views and palette recents; see "Console security rules".
 | `.cell-link`, `.cell-filter` | Click-to-filter on a table value | Pointer convenience, out of the tab order (`tabindex="-1"`); the event's "Narrow the list" panel is the keyboard path. Hidden on devices without hover |
 | `.cadence` (`__col`, `__bar`, `__fill`, `__count`, `__label`) | Gap histogram (Source) | Every column prints its count; the peak column is also named in text. Caption states how many loaded events it used |
 | `.peek--plain` | Absolute time behind a relative time | Same floating element as the evidence peek, without the evidence look |
+| `.assess` (`--filled`, `--ring`, `--dash`, `--compact`) | Automation observation | Shape plus words: filled diamond "Consistent with automation", hollow ring "No pattern established", dash "Too few events", always with the observation count. Never a verdict badge ("AI attacker", "bot") |
+| `.cstrip` | Pace strip | Log scale 10 ms … 1 h: min-to-p90 range, a median tick, and the printed median beside it |
+| `.stage` (`--discovery`, `--credential_access`, `--ai_service_abuse`, `--decoy_credential_replay`), `.ribbon` | Session stages | Word plus shape (ring, hatched square, diamond, triangle); the ribbon's segments are textured, and its legend prints each stage's event count |
+| `.story` (`__phase`, `__event`, `__when`, `__gap`, `__node`, `__body`, `__summary`, `__meta`, `__idle`) | Attack story timeline | Time with milliseconds and the gap before each event in a left rail; a spine with the classification glyph; summary as evidence opening the side panel; gaps over 5 minutes collapse into a dashed "quiet" marker. Below 720px the rail folds above the summary |
+| `.story-hero`, `.story-layout`, `.story-side` | Session detail layout | Hero: assessment, figures, stage ribbon. Two columns from 1200px, one below |
+| `.figures` (`__item`, `__note`) | Labelled numbers | Pace figures; the note explains the formulas |
+| `.obs-list`, `.obs` (`--quiet`) | Automation observations | Console title and explanation, a "what is this?" tip, and the server's fixed sentence labelled "Server" |
+| `.fw-groups`, `.fw-group`, `.chip--fw`, `.fw-link` | Framework references | Grouped by framework in fixed order; each chip opens the matrix at that technique. Editorial "relates to", stated beside them |
+| `.tgrid`, `.tcell` (`--observed`, `--quiet`) | Technique matrix | Observed: solid edge, accent rule, a count, last seen, a link to the events. Not observed: dashed edge, no fill, the words "not observed" |
+| `.downloads` | Report and indicator downloads | Analyst only (viewers see why); fixed file names; status line with skip counts and scan bounds; "proposed, never applied" for the blocklist |
 | `.top-tenant`, `--static` | Active tenant in the top bar | A button that opens the tenant menu with several tenants; a static label with one tenant not named `default`; absent otherwise |
 
 ## Console security rules
@@ -368,6 +380,49 @@ Extension points for later screens: a screen is an item in `NAV`
 (`ui/shell.js`), a route in `lib/route.js`, and a descriptor in
 `screens/index.js`; the palette picks up `NAV` automatically. Nothing is
 listed before it exists.
+
+### Attacker sessions, the attack story and techniques (2026-11-22)
+
+Built on `GET /sessions`, `/sessions/{id}`, `/coverage`, `/export/indicators`,
+`/sessions/{id}/report` and `/investigations/{id}/report`
+(docs/architecture/console-api.md, ADR-0022).
+
+- **Sessions** (`#/sessions`, nav Observe, `g c`, palette): source (evidence)
+  with last seen, duration, events, surfaces, max severity, rules, a pace
+  strip and the automation observation ("Consistent with automation · 3").
+  Window and exact-source filters, cursor paging, the API's `bounds` as one
+  sentence (scan size, scan limit reached, index history, "a source key is
+  not an actor identity"). Rows consistent with automation carry an accent
+  edge; the text says the same. The table scrolls in its panel.
+- **Session detail** (`#/sessions/<id>`): hero with the assessment, figures
+  and the stage ribbon; the timeline grouped by `phases`, gaps as durations
+  (sub-second gaps in semibold), idles over 5 minutes collapsed, events
+  opening the shared event side panel (`?event=`, j/k, Esc); "Automation
+  observations" (each code in plain words, a tip, the server's sentence);
+  "Pace" (min, median, p90, events per minute, regularity, the formulas, a
+  gap histogram from the timeline); "Frameworks" (chips into the matrix);
+  "Downloads"; "New investigation with these events" (analyst, local event
+  ids only, at most 200). A truncated timeline says what it covers.
+- **Techniques** (`#/techniques`, nav Investigate, `g t`): tabs for MITRE
+  ATT&CK, MITRE ATLAS and OWASP LLM 2025 (arrow keys move), the API's
+  `interpretation` verbatim in a "Not a coverage claim" banner plus what
+  observed and unobserved mean, one cell per technique. An observed cell
+  opens events citing its first rule since the window start.
+- **Rules**: grouped by family with what each family does, framework
+  references per rule, and a statement that the API does not report per rule
+  whether a match only observes.
+- **Integrations**: Source links to its sessions; Investigation has
+  "Downloads"; the Overview brief adds "N sessions with pace or rules
+  consistent with automation" ("At least" when more pages exist) when the
+  endpoint answers; the palette lists sessions (source as evidence) and
+  techniques; the Guide gains session, pace and regularity, automation
+  observation, honeytoken, agent canary, LLMjacking pattern, technique
+  mapping and proposed blocklist.
+- **Downloads** go through the API client (session cookie, same origin;
+  GETs need no CSRF token). The response is read as a Blob and saved under
+  one of the server's fixed names chosen by kind; `Content-Disposition` is
+  never read. They are never cached or prefetched (audited reads). Viewers
+  see "Reports and indicator exports need the analyst role".
 
 ### Sign-in (operator token and experimental single sign-on)
 
@@ -531,7 +586,7 @@ On a hub that accepts forwarded evidence, an event summary may carry `node:
   server-side event search (see "Understanding aids"). Ranking: exact, prefix, word start,
   substring, then fuzzy; tested in `webtest/palette.test.mjs`. A pasted
   32-hex event id offers to open that event.
-- **Shortcuts** (`?` shows them): `g` then `o/e/s/i/r/n/a/h` to go to a
+- **Shortcuts** (`?` shows them): `g` then `o/e/s/c/i/t/r/n/a/h` to go to a
   screen, `/` to search events, `j`/`k` to move through the events list,
   Enter to open a row, `o` to open the side panel's event as a full page,
   Esc to close. Single-letter shortcuts never fire inside text fields.
@@ -693,3 +748,14 @@ and does not ship.
 | 375px (mobile emulation, coarse pointer): Overview and Events, no horizontal page scroll | PASS |
 | Site: style guide "Understanding aids" section and landing showcase brief, light, 1440px | PASS |
 | Reduced motion, Firefox, Safari, the real Go console server, an empty index (first-run steps) in the browser | NOT RUN: the pane cannot emulate reduced motion, only Chromium was available, and the mock always has events (the empty brief is covered by unit tests) |
+
+### Verification: attacker sessions and techniques (2026-11-22, macOS, Node 25, Go toolchain, Chromium in the Claude browser pane)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (204 tests: the 191 before plus story wording and layout, downloads, routes, the brief's session clause, and the mock's sessions, details, coverage, downloads and formulas) | PASS |
+| `go test ./internal/consoleui` (embed safety: new screens, literal `import()`s) | PASS |
+| Browser against the mock (port 9133), dark 1440px: Sessions, the LLMjacking story (phases, gaps, idle markers, observations, pace, side panel by click, a proposed-blocklist download), Techniques | PASS |
+| Light 1440px: Techniques (ATT&CK with unobserved cells), Rules | PASS |
+| 375px: the SSH story (light), Sessions, Techniques, Rules and Overview (dark); no horizontal page scroll (found and fixed: the framework tabs and the bounds note widened the page) | PASS |
+| Session detail in light at 1440px, reduced motion, Firefox and Safari, the real Go server | NOT RUN |

@@ -181,6 +181,96 @@ export const GLOSSARY = Object.freeze([
     ],
     see: ['integrity'],
   },
+  {
+    id: 'session',
+    term: 'Session',
+    group: 'Sessions and AI decoys',
+    short: 'Consecutive events from one source key, until it was quiet for more than 30 minutes.',
+    body: [
+      'Sessions are built on request from the newest 8,192 indexed events; nothing is stored. Correlation signals and forwarded copies with the same source key are included. The timeline shows the first 200 events.',
+      'A source key is not an actor identity: NAT and proxies can combine clients, and one client can change address. A session id is derived from its first retained event, so it can change when that event ages out or the process restarts.',
+      'Stages (discovery, credential access, AI service use, decoy credential replay) name which rules fired in a run of events. They can recur in any order and do not infer intent.',
+    ],
+    see: ['regularity', 'automation', 'source'],
+  },
+  {
+    id: 'regularity',
+    term: 'Pace and regularity',
+    group: 'Sessions and AI decoys',
+    short: 'The gaps between a session’s events: median, 90th percentile, shortest, events per minute, and how many gaps sit near the median.',
+    body: [
+      'The median is the upper median of the gaps; the 90th percentile is nearest-rank. Events per minute is (events − 1) divided by the elapsed minutes.',
+      'Regularity is the share of gaps within 25% of the median gap; with a zero median, only zero gaps count. A short, steady pace is typical of scripts and agent tool loops; uptime monitors and scheduled clients can look the same. Zero gaps can be clock precision.',
+    ],
+    see: ['automation', 'cadence'],
+  },
+  {
+    id: 'automation',
+    term: 'Automation observation',
+    group: 'Sessions and AI decoys',
+    short: 'Whether a session’s pace or rules are consistent with automation, with each supporting observation listed. Never a verdict.',
+    body: [
+      'At least eight non-signal events are needed; with fewer the reading is “too few events”. Then any one of these holds the reading “consistent with automation”: a median interaction gap under a second; a median of 1 to 30 seconds with at most one gap more than 25% away; or AGT-001, COR-005, COR-006, HT-001 or COR-008 in the session.',
+      '“No automation pattern established” means none of these selected checks held. It is not evidence of a person. Correlation signals are left out of the timing, because their timestamps are generated.',
+    ],
+    see: ['regularity', 'agentcanary', 'honeytoken'],
+  },
+  {
+    id: 'honeytoken',
+    term: 'Honeytoken (decoy credential)',
+    group: 'Sessions and AI decoys',
+    short: 'A fake credential planted only in decoy material. If it comes back inbound (HT-001), whoever sent it read the decoy.',
+    body: [
+      'The operator configures fake values and plants them in decoy responses such as a key-information page. Evidence keeps only the token id, never the value. COR-008 links a replay to earlier contact by the same peer on another sensor; it does not prove that sensor disclosed it.',
+      'Never use a real credential as a honeytoken.',
+    ],
+    cli: 'aegismesh honeytoken new --kind credential --format openai --id planted-key',
+    see: ['agentcanary', 'llmjacking'],
+  },
+  {
+    id: 'agentcanary',
+    term: 'Agent canary',
+    group: 'Sessions and AI decoys',
+    short: 'An instruction planted in decoy text that asks the reader to fetch a path or echo a marker. Following it is AGT-001.',
+    body: [
+      'An LLM-driven client that reads decoy content may act on the instruction. A person or a scanner can copy it too, so a hit is consistent with an LLM client, not proof of one.',
+    ],
+    cli: 'aegismesh honeytoken new --kind agent_canary --format generic --id diagnostic-echo',
+    see: ['honeytoken', 'automation'],
+  },
+  {
+    id: 'llmjacking',
+    term: 'LLMjacking pattern',
+    group: 'Sessions and AI decoys',
+    short: 'Looking for exposed AI services to use someone else’s quota: enumerate endpoints, validate a key cheaply, then use or change resources.',
+    body: [
+      'The AI decoy profile serves static Ollama, OpenAI-compatible, LiteLLM and vLLM shapes; no model runs behind them. LLM-001 notes a known AI API path, LLM-002 a minimal-cost completion probe (a tiny token budget), LLM-003 a model or key change, LLM-004 a provider-shaped key, and COR-006 one source touching several AI families.',
+      'A session can show these steps in order; the console describes the observations and never concludes the service was abused successfully.',
+    ],
+    cli: 'aegismesh init --profile ai-decoy --dir ./ai-lab',
+    see: ['honeytoken', 'session'],
+  },
+  {
+    id: 'mapping',
+    term: 'Technique mapping (editorial)',
+    group: 'Sessions and AI decoys',
+    short: 'Rules list the MITRE ATT&CK, MITRE ATLAS and OWASP LLM 2025 entries they relate to. Editorial references, not coverage.',
+    body: [
+      'The Techniques screen counts indexed events in the window that cited a rule related to each technique. An observed technique means a related rule fired, not that the technique was used or succeeded; an unobserved one means no related rule fired, not that the technique is detectable or was absent.',
+      'AGT-001 relates to prompt injection because the defender mirrors that technique in decoy content, not because an attacker used it.',
+    ],
+    see: ['rule', 'session'],
+  },
+  {
+    id: 'blocklist',
+    term: 'Proposed blocklist and indicators',
+    group: 'Sessions and AI decoys',
+    short: 'IP indicators exported for your own tools. Proposed for review; AegisMesh never applies them.',
+    body: [
+      'Only literal IPv4 and IPv6 source keys are exported; anything else is skipped and counted. Confidence is 15 out of 100 on purpose: contact with a decoy is an observation. STIX 2.1, CSV and a plain list are available to analysts; each download is recorded in the audit trail.',
+    ],
+    see: ['recommendation', 'source'],
+  },
 ]);
 
 const BY_ID = new Map(GLOSSARY.map((e) => [e.id, e]));

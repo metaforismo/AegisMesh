@@ -24,6 +24,7 @@ import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFleet } from './mock-fleet.mjs';
+import { snapshot, sessionsOf, publicSession, sessionDetail, coverageOf, indicatorsOf, renderIndicators, renderReport, RULE_FRAMEWORKS, INTERPRETATION } from './mock-analysis.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
@@ -107,8 +108,88 @@ const CORRELATION_RULES = [
   { id: 'CR-CANARY-AFTER-SCAN', title: 'Canary invoked after reconnaissance' },
 ];
 
+// More backend catalog rules (the AI pack and others with framework
+// references). Kept apart from DETECTION_RULES so the
+// seeded random data set above is unchanged.
+const AI_RULES = [
+  { id: 'LLM-001', family: 'detection', title: 'Known AI API path or MCP message', severity: 'low' },
+  { id: 'LLM-002', family: 'detection', title: 'Minimal-cost completion probe', severity: 'medium' },
+  { id: 'LLM-003', family: 'detection', title: 'Model or key mutation on an AI service', severity: 'medium' },
+  { id: 'LLM-004', family: 'detection', title: 'Provider-shaped key in a credential context', severity: 'low' },
+  { id: 'HT-001', family: 'detection', title: 'Decoy credential marker presented inbound', severity: 'critical' },
+  { id: 'AGT-001', family: 'detection', title: 'Agent marker followed a decoy instruction', severity: 'high' },
+  { id: 'PI-002', family: 'detection', title: 'Obfuscated prompt-injection phrasing', severity: 'high' },
+  { id: 'EXF-001', family: 'detection', title: 'Credential or secret requested from a tool', severity: 'high' },
+  { id: 'ESC-001', family: 'detection', title: 'Tool call asking for command execution', severity: 'high' },
+  { id: 'RES-001', family: 'detection', title: 'Oversized or repeated resource request', severity: 'medium' },
+  { id: 'COR-005', family: 'correlation', title: 'Machine-paced cadence from one peer', severity: '' },
+  { id: 'COR-006', family: 'correlation', title: 'One source touched several AI families', severity: '' },
+  { id: 'COR-007', family: 'correlation', title: 'Distinct credential attempts from one source', severity: '' },
+  { id: 'COR-008', family: 'correlation', title: 'Decoy credential replayed after contact elsewhere', severity: '' },
+];
+const AI_SENSORS = [
+  { id: 'ai-ollama', kind: 'http', listen: '127.0.0.1:11434', state: 'running', process_isolation: false },
+  { id: 'ai-litellm', kind: 'http', listen: '127.0.0.1:8001', state: 'running', process_isolation: false },
+];
+
 const now = Date.now();
 let seq = 0;
+
+// Scripted attacker sessions, built without the seeded generator (so the
+// random data set is unchanged): an LLMjacking-style run (AI endpoint
+// enumeration, a one-token key validation, a decoy credential replay, an
+// agent canary), an SSH credential-stuffing run and a slow, human-paced
+// browse. Times are relative to start-up; ids are hashes of fixed labels.
+function storyEvents() {
+  const out = [];
+  const sensorOf = (id) => [...SENSORS, ...AI_SENSORS].find((x) => x.id === id);
+  const sevOf = (rules) => rules.map((r) => AI_RULES.find((x) => x.id === r)?.severity || DETECTION_RULES.find((x) => x.id === r)?.severity || '').reduce((m, v) => (['', 'info', 'low', 'medium', 'high', 'critical'].indexOf(v) > ['', 'info', 'low', 'medium', 'high', 'critical'].indexOf(m) ? v : m), '');
+  const add = (label, t, sensorId, summary, rules = [], classification = 'interaction', source) => {
+    const sn = sensorOf(sensorId) || { id: 'correlator', kind: '', listen: '' };
+    const signal = classification === 'correlation_signal';
+    out.push({
+      id: createHash('sha256').update(`story:${label}`).digest('hex').slice(0, 32), time: new Date(t).toISOString(), seq: 0,
+      sensor: signal ? { id: 'correlator', kind: '', listen: '' } : { id: sn.id, kind: sn.kind, listen: sn.listen },
+      classification, source, summary, severity: signal ? '' : sevOf(rules), rule_ids: rules, action: rules.length ? 'observe' : '', _integrity: true, _story: true,
+    });
+  };
+  // 1. LLMjacking-style: ~0.7 s apart, 25 minutes ago.
+  const A = '203.0.113.66';
+  let t = now - 25 * 60e3;
+  const step = (n) => { t += 640 + ((n * 37) % 9) * 20; return t; };
+  const llm = [
+    ['ai-ollama', 'GET / → 200 "Ollama is running"', ['LLM-001']],
+    ['ai-ollama', 'GET /api/version → 200', ['LLM-001']],
+    ['ai-ollama', 'GET /api/tags → 200 (3 models)', ['LLM-001']],
+    ['ai-litellm', 'GET /v1/models → 200', ['LLM-001']],
+    ['sig', 'COR-006: one source touched ollama and openai-compatible surfaces', ['COR-006']],
+    ['ai-ollama', 'POST /api/generate model=llama3 num_predict=1 prompt="hi" → 200', ['LLM-001', 'LLM-002']],
+    ['ai-litellm', 'GET /key/info → 200', ['LLM-001']],
+    ['ai-litellm', 'POST /v1/chat/completions Authorization: Bearer [honeytoken:planted-key] max_tokens=1 → 200', ['HT-001', 'LLM-001', 'LLM-002']],
+    ['sig', 'COR-008: decoy credential replayed on ai-litellm after contact on ai-ollama', ['COR-008']],
+    ['ai-litellm', 'GET /model/info → 200', ['LLM-001']],
+    ['ai-litellm', 'GET /diagnostics/echo?m=[agent-marker:diagnostic-echo] → 200', ['AGT-001', 'LLM-001']],
+    ['ai-ollama', 'POST /api/pull name="llama3:70b" → 200 (static)', ['LLM-001', 'LLM-003']],
+    ['sig', 'COR-005: consistent with scripted or agent-driven activity', ['COR-005']],
+  ];
+  llm.forEach(([sid, summary, rules], i) => add(`llm-${i}`, step(i), sid, summary, rules, sid === 'sig' ? 'correlation_signal' : 'interaction', A));
+  // 2. SSH credential stuffing: ~2 s apart, 3 hours ago.
+  const B = '198.51.100.77';
+  t = now - 3 * 3600e3;
+  const users = ['root', 'admin', 'ubuntu', 'oracle', 'test', 'git', 'deploy', 'pi'];
+  for (let i = 0; i < 36; i++) {
+    t += 1900 + ((i * 53) % 5) * 40;
+    add(`ssh-${i}`, t, 'ssh-decoy', `auth password user=${users[i % users.length]} password=[redacted]`, i % 9 === 4 ? ['AUTH-005'] : [], 'interaction', B);
+    if (i === 20) add('ssh-cor7', t + 5, 'sig', 'COR-007: 20 distinct credential attempts from one source', ['COR-007'], 'correlation_signal', B);
+  }
+  // 3. Slow, human-paced browsing: irregular gaps of 3 to 25 minutes.
+  const C = '192.0.2.150';
+  t = now - 9 * 3600e3;
+  const slow = [['GET / → 200', []], ['GET /robots.txt → 404', []], ['GET /admin → 200', []], ['GET /admin/login → 200', []], ['POST /admin/login → 401', []], ['GET /.git/config → 404', ['SCAN-004']], ['GET /admin/login → 200', []], ['POST /admin/login → 401', []], ['GET /docs → 404', []]];
+  const waits = [0, 4, 17, 6, 3, 25, 12, 9, 21];
+  slow.forEach(([summary, rules], i) => { t += waits[i] * 60e3 + i * 7000; add(`slow-${i}`, t, 'web', summary, rules, 'interaction', C); });
+  return out;
+}
 
 function makeEvent(t, overrides = {}) {
   const sensor = overrides.sensor || pick(SENSORS);
@@ -166,6 +247,7 @@ function buildTenant(name, local) {
       sig._cites = [base.id, events[21 + i * 37].id];
       events.push(sig);
     }
+    events.push(...storyEvents());
   }
   // Forwarded copies. Forwarding is live, so they cover only the time since
   // this (synthetic) hub started: the last 20 hours. One copy deliberately
@@ -185,7 +267,8 @@ function buildTenant(name, local) {
     if (twin && copy) copy.id = twin.id;
   }
   events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
-  events.forEach((e) => { e.time = e.time.replace(/\.\d+Z$/, 'Z'); });
+  // Scripted sessions keep milliseconds: their sub-second cadence is the point.
+  events.forEach((e) => { if (!e._story) e.time = e.time.replace(/\.\d+Z$/, 'Z'); });
   // Events are found by id within an origin ("local" or a node id).
   t.byKey = new Map(events.map((e) => [keyOf(e.id, originOf(e)), e]));
   t.localById = (id) => t.byKey.get(keyOf(id, LOCAL));
@@ -227,7 +310,7 @@ const tenants = new Map(TENANTS.map((name, i) => [name, buildTenant(name, i === 
 const localTenant = tenants.get(LOCAL_TENANT);
 
 const summaryOf = (e) => {
-  const { _integrity, _cites, ...pub } = e;
+  const { _integrity, _cites, _story, ...pub } = e;
   return pub;
 };
 
@@ -671,7 +754,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/sensors') {
     // Local sensors belong to the local tenant; others get an empty list.
     return send(res, 200, {
-      sensors: !T.local ? [] : SENSORS.map((x) => {
+      sensors: !T.local ? [] : [...SENSORS, ...AI_SENSORS].map((x) => {
         const mine = T.localEvents().filter((e) => e.sensor.id === x.id);
         return { ...x, events_total: mine.length, last_event_at: mine[0]?.time || '', by_classification: Object.fromEntries(CLASSES.slice(0, 2).map((c) => [c, mine.filter((e) => e.classification === c).length])) };
       }),
@@ -682,10 +765,146 @@ async function api(req, res, url) {
     if (!T.local) return send(res, 200, { rules: [] });
     return send(res, 200, {
       rules: [
-        ...DETECTION_RULES.map((r) => ({ id: r.id, family: 'detection', title: r.title, description: `Flags ${r.title.toLowerCase()}.`, severity: r.severity, enabled: true })),
-        ...CORRELATION_RULES.map((r, i) => ({ id: r.id, family: 'correlation', title: r.title, description: i ? '' : 'Emits a signal when one source reaches two or more sensors within the correlation window.', severity: '', enabled: i === 0 })),
+        ...DETECTION_RULES.map((r) => ({ frameworks: RULE_FRAMEWORKS[r.id] || [], id: r.id, family: 'detection', title: r.title, description: `Flags ${r.title.toLowerCase()}.`, severity: r.severity, enabled: true })),
+        ...CORRELATION_RULES.map((r, i) => ({ frameworks: [], id: r.id, family: 'correlation', title: r.title, description: i ? '' : 'Emits a signal when one source reaches two or more sensors within the correlation window.', severity: '', enabled: i === 0 })),
+        ...AI_RULES.map((r) => ({ frameworks: RULE_FRAMEWORKS[r.id] || [], id: r.id, family: r.family, title: r.title, description: '', severity: r.severity, enabled: true })),
       ],
     });
+  }
+
+  // ---- Derived views (ADR-0022) ---------------------------------------------
+  const strictQuery = (allowed) => {
+    const seen = new Set();
+    for (const k of url.searchParams.keys()) {
+      if (!allowed.includes(k) || seen.has(k)) { fail(res, 'invalid_argument', `unknown or duplicate parameter "${k}"`); return false; }
+      seen.add(k);
+    }
+    return true;
+  };
+  const analysisWindow = () => {
+    const w = url.searchParams.get('window') ?? '24h';
+    if (!WINDOW_MS[w]) { fail(res, 'invalid_argument', 'window must be 1h, 24h or 7d'); return null; }
+    return w;
+  };
+  const snap = () => snapshot(events, T.local ? 'complete' : 'unavailable');
+  const SESSION_ID = /^[0-9a-f]{32}$/;
+  const findSession = (id) => {
+    if (!SESSION_ID.test(id)) { fail(res, 'invalid_argument', 'malformed session id'); return null; }
+    const sn = snap();
+    const hit = sessionsOf(T.name, sn.events).find((x) => x.id === id);
+    if (!hit) { fail(res, 'not_found', 'session is no longer indexed'); return null; }
+    return { session: hit, sn };
+  };
+  const attachment = (body, type, name, sn, extra = {}) => {
+    res.writeHead(200, securityHeaders({
+      'Content-Type': type, 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store',
+      'X-AegisMesh-Index-History': sn.bounds.index.history, 'X-AegisMesh-Index-Events': String(sn.bounds.index.events),
+      'X-AegisMesh-Scanned-Events': String(sn.bounds.scanned_events), 'X-AegisMesh-Scan-Limit': String(sn.bounds.scan_limit),
+      'X-AegisMesh-Scan-Truncated': String(sn.bounds.scan_truncated), ...extra,
+    }));
+    res.end(body);
+  };
+
+  if (m === 'GET' && p === '/sessions') {
+    if (!strictQuery(['window', 'source', 'limit', 'cursor'])) return;
+    const w = analysisWindow();
+    if (!w) return;
+    const source = url.searchParams.get('source') ?? '';
+    if (Buffer.byteLength(source) > 255) return fail(res, 'invalid_argument', 'source too long');
+    const limit = Number(url.searchParams.get('limit') || 50);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) return fail(res, 'invalid_argument', 'limit must be within 1..200');
+    let offset = 0;
+    let asOf = new Date().toISOString();
+    const raw = url.searchParams.get('cursor');
+    if (raw) {
+      try {
+        const c = JSON.parse(Buffer.from(raw, 'base64url').toString());
+        if (c.s !== 'attacker_sessions' || c.w !== w || c.src !== source || !Number.isInteger(c.o) || c.o < 0) throw new Error('scope');
+        offset = c.o;
+        asOf = c.t;
+      } catch { return fail(res, 'invalid_argument', 'invalid cursor'); }
+    }
+    const sn = snap();
+    const end = Date.parse(asOf);
+    const all = sessionsOf(T.name, sn.events).filter((x) => Date.parse(x.last_seen) >= end - WINDOW_MS[w] && Date.parse(x.first_seen) <= end && (!source || x.source === source));
+    const page = all.slice(offset, offset + limit);
+    const next = offset + limit < all.length ? Buffer.from(JSON.stringify({ s: 'attacker_sessions', w, src: source, o: offset + limit, t: asOf })).toString('base64url') : '';
+    return send(res, 200, { sessions: page.map(publicSession), total_matched: all.length, next_cursor: next, as_of: asOf, window: w, bounds: sn.bounds });
+  }
+
+  const reportMatch = p.match(/^\/sessions\/([^/]+)\/report$/);
+  if (m === 'GET' && reportMatch) {
+    if (!strictQuery([])) return;
+    if (!need('analyst', 'session.report', decodeURIComponent(reportMatch[1]))) return;
+    const found = findSession(decodeURIComponent(reportMatch[1]));
+    if (!found) return;
+    audit(who.name, who.role, 'session.report', found.session.id, 'ok', remote);
+    const body = renderReport({ scope: `Session ${found.session.id} (source key shown below; not an actor identity)`, title: found.session.source, events: found.session._events, sessions: [found.session] });
+    return attachment(body, 'text/markdown; charset=utf-8', 'aegismesh-observation-report.md', found.sn);
+  }
+
+  const sessionMatch = p.match(/^\/sessions\/([^/]+)$/);
+  if (m === 'GET' && sessionMatch) {
+    if (!strictQuery([])) return;
+    const found = findSession(decodeURIComponent(sessionMatch[1]));
+    return found && send(res, 200, { ...sessionDetail(found.session), bounds: found.sn.bounds });
+  }
+
+  if (m === 'GET' && p === '/coverage') {
+    if (!strictQuery(['window'])) return;
+    const w = analysisWindow();
+    if (!w) return;
+    const sn = snap();
+    const until = Date.now();
+    const since = until - WINDOW_MS[w];
+    return send(res, 200, { frameworks: coverageOf(sn.events, since, until), bounds: sn.bounds, since: new Date(since).toISOString(), until: new Date(until).toISOString(), interpretation: INTERPRETATION });
+  }
+
+  if (m === 'GET' && p === '/export/indicators') {
+    if (!strictQuery(['session', 'source', 'investigation', 'window', 'format'])) return;
+    const format = url.searchParams.get('format');
+    if (!['stix', 'csv', 'txt'].includes(format)) return fail(res, 'invalid_argument', 'format must be stix, csv or txt');
+    const scopes = ['session', 'source', 'investigation', 'window'].filter((k) => url.searchParams.has(k));
+    if (scopes.length !== 1 || !url.searchParams.get(scopes[0])) return fail(res, 'invalid_argument', 'exactly one scope is required');
+    if (!need('analyst', 'export.indicators', scopes[0] === 'source' ? '' : url.searchParams.get(scopes[0]))) return;
+    const sn = snap();
+    const v = url.searchParams.get(scopes[0]);
+    let scoped;
+    let target = '';
+    if (scopes[0] === 'session') {
+      const found = findSession(v);
+      if (!found) return;
+      scoped = found.session._events;
+      target = v;
+    } else if (scopes[0] === 'source') {
+      if (Buffer.byteLength(v) > 255) return fail(res, 'invalid_argument', 'source too long');
+      scoped = sn.events.filter((e) => e.source === v);
+    } else if (scopes[0] === 'investigation') {
+      const inv = T.investigations.get(v);
+      if (!inv) return fail(res, 'not_found', 'investigation not found');
+      scoped = inv.event_ids.map((id) => T.localById(id)).filter(Boolean);
+      target = v;
+    } else {
+      if (!WINDOW_MS[v]) return fail(res, 'invalid_argument', 'window must be 1h, 24h or 7d');
+      scoped = sn.events.filter((e) => Date.parse(e.time) >= Date.now() - WINDOW_MS[v]);
+    }
+    const ind = indicatorsOf(scoped);
+    audit(who.name, who.role, 'export.indicators', target, 'ok', remote);
+    const name = { stix: 'aegismesh-indicators.json', csv: 'aegismesh-indicators.csv', txt: 'aegismesh-indicators.txt' }[format];
+    const type = { stix: 'application/json', csv: 'text/csv; charset=utf-8', txt: 'text/plain; charset=utf-8' }[format];
+    return attachment(renderIndicators(format, ind), type, name, sn, { 'X-AegisMesh-Skipped-Non-IP-Sources': String(ind.skippedSources), 'X-AegisMesh-Skipped-Non-IP-Events': String(ind.skippedEvents) });
+  }
+
+  const invReport = p.match(/^\/investigations\/([^/]+)\/report$/);
+  if (m === 'GET' && invReport) {
+    if (!strictQuery([])) return;
+    const id = decodeURIComponent(invReport[1]);
+    if (!need('analyst', 'investigation.report', id)) return;
+    const inv = T.investigations.get(id);
+    if (!inv) return fail(res, 'not_found', 'investigation not found');
+    const resolved = inv.event_ids.map((x) => T.localById(x)).filter(Boolean);
+    audit(who.name, who.role, 'investigation.report', id, 'ok', remote);
+    return attachment(renderReport({ scope: `Investigation ${id}`, title: inv.title, events: resolved, notes: inv.notes, unresolved: inv.event_ids.length - resolved.length }), 'text/markdown; charset=utf-8', 'aegismesh-observation-report.md', snap());
   }
 
   if (m === 'GET' && p === '/recommendations') {

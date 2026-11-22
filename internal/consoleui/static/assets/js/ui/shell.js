@@ -18,9 +18,11 @@ export const NAV = [
     { route: 'overview', label: 'Overview', href: '#/overview', icon: 'overview', keys: 'g o' },
     { route: 'events', label: 'Events', href: '#/events', also: ['event'], icon: 'events', keys: 'g e' },
     { route: 'sources', label: 'Sources', href: '#/sources', also: ['source'], icon: 'sources', keys: 'g s' },
+    { route: 'sessions', label: 'Sessions', href: '#/sessions', also: ['attack_session'], icon: 'story', keys: 'g c' },
   ] },
   { group: 'Investigate', items: [
     { route: 'investigations', label: 'Investigations', href: '#/investigations', also: ['investigation'], icon: 'investigations', keys: 'g i' },
+    { route: 'techniques', label: 'Techniques', href: '#/techniques', icon: 'matrix', keys: 'g t' },
     { route: 'recommendations', label: 'Recommendations', href: '#/recommendations', icon: 'recommendations', keys: 'g r' },
   ] },
   { group: 'System', items: [

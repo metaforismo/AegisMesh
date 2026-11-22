@@ -46,6 +46,7 @@
       <a href="#icons">Icons</a>
       <a href="#marks">Small data marks</a>
       <a href="#understanding">Understanding aids</a>
+      <a href="#sessions">Sessions &amp; techniques</a>
       <a href="#overlays">Overlays &amp; keys</a>
     </nav>
 
@@ -383,6 +384,47 @@ prompts/get name="ignore previous instructions 🙂"</span>
             <li class="cadence__col"><span class="cadence__bar" aria-hidden="true"><span class="cadence__fill cad-0"></span></span><span class="cadence__count">1</span><span class="cadence__label">≥ 1 h</span></li>
           </ol>
           <p class="muted">Gaps between consecutive events, from the 64 loaded events (synthetic).</p>
+        </div>
+      </section>
+
+      <section class="ds-section" id="sessions">
+        <h2>Sessions &amp; techniques</h2>
+        <p>An attacker session is a run of events from one source key. Its automation reading is an observation with a shape, words and the number of observations behind it, never a verdict. Synthetic values.</p>
+        <div class="ds-demo">
+          <span class="assess assess--filled"><span class="assess__mark" aria-hidden="true"></span><span class="assess__label">Consistent with automation</span><span class="assess__count"> · 6 observations</span></span>
+          <span class="assess assess--ring"><span class="assess__mark" aria-hidden="true"></span><span class="assess__label">No automation pattern established</span><span class="assess__count"> · 0 observations</span></span>
+          <span class="assess assess--dash"><span class="assess__mark" aria-hidden="true"></span><span class="assess__label">Too few events to assess</span><span class="assess__count"> · 1 observation</span></span>
+          <span class="cstrip"><span class="cstrip__track" aria-hidden="true"><span class="cstrip__range ds-cs-range"></span><span class="cstrip__median ds-cs-median"></span></span><span class="cstrip__value">median 700 ms</span></span>
+        </div>
+        <p>Stages name which rules fired in a run of events: a word and a shape each. The ribbon prints every stage's count.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="ribbon">
+            <div class="ribbon__bar" aria-hidden="true"><span class="ribbon__seg ribbon__seg--discovery ds-g4"></span><span class="ribbon__seg ribbon__seg--ai_service_abuse ds-g1"></span><span class="ribbon__seg ribbon__seg--discovery ds-g1"></span><span class="ribbon__seg ribbon__seg--decoy_credential_replay ds-g2"></span><span class="ribbon__seg ribbon__seg--credential_access ds-g2"></span></div>
+            <ul class="ribbon__legend">
+              <li><span class="stage stage--discovery"><span class="stage__mark" aria-hidden="true"></span>Discovery</span><span class="ribbon__count">5 of 10 events, 2 runs</span></li>
+              <li><span class="stage stage--ai_service_abuse"><span class="stage__mark" aria-hidden="true"></span>AI service use</span><span class="ribbon__count">1 of 10 events</span></li>
+              <li><span class="stage stage--decoy_credential_replay"><span class="stage__mark" aria-hidden="true"></span>Decoy credential replay</span><span class="ribbon__count">2 of 10 events</span></li>
+              <li><span class="stage stage--credential_access"><span class="stage__mark" aria-hidden="true"></span>Credential access</span><span class="ribbon__count">2 of 10 events</span></li>
+            </ul>
+          </div>
+        </div>
+        <p>The attack story: time with milliseconds and the gap before each event in a rail, a spine with the classification glyph, the summary as evidence, phase headers, and long quiet stretches collapsed.</p>
+        <div class="ds-demo ds-demo--col">
+          <ol class="story">
+            <li class="story__phase"><span class="stage stage--discovery"><span class="stage__mark" aria-hidden="true"></span>Discovery</span><span class="story__phase-meta">2 events · 19:59:07–19:59:08 UTC</span></li>
+            <li class="story__event"><div class="story__when"><time>19:59:07.826</time><span class="story__gap">first</span></div><span class="story__node" aria-hidden="true"><span class="glyph glyph--interaction"></span></span><div class="story__body"><span class="evidence">GET /api/tags → 200</span><div class="story__meta"><code>ai-ollama</code><span class="chip">HTTP</span><span class="chip chip--mono">LLM-001</span></div></div></li>
+            <li class="story__event"><div class="story__when"><time>19:59:08.486</time><span class="story__gap story__gap--fast">+660 ms</span></div><span class="story__node" aria-hidden="true"><span class="glyph glyph--interaction"></span></span><div class="story__body"><span class="evidence">GET /v1/models → 200</span><div class="story__meta"><code>ai-litellm</code><span class="chip">HTTP</span><span class="chip chip--mono">LLM-001</span></div></div></li>
+            <li class="story__idle"><span class="story__idle-line" aria-hidden="true"></span><span>14 min quiet</span></li>
+            <li class="story__phase"><span class="stage stage--decoy_credential_replay"><span class="stage__mark" aria-hidden="true"></span>Decoy credential replay</span><span class="story__phase-meta">1 event · 20:13:12 UTC</span></li>
+            <li class="story__event"><div class="story__when"><time>20:13:12.866</time><span class="story__gap">+14 min</span></div><span class="story__node" aria-hidden="true"><span class="glyph glyph--interaction"></span></span><div class="story__body"><span class="evidence">POST /v1/chat/completions Authorization: Bearer [honeytoken:planted-key]</span><div class="story__meta"><code>ai-litellm</code><span class="chip">HTTP</span><span class="chip chip--mono">HT-001</span></div></div></li>
+          </ol>
+        </div>
+        <p>Technique cells: an observed technique has a solid edge, a count and its last sighting; an unobserved one is dashed, unfilled and says “not observed”. The references are editorial, never a coverage claim.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="tgrid">
+            <a class="tcell tcell--observed" href="#sessions"><span class="tcell__head"><code class="tcell__id">AML.T0040</code><span class="tcell__count">2</span></span><span class="tcell__name">AI Model Inference API Access</span><span class="tcell__rules"><code>LLM-002</code></span><span class="tcell__seen">Last seen 26m ago</span></a>
+            <div class="tcell tcell--quiet"><span class="tcell__head"><code class="tcell__id">T1499</code><span class="tcell__none">not observed</span></span><span class="tcell__name">Endpoint Denial of Service</span><span class="tcell__rules"><code>RES-001</code></span><span class="tcell__seen">No event in this window cited these rules</span></div>
+          </div>
         </div>
       </section>
 

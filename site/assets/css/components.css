@@ -2150,3 +2150,146 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   .cell-link:hover { outline: 1px solid var(--color-accent-line); outline-offset: 1px; }
   .cell-link:hover code, .cell-link:hover .chip { color: var(--color-accent); }
 }
+
+/* ---- Automation observation ------------------------------------------------ */
+/* Shape plus words: filled diamond = consistent with automation; hollow ring
+   = no pattern established; dash = too few events. Never a verdict badge. */
+.assess { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--color-ink); white-space: nowrap; }
+.assess__mark { flex: none; width: 9px; height: 9px; }
+.assess--filled .assess__mark { background: var(--color-accent); transform: rotate(45deg) scale(0.85); border-radius: 1px; }
+.assess--ring .assess__mark { border: 1.5px solid var(--color-ink-3); border-radius: 50%; }
+.assess--dash .assess__mark { height: 2px; background: var(--color-ink-3); border-radius: 1px; }
+.assess__label { font-weight: var(--weight-medium); }
+.assess__count { color: var(--color-ink-3); }
+
+/* ---- Pace strip (log scale, 10 ms … 1 h) ----------------------------------- */
+.cstrip { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--color-ink-2); }
+.cstrip__track { position: relative; flex: none; width: 4.5rem; height: 8px; border-radius: var(--radius-xs); background: var(--chart-grid); }
+.cstrip__range { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; background: color-mix(in srgb, var(--color-accent) 45%, transparent); }
+.cstrip__median { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--color-ink); }
+.cstrip__value { font-variant-numeric: tabular-nums; }
+
+/* ---- Framework references --------------------------------------------------- */
+.fw-groups { display: flex; flex-direction: column; gap: var(--space-2); }
+.fw-group { display: flex; flex-direction: column; gap: var(--space-1); }
+.fw-group__label { color: var(--color-ink-3); font-size: var(--text-2xs); font-weight: var(--weight-medium); letter-spacing: var(--tracking-label); }
+.chip--fw { gap: var(--space-1); white-space: normal; }
+.chip--fw code { font-size: var(--text-2xs); color: var(--color-ink); }
+.chip__name { color: var(--color-ink-2); }
+.fw-link { text-decoration: none; border-radius: var(--radius-xs); }
+@media (hover: hover) { .fw-link:hover .chip { border-color: var(--color-accent-line); color: var(--color-accent); } }
+
+/* ---- Stages ------------------------------------------------------------------ */
+/* A word plus a shape per stage; tints are secondary. */
+.stage { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-ink); font-size: var(--text-xs); font-weight: var(--weight-semibold); white-space: nowrap; }
+.stage__mark { flex: none; width: 9px; height: 9px; }
+.stage--discovery .stage__mark { border: 1.5px solid var(--color-ink-3); border-radius: 50%; }
+.stage--credential_access .stage__mark { border: 1.5px solid var(--color-ink-2); border-radius: 1px; background: repeating-linear-gradient(135deg, var(--color-ink-3) 0 1.5px, transparent 1.5px 3.5px); }
+.stage--ai_service_abuse .stage__mark { background: color-mix(in srgb, var(--color-accent) 60%, transparent); transform: rotate(45deg) scale(0.85); }
+.stage--decoy_credential_replay .stage__mark { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--color-accent); }
+.stage--other .stage__mark { height: 2px; background: var(--color-ink-3); }
+
+.ribbon { display: flex; flex-direction: column; gap: var(--space-2); }
+.ribbon__bar { display: flex; gap: 2px; height: 0.625rem; overflow: hidden; border-radius: var(--radius-xs); animation: reveal-x var(--duration-chart) var(--ease-out) both; }
+.ribbon__seg { min-width: 3px; }
+.ribbon__seg--discovery { background: var(--color-surface-3); box-shadow: inset 0 0 0 1px var(--color-border-strong); }
+.ribbon__seg--credential_access { background: repeating-linear-gradient(135deg, var(--color-ink-3) 0 2px, var(--color-surface-2) 2px 5px); }
+.ribbon__seg--ai_service_abuse { background: color-mix(in srgb, var(--color-accent) 55%, transparent); }
+.ribbon__seg--decoy_credential_replay { background: var(--color-accent); }
+.ribbon__seg--other { background: var(--sev-track); }
+.ribbon__legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); list-style: none; }
+.ribbon__legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
+.ribbon__count { color: var(--color-ink-3); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+
+/* ---- Attack story timeline --------------------------------------------------- */
+/* Time and gap in a left rail, a spine with a classification glyph per event,
+   the summary as evidence. Phase headers interrupt the spine; long idles
+   collapse into a dashed marker. */
+.story { position: relative; display: flex; flex-direction: column; list-style: none; }
+.story__event {
+  position: relative;
+  display: grid;
+  grid-template-columns: 7.75rem 1.5rem minmax(0, 1fr);
+  align-items: start;
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-instant) var(--ease-color);
+}
+.story__event::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(7.75rem + 0.75rem - 0.5px); width: 1px; background: var(--color-border); }
+@media (hover: hover) { .story__event:hover { background: var(--color-surface-2); } }
+.story__event.is-open { background: var(--color-accent-soft); box-shadow: inset 2px 0 0 var(--color-accent); }
+.story__when { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; padding-right: var(--space-2); font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-ink-2); font-variant-numeric: tabular-nums; }
+.story__gap { color: var(--color-ink-3); }
+.story__gap--fast { color: var(--color-ink); font-weight: var(--weight-semibold); }
+.story__node { position: relative; z-index: 1; display: grid; place-items: center; width: 1.5rem; height: 1.25rem; }
+.story__node .glyph { box-shadow: 0 0 0 3px var(--color-surface); }
+.story__body { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding-left: var(--space-2); }
+.story__summary { display: block; min-width: 0; text-decoration: none; }
+.story__summary .evidence { display: inline; overflow-wrap: anywhere; }
+@media (hover: hover) { .story__summary:hover .evidence { box-shadow: inset 0 0 0 1px var(--color-accent-line); } }
+.story__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); font-size: var(--text-xs); }
+.story__event--signal .story__summary .evidence { font-style: normal; }
+.story__phase {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3);
+  margin: var(--space-3) 0 var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+.story__phase:first-child { margin-top: 0; }
+.story__phase-meta { color: var(--color-ink-3); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.story__idle { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-1) 0; padding-left: calc(7.75rem + 0.25rem); color: var(--color-ink-3); font-size: var(--text-xs); }
+.story__idle-line { width: 1rem; height: 2.25rem; border-left: 1px dashed var(--color-border-strong); margin-left: 0.5rem; }
+.story__idle .icon { vertical-align: -1px; }
+
+@media (max-width: 45rem) {
+  .story__event { grid-template-columns: 1.25rem minmax(0, 1fr); padding-left: 0; }
+  .story__event::before { left: calc(0.625rem - 0.5px); }
+  .story__when { grid-column: 2; grid-row: 1; flex-direction: row; justify-content: flex-start; gap: var(--space-2); padding: 0 0 0 var(--space-2); }
+  .story__node { grid-column: 1; grid-row: 1 / span 2; width: 1.25rem; }
+  .story__body { grid-column: 2; }
+  .story__idle { padding-left: 0; }
+}
+
+/* ---- Figures (labelled numbers) ------------------------------------------------ */
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: var(--space-3); }
+.figures__item dt { color: var(--color-ink-3); font-size: var(--text-2xs); }
+.figures__item dd { font-size: var(--text-lg); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-figure); }
+.figures__note { color: var(--color-ink-3); font-size: var(--text-xs); line-height: var(--leading-snug); }
+
+/* ---- Observations list ------------------------------------------------------- */
+.obs-list { display: flex; flex-direction: column; gap: var(--space-3); list-style: none; }
+.obs { padding-left: var(--space-3); border-left: 2px solid var(--color-accent); }
+.obs--quiet { border-left-color: var(--color-border-strong); border-left-style: dashed; }
+.obs__title { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.obs__text { color: var(--color-ink-2); font-size: var(--text-sm); }
+.obs__detail { margin-top: var(--space-1); color: var(--color-ink-3); font-size: var(--text-xs); }
+.assess-line .assess { font-size: var(--text-sm); }
+
+/* ---- Technique matrix cell --------------------------------------------------- */
+/* Observed: solid edge, accent rule, a count. Not observed: dashed edge, no
+   fill, muted text and the words "not observed". Never color alone. */
+.tcell {
+  position: relative;
+  display: flex; flex-direction: column; gap: var(--space-1);
+  min-width: 0; padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  text-decoration: none;
+  transition: border-color var(--duration-instant) var(--ease-color), background-color var(--duration-instant) var(--ease-color);
+}
+.tcell--observed { box-shadow: inset 3px 0 0 var(--color-accent), var(--elev-1); }
+.tcell--quiet { border-style: dashed; border-color: var(--color-border-strong); background: transparent; color: var(--color-ink-2); }
+@media (hover: hover) { a.tcell:hover { border-color: var(--color-accent-line); background: var(--color-surface-2); } }
+.tcell.is-target { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.tcell__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.tcell__id { font-size: var(--text-xs); color: inherit; }
+.tcell__count { font-size: var(--text-lg); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-figure); }
+.tcell__none { color: var(--color-ink-3); font-size: var(--text-2xs); font-style: italic; }
+.tcell__name { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.tcell__rules { display: flex; flex-wrap: wrap; gap: var(--space-1); font-size: var(--text-2xs); color: var(--color-ink-3); }
+.tcell__seen { margin-top: auto; color: var(--color-ink-3); font-size: var(--text-2xs); }

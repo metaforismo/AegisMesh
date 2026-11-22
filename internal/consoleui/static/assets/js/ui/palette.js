@@ -16,9 +16,10 @@ import { NAV, isApple } from './shell.js';
 import { GLOSSARY } from '../lib/glossary.js';
 import { loadRecents, storeRecents, pushRecent } from '../lib/views.js';
 import { formatRelative } from '../lib/format.js';
+import { assessmentOf, frameworkLabel } from '../lib/story.js';
 
-const GROUP_ORDER = ['Recent', 'Go to', 'Actions', 'Investigations', 'Rules', 'Nodes', 'Sensors', 'Sources', 'Guide'];
-const PER_GROUP_EMPTY = { Recent: 6, 'Go to': 20, Actions: 10, Investigations: 5, Rules: 0, Nodes: 5, Sensors: 6, Sources: 5, Guide: 0 };
+const GROUP_ORDER = ['Recent', 'Go to', 'Actions', 'Sessions', 'Investigations', 'Rules', 'Techniques', 'Nodes', 'Sensors', 'Sources', 'Guide'];
+const PER_GROUP_EMPTY = { Recent: 6, 'Go to': 20, Actions: 10, Sessions: 4, Investigations: 5, Rules: 0, Techniques: 0, Nodes: 5, Sensors: 6, Sources: 5, Guide: 0 };
 const EVENT_SEARCH_MIN = 2;
 const EVENT_RESULTS = 6;
 
@@ -54,12 +55,14 @@ async function dataItems(api, signal) {
     const res = await api.fleetNodes('', { signal }).catch(() => null);
     return nodeFilterTargets(fleet, res?.nodes);
   };
-  const [sensors, sources, invs, nodes, rules] = await Promise.allSettled([
+  const [sensors, sources, invs, nodes, rules, sessions, coverage] = await Promise.allSettled([
     api.sensors({ signal }),
     api.sources('24h', 50, { signal }),
     api.investigations('', { signal }),
     api.fleet ? nodesOf() : Promise.resolve([]),
     api.rules ? api.rules({ signal }) : Promise.resolve({ rules: [] }),
+    api.sessions ? api.sessions('24h', '', '', 50, { signal }) : Promise.resolve({ sessions: [] }),
+    api.coverage ? api.coverage('7d', { signal }) : Promise.resolve({ frameworks: [] }),
   ]);
   if (sensors.status === 'fulfilled') {
     for (const s of sensors.value?.sensors || []) {
@@ -91,6 +94,22 @@ async function dataItems(api, signal) {
       out.push({ group: 'Rules', label: r.id, hint: `${r.family === 'correlation' ? 'Correlation' : 'Detection'} rule · events citing it`, icon: 'rules', keywords: [String(r.title || '')], run: (p) => p.navigate(href('events', { rule: r.id })), recent: { kind: 'rule', id: r.id } });
     }
   } else failed++;
+  if (sessions.status === 'fulfilled') {
+    for (const x of sessions.value?.sessions || []) {
+      if (!/^[0-9a-f]{32}$/.test(x?.id) || typeof x.source !== 'string') continue;
+      // The source key is evidence: the label keeps the evidence treatment.
+      out.push({ group: 'Sessions', label: x.source, evidence: true, icon: 'story', hint: `${x.event_count ?? 0} events · ${assessmentOf(x.automation).label}`, keywords: ['session', 'story'], run: (p) => p.navigate(href('sessions', x.id)) });
+    }
+  }
+  if (coverage.status === 'fulfilled') {
+    for (const f of coverage.value?.frameworks || []) {
+      for (const t of f?.techniques || []) {
+        if (typeof t?.id !== 'string' || !/^[A-Za-z0-9.]{1,32}$/.test(t.id)) continue;
+        const n = Number(t.observed_event_count) || 0;
+        out.push({ group: 'Techniques', label: `${t.id} ${String(t.name || '')}`, icon: 'matrix', hint: `${frameworkLabel(f.framework)} · ${n ? `${n} events, 7d` : 'not observed, 7d'}`, keywords: [String(f.framework)], run: (p) => p.navigate(href('techniques', { window: '7d', f: f.framework, t: t.id })) });
+      }
+    }
+  }
   return { items: out, failed };
 }
 
@@ -296,6 +315,8 @@ export const SHORTCUTS = [
     [['g', 'o'], 'Go to Overview'],
     [['g', 'e'], 'Go to Events'],
     [['g', 's'], 'Go to Sources'],
+    [['g', 'c'], 'Go to Sessions'],
+    [['g', 't'], 'Go to Techniques'],
     [['g', 'i'], 'Go to Investigations'],
     [['g', 'r'], 'Go to Recommendations'],
     [['g', 'n'], 'Go to Sensors'],
@@ -306,6 +327,11 @@ export const SHORTCUTS = [
     [['k'], 'Previous row'],
     [['Enter'], 'Open the row in the side panel'],
     [['/'], 'Search events'],
+  ] },
+  { title: 'Session story', keys: [
+    [['j'], 'Next event'],
+    [['k'], 'Previous event'],
+    [['Enter'], 'Open the event in the side panel'],
   ] },
   { title: 'Event side panel', keys: [
     [['j'], 'Next event'],

@@ -15,6 +15,20 @@ const MAX_QUERY_CHARS = 128;
 
 export const isEventId = (v) => typeof v === 'string' && EVENT_ID.test(v);
 export const isOpaqueId = (v) => typeof v === 'string' && OPAQUE_ID.test(v);
+// Attacker-session ids: 32 lowercase hex (derived, not persisted).
+export const isSessionId = (v) => typeof v === 'string' && EVENT_ID.test(v);
+
+// Sessions list filters: window and an exact source key.
+export function normalizeSessionFilters(query) {
+  const out = { window: normalizeWindow(query?.window) };
+  if (isSourceKey(query?.source)) out.source = query.source;
+  return out;
+}
+
+export const TECHNIQUE_FRAMEWORKS = Object.freeze(['mitre-attack', 'mitre-atlas', 'owasp-llm-2025']);
+export function normalizeFramework(value) {
+  return TECHNIQUE_FRAMEWORKS.includes(value) ? value : TECHNIQUE_FRAMEWORKS[0];
+}
 
 export function isSourceKey(v) {
   return typeof v === 'string' && v.length > 0 && new TextEncoder().encode(v).length <= MAX_SOURCE_BYTES;
@@ -73,6 +87,9 @@ const ROUTES = [
   { name: 'fleet', pattern: ['fleet', 'nodes'] },
   { name: 'fleet_node', pattern: ['fleet', 'nodes', ':id'], valid: (p) => /^[0-9a-f]{32}$/.test(p.id) },
   { name: 'guide', pattern: ['guide'] },
+  { name: 'sessions', pattern: ['sessions'] },
+  { name: 'attack_session', pattern: ['sessions', ':id'], valid: (p) => isSessionId(p.id) },
+  { name: 'techniques', pattern: ['techniques'] },
   { name: 'login', pattern: ['login'] },
 ];
 

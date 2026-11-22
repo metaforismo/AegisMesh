@@ -154,7 +154,7 @@ function viewsControl(ctx, filters, { live }) {
 
 // ---- Side panel (event detail over the list) --------------------------------
 
-function createDrawer({ onRequestClose, onStep, onFull }) {
+export function createDrawer({ onRequestClose, onStep, onFull }) {
   const titleText = h('span', { class: 'drawer__title-text' }, 'Event');
   const position = h('span', { class: 'muted' });
   const prev = h('button', { class: ['btn', 'btn--ghost', 'btn--icon', 'btn--sm'], type: 'button', 'aria-label': 'Previous event (k)', title: 'Previous event (k)' }, icon('chevron-up'));

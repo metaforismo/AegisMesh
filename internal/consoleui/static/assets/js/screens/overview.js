@@ -44,8 +44,8 @@ function firstRun() {
     h('p', { class: 'muted' }, 'Wider windows may hold older events: try ', h('a', { href: href('overview', { window: '7d' }) }, 'the last 7 days'), '. ', h('a', { href: '#/guide' }, 'Read the guide'), ' for what each screen shows.'));
 }
 
-function briefPanel(ov, window, windowText, empty) {
-  const clauses = buildBrief(ov, window);
+function briefPanel(ov, window, windowText, empty, sessions) {
+  const clauses = buildBrief(ov, window, { sessions });
   return h('section', { class: 'brief', 'aria-labelledby': 'brief-title' },
     h('div', { class: 'brief__head' },
       h('h2', { class: 'brief__eyebrow', id: 'brief-title' }, h('span', { class: 'brief__dot', 'aria-hidden': 'true' }), 'Situation'),
@@ -107,9 +107,11 @@ export default {
   title: 'Overview',
   async render(root, ctx) {
     const window = normalizeWindow(ctx.route.query.window);
-    const [ov, node] = await Promise.all([
+    const [ov, node, sessions] = await Promise.all([
       ctx.api.overview(window, { signal: ctx.signal }),
       ctx.api.node({ signal: ctx.signal }).catch(() => null),
+      // Optional: the brief mentions sessions only when the endpoint answers.
+      ctx.api.sessions ? ctx.api.sessions(window, '', '', 200, { signal: ctx.signal }).catch(() => null) : null,
     ]);
     const t = ov.totals || {};
     const p = ov.previous_totals || {};
@@ -148,7 +150,7 @@ export default {
       }),
       historyBanner(node, { accepting: hasByNode }),
       hasByNode ? forwardedNote('counts') : null,
-      briefPanel(ov, window, WINDOW_LABELS.find(([w]) => w === window)[1], isEmpty),
+      briefPanel(ov, window, WINDOW_LABELS.find(([w]) => w === window)[1], isEmpty, sessions),
       tiles,
       panel({
         primary: true,
