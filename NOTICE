@@ -12,6 +12,13 @@ Third-party components:
   for parts derived from libyaml, under the Apache License 2.0). See
   docs/license-policy.md for the review policy.
 
+- tasteskill kit stylesheets (https://github.com/Leonxlnx/taste-skill, v2.5.1,
+  commit 6c0b5c78f5d31776e2210305abaa210cdc0030bf) — Copyright (c) 2026
+  Leonxlnx. Licensed under the MIT License. Four unmodified CSS files vendored
+  on 2026-11-23 under site/assets/landing/kit/ for the static landing page only;
+  the licence text is site/assets/landing/kit/LICENSE and site/CREDITS.md
+  lists each file. Not part of the binary or the console.
+
 AegisMesh is an independent implementation. It contains no code, configuration
 samples, or documentation text from Beelzebub or any other honeypot project.
 Concept-level inspiration is documented in docs/research/competitive-landscape.md.
