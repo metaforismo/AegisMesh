@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/metaforismo/aegismesh/internal/console/audit"
@@ -169,6 +170,8 @@ type caller struct {
 	session auth.Session
 	id      string
 	cookie  bool
+	// expires is the managed key's absolute expiry for bearer callers (zero for config tokens).
+	expires time.Time
 }
 
 func (s *Server) caller(r *http.Request) (caller, bool) {
@@ -179,10 +182,10 @@ func (s *Server) caller(r *http.Request) (caller, bool) {
 		if !strings.HasPrefix(header, "Bearer ") {
 			return caller{}, false
 		}
-		principal, ok := s.auth.Authenticate(strings.TrimPrefix(header, "Bearer "))
+		principal, expires, ok := s.auth.AuthenticateUntil(strings.TrimPrefix(header, "Bearer "))
 		return caller{session: auth.Session{
 			Principal: principal, Tenant: principal.Tenant, Tenants: principal.Tenants,
-		}}, ok
+		}, expires: expires}, ok
 	}
 
 	credentials, err := r.Cookie(CookieName)

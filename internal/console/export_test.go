@@ -1,5 +1,15 @@
 package console
 
+import "time"
+
+// SetStreamHeartbeatForTest shortens the SSE heartbeat and credential re-check
+// interval; the returned function restores it.
+func SetStreamHeartbeatForTest(interval time.Duration) func() {
+	previous := streamHeartbeat
+	streamHeartbeat = interval
+	return func() { streamHeartbeat = previous }
+}
+
 // RouteForTest exposes registration metadata only to the external HTTP tests.
 type RouteForTest struct {
 	Pattern string

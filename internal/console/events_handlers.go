@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
+	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
 )
@@ -110,6 +112,26 @@ func (s *Server) eventDetail(w http.ResponseWriter, r *http.Request, credentials
 	send(w, 200, detail)
 }
 
+// streamHeartbeat is the SSE heartbeat and credential re-check interval.
+var streamHeartbeat = 15 * time.Second
+
+// streamAuthorized re-checks a long-lived stream's credential. Cookie sessions
+// must still exist (revocation, idle and absolute expiry included). Managed
+// bearer keys must still be usable and still grant viewer access to this
+// tenant; config-file tokens cannot change while the process runs.
+func (s *Server) streamAuthorized(credentials caller) bool {
+	if credentials.cookie {
+		_, ok := s.auth.Peek(credentials.id)
+		return ok
+	}
+	principal := credentials.session.Principal
+	if principal.Source != auth.SourceManaged {
+		return true
+	}
+	current, _, ok := s.accounts.Verify(principal.ID, principal.KeyID)
+	return ok && auth.Granted(current.Role, "viewer") && slices.Contains(current.Tenants, s.tenantID)
+}
+
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials caller) {
 	values, valid := query(w, r, "node")
 	if !valid {
@@ -155,13 +177,19 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 		return
 	}
 
-	heartbeat := time.NewTicker(15 * time.Second)
+	heartbeat := time.NewTicker(streamHeartbeat)
 	defer heartbeat.Stop()
 
 	var expired <-chan time.Time
 	var timer *time.Timer
-	if credentials.cookie {
+	switch {
+	case credentials.cookie:
 		timer = time.NewTimer(time.Until(credentials.session.ExpiresAt))
+	case !credentials.expires.IsZero():
+		// Managed bearer keys end the stream at the key's own expiry.
+		timer = time.NewTimer(time.Until(credentials.expires))
+	}
+	if timer != nil {
 		defer timer.Stop()
 		expired = timer.C
 	}
@@ -192,10 +220,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 			if !ok {
 				return
 			}
-			if credentials.cookie {
-				if _, ok := s.auth.Peek(credentials.id); !ok {
-					return
-				}
+			if !s.streamAuthorized(credentials) {
+				return
 			}
 			if !observation.Matches(filter) {
 				continue
@@ -210,10 +236,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 				return
 			}
 		case tick := <-heartbeat.C:
-			if credentials.cookie {
-				if _, ok := s.auth.Peek(credentials.id); !ok {
-					return
-				}
+			if !s.streamAuthorized(credentials) {
+				return
 			}
 			if !write("heartbeat", map[string]string{"time": tick.UTC().Format(time.RFC3339Nano)}) {
 				return

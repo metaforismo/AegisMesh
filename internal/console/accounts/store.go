@@ -589,6 +589,42 @@ func (s *Store) Match(digest [32]byte) (auth.Principal, time.Time, bool) {
 	return auth.Principal{}, time.Time{}, false
 }
 
+// Verify re-checks a previously authenticated managed key without recording use:
+// it fails once the key is revoked or expired, the account is disabled, or no
+// declared membership remains. Long-lived requests such as event streams call it.
+func (s *Store) Verify(accountID, keyID string) (auth.Principal, time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := find(s.data, accountID)
+	if index < 0 {
+		return auth.Principal{}, time.Time{}, false
+	}
+	account := s.data.Accounts[index]
+	now := s.now().UTC()
+	for _, key := range account.Keys {
+		if key.ID != keyID {
+			continue
+		}
+		if account.Status != StatusActive || key.Status(now) != KeyActive {
+			return auth.Principal{}, time.Time{}, false
+		}
+		tenants := []string{}
+		for _, name := range account.Tenants {
+			if len(s.opts.Tenants) == 0 || slices.Contains(s.opts.Tenants, name) {
+				tenants = append(tenants, name)
+			}
+		}
+		if len(tenants) == 0 {
+			return auth.Principal{}, time.Time{}, false
+		}
+		return auth.Principal{
+			ID: account.ID, Source: auth.SourceManaged, Kind: account.Kind, KeyID: key.ID,
+			AuthMethod: "token", Name: account.Name, Role: account.Role, Tenant: tenants[0], Tenants: tenants,
+		}, key.ExpiresAt, true
+	}
+	return auth.Principal{}, time.Time{}, false
+}
+
 // Flush persists pending last_used_at updates.
 func (s *Store) Flush() error {
 	s.mu.Lock()

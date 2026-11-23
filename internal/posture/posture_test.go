@@ -14,25 +14,25 @@ import (
 
 func baseline() (*Facts, Evidence) {
 	return &Facts{
-			Sensors: []Sensor{
-				{ID: "ai-api", Kind: "http", Listen: "127.0.0.1:8080", SurfaceFamilies: []string{"openai"}},
-				{ID: "ai-workspace", Kind: "mcp", Listen: "127.0.0.1:8002", SurfaceFamilies: []string{"mcp_environment"}, MCPEnvironment: true},
-			},
-			Honeytokens:        []Token{{ID: "decoy-key", Kind: "credential", Planted: true}, {ID: "agent-diagnostic", Kind: "agent_canary", Planted: true}},
-			ConsoleEnabled:     true,
-			ConsoleListen:      "127.0.0.1:9120",
-			TokenLogin:         true,
-			OperatorRoles:      map[string]int{"admin": 1, "viewer": 1},
-			LLMProvider:        "local",
-			DetectionEnabled:   true,
-			Actions:            map[string]string{"info": "observe", "low": "tag", "medium": "tag", "high": "observe"},
-			CorrelationEnabled: true,
-			EncryptionAtRest:   true,
-		}, Evidence{
-			Available: true, Scanned: 40, Limit: 8192,
-			SensorEvents: map[string]int{"ai-api": 30, "ai-workspace": 10},
-			TokenHits:    map[string]int{"decoy-key": 1},
-		}
+		Sensors: []Sensor{
+			{ID: "ai-api", Kind: "http", Listen: "127.0.0.1:8080", SurfaceFamilies: []string{"openai"}},
+			{ID: "ai-workspace", Kind: "mcp", Listen: "127.0.0.1:8002", SurfaceFamilies: []string{"mcp_environment"}, MCPEnvironment: true},
+		},
+		Honeytokens:        []Token{{ID: "decoy-key", Kind: "credential", Planted: true}, {ID: "agent-diagnostic", Kind: "agent_canary", Planted: true}},
+		ConsoleEnabled:     true,
+		ConsoleListen:      "127.0.0.1:9120",
+		TokenLogin:         true,
+		OperatorRoles:      map[string]int{"admin": 1, "viewer": 1},
+		LLMProvider:        "local",
+		DetectionEnabled:   true,
+		Actions:            map[string]string{"info": "observe", "low": "tag", "medium": "tag", "high": "observe"},
+		CorrelationEnabled: true,
+		EncryptionAtRest:   true,
+	}, Evidence{
+		Available: true, Scanned: 40, Limit: 8192,
+		SensorEvents: map[string]int{"ai-api": 30, "ai-workspace": 10},
+		TokenHits:    map[string]int{"decoy-key": 1},
+	}
 }
 
 func TestBaselineIsAllOKOrExpectedInfo(t *testing.T) {

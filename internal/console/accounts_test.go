@@ -3,6 +3,7 @@ package console_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -484,4 +485,66 @@ func TestOIDCIdentityDirectory(t *testing.T) {
 	// OIDC identities cannot mint API keys for themselves.
 	requireStatus(t, h.request(t, apiRequest{method: "POST", path: "/api/v1/me/keys", cookie: againCookie,
 		csrf: again.CSRFToken, body: `{"label":"bypass"}`}), 403)
+}
+
+// openStream starts an SSE request with a bearer token and reports when the
+// server ends it.
+func openStream(t *testing.T, h *consoleHarness, token string) <-chan struct{} {
+	t.Helper()
+	req, err := http.NewRequest("GET", h.base+"/api/v1/events/stream", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	client := &http.Client{} // no overall timeout: the stream is long-lived
+	response, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != 200 {
+		response.Body.Close()
+		t.Fatalf("stream status %d", response.StatusCode)
+	}
+	t.Cleanup(func() { response.Body.Close() })
+	closed := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, response.Body)
+		close(closed)
+	}()
+	return closed
+}
+
+func TestManagedKeyStreamsCloseOnRevocationAndDisable(t *testing.T) {
+	const heartbeat = 100 * time.Millisecond
+	t.Cleanup(console.SetStreamHeartbeatForTest(heartbeat))
+	h := newConsoleHarness(t, nil)
+	account := createAccount(t, h, "synthetic-admin", `{"name":"Stream Reader","kind":"service","role":"viewer","tenants":["default"]}`)
+	revoked := createKey(t, h, "synthetic-admin", account.ID)
+	other := createKey(t, h, "synthetic-admin", account.ID)
+	config := openStream(t, h, "synthetic-viewer")
+
+	first := openStream(t, h, revoked.Token)
+	requireStatus(t, h.request(t, apiRequest{method: "DELETE",
+		path: "/api/v1/admin/accounts/" + account.ID + "/keys/" + revoked.Key.ID, token: "synthetic-admin"}), 204)
+	select {
+	case <-first:
+	case <-time.After(3 * heartbeat * 10):
+		t.Fatal("stream outlived key revocation by more than one heartbeat")
+	}
+
+	second := openStream(t, h, other.Token)
+	requireStatus(t, h.request(t, apiRequest{method: "PATCH", path: "/api/v1/admin/accounts/" + account.ID,
+		token: "synthetic-admin", body: `{"status":"disabled"}`}), 200)
+	select {
+	case <-second:
+	case <-time.After(3 * heartbeat * 10):
+		t.Fatal("stream outlived account disable by more than one heartbeat")
+	}
+
+	// Config-file bearer streams are unaffected by managed-account changes.
+	select {
+	case <-config:
+		t.Fatal("config operator stream closed")
+	case <-time.After(3 * heartbeat):
+	}
 }
