@@ -1,12 +1,14 @@
 package evidenceview
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
+	"github.com/metaforismo/aegismesh/internal/redact"
 )
 
 func TestShapeNormalisation(t *testing.T) {
@@ -117,4 +119,22 @@ func FuzzShape(f *testing.F) {
 			t.Fatalf("provider-key shape survived scrubbing: %q", shape)
 		}
 	})
+}
+
+func TestScrubCacheIsTransparentAndBounded(t *testing.T) {
+	for i := 0; i < scrubCacheLimit+10; i++ {
+		value := fmt.Sprintf("GET /k/sk-abcdefgh%06d", i)
+		if got := scrubCached(value); got != redact.Scrub(value) || strings.Contains(got, "sk-abcdefgh") {
+			t.Fatalf("%q -> %q", value, got)
+		}
+		if again := scrubCached(value); again != redact.Scrub(value) {
+			t.Fatal("cached value differs")
+		}
+	}
+	scrubCache.Lock()
+	size := len(scrubCache.values)
+	scrubCache.Unlock()
+	if size > scrubCacheLimit {
+		t.Fatalf("cache grew to %d", size)
+	}
 }

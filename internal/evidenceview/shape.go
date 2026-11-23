@@ -3,6 +3,7 @@ package evidenceview
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -107,11 +108,39 @@ func shapeParts(kind, classification, summary string, status int) (shape, method
 // finishShape applies credential scrubbing again (defence in depth: stored
 // fields were already scrubbed by the sensor) and the final rune cap.
 func finishShape(value string) string {
-	value = evidenceindex.Bound(redact.Scrub(value), MaxShapeRunes)
+	value = evidenceindex.Bound(scrubCached(value), MaxShapeRunes)
 	if strings.TrimSpace(value) == "" {
 		return "(empty)"
 	}
 	return value
+}
+
+// scrubCacheLimit bounds the memo of scrubbed shapes; templated shapes repeat
+// heavily, and the memo is cleared rather than grown when full.
+const scrubCacheLimit = 16384
+
+var scrubCache = struct {
+	sync.Mutex
+	values map[string]string
+}{values: map[string]string{}}
+
+// scrubCached returns redact.Scrub(value), memoised. The cache is transparent:
+// results are identical with or without it.
+func scrubCached(value string) string {
+	scrubCache.Lock()
+	cached, ok := scrubCache.values[value]
+	scrubCache.Unlock()
+	if ok {
+		return cached
+	}
+	scrubbed := redact.Scrub(value)
+	scrubCache.Lock()
+	if len(scrubCache.values) >= scrubCacheLimit {
+		clear(scrubCache.values)
+	}
+	scrubCache.values[value] = scrubbed
+	scrubCache.Unlock()
+	return scrubbed
 }
 
 func normaliseMethod(value string) string {
