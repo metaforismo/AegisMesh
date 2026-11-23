@@ -94,3 +94,22 @@ test('describeError gives operator-facing text for every code', () => {
   }
   assert.equal(describeError(new Error('boom')).detail, 'boom');
 });
+
+test('screenFailure: older server, missing object, retryable outage', async () => {
+  const { screenFailure, ApiError: E } = await import('../static/assets/js/lib/api.js');
+  const missing = new E(404, 'not_found', 'not found');
+  const older = screenFailure(missing, { name: 'decoys', title: 'Decoys' });
+  assert.equal(older.title, 'This server does not provide decoys yet');
+  assert.equal(older.retry, false);
+  assert.deepEqual(older.actions.map((a) => a[0]), ['#/overview', '#/guide']);
+  assert.equal(screenFailure(new E(501, 'internal', 'x'), { name: 'digest', title: 'Digest' }).retry, false);
+  // On a detail route a 404 is a missing object; the way back is its list.
+  const gone = screenFailure(missing, { name: 'attack_session', title: 'Session' });
+  assert.equal(gone.title, 'Not found');
+  assert.equal(gone.retry, false);
+  assert.deepEqual(gone.actions, [['#/sessions', 'Go to sessions']]);
+  const down = screenFailure(new E(0, 'unavailable', 'offline'), { name: 'events', title: 'Events' });
+  assert.equal(down.retry, true);
+  assert.equal(down.title, 'Console unavailable');
+  assert.equal(screenFailure(new TypeError('boom'), { name: 'node', title: 'Node' }).retry, true);
+});
