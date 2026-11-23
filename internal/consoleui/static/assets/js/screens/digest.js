@@ -109,7 +109,6 @@ export default {
     const oi = d?.open_investigations;
     mount(root,
       pageHead({
-        eyebrow: 'Briefing',
         title: 'Digest',
         subtitle: 'What the decoys recorded, compared with the window before. Computed when you open this page; nothing is scheduled or sent.',
         hint: 'Read the briefing, then follow any figure to the events behind it, copy it as Markdown or print it.',

@@ -47,6 +47,7 @@ const PAIRS = [
   ...['--color-ink', '--color-ink-2', '--color-ink-3', '--color-accent'].map((fg) => [fg, SURFACES, TEXT, 'text']),
   ['--color-ink-3', ['--color-surface-3', '--color-accent-soft'], TEXT, 'muted text on hover and selected rows'],
   ['--color-accent', ['--color-accent-soft'], TEXT, 'selected palette row'],
+  ['--color-accent', ['--color-surface-3', '--color-canvas', '--color-surface'], UI, 'the 1px selection line (sidebar edge, segmented, tab, selected row)'],
   ['--color-accent-ink', ['--color-accent'], TEXT, 'primary button label'],
   ['--color-evidence-ink', ['--color-evidence-bg'], TEXT, 'evidence text'],
   ['--color-ok', ['--color-ok-soft'], TEXT, 'badge'],

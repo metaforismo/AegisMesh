@@ -103,9 +103,18 @@ function tempoView(d, storySlot, rowHref) {
   const plot = svg('svg', { class: 'tempo', viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': 'Tempo: every event on one compressed time axis. Arrow keys move between events.' });
   for (const b of L.bands) plot.appendChild(svg('rect', { class: ['tempo__band', `tempo__band--${STAGES[b.stage] ? b.stage : 'other'}`], x: b.left, y: 40, width: Math.max(2, b.right - b.left), height: 8, rx: 2 }));
   plot.appendChild(svg('line', { class: 'tempo__axis', x1: 10, x2: W - 10, y1: 34.5, y2: 34.5 }));
+  // Break labels never overlap each other or the end times: a label that
+  // would collide is left out (the break mark stays, and the story's rail
+  // prints every gap). Widths are estimated at 11px tabular figures.
+  const textW = (s) => String(s).length * 6.4;
+  const taken = [[10, 10 + textW(clockMs(timeline[0].time))], [W - 10 - textW(clockMs(timeline[timeline.length - 1].time)), W - 10]];
   for (const br of L.breaks) {
     plot.appendChild(svg('path', { class: 'tempo__break', d: `M${br.x - 3} 30 l4 9 M${br.x + 1} 30 l4 9` }));
-    plot.appendChild(svg('text', { class: 'tempo__label', x: br.x, y: 60, 'text-anchor': 'middle' }, formatDurationMs(br.ms)));
+    const label = formatDurationMs(br.ms);
+    const span = [br.x - textW(label) / 2 - 6, br.x + textW(label) / 2 + 6];
+    if (taken.some(([a, b]) => span[0] < b && span[1] > a)) continue;
+    taken.push(span);
+    plot.appendChild(svg('text', { class: 'tempo__label', x: br.x, y: 60, 'text-anchor': 'middle' }, label));
   }
   const groups = [];
   const hot = (i, on) => {

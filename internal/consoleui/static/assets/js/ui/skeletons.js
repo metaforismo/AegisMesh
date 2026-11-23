@@ -24,10 +24,10 @@ function rows(n, cols = 5) {
 }
 
 const BUILDERS = {
+  // The brief beside its counts, then the chart (Overview).
   overview: () => [
     head(),
-    h('div', { class: ['grid', 'grid--stats'] }, Array.from({ length: 6 }, () => h('div', { class: 'stat' },
-      h('span', { class: 'stat__label' }, sk('text', 'w-50')), h('span', { class: 'stat__value' }, sk('value')), h('span', { class: 'stat__delta' }, sk('text', 'w-70'))))),
+    h('div', { class: 'lead-row' }, panelShell(lines(4)), panelShell(rows(6, 2))),
     panelShell(sk('block')),
     h('div', { class: ['grid', 'grid--2'] }, panelShell(rows(5, 2)), panelShell(rows(5, 2))),
   ],

@@ -125,6 +125,23 @@ export function stat({ label, value, delta, icon: lead, spark, title, note }) {
     !delta && note ? h('span', { class: 'stat__delta' }, note) : null);
 }
 
+// A divided list of counts: label left, figure right, its change under it on
+// the same right edge. The first row may lead (a larger figure). `delta`
+// comes from formatDelta; changes stay neutral ink and carry their sign in
+// the text, and `baseline` (visually hidden) names what they are against.
+export function tally(items, { baseline = '' } = {}) {
+  return h('dl', { class: 'tally' }, items.filter(Boolean).map((it) =>
+    h('div', { class: ['tally__row', it.lead ? 'tally__row--lead' : ''] },
+      h('dt', { class: 'tally__label' }, it.icon || null, h('span', null, it.label)),
+      h('dd', { class: 'tally__value' },
+        h('span', { class: 'tally__num' }, it.value),
+        it.delta
+          ? h('span', { class: 'tally__delta' }, it.delta.text, baseline && it.delta.detail === 'vs previous window'
+            ? h('span', { class: 'visually-hidden' }, ` ${baseline}`)
+            : it.delta.detail === 'vs previous window' ? null : ` · ${it.delta.detail}`)
+          : it.note ? h('span', { class: 'tally__delta' }, it.note) : null))));
+}
+
 // Decorative trend line beside a printed number (aria-hidden: the number
 // and the chart's table view carry the data). `series` picks a class color.
 export function sparkline(values, { series = '', width = 88, height = 28, label } = {}) {
