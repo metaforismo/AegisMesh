@@ -27,6 +27,9 @@ type Console struct {
 	StateDir string `yaml:"state_dir" json:"state_dir"`
 	// SessionTTLSeconds bounds an absolute session lifetime to 60..86400 seconds.
 	SessionTTLSeconds int `yaml:"session_ttl_seconds" json:"session_ttl_seconds"`
+	// SessionIdleSeconds ends a browser session after this much inactivity:
+	// nil means DefaultSessionIdleSeconds, 0 disables, otherwise 300..86400.
+	SessionIdleSeconds *int `yaml:"session_idle_seconds" json:"session_idle_seconds"`
 	// IndexMaxEvents bounds retained evidence projections to 1000..500000 entries.
 	IndexMaxEvents int `yaml:"index_max_events" json:"index_max_events"`
 	// TLSCertFile is the trusted PEM certificate path.
@@ -49,6 +52,17 @@ type Operator struct {
 	TokenSHA256 string `yaml:"token_sha256" json:"token_sha256"`
 }
 
+// DefaultSessionIdleSeconds is the idle timeout applied when the field is omitted.
+const DefaultSessionIdleSeconds = 1800
+
+// IdleSeconds returns the effective idle timeout; zero means disabled.
+func (c Console) IdleSeconds() int {
+	if c.SessionIdleSeconds == nil {
+		return DefaultSessionIdleSeconds
+	}
+	return *c.SessionIdleSeconds
+}
+
 // TokenEnabled reports the compatibility-default token authentication policy.
 func (c Console) TokenEnabled() bool { return c.TokenLogin == nil || *c.TokenLogin }
 
@@ -66,6 +80,11 @@ func (c *Console) defaults() {
 
 	if c.IndexMaxEvents == 0 {
 		c.IndexMaxEvents = 50000
+	}
+
+	if c.SessionIdleSeconds == nil {
+		idle := DefaultSessionIdleSeconds
+		c.SessionIdleSeconds = &idle
 	}
 }
 
@@ -91,6 +110,10 @@ func (c *Config) ValidateConsole() error {
 
 	if consoleConfig.SessionTTLSeconds < 60 || consoleConfig.SessionTTLSeconds > 86400 {
 		return fail("session_ttl_seconds must be within 60..86400")
+	}
+
+	if idle := consoleConfig.IdleSeconds(); idle != 0 && (idle < 300 || idle > 86400) {
+		return fail("session_idle_seconds must be 0 (disabled) or within 300..86400")
 	}
 
 	if consoleConfig.IndexMaxEvents < 1000 || consoleConfig.IndexMaxEvents > 500000 {
