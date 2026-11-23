@@ -199,7 +199,9 @@
   --scrim: rgb(15 20 27 / 0.38);
 }
 
-@media (prefers-color-scheme: dark) {
+/* Dark applies to screens only: paper always gets the light palette, so a
+   page printed from a dark console is dark ink on white, never light ink. */
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --color-canvas: #0d1218;
@@ -256,57 +258,59 @@
   }
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --color-canvas: #0d1218;
-  --color-surface: #151b24;
-  --color-surface-2: #1a212c;
-  --color-surface-3: #232c39;
-  --color-border: #263040;
-  --color-border-strong: #617088;
-  --color-ink: #e7ebf1;             /* 14.46:1 surface */
-  --color-ink-2: #b8c1ce;           /*  9.52:1 surface */
-  --color-ink-3: #909bab;           /*  6.15:1 surface, 5.75:1 surface-2 */
-  --color-ink-inverse: #0e131a;
-  --color-accent: #8ea5ff;
-  --color-accent-hover: #adbdff;
-  --color-accent-soft: #1f2a4d;
-  --color-accent-ink: #0e131a;
-  --color-accent-line: #3a4b8c;
-  --color-focus: #8ea5ff;
-  --color-evidence-bg: #1b1a2b;
-  --color-evidence-border: #34304f;
-  --color-evidence-ink: #dcd7f5;
-  --color-ok: #5fcf85;
-  --color-ok-soft: #14301f;
-  --color-warn: #f0bf4c;
-  --color-warn-soft: #33290f;
-  --color-danger: #ff8a8a;
-  --color-danger-soft: #3a1719;
-  --color-info: #8ea5ff;
-  --color-info-soft: #1f2a4d;
-  --sev-info: #7c8797;
-  --sev-low: #5b97dc;
-  --sev-medium: #e0ab1f;
-  --sev-high: #ef8550;
-  --sev-critical: #ef5f80;
-  --sev-track: #2b3544;
-  /* Validated vs #151b24: all checks pass (see the media block above). */
-  --class-interaction: #3987e5;
-  --class-canary: #d95926;
-  --class-signal: #199e70;
-  --chart-grid: #212a36;
-  --chart-axis: #45526a;
-  --chart-crosshair: #909bab;
-  --mesh-dot: rgb(231 235 241 / 0.07);
-  --mesh-line: rgb(142 165 255 / 0.10);
-  --lattice-line: rgb(142 165 255 / 0.04);
-  --lattice-node: rgb(142 165 255 / 0.10);
-  --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
-  --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
-  --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);
-  --highlight: inset 0 1px 0 rgb(255 255 255 / 0.045);
-  --scrim: rgb(4 7 11 / 0.62);
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-canvas: #0d1218;
+    --color-surface: #151b24;
+    --color-surface-2: #1a212c;
+    --color-surface-3: #232c39;
+    --color-border: #263040;
+    --color-border-strong: #617088;
+    --color-ink: #e7ebf1;             /* 14.46:1 surface */
+    --color-ink-2: #b8c1ce;           /*  9.52:1 surface */
+    --color-ink-3: #909bab;           /*  6.15:1 surface, 5.75:1 surface-2 */
+    --color-ink-inverse: #0e131a;
+    --color-accent: #8ea5ff;
+    --color-accent-hover: #adbdff;
+    --color-accent-soft: #1f2a4d;
+    --color-accent-ink: #0e131a;
+    --color-accent-line: #3a4b8c;
+    --color-focus: #8ea5ff;
+    --color-evidence-bg: #1b1a2b;
+    --color-evidence-border: #34304f;
+    --color-evidence-ink: #dcd7f5;
+    --color-ok: #5fcf85;
+    --color-ok-soft: #14301f;
+    --color-warn: #f0bf4c;
+    --color-warn-soft: #33290f;
+    --color-danger: #ff8a8a;
+    --color-danger-soft: #3a1719;
+    --color-info: #8ea5ff;
+    --color-info-soft: #1f2a4d;
+    --sev-info: #7c8797;
+    --sev-low: #5b97dc;
+    --sev-medium: #e0ab1f;
+    --sev-high: #ef8550;
+    --sev-critical: #ef5f80;
+    --sev-track: #2b3544;
+    /* Validated vs #151b24: all checks pass (see the media block above). */
+    --class-interaction: #3987e5;
+    --class-canary: #d95926;
+    --class-signal: #199e70;
+    --chart-grid: #212a36;
+    --chart-axis: #45526a;
+    --chart-crosshair: #909bab;
+    --mesh-dot: rgb(231 235 241 / 0.07);
+    --mesh-line: rgb(142 165 255 / 0.10);
+    --lattice-line: rgb(142 165 255 / 0.04);
+    --lattice-node: rgb(142 165 255 / 0.10);
+    --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
+    --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
+    --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);
+    --highlight: inset 0 1px 0 rgb(255 255 255 / 0.045);
+    --scrim: rgb(4 7 11 / 0.62);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

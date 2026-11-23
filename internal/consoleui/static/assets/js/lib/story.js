@@ -169,7 +169,14 @@ export function unfoldSentence(d) {
   if (order.length === 1) out.push({ t: 'text', v: `, all of it ${order[0]}.` });
   else if (order.length > 1) {
     const mid = order.slice(1, -1);
-    out.push({ t: 'text', v: `: it began with ${order[0]}${mid.length ? `, moved through ${mid.join(', then ')}` : ''}, and ended with ${order[order.length - 1]}.` });
+    // A long back-and-forth is summarised, not spelled out stage by stage:
+    // the ribbon and the timeline below show every switch.
+    const distinct = [...new Set(mid)];
+    const words = (list) => (list.length < 3 ? list.join(' and ') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`);
+    const through = mid.length > 3
+      ? `, switched between ${words(distinct)} ${mid.length} times`
+      : mid.length ? `, moved through ${mid.join(', then ')}` : '';
+    out.push({ t: 'text', v: `: it began with ${order[0]}${through}, and ended with ${order[order.length - 1]}.` });
   } else out.push({ t: 'text', v: '.' });
   const med = d.cadence?.median_gap_ms;
   if (n > 1 && Number.isFinite(Number(med))) out.push({ t: 'text', v: ` The typical gap between events was ${formatDurationMs(med)}.` });

@@ -26,7 +26,7 @@ function hexTokens(text) {
 
 const light = hexTokens(block(css, ':root {'));
 const dark = hexTokens(block(css, ':root[data-theme="dark"]'));
-const darkMedia = hexTokens(block(block(css, '@media (prefers-color-scheme: dark)'), ':root:not([data-theme="light"])'));
+const darkMedia = hexTokens(block(block(css, '@media screen and (prefers-color-scheme: dark)'), ':root:not([data-theme="light"])'));
 
 function luminance(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -76,6 +76,13 @@ for (const [name, theme] of [['light', light], ['dark', dark]]) {
 
 test('the media-query dark theme and the explicit dark theme are the same palette', () => {
   assert.deepEqual(darkMedia, dark);
+});
+
+test('print never inherits the dark palette', () => {
+  // Both dark blocks sit inside screen-only media queries.
+  assert.doesNotMatch(css, /@media \(prefers-color-scheme: dark\)/);
+  const explicit = css.indexOf(':root[data-theme="dark"]');
+  assert.match(css.slice(css.lastIndexOf('@media', explicit), explicit), /^@media screen \{\s*$/);
 });
 
 test('ratio matches published reference values', () => {

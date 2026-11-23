@@ -2422,7 +2422,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .tempo__tick--canary_invocation { stroke: var(--class-canary); }
 .tempo__tick--interaction { stroke: var(--class-interaction); }
 .tempo__hit { fill: transparent; cursor: pointer; }
-.tempo__hit:focus-visible { outline: none; fill: color-mix(in srgb, var(--color-focus) 18%, transparent); }
+.tempo__hit:focus-visible { outline: none; fill: color-mix(in srgb, var(--color-focus) 18%, transparent); stroke: var(--color-focus); stroke-width: 2; }
 .tempo g.is-hot .tempo__tick { stroke: var(--color-ink); stroke-width: 3; }
 .tempo__label { fill: var(--color-ink-3); font-family: var(--font-sans); font-size: 10px; font-variant-numeric: tabular-nums; }
 .story__event.is-hot { background: var(--color-surface-2); box-shadow: inset 2px 0 0 var(--color-ink-3); }
