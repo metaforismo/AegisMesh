@@ -208,7 +208,7 @@ export function describeError(err) {
   switch (err.code) {
     case 'unauthenticated': return { title: 'Session ended', detail: 'Sign in again to continue.' };
     case 'forbidden': return { title: 'Not permitted', detail: 'Your role does not grant access to this. Ask an admin if you need it.' };
-    case 'not_found': return { title: 'Not found', detail: 'It may have aged out of the in-memory index. Older evidence stays on disk and is reachable with `aegismesh inspect`.' };
+    case 'not_found': return { title: 'Not found', detail: 'It may have aged out of the in-memory index. Older evidence stays on disk; the aegismesh inspect command reads it.' };
     case 'rate_limited': return { title: 'Too many attempts', detail: err.retryAfter ? `Wait ${err.retryAfter}s and try again.` : 'Wait a moment and try again.' };
     case 'unavailable': return { title: 'Console unavailable', detail: err.status === 0 ? 'The console server could not be reached. Check that AegisMesh is running.' : err.message };
     case 'invalid_argument': return { title: 'Request rejected', detail: err.message };

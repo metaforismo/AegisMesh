@@ -81,3 +81,16 @@ test('every routable screen except login has a registered module', () => {
   assert.equal(SCREENS.audit.role, 'admin');
   assert.equal(parseHash('#/login').name, 'login');
 });
+
+test('every screen names a loading skeleton that exists and matches its layout family', async () => {
+  const { SKELETON_KINDS, skeleton } = await import('../static/assets/js/ui/skeletons.js');
+  for (const [name, screen] of Object.entries(SCREENS)) {
+    assert.ok(SKELETON_KINDS.includes(screen.skeleton), `${name} uses skeleton "${screen.skeleton}"`);
+    const el = skeleton(screen.skeleton, screen.title);
+    assert.equal(el.getAttribute('role'), 'status');
+    assert.equal(el.getAttribute('aria-label'), `Loading ${screen.title}`);
+  }
+  assert.equal(SCREENS.digest.skeleton, 'digest');
+  assert.equal(SCREENS.attack_session.skeleton, 'story');
+  assert.equal(SCREENS.node.skeleton, 'kv');
+});
