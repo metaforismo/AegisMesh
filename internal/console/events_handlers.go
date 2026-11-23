@@ -193,7 +193,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 				return
 			}
 			if credentials.cookie {
-				if _, ok := s.auth.Session(credentials.id); !ok {
+				if _, ok := s.auth.Peek(credentials.id); !ok {
 					return
 				}
 			}
@@ -211,7 +211,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials call
 			}
 		case tick := <-heartbeat.C:
 			if credentials.cookie {
-				if _, ok := s.auth.Session(credentials.id); !ok {
+				if _, ok := s.auth.Peek(credentials.id); !ok {
 					return
 				}
 			}

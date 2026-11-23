@@ -37,7 +37,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request, _ caller) {
 		return
 	}
 
-	principal, ok := s.auth.Authenticate(body.Token)
+	principal, expiry, ok := s.auth.AuthenticateUntil(body.Token)
 	if !ok {
 		s.failures.Inc()
 		if s.record(r, auth.Principal{}, "session.login_failed", "", "denied") != nil {
@@ -48,7 +48,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request, _ caller) {
 		return
 	}
 
-	id, session, err := s.auth.Login(principal)
+	id, session, err := s.auth.LoginWith(principal, expiry, s.loginMeta(r))
 	if err != nil {
 		fail(w, 503, "unavailable", "session entropy unavailable")
 		return
@@ -81,6 +81,11 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, credentials call
 		MaxAge:   -1,
 	})
 	w.WriteHeader(204)
+}
+
+// loginMeta carries the peer host and a User-Agent that auth reduces to a fixed family.
+func (s *Server) loginMeta(r *http.Request) auth.Meta {
+	return auth.Meta{Remote: remote(r), UserAgent: r.Header.Get("User-Agent")}
 }
 
 func (s *Server) session(w http.ResponseWriter, _ *http.Request, credentials caller) {

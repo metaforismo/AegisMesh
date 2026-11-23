@@ -4,7 +4,7 @@
   "summary": {
     "attention": 2,
     "ok": 8,
-    "info": 8
+    "info": 9
   },
   "checks": [
     {
@@ -168,6 +168,15 @@
       "detail": "Evidence is stored unencrypted; it is redacted but still holds attacker-supplied text and source addresses.",
       "recommendation": "Enable storage.encryption if the data directory is backed up or shared.",
       "doc": "docs/evidence-encryption.md"
+    },
+    {
+      "id": "POS-019",
+      "area": "access",
+      "status": "info",
+      "title": "Break-glass administrator",
+      "detail": "The console is disabled; administrator access was not evaluated.",
+      "recommendation": "",
+      "doc": "docs/architecture/console-api.md#accounts-access-and-settings-adr-0025"
     }
   ],
   "disclaimer": "Static review of the running configuration and of retained evidence; not a security guarantee or a complete audit."

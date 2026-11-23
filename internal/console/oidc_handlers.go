@@ -93,7 +93,16 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request, _ caller) 
 		s.oidcError(w, r, principal, errorCode)
 		return
 	}
-	id, session, err := s.auth.LoginUntil(principal, expiry)
+	// The directory stores a keyed hash of issuer+subject, never the pair itself.
+	principal.ID, err = s.accounts.SeenIdentity(
+		principal.Issuer, principal.Subject, principal.Name, principal.Role, principal.Tenants,
+	)
+	if err != nil {
+		s.oidcError(w, r, principal, "unavailable")
+		return
+	}
+	principal.Source, principal.Kind = auth.SourceOIDC, "person"
+	id, session, err := s.auth.LoginWith(principal, expiry, s.loginMeta(r))
 	if err != nil {
 		s.oidcError(w, r, principal, "unavailable")
 		return

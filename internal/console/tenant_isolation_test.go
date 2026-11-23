@@ -213,6 +213,11 @@ func TestEveryRouteTenantIsolation(t *testing.T) {
 						requireStatus(t, result, 403)
 						return
 					}
+					// Instance administration requires local-tenant membership, which bravo-only admins lack.
+					if strings.HasPrefix(path, "/api/v1/admin/") || path == "/api/v1/system" {
+						requireStatus(t, result, 403)
+						return
+					}
 					if direct {
 						requireStatus(t, result, 404)
 					}

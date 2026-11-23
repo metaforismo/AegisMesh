@@ -14,31 +14,31 @@ import (
 
 func baseline() (*Facts, Evidence) {
 	return &Facts{
-		Sensors: []Sensor{
-			{ID: "ai-api", Kind: "http", Listen: "127.0.0.1:8080", SurfaceFamilies: []string{"openai"}},
-			{ID: "ai-workspace", Kind: "mcp", Listen: "127.0.0.1:8002", SurfaceFamilies: []string{"mcp_environment"}, MCPEnvironment: true},
-		},
-		Honeytokens:        []Token{{ID: "decoy-key", Kind: "credential", Planted: true}, {ID: "agent-diagnostic", Kind: "agent_canary", Planted: true}},
-		ConsoleEnabled:     true,
-		ConsoleListen:      "127.0.0.1:9120",
-		TokenLogin:         true,
-		OperatorRoles:      map[string]int{"admin": 1, "viewer": 1},
-		LLMProvider:        "local",
-		DetectionEnabled:   true,
-		Actions:            map[string]string{"info": "observe", "low": "tag", "medium": "tag", "high": "observe"},
-		CorrelationEnabled: true,
-		EncryptionAtRest:   true,
-	}, Evidence{
-		Available: true, Scanned: 40, Limit: 8192,
-		SensorEvents: map[string]int{"ai-api": 30, "ai-workspace": 10},
-		TokenHits:    map[string]int{"decoy-key": 1},
-	}
+			Sensors: []Sensor{
+				{ID: "ai-api", Kind: "http", Listen: "127.0.0.1:8080", SurfaceFamilies: []string{"openai"}},
+				{ID: "ai-workspace", Kind: "mcp", Listen: "127.0.0.1:8002", SurfaceFamilies: []string{"mcp_environment"}, MCPEnvironment: true},
+			},
+			Honeytokens:        []Token{{ID: "decoy-key", Kind: "credential", Planted: true}, {ID: "agent-diagnostic", Kind: "agent_canary", Planted: true}},
+			ConsoleEnabled:     true,
+			ConsoleListen:      "127.0.0.1:9120",
+			TokenLogin:         true,
+			OperatorRoles:      map[string]int{"admin": 1, "viewer": 1},
+			LLMProvider:        "local",
+			DetectionEnabled:   true,
+			Actions:            map[string]string{"info": "observe", "low": "tag", "medium": "tag", "high": "observe"},
+			CorrelationEnabled: true,
+			EncryptionAtRest:   true,
+		}, Evidence{
+			Available: true, Scanned: 40, Limit: 8192,
+			SensorEvents: map[string]int{"ai-api": 30, "ai-workspace": 10},
+			TokenHits:    map[string]int{"decoy-key": 1},
+		}
 }
 
 func TestBaselineIsAllOKOrExpectedInfo(t *testing.T) {
 	facts, evidence := baseline()
 	r := Evaluate(facts, evidence, time.Date(2026, 11, 23, 0, 0, 0, 0, time.UTC))
-	if len(r.Checks) != 18 || r.Summary.Attention != 0 || r.Summary.OK+r.Summary.Info != 18 || r.Scope != "configuration_and_evidence" {
+	if len(r.Checks) != 19 || r.Summary.Attention != 0 || r.Summary.OK+r.Summary.Info != 19 || r.Scope != "configuration_and_evidence" {
 		t.Fatalf("%+v", r.Summary)
 	}
 	for i, c := range r.Checks {
@@ -114,6 +114,13 @@ func TestChecks(t *testing.T) {
 		{"POS-017", "saturated", func(_ *Facts, e *Evidence) { e.Truncated, e.Scanned = true, 8192 }, StatusAttention, "8192-event analysis sample"},
 		{"POS-017", "fits", func(*Facts, *Evidence) {}, StatusOK, "40 retained"},
 		{"POS-018", "plaintext", func(f *Facts, _ *Evidence) { f.EncryptionAtRest = false }, StatusInfo, "unencrypted"},
+		{"POS-019", "config admin", func(*Facts, *Evidence) {}, StatusOK, "1 config-file admin token(s)"},
+		{"POS-019", "managed only", func(f *Facts, _ *Evidence) {
+			f.OperatorRoles = map[string]int{"viewer": 1}
+			f.ManagedKnown, f.ManagedAdmins = true, 2
+		}, StatusInfo, "2 managed admin account(s)"},
+		{"POS-019", "token login off", func(f *Facts, _ *Evidence) { f.TokenLogin, f.OIDC = false, true }, StatusInfo, "OIDC role mapping"},
+		{"POS-019", "offline", func(f *Facts, _ *Evidence) { f.OperatorRoles = map[string]int{} }, StatusInfo, "not evaluated (offline review)"},
 	} {
 		t.Run(tc.id+"/"+tc.name, func(t *testing.T) {
 			facts, evidence := baseline()
