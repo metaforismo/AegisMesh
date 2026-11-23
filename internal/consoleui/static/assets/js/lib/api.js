@@ -208,11 +208,44 @@ export function describeError(err) {
   switch (err.code) {
     case 'unauthenticated': return { title: 'Session ended', detail: 'Sign in again to continue.' };
     case 'forbidden': return { title: 'Not permitted', detail: 'Your role does not grant access to this. Ask an admin if you need it.' };
-    case 'not_found': return { title: 'Not found', detail: 'It may have aged out of the in-memory index. Older evidence stays on disk and is reachable with `aegismesh inspect`.' };
+    case 'not_found': return { title: 'Not found', detail: 'It may have aged out of the in-memory index. Older evidence stays on disk; the aegismesh inspect command reads it.' };
     case 'rate_limited': return { title: 'Too many attempts', detail: err.retryAfter ? `Wait ${err.retryAfter}s and try again.` : 'Wait a moment and try again.' };
     case 'unavailable': return { title: 'Console unavailable', detail: err.status === 0 ? 'The console server could not be reached. Check that AegisMesh is running.' : err.message };
     case 'invalid_argument': return { title: 'Request rejected', detail: err.message };
     case 'conflict': return { title: 'Conflict', detail: err.message };
     default: return { title: 'Server error', detail: err.message };
   }
+}
+
+// What a screen says when it cannot load, and where the operator can go
+// next. `name` is the route name; detail routes name their list so a
+// missing object offers the way back. A collection path the server does not
+// know (404/405/501 on a list screen) means an older server, not a missing
+// object, and retrying will not help.
+const LIST_OF = Object.freeze({
+  event: ['#/events', 'Go to events'],
+  source: ['#/sources', 'Go to sources'],
+  attack_session: ['#/sessions', 'Go to sessions'],
+  campaign: ['#/campaigns', 'Go to campaigns'],
+  investigation: ['#/investigations', 'Go to investigations'],
+  fleet_node: ['#/fleet', 'Go to the fleet'],
+});
+const OVERVIEW = ['#/overview', 'Go to the overview'];
+
+export function screenFailure(err, { name = '', title = 'This page' } = {}) {
+  const parent = LIST_OF[name] || null;
+  const status = err instanceof ApiError ? err.status : -1;
+  if (!parent && (status === 404 || status === 405 || status === 501)) {
+    return {
+      title: `This server does not provide ${title.toLowerCase()} yet`,
+      detail: 'The console is newer than the AegisMesh server answering it. Update the server to use this screen; the other screens keep working.',
+      retry: false,
+      actions: [OVERVIEW, ['#/guide', 'Open the guide']],
+    };
+  }
+  const d = describeError(err);
+  if (err instanceof ApiError && err.code === 'not_found') return { ...d, retry: false, actions: [parent || OVERVIEW] };
+  if (err instanceof ApiError && err.code === 'forbidden') return { ...d, retry: false, actions: [OVERVIEW] };
+  if (err instanceof ApiError && err.code === 'unauthenticated') return { ...d, retry: false, actions: [] };
+  return { ...d, retry: true, actions: parent ? [parent] : [OVERVIEW] };
 }

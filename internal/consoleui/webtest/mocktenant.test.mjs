@@ -16,7 +16,7 @@ function start(args) {
   const proc = spawn(process.execPath, [MOCK, '--port', String(port), ...args], { stdio: ['ignore', 'pipe', 'inherit'] });
   procs.push(proc);
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('mock did not start')), 5000);
+    const t = setTimeout(() => reject(new Error('mock did not start')), 30000);
     proc.stdout.on('data', (d) => { if (String(d).includes('console mock on')) { clearTimeout(t); resolve(`http://127.0.0.1:${port}`); } });
   });
 }

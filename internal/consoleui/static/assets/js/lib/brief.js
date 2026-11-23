@@ -14,12 +14,12 @@
 // where route is { name, params?, query } for lib/route.js href(), or null.
 
 import { isSeverity, severityLabel, SEVERITIES } from './taxonomy.js';
+import { formatCount } from './format.js';
 
 const WINDOW_TEXT = { '1h': 'the last hour', '24h': 'the last 24 hours', '7d': 'the last 7 days' };
 const WINDOW_MS = { '1h': 3600e3, '24h': 86400e3, '7d': 7 * 86400e3 };
 
-const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const count = (n) => nf.format(n);
+const count = (n) => formatCount(n);
 const isCount = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const plural = (n, one, many) => (n === 1 ? one : many);
 

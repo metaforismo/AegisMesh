@@ -75,7 +75,8 @@
           <p class="brief__text lp-serif">714 events in the last 24 hours, 485 more than the window before (+212%). 55 canary invocations.</p>
           <p><code>id 0f00a0b0</code> · <span class="evidence">GET /admin → 200</span> carries the evidence notch on its left edge: the one ornament, reserved for attacker-supplied text.</p>
         </div>
-        <p>The mesh appears as a faint lattice (<code>--lattice-line</code>, <code>--lattice-node</code>) behind the top of each screen and the landing hero. It is decorative and carries no information.</p>
+        <p>The mesh appears as a faint lattice (<code>--lattice-line</code>, <code>--lattice-node</code>) on the sign-in page, in empty states and behind the landing hero. It is decorative and carries no information, so it never sits behind data: console screens are a flat canvas.</p>
+        <p>In the console, colour goes on data, status and the one primary action. A selection (the current screen, a time window, a tab) is the label in full ink with a 1px cobalt line exactly as wide as its word; controls are fully round and flat, panels flat with a quiet hairline and no shadow.</p>
         <div class="ds-demo lattice ds-lattice" aria-hidden="true"></div>
       </section>
 
@@ -100,7 +101,7 @@
             <line class="tempo__tick tempo__tick--interaction" x1="250" x2="250" y1="20" y2="34"/><line class="tempo__tick tempo__tick--signal" x1="300" x2="300" y1="14" y2="34"/><line class="tempo__tick tempo__tick--interaction" x1="390" x2="390" y1="20" y2="34"/>
           </svg>
         </div>
-        <p>Row density is comfortable or compact, toggled in the console's top bar and remembered in this browser. Stacking tables carry a low-specificity zebra so hover, cursor, open and live states always win. Where an empty list is a normal state, the empty state draws a small lattice with one decoy and a probe line that stops short of it.</p>
+        <p>Row density is comfortable or compact, toggled in the console's top bar and remembered in this browser. Rows are told apart by rules and alignment, never zebra striping. Where an empty list is a normal state, the empty state draws a small lattice with one decoy and a probe line that stops short of it.</p>
         <div class="ds-demo">
           <div class="state">
             <svg class="empty-art" viewBox="0 0 120 72" aria-hidden="true" focusable="false"><line class="empty-art__grid" x1="0" x2="0" y1="0" y2="72"/><line class="empty-art__grid" x1="24" x2="24" y1="0" y2="72"/><line class="empty-art__grid" x1="48" x2="48" y1="0" y2="72"/><line class="empty-art__grid" x1="72" x2="72" y1="0" y2="72"/><line class="empty-art__grid" x1="96" x2="96" y1="0" y2="72"/><line class="empty-art__grid" x1="0" x2="120" y1="24" y2="24"/><line class="empty-art__grid" x1="0" x2="120" y1="48" y2="48"/><path class="empty-art__probe" d="M12 60 C 36 60, 48 36, 66 30"/><circle class="empty-art__node" cx="12" cy="60" r="3.5"/><circle class="empty-art__node" cx="96" cy="12" r="3"/><rect class="empty-art__decoy" x="66" y="18" width="24" height="24" rx="4"/></svg>
@@ -202,7 +203,9 @@ prompts/get name="ignore previous instructions 🙂"</span>
           <span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span>
           <span class="sev sev--critical"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Critical</span>
           <span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span>
+          <span class="sev sev--none" title="Correlation rules write signals, which have no severity"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Signal</span>
         </div>
+        <p>One component (<code>sevChip</code>) draws every severity in the console: tables, cards, the severity share's key and the digest. A correlation rule has no severity and shows the empty meter with “Signal”, never “n/a”.</p>
       </section>
 
       <section class="ds-section" id="classification">
@@ -249,9 +252,14 @@ prompts/get name="ignore previous instructions 🙂"</span>
 
       <section class="ds-section" id="panels">
         <h2>Panels &amp; stat tiles</h2>
-        <p>Deltas are neutral: they state the change against the previous window, with no red or green.</p>
+        <p>Deltas are neutral: they state the change against the previous window, with no red or green. Peer counts sit in one divided container (<code>.grid--stats</code>), never a row of separate tiles; the Overview's counts are a <code>.tally</code>, a divided list beside the brief whose first row leads.</p>
         <div class="ds-demo ds-demo--col">
-          <div class="cards">
+          <dl class="tally">
+            <div class="tally__row tally__row--lead"><dt class="tally__label"><span>Events</span></dt><dd class="tally__value"><span class="tally__num">425</span><span class="tally__delta">+195 (+85%)</span></dd></div>
+            <div class="tally__row"><dt class="tally__label"><span class="glyph glyph--canary" aria-hidden="true"></span><span>Canary invocation</span></dt><dd class="tally__value"><span class="tally__num">32</span><span class="tally__delta">−3 (−9%)</span></dd></div>
+            <div class="tally__row"><dt class="tally__label"><span>Sensors with events</span></dt><dd class="tally__value"><span class="tally__num">8</span><span class="tally__delta">This window only</span></dd></div>
+          </dl>
+          <div class="grid--stats">
             <div class="stat"><span class="stat__label">Events</span><span class="stat__value">425</span><span class="stat__delta"><strong>+195 (+85%)</strong> vs previous window</span></div>
             <div class="stat"><span class="stat__label"><span class="glyph glyph--canary" aria-hidden="true"></span>Canary invocation</span><span class="stat__value">32</span><span class="stat__delta"><strong>−3 (−9%)</strong> vs previous window</span></div>
           </div>
@@ -266,14 +274,15 @@ prompts/get name="ignore previous instructions 🙂"</span>
 
       <section class="ds-section" id="tables">
         <h2>Tables</h2>
-        <p>Sticky header, tabular numerals, right-aligned counts. Below 720px a table becomes a list of labelled cards; labels come from interface text only.</p>
+        <p>Sticky header, tabular numerals, right-aligned counts. Times are relative (“2m ago”) with the absolute UTC time in <code>&lt;time datetime&gt;</code>, the title, the peek and visually hidden text. A header is a sort button (<code>.th-sort</code>, <code>aria-sort</code>) only when every row is already in the browser; paged lists keep the server’s order. The mark is a filled triangle for the active direction, a faint one otherwise; in numeric columns it sits left of the label. A table wider than its column scrolls inside its wrapper. Below 720px a table becomes a list of labelled cards; labels come from interface text only.</p>
         <div class="ds-demo ds-demo--col">
           <div class="table-wrap">
             <table class="table table--stack">
-              <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Class</th><th scope="col">Severity</th><th scope="col" class="col-summary">Summary</th><th scope="col" class="num">Events</th></tr></thead>
+              <caption class="visually-hidden">Example events, sorted by events, descending</caption>
+              <thead><tr><th scope="col">Time</th><th scope="col">Class</th><th scope="col">Severity</th><th scope="col" class="col-summary">Summary</th><th scope="col" class="num" aria-sort="descending"><button class="th-sort" type="button" data-dir="descending" title="Sorted by events, descending"><span>Events</span><span class="th-sort__mark" aria-hidden="true"></span></button></th></tr></thead>
               <tbody>
-                <tr><td data-label="Time (UTC)">09:03:44</td><td data-label="Class"><span class="cls"><span class="glyph glyph--signal" aria-hidden="true"></span>Correlation signal</span></td><td data-label="Severity"><span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span></td><td data-label="Summary" class="col-summary"><span class="evidence">Same source touched several sensors: 203.0.113.7</span></td><td data-label="Events" class="num">6</td></tr>
-                <tr><td data-label="Time (UTC)">09:02:10</td><td data-label="Class"><span class="cls"><span class="glyph glyph--interaction" aria-hidden="true"></span>Interaction</span></td><td data-label="Severity"><span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span></td><td data-label="Summary" class="col-summary"><span class="evidence">GET /.env → 404</span></td><td data-label="Events" class="num">1</td></tr>
+                <tr><td data-label="Time"><time class="reltime" datetime="2026-11-14T09:03:44Z" title="2026-11-14 09:03:44 UTC">2m ago<span class="visually-hidden"> (2026-11-14 09:03:44 UTC)</span></time></td><td data-label="Class"><span class="cls"><span class="glyph glyph--signal" aria-hidden="true"></span>Correlation signal</span></td><td data-label="Severity"><span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span></td><td data-label="Summary" class="col-summary"><span class="evidence">Same source touched several sensors: 203.0.113.7</span></td><td data-label="Events" class="num">6</td></tr>
+                <tr><td data-label="Time"><time class="reltime" datetime="2026-11-14T09:02:10Z" title="2026-11-14 09:02:10 UTC">4m ago<span class="visually-hidden"> (2026-11-14 09:02:10 UTC)</span></time></td><td data-label="Class"><span class="cls"><span class="glyph glyph--interaction" aria-hidden="true"></span>Interaction</span></td><td data-label="Severity"><span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span></td><td data-label="Summary" class="col-summary"><span class="evidence">GET /.env → 404</span></td><td data-label="Events" class="num">1</td></tr>
               </tbody>
             </table>
           </div>
@@ -282,7 +291,7 @@ prompts/get name="ignore previous instructions 🙂"</span>
 
       <section class="ds-section" id="banners">
         <h2>Banners</h2>
-        <p>The hatched edge marks a dry-run proposal: something suggested and not executed.</p>
+        <p>The dashed edge marks a dry-run proposal: something suggested and not executed, in the same dashed vocabulary as unloaded time and techniques not observed.</p>
         <div class="ds-demo ds-demo--col">
           <div class="banner banner--info"><div><p class="banner__title">Info</p><p>Counts come from the in-memory index.</p></div></div>
           <div class="banner banner--warn"><div><p class="banner__title">Index history is truncated</p><p>Older evidence is still on disk.</p></div></div>

@@ -9,10 +9,9 @@
 import { h, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
 import { formatCount, formatDateTime } from '../lib/format.js';
-import { isSeverity } from '../lib/taxonomy.js';
 import { normalizeDigestWindow, digestLead, digestFigures, groupTechniques, digestLimits, digestMarkdown } from '../lib/catalogs.js';
 import { glossaryEntry } from '../lib/glossary.js';
-import { pageHead, segmented, sevChip, empty, helpTip, toast, panel } from '../ui/components.js';
+import { pageHead, segmented, sevChip, empty, helpTip, toast, panel, SIGNAL_NO_SEVERITY } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 
 const WINDOWS = [['24h', '24h'], ['7d', '7d']];
@@ -110,7 +109,6 @@ export default {
     const oi = d?.open_investigations;
     mount(root,
       pageHead({
-        eyebrow: 'Briefing',
         title: 'Digest',
         subtitle: 'What the decoys recorded, compared with the window before. Computed when you open this page; nothing is scheduled or sent.',
         hint: 'Read the briefing, then follow any figure to the events behind it, copy it as Markdown or print it.',
@@ -135,7 +133,7 @@ export default {
             h('a', { class: 'digest__rulelink', href: href('events', { rule: r.rule_id, since }) },
               h('code', null, r.rule_id),
               h('span', { class: 'digest__ruletitle' }, typeof r.title === 'string' && r.title ? r.title : 'Untitled rule')),
-            isSeverity(r.severity) ? sevChip(r.severity) : h('span', { class: 'muted digest__nosev' }, 'Signal'),
+            sevChip(r.severity, SIGNAL_NO_SEVERITY),
             h('span', { class: 'digest__count' }, `${formatCount(r.events)} ${r.events === 1 ? 'event' : 'events'}`))))
           : h('p', { class: 'muted' }, 'No rule was cited in this window.')),
         section('techniques', h('span', { class: 'title-help' }, 'Newly observed techniques', tip('mapping')), techs.length

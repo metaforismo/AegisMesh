@@ -48,15 +48,30 @@ export function formatRelative(value, now = Date.now()) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// One duration style everywhere (session spans, gaps, uptime, lifetimes):
+// "850 ms", "4.2 s", "45 s", "3 min", "1.5 h", "2.3 d". Unknown or negative
+// is "—"; zero is "0 s".
+export function formatDurationMs(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  const ms = Number(value);
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  if (ms === 0) return '0 s';
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  const s = ms / 1000;
+  if (s < 10) return `${Math.round(s * 10) / 10} s`;
+  if (s < 90) return `${Math.round(s)} s`;
+  const m = s / 60;
+  if (m < 90) return `${m < 10 ? Math.round(m * 10) / 10 : Math.round(m)} min`;
+  const h = m / 60;
+  if (h < 48) return `${Math.round(h * 10) / 10} h`;
+  return `${Math.round((h / 24) * 10) / 10} d`;
+}
+
+// Seconds (uptime, session lifetime) in the same style.
 export function formatDuration(totalSeconds) {
-  const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s % 60}s`;
-  return `${s}s`;
+  if (totalSeconds === null || totalSeconds === undefined || totalSeconds === '') return '—';
+  const n = Number(totalSeconds);
+  return Number.isFinite(n) ? formatDurationMs(Math.max(0, n) * 1000) : '—';
 }
 
 const integer = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -73,6 +88,13 @@ export function formatCompact(value) {
   if (Math.abs(n) < 10000) return integer.format(n);
   if (Math.abs(n) < 1e6) return `${trim(n / 1e3)}K`;
   return `${trim(n / 1e6)}M`;
+}
+
+// A measured rate or ratio: one decimal by default, grouped like counts.
+export function formatNumber(value, digits = 1) {
+  const n = Number(value);
+  if (value === null || value === undefined || value === '' || !Number.isFinite(n)) return '—';
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: digits }).format(n);
 }
 
 function trim(n) {

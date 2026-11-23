@@ -53,8 +53,24 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   console identity, real console screenshots from the synthetic dev mock, a
   CSS-only hero entrance and statement; still no script, web font or external
   request. Vendors four MIT stylesheets; see `site/CREDITS.md`.
+- Console redesign (data-terminal style): flat panels and controls with no
+  resting shadows, gradients or glass; one selection mark (a 1px cobalt line)
+  for the current screen, time window and tab; round flat buttons; readout
+  labels in sentence case; nothing under 11px; skeletons without shimmer. The
+  Overview leads with the brief beside a divided count list, then the chart,
+  then what to read next; paired panels end level. Session hero rebalanced;
+  tempo labels never overlap.
 
 ### Fixed
+
+- Console audit pass: one severity mark (also for "no finding" and
+  correlation-rule "Signal"), one table time format (relative with absolute
+  UTC), one duration and number formatter, sortable headers on tables whose
+  rows are all loaded, wide tables scroll in place instead of widening the
+  page, failed screens keep their heading and offer a next step (older
+  server, missing object), layout-matched skeletons, 40px+ targets at phone
+  widths, print always light, light severity fills and signal green raised to
+  3:1 (checked by a token contrast test).
 
 - Release SBOM generation for targets other than the build host. The generator
   was started with `go run` under the target's `GOOS`/`GOARCH`, so it was

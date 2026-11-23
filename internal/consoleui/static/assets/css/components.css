@@ -19,12 +19,12 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 2rem;
-  padding: 0 var(--space-3);
+  min-height: 2.125rem;
+  padding: 0 var(--space-4);
   border: var(--border-width) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  box-shadow: var(--elev-1), var(--highlight);
+  /* Controls are fully round and flat; containers stay square-ish. */
+  border-radius: var(--radius-pill);
+  background: transparent;
   color: var(--color-ink);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -55,14 +55,12 @@
 .btn--primary {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  box-shadow: var(--elev-1), inset 0 1px 0 rgb(255 255 255 / 0.16);
   color: var(--color-accent-ink);
 }
 
 .btn--ghost {
   background: transparent;
   border-color: transparent;
-  box-shadow: none;
   color: var(--color-ink-2);
 }
 
@@ -71,10 +69,10 @@
   border-color: var(--color-border-strong);
 }
 
-.btn--sm { min-height: 1.75rem; padding: 0 var(--space-2); font-size: var(--text-xs); }
+.btn--sm { min-height: 1.75rem; padding: 0 var(--space-3); font-size: var(--text-xs); }
 
-/* Square icon-only button. Always carries an aria-label. */
-.btn--icon { width: 2rem; padding: 0; }
+/* Round icon-only button. Always carries an aria-label. */
+.btn--icon { width: 2.125rem; padding: 0; }
 .btn--icon.btn--sm { width: 1.75rem; }
 
 .btn[disabled],
@@ -92,37 +90,44 @@
   gap: var(--space-2);
 }
 
-/* Segmented control: a group of mutually exclusive buttons (aria-pressed). */
+/* Segmented control: a group of mutually exclusive buttons (aria-pressed).
+   No track and no filled pill: the choice is the ink label with a 1px
+   accent line exactly as wide as its word, the console's one selection
+   mark (the same line marks the current screen in the sidebar and the
+   current tab). */
 .segmented {
   display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  gap: var(--space-1);
 }
 
 .segmented button {
-  min-height: 1.625rem;
-  padding: 0 var(--space-3);
+  position: relative;
+  min-height: 2.125rem;
+  padding: 0 var(--space-2);
   border: 0;
-  border-radius: calc(var(--radius-sm) - 2px);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-ink-2);
-  font-size: var(--text-xs);
+  color: var(--color-ink-3);
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: background-color var(--duration-instant) var(--ease-color), color var(--duration-instant) var(--ease-color);
+  transition: color var(--duration-instant) var(--ease-color);
 }
 
 @media (hover: hover) {
   .segmented button:hover { color: var(--color-ink); }
 }
 
-.segmented button[aria-pressed="true"] {
-  background: var(--color-surface);
-  color: var(--color-ink);
-  box-shadow: 0 0 0 1px var(--color-border), var(--elev-1);
+.segmented button[aria-pressed="true"] { color: var(--color-ink); }
+.segmented button[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: 3px;
+  height: 1px;
+  background: var(--color-accent);
 }
 
 /* ---- Form controls ------------------------------------------------------ */
@@ -184,9 +189,12 @@
 .select {
   appearance: none;
   padding-right: var(--space-6);
-  background-image: linear-gradient(45deg, transparent 50%, var(--color-ink-3) 50%), linear-gradient(135deg, var(--color-ink-3) 50%, transparent 50%);
-  background-position: calc(100% - 13px) 55%, calc(100% - 9px) 55%;
-  background-size: 4px 4px, 4px 4px;
+  /* The chevron is a small inline SVG (CSP img-src allows data:), stroked in
+     a mid graphite that reads on both themes (3.6:1 on white, 4.7:1 on the
+     dark surface). */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5' fill='none' stroke='%237d8899' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: calc(100% - 8px) 50%;
+  background-size: 14px 14px;
   background-repeat: no-repeat;
 }
 
@@ -431,7 +439,6 @@
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  box-shadow: var(--elev-1), var(--highlight);
 }
 
 .panel__head {
@@ -446,7 +453,7 @@
 }
 
 .panel__title {
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
 }
@@ -482,7 +489,6 @@
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  box-shadow: var(--elev-1), var(--highlight);
 }
 
 .stat__label {
@@ -497,7 +503,7 @@
 
 .stat__value {
   grid-area: value;
-  font-size: var(--text-2xl);
+  font-size: 1.5rem;
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--tracking-figure);
@@ -527,6 +533,29 @@
 }
 
 .stat__delta .icon { width: var(--icon-xs); height: var(--icon-xs); stroke-width: 2; }
+
+/* Peer counts: one divided container, never a row of separate tiles. The
+   1px gap over the border colour draws the dividers; the column count
+   follows the item count so no cell is orphaned (four, or two by two). */
+.grid--stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-border); }
+.grid--stats > .stat { border: 0; border-radius: 0; }
+@media (min-width: 64rem) { .grid--stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Counts as one divided list: label left, figure right, the change under
+   the figure on the same right edge. The first row may lead. */
+.tally { display: flex; flex-direction: column; }
+.tally__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); min-height: 2.25rem; padding: var(--space-2) 0; border-top: var(--border-width) solid var(--color-border); }
+.tally__row:first-child { border-top: 0; padding-top: 0; }
+.tally__label { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; color: var(--color-ink-2); font-size: var(--text-sm); }
+/* The change sits left of its figure on one baseline; figures share the
+   right edge, changes a column of their own. */
+.tally__value { display: flex; flex-direction: row-reverse; align-items: baseline; gap: var(--space-3); flex: none; text-align: right; }
+.tally__num { min-width: 3.5ch; color: var(--color-ink); font-size: var(--text-lg); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-figure); line-height: 1.25; }
+.tally__delta { color: var(--color-ink-3); font-size: var(--text-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tally__row--lead { flex-wrap: wrap; align-items: flex-end; padding-bottom: var(--space-3); }
+.tally__row--lead .tally__label { color: var(--color-ink); font-weight: var(--weight-semibold); }
+.tally__row--lead .tally__value { flex-direction: column; align-items: flex-end; gap: 2px; }
+.tally__row--lead .tally__num { font-size: 2rem; line-height: 1.1; }
 
 /* ---- Sparklines and traces ---------------------------------------------- */
 /* Tiny trend lines. Decorative companions of a number that is printed in
@@ -559,7 +588,7 @@
 .trace__bar { fill: var(--color-accent); fill-opacity: 0.75; }
 .trace__bar--zero { fill: var(--chart-grid); fill-opacity: 1; }
 .trace__base { stroke: var(--chart-axis); stroke-width: 1; shape-rendering: crispEdges; }
-.trace__tick { fill: var(--color-ink-3); font-size: 9px; font-family: var(--font-sans); }
+.trace__tick { fill: var(--color-ink-3); font-size: 11px; font-family: var(--font-sans); }
 .trace-wrap { display: flex; flex-direction: column; gap: var(--space-1); }
 .trace-wrap__meta { display: flex; justify-content: space-between; gap: var(--space-2); color: var(--color-ink-3); font-size: var(--text-2xs); }
 
@@ -589,7 +618,7 @@
 .segbar__seg--low { background: var(--sev-low); }
 .segbar__seg--info { background: var(--sev-info); }
 .segbar__seg--none {
-  background: repeating-linear-gradient(135deg, var(--sev-track) 0 3px, transparent 3px 6px), var(--color-surface-2);
+  background: repeating-linear-gradient(135deg, var(--sev-track) 0 3px, transparent 3px 6px), var(--color-surface-2); /* taste-skill-ignore: hatch encodes "no finding" without colour */
   box-shadow: inset 0 0 0 1px var(--sev-track);
 }
 
@@ -688,8 +717,9 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   position: sticky;
   top: var(--sticky-top, 0px);
   z-index: 1;
-  background: color-mix(in srgb, var(--color-surface-2) 92%, transparent);
-  backdrop-filter: blur(6px);
+  /* Opaque on the panel's own surface: a sticky header with no band and no
+     blur; its bottom rule is the strongest line in the table. */
+  background: var(--color-surface);
   color: var(--color-ink-2);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
@@ -699,6 +729,45 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 .table td.num,
 .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Sortable header: the whole label is the button. The mark is a filled
+   triangle for the active direction and a faint pair otherwise, so the
+   order is never shown by color alone; aria-sort carries it to AT. */
+.table th[aria-sort] { padding: 0; }
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 2rem;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.table th.num .th-sort { flex-direction: row-reverse; justify-content: flex-start; } /* mark on the left, label over the digits */
+.table th:first-child .th-sort { padding-left: var(--space-4); }
+.table th:last-child .th-sort { padding-right: var(--space-4); }
+.th-sort:focus-visible { outline-offset: -2px; }
+.th-sort__mark {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-inline: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.35;
+}
+.th-sort[data-dir="ascending"] .th-sort__mark { border-top: 0; border-bottom: 5px solid currentColor; opacity: 1; }
+.th-sort[data-dir="descending"] .th-sort__mark { opacity: 1; }
+.th-sort[data-dir="ascending"],
+.th-sort[data-dir="descending"] { color: var(--color-ink); }
+@media (hover: hover) { .th-sort:hover { color: var(--color-ink); } .th-sort:hover .th-sort__mark { opacity: 1; } }
+@media (pointer: coarse), (max-width: 47.99rem) { .th-sort { min-height: 2.75rem; } }
 
 .table tbody tr { transition: background-color var(--duration-instant) var(--ease-color); }
 
@@ -711,7 +780,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 /* Keyboard row cursor (j/k) and the row whose detail is open. */
 .table tbody tr.is-cursor { background: var(--color-surface-2); box-shadow: inset 2px 0 0 var(--color-accent); }
-.table tbody tr.is-open { background: var(--color-accent-soft); box-shadow: inset 2px 0 0 var(--color-accent); }
+.table tbody tr.is-open { background: var(--color-surface-3); box-shadow: inset 1px 0 0 var(--color-accent); }
 
 .table a.row-link {
   color: var(--color-ink);
@@ -815,7 +884,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .tab {
   padding: var(--space-2) var(--space-3);
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   background: transparent;
   color: var(--color-ink-2);
   font-size: var(--text-sm);
@@ -853,13 +922,11 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .banner--danger { border-color: color-mix(in srgb, var(--color-danger) 32%, transparent); background: var(--color-danger-soft); }
 .banner--danger > .icon { color: var(--color-danger); }
 
-/* Dry-run proposals carry a hatched edge: "not executed" made visible. */
+/* Dry-run proposals carry a dashed edge: "not executed" made visible, in the
+   same dashed vocabulary as unloaded time and techniques not observed. */
 .banner--proposal {
-  border-left: 0;
-  background:
-    repeating-linear-gradient(135deg, var(--color-surface-3) 0 6px, transparent 6px 12px) left / 10px 100% no-repeat,
-    var(--color-surface);
-  padding-left: calc(var(--space-4) + 10px);
+  border: var(--border-width) dashed var(--color-border-strong);
+  background: var(--color-surface);
 }
 
 /* ---- Empty, loading and error states ------------------------------------ */
@@ -918,8 +985,8 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Skeletons are shaped like the content they stand in for. The sheen is a
-   translated overlay (compositor only), not an animated background. */
+/* Skeletons are shaped like the content they stand in for: flat bars at the
+   size of the value they replace, labels shown at once, no shimmer. */
 .skeleton {
   position: relative;
   display: block;
@@ -929,22 +996,11 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   background: var(--color-surface-3);
 }
 
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-surface) 55%, transparent), transparent);
-  transform: translateX(-100%);
-  animation: sheen 1.5s var(--ease-in-out) infinite;
-}
-
 .skeleton--title { width: 12rem; height: 1.25rem; }
 .skeleton--text { width: 60%; }
 .skeleton--value { width: 4.5rem; height: 1.75rem; }
 .skeleton--block { height: 12rem; border-radius: var(--radius-sm); }
 .skeleton--chip { width: 4.5rem; height: 1.125rem; }
-
-@keyframes sheen { to { transform: translateX(100%); } }
 
 /* ---- Dialog, drawer, palette (native <dialog>) ------------------------- */
 /* Enter and exit are transitions on [open] with display/overlay discrete,
@@ -1150,12 +1206,13 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .palette__item mark { background: transparent; color: var(--color-accent); font-weight: var(--weight-semibold); }
 .palette__item .evidence mark { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
+/* The active row: a neutral step plus the console's 1px selection line. */
 .palette__item[aria-selected="true"] {
-  background: var(--color-accent-soft);
-  box-shadow: inset 2px 0 0 var(--color-accent);
+  background: var(--color-surface-3);
+  box-shadow: inset 1px 0 0 var(--color-accent);
 }
 
-.palette__item[aria-selected="true"] > .icon { color: var(--color-accent); }
+.palette__item[aria-selected="true"] > .icon { color: var(--color-ink); }
 
 .palette__empty { padding: var(--space-6) var(--space-4); color: var(--color-ink-3); font-size: var(--text-sm); text-align: center; }
 
@@ -1249,7 +1306,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   bottom: var(--space-3);
   left: 0.5rem;
   width: 1px;
-  background: linear-gradient(var(--color-border-strong), var(--color-border));
+  background: var(--color-border);
 }
 
 .timeline__item {
@@ -1278,6 +1335,15 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 }
 
 .timeline__item.is-pending { opacity: 0.6; }
+
+/* Compact: one line per entry under its time, the summary cut with an
+   ellipsis (the evidence peek shows it whole). */
+.timeline--compact .timeline__item { padding: var(--space-1) 0 var(--space-2); }
+.timeline--compact .timeline__item > .glyph { top: 0.7rem; }
+.timeline--compact .timeline__body { flex-wrap: nowrap; }
+.timeline--compact .timeline__body > a { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.timeline--compact .timeline__body > a .evidence { white-space: nowrap; }
+.timeline--compact .timeline__body > .sev { flex: none; }
 
 /* ---- JSON viewer ------------------------------------------------------ */
 
@@ -1370,7 +1436,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-ink-3);
-  font-size: 0.625rem;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   transition:
     background-color var(--duration-fast) var(--ease-color),
@@ -1400,7 +1466,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .chain__link[data-state="ok"] { border-color: var(--color-ok); background: var(--color-ok-soft); color: var(--color-ok); }
 .chain__link[data-state="ok"]::before { background: var(--color-ok); }
 .chain__link[data-state="broken"] { border-style: dashed; border-color: var(--color-danger); background: var(--color-danger-soft); color: var(--color-danger); transform: scale(1.12); }
-.chain__link[data-state="broken"]::before { background: repeating-linear-gradient(90deg, var(--color-danger) 0 3px, transparent 3px 5px); }
+.chain__link[data-state="broken"]::before { background: repeating-linear-gradient(90deg, var(--color-danger) 0 3px, transparent 3px 5px); } /* taste-skill-ignore: a broken link drawn as a broken line, shape not colour */
 .chain__link[data-state="beyond"] { border-style: dotted; opacity: 0.55; }
 
 .chain-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); color: var(--color-ink-3); font-size: var(--text-2xs); }
@@ -1457,7 +1523,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .chart svg { width: 100%; height: auto; overflow: visible; }
 .chart__grid { stroke: var(--chart-grid); stroke-width: 1; stroke-dasharray: 2 3; shape-rendering: crispEdges; }
 .chart__axis { stroke: var(--chart-axis); stroke-width: 1; shape-rendering: crispEdges; }
-.chart__tick { fill: var(--color-ink-3); font-size: 10px; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.chart__tick { fill: var(--color-ink-3); font-size: 11px; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
 .chart__seg--interaction { fill: var(--class-interaction); }
 .chart__seg--canary_invocation { fill: var(--class-canary); }
 .chart__seg--correlation_signal { fill: var(--class-signal); }
@@ -1565,8 +1631,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   height: var(--topbar-h);
   padding: 0 var(--space-6);
   border-bottom: var(--border-width) solid var(--color-border);
-  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
+  background: var(--color-canvas);
 }
 
 .shell__nav {
@@ -1581,20 +1646,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   padding: 0 var(--space-3) var(--space-4);
   overflow-y: auto;
   border-right: var(--border-width) solid var(--color-border);
-  background:
-    radial-gradient(circle at 1px 1px, var(--mesh-dot) 1px, transparent 1.5px) 0 0 / 16px 16px,
-    var(--color-surface-2);
-  background-attachment: local, local;
-}
-
-/* The mesh dots fade out below the brand so labels sit on a clean surface. */
-.shell__nav::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: linear-gradient(to bottom, transparent 0, var(--color-surface-2) 7rem);
-  pointer-events: none;
+  background: var(--color-canvas);
 }
 
 .shell__nav > * { position: relative; z-index: 1; }
@@ -1639,7 +1691,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .nav-group__label {
   padding: 0 var(--space-2) var(--space-1);
   color: var(--color-ink-3);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   letter-spacing: var(--tracking-label);
 }
@@ -1661,19 +1713,21 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 .nav-link .icon { color: var(--color-ink-3); transition: color var(--duration-instant) var(--ease-color); }
 .nav-link__label { flex: 1; min-width: 0; }
-.nav-link__tag { color: var(--color-ink-3); font-size: var(--text-2xs); }
+.nav-link__tag { color: var(--color-ink-3); font-size: var(--text-xs); }
 
 @media (hover: hover) {
   .nav-link:hover { background: color-mix(in srgb, var(--color-surface-3) 70%, transparent); color: var(--color-ink); }
   .nav-link:hover .icon { color: var(--color-ink-2); }
 }
 
-.nav-link[aria-current="page"] { color: var(--color-ink); font-weight: var(--weight-medium); }
-.nav-link[aria-current="page"] .icon { color: var(--color-accent); }
+.nav-link[aria-current="page"] { color: var(--color-ink); font-weight: var(--weight-semibold); }
+.nav-link[aria-current="page"] .icon { color: var(--color-ink); }
 .nav-link[aria-current="page"]:hover { background: transparent; }
 
 /* One indicator per nav that slides to the active link: spatial continuity
-   for "where am I" when the route changes. Placed in script. */
+   for "where am I" when the route changes. Placed in script. It is the
+   console's selection mark: no fill, a 1px accent line on the sidebar's
+   own edge, level with the current screen's row. */
 .nav-indicator {
   position: absolute;
   top: 0;
@@ -1681,9 +1735,6 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   right: 0;
   z-index: 0;
   height: 2rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  box-shadow: 0 0 0 1px var(--color-border), var(--elev-1);
   opacity: 0;
   pointer-events: none;
   transition: transform var(--duration-base) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
@@ -1695,11 +1746,10 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .nav-indicator::before {
   content: "";
   position: absolute;
-  top: 0.5rem;
-  bottom: 0.5rem;
-  left: 0;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
+  top: 0;
+  bottom: 0;
+  right: calc(-1 * var(--space-3));
+  width: 1px;
   background: var(--color-accent);
 }
 
@@ -1841,7 +1891,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 }
 
 .menu__item:focus-visible { outline-offset: -2px; }
-.menu__item[aria-current="true"] { background: var(--color-accent-soft); color: var(--color-accent); cursor: default; }
+.menu__item[aria-current="true"] { background: var(--color-surface-3); color: var(--color-ink); box-shadow: inset 1px 0 0 var(--color-accent); cursor: default; }
 @media (hover: hover) {
   .menu__item:not([aria-current="true"]):hover { background: var(--color-surface-3); }
 }
@@ -1870,29 +1920,29 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .menu__kv dd { min-width: 0; overflow-wrap: anywhere; }
 .menu__action { justify-content: flex-start; gap: var(--space-2); }
 
-/* ---- Instrument labels ---------------------------------------------------- */
-/* Uppercase monospace micro-labels name a readout ("SITUATION", a bucket
-   time). Interface text only; never used for evidence. */
+/* ---- Readout labels -------------------------------------------------------- */
+/* A small sentence-case label that names a readout ("Whole window", "Server",
+   "Measured"). Interface text only; never used for evidence. It was an
+   uppercase monospace micro-label until 2026-11-23: tracked capitals read
+   louder than the values they name. */
 .caps {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
   color: var(--color-ink-3);
 }
 
 /* ---- Primary panel ------------------------------------------------------- */
-/* The one panel a screen is about. A firmer (decorative) edge; everything
-   else is secondary by default. */
-.panel--primary { border-color: color-mix(in srgb, var(--color-border-strong) 32%, var(--color-border)); }
+/* The one panel a screen is about. It is marked by its place and size, not
+   by a louder frame: every panel keeps the same quiet hairline. */
 .panel--primary > .panel__head .panel__title { font-size: var(--text-lg); }
 
 /* ---- Situation brief ------------------------------------------------------ */
 /* A few plain sentences computed from the loaded overview. Each clause links
    to the filtered view that shows it. Numbers are semibold ink, never
-   colored. The left rule and the dot are accent: the brief is the screen's
-   entry point, not an alarm. */
+   colored. The brief is the screen's largest block and its entry point;
+   its place says so, without an accent rule or an alarm colour. */
 .brief {
   position: relative;
   isolation: isolate;
@@ -1901,29 +1951,8 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  box-shadow: var(--elev-1), var(--highlight);
 }
 
-.brief::before {
-  content: "";
-  position: absolute;
-  inset: var(--space-4) auto var(--space-4) 0;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--color-accent);
-}
-
-/* The mesh motif, faint, fading in from the right edge. Never content. */
-.brief::after {
-  content: "";
-  position: absolute;
-  inset: 0 0 0 auto;
-  z-index: -1;
-  width: min(22rem, 45%);
-  background: radial-gradient(circle at 1px 1px, var(--mesh-dot) 1px, transparent 1.5px) 0 0 / 14px 14px;
-  mask-image: linear-gradient(to left, #000, transparent);
-  pointer-events: none;
-}
 
 .brief__head {
   display: flex;
@@ -1943,7 +1972,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   color: var(--color-ink-2);
 }
 
-.brief__dot { width: 6px; height: 6px; border-radius: 1px; background: var(--color-accent); }
+.brief__dot { display: none; }
 .brief__meta { color: var(--color-ink-3); font-size: var(--text-xs); }
 
 .brief__text {
@@ -1985,15 +2014,12 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 .readout__head {
   min-width: 23ch;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: var(--color-ink-3);
 }
 
-.readout.is-bucket .readout__head { color: var(--color-accent); }
+.readout.is-bucket .readout__head { color: var(--color-ink); }
 .readout__list { gap: var(--space-2) var(--space-5); }
 .readout__value { color: var(--color-ink); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
 .readout__total { padding-left: var(--space-4); border-left: var(--border-width) solid var(--color-border); }
@@ -2029,7 +2055,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 .tip-pop { width: min(20rem, calc(100vw - 1rem)); padding: var(--space-3); font-weight: var(--weight-regular); }
 .tip-pop:popover-open { display: flex; flex-direction: column; gap: var(--space-2); }
-.tip-pop__term { font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--color-ink-2); }
+.tip-pop__term { font-size: var(--text-xs); font-weight: var(--weight-semibold); color: var(--color-ink-2); }
 .tip-pop__text { color: var(--color-ink); font-size: var(--text-sm); line-height: var(--leading-normal); letter-spacing: normal; }
 .tip-pop__more { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); }
 
@@ -2137,9 +2163,17 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 }
 
 /* ---- Touch targets --------------------------------------------------------- */
-/* On coarse pointers every control is at least 44px in both directions. */
-@media (pointer: coarse) {
-  .btn, .nav-link, .segmented button, .menu__item, .tab, .palette__item { min-height: 2.75rem; }
+/* On coarse pointers, and at phone widths whatever the pointer, every
+   control is at least 44px tall (icon buttons in both directions) and every
+   standalone link at least 40px. Links inside running prose are exempt
+   (WCAG 2.5.8 inline exception). */
+@media (pointer: coarse), (max-width: 47.99rem) {
+  .btn, .nav-link, .segmented button, .menu__item, .tab, .palette__item, .input, .select { min-height: 2.75rem; }
+  .crumbs__item a, .row-open, .fw-link, .token-link, .cell-chip, .session-link, .story__summary,
+  .digest__rulelink, .segleg__row, .brief__digest, .token-sources__more, .tip-pop__more,
+  .table td > a:only-child, .kv dd > a:only-child, .bar-list__label > a {
+    display: inline-flex; align-items: center; min-height: 2.5rem;
+  }
   .btn--icon, .copy { min-width: 2.75rem; min-height: 2.75rem; }
   .help-tip::after { inset: -12px; }
   .fchip { min-height: 2.75rem; }
@@ -2186,7 +2220,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .stage { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-ink); font-size: var(--text-xs); font-weight: var(--weight-semibold); white-space: nowrap; }
 .stage__mark { flex: none; width: 9px; height: 9px; }
 .stage--discovery .stage__mark { border: 1.5px solid var(--color-ink-3); border-radius: 50%; }
-.stage--credential_access .stage__mark { border: 1.5px solid var(--color-ink-2); border-radius: 1px; background: repeating-linear-gradient(135deg, var(--color-ink-3) 0 1.5px, transparent 1.5px 3.5px); }
+.stage--credential_access .stage__mark { border: 1.5px solid var(--color-ink-2); border-radius: 1px; background: repeating-linear-gradient(135deg, var(--color-ink-3) 0 1.5px, transparent 1.5px 3.5px); } /* taste-skill-ignore: hatch encodes the stage without colour */
 .stage--ai_service_abuse .stage__mark { background: color-mix(in srgb, var(--color-accent) 60%, transparent); transform: rotate(45deg) scale(0.85); }
 .stage--decoy_credential_replay .stage__mark { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--color-accent); }
 .stage--other .stage__mark { height: 2px; background: var(--color-ink-3); }
@@ -2197,7 +2231,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .ribbon__bar { display: flex; gap: 2px; width: 100%; height: 0.625rem; overflow: hidden; border-radius: var(--radius-xs); }
 .ribbon__seg { min-width: 3px; }
 .ribbon__seg--discovery { background: color-mix(in srgb, var(--color-ink-3) 30%, var(--color-surface)); box-shadow: inset 0 0 0 1px var(--color-border-strong); }
-.ribbon__seg--credential_access { background: repeating-linear-gradient(135deg, var(--color-ink-3) 0 2px, var(--color-surface-2) 2px 5px); }
+.ribbon__seg--credential_access { background: repeating-linear-gradient(135deg, var(--color-ink-3) 0 2px, var(--color-surface-2) 2px 5px); } /* taste-skill-ignore: hatch encodes the stage without colour */
 .ribbon__seg--ai_service_abuse { background: color-mix(in srgb, var(--color-accent) 55%, transparent); }
 .ribbon__seg--decoy_credential_replay { background: var(--color-accent); }
 .ribbon__seg--other { background: var(--sev-track); }
@@ -2222,7 +2256,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 }
 .story__event::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(7.75rem + 0.75rem - 0.5px); width: 1px; background: var(--color-border); }
 @media (hover: hover) { .story__event:hover { background: var(--color-surface-2); } }
-.story__event.is-open { background: var(--color-accent-soft); box-shadow: inset 2px 0 0 var(--color-accent); }
+.story__event.is-open { background: var(--color-surface-3); box-shadow: inset 1px 0 0 var(--color-accent); }
 .story__when { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; padding-right: var(--space-2); font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-ink-2); font-variant-numeric: tabular-nums; }
 .story__gap { color: var(--color-ink-3); }
 .story__gap--fast { color: var(--color-ink); font-weight: var(--weight-semibold); }
@@ -2286,7 +2320,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   text-decoration: none;
   transition: border-color var(--duration-instant) var(--ease-color), background-color var(--duration-instant) var(--ease-color);
 }
-.tcell--observed { box-shadow: inset 3px 0 0 var(--color-accent), var(--elev-1); }
+.tcell--observed { box-shadow: inset 3px 0 0 var(--color-accent); }
 .tcell--quiet { border-style: dashed; border-color: var(--color-border-strong); background: transparent; color: var(--color-ink-2); }
 @media (hover: hover) { a.tcell:hover { border-color: var(--color-accent-line); background: var(--color-surface-2); } }
 .tcell.is-target { outline: 2px solid var(--color-focus); outline-offset: 2px; }
@@ -2316,18 +2350,15 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 
 .lattice {
   background-image:
-    radial-gradient(circle at 0 0, var(--lattice-node) 1.25px, transparent 1.75px),
-    linear-gradient(var(--lattice-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--lattice-line) 1px, transparent 1px);
+    radial-gradient(circle at 0 0, var(--lattice-node) 1.25px, transparent 1.75px), /* taste-skill-ignore: lattice motif, used by the landing page only */
+    linear-gradient(var(--lattice-line) 1px, transparent 1px), /* taste-skill-ignore: lattice motif */
+    linear-gradient(90deg, var(--lattice-line) 1px, transparent 1px); /* taste-skill-ignore: lattice motif */
   background-size: 24px 24px;
   background-position: -1px -1px;
 }
 
-/* Panels: a hairline, an inner top highlight and, in dark, one step of
-   surface light at the top edge, so layers read without heavy shadows. */
-.panel { background: linear-gradient(to bottom, color-mix(in srgb, var(--color-surface) 97%, var(--color-ink)), var(--color-surface) 3.5rem); }
-:root[data-theme="light"] .panel { background: var(--color-surface); }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .panel { background: var(--color-surface); } }
+/* Panels are flat: one surface step from the canvas and a quiet hairline,
+   no shadow and no sheen. */
 .panel__title { letter-spacing: -0.006em; }
 
 /* Evidence keeps its violet inset and gains a tag notch on the left edge:
@@ -2342,7 +2373,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 /* Sensors as nodes around the console core. Node size follows events in the
    window; a ring marks a sensor with events in the newest bucket. Each node
    is a link with its name and count in text. */
-.mesh { display: block; width: 100%; max-width: 24rem; height: auto; margin: 0 auto; overflow: visible; }
+.mesh { display: block; width: 100%; max-width: 28rem; height: auto; margin: 0 auto; overflow: visible; }
 .mesh__edge { stroke: var(--color-border-strong); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.6; vector-effect: non-scaling-stroke; }
 .mesh__edge--active { stroke: var(--color-accent); stroke-dasharray: none; opacity: 0.55; }
 .mesh__core { fill: var(--color-accent); }
@@ -2354,7 +2385,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 @keyframes mesh-pulse { from { opacity: 0.6; transform: scale(1); } 70%, to { opacity: 0; transform: scale(2.2); } }
 @media (prefers-reduced-motion: reduce) { .mesh__pulse { animation: none; opacity: 0.45; } }
 .mesh__label { fill: var(--color-ink); font-family: var(--font-mono); font-size: 11px; }
-.mesh__count { fill: var(--color-ink-3); font-family: var(--font-sans); font-size: 10px; font-variant-numeric: tabular-nums; }
+.mesh__count { fill: var(--color-ink-3); font-family: var(--font-sans); font-size: 11px; font-variant-numeric: tabular-nums; }
 .mesh a:focus-visible .mesh__node { stroke: var(--color-focus); stroke-width: 3; }
 @media (hover: hover) { .mesh a:hover .mesh__node { stroke: var(--color-accent); } .mesh a:hover .mesh__label { fill: var(--color-accent); } }
 
@@ -2375,9 +2406,9 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .tempo__tick--canary_invocation { stroke: var(--class-canary); }
 .tempo__tick--interaction { stroke: var(--class-interaction); }
 .tempo__hit { fill: transparent; cursor: pointer; }
-.tempo__hit:focus-visible { outline: none; fill: color-mix(in srgb, var(--color-focus) 18%, transparent); }
+.tempo__hit:focus-visible { outline: none; fill: color-mix(in srgb, var(--color-focus) 18%, transparent); stroke: var(--color-focus); stroke-width: 2; }
 .tempo g.is-hot .tempo__tick { stroke: var(--color-ink); stroke-width: 3; }
-.tempo__label { fill: var(--color-ink-3); font-family: var(--font-sans); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tempo__label { fill: var(--color-ink-3); font-family: var(--font-sans); font-size: 11px; font-variant-numeric: tabular-nums; }
 .story__event.is-hot { background: var(--color-surface-2); box-shadow: inset 2px 0 0 var(--color-ink-3); }
 
 /* ---- Empty-state art --------------------------------------------------------- */
@@ -2394,9 +2425,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 :root[data-density="compact"] .table td { padding-top: 3px; padding-bottom: 3px; }
 :root[data-density="compact"] .story__event { padding-top: 3px; padding-bottom: 3px; }
 :root[data-density="compact"] .panel__body { padding: var(--space-3); }
-/* Zebra at the lowest specificity, so hover, cursor, open and live states
-   always win over it. */
-:where(.table--stack tbody tr:nth-child(even)) { background: color-mix(in srgb, var(--color-surface-2) 55%, transparent); }
+/* No zebra: rows are told apart by their rules and alignment. */
 
 /* ---- Catalog marks (2026-11-22) ------------------------------------------------ */
 /* Every mark is a shape plus a word; ink only, so nothing depends on color. */
@@ -2460,7 +2489,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .actor__count { color: var(--color-ink-3); font-variant-numeric: tabular-nums; }
 .actor__mark { position: relative; flex: none; display: inline-block; width: 10px; height: 10px; }
 .actor--auto .actor__mark, .mix__mark--auto { background: var(--color-accent); transform: rotate(45deg) scale(0.8); border-radius: 1px; }
-.actor--agent .actor__mark, .mix__mark--agent { border: 1.5px solid var(--color-accent); transform: rotate(45deg) scale(0.85); border-radius: 1px; background: radial-gradient(circle, var(--color-accent) 0 1.25px, transparent 1.75px); }
+.actor--agent .actor__mark, .mix__mark--agent { border: 1.5px solid var(--color-accent); transform: rotate(45deg) scale(0.85); border-radius: 1px; background: radial-gradient(circle, var(--color-accent) 0 1.25px, transparent 1.75px); } /* taste-skill-ignore: hatch encodes the reading without colour */
 .actor--human .actor__mark, .mix__mark--human { background: var(--color-ink-2); border-radius: 50%; transform: scale(0.85); }
 .actor--none .actor__mark, .mix__mark--none { height: 2px; background: var(--color-ink-3); border-radius: 1px; }
 
@@ -2510,7 +2539,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .mix__bar { display: flex; gap: 2px; width: 100%; min-width: 8rem; max-width: 16rem; height: 6px; }
 .mix__seg { flex: 1 1 0; min-width: 4px; border-radius: 1px; background: var(--sev-track); }
 .mix__seg--auto { background: var(--color-accent); }
-.mix__seg--agent { background: repeating-linear-gradient(135deg, var(--color-accent) 0 2px, color-mix(in srgb, var(--color-accent) 35%, transparent) 2px 4px); }
+.mix__seg--agent { background: repeating-linear-gradient(135deg, var(--color-accent) 0 2px, color-mix(in srgb, var(--color-accent) 35%, transparent) 2px 4px); } /* taste-skill-ignore: hatch encodes the reading without colour */
 .mix__seg--human { background: var(--color-ink-2); }
 .mix__seg--none { background: var(--color-border-strong); }
 .mix__list { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); color: var(--color-ink-2); font-size: var(--text-xs); }
@@ -2529,10 +2558,10 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 /* The campaign score: an accessible table drawn as lanes. */
 .score-wrap {
   position: relative; overflow-x: auto; overscroll-behavior-x: contain; margin: 0 calc(-1 * var(--space-4)); padding: 0 var(--space-4) var(--space-2);
-  /* Scroll shadows: an edge darkens only while more columns sit beyond it. */
-  background:
-    linear-gradient(to left, var(--color-surface), transparent) right / 2.5rem 100% no-repeat local,
-    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--color-ink) 14%, transparent), transparent) right / 0.75rem 100% no-repeat scroll;
+  /* A visible scrollbar says the score scrolls sideways (it replaced the
+     gradient scroll shadows); the cut-off column header says it too. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
 .score { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: var(--text-xs); }
 .score th, .score td { padding: 0; text-align: center; vertical-align: middle; }
@@ -2561,7 +2590,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .score__cell--performed .score__mark { background: var(--color-accent); box-shadow: 0 0 0 3px var(--color-surface); }
 .score__cell--absent .score__mark { width: 8px; height: 8px; margin-top: calc(1.25rem - 4px); border: 1.5px solid var(--color-ink-3); background: var(--color-surface); }
 .score__cell--unknown .score__mark { border: 1.5px dotted var(--color-ink-3); background: var(--color-surface); }
-.score__t { display: block; margin-top: 3px; color: var(--color-ink-2); font-family: var(--font-mono); font-size: 0.625rem; font-variant-numeric: tabular-nums slashed-zero; white-space: nowrap; }
+.score__t { display: block; margin-top: 3px; color: var(--color-ink-2); font-size: var(--text-2xs); font-variant-numeric: tabular-nums slashed-zero; white-space: nowrap; }
 .score-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin-bottom: var(--space-3); color: var(--color-ink-2); font-size: var(--text-xs); }
 .score-legend__item { display: inline-flex; align-items: center; gap: var(--space-2); }
 .score-legend__mark { position: relative; display: inline-grid; place-items: center; width: 22px; height: 12px; }
@@ -2577,7 +2606,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 /* Posture status: a mark plus words. Triangle-ish "!" = needs attention,
    "i" = for your information, check = looks right. */
 .pstatus { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-ink); font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap; }
-.pstatus__mark { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; border-radius: 50%; font-size: 0.625rem; font-weight: var(--weight-bold); line-height: 1; }
+.pstatus__mark { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; border-radius: 50%; font-size: var(--text-2xs); font-weight: var(--weight-bold); line-height: 1; }
 .pstatus--attention .pstatus__mark, .pfig--attention .pstatus__mark { border-radius: 3px; background: var(--color-warn-soft); color: var(--color-warn); box-shadow: inset 0 0 0 1.5px var(--color-warn); }
 .pstatus--info .pstatus__mark, .pfig--info .pstatus__mark { border: 1.5px solid var(--color-ink-3); color: var(--color-ink-2); font-family: var(--font-display); font-style: italic; }
 .pstatus--ok .pstatus__mark, .pfig--ok .pstatus__mark { background: var(--color-ok-soft); color: var(--color-ok); }
@@ -2595,6 +2624,6 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   .score__shape .evidence { max-width: 5.5rem; }
 }
 /* Touch: inline links that open a source, rule or campaign get a 40px target. */
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 47.99rem) {
   .source-chip, .campaign-mark, .score__src, .rule-link { display: inline-flex; align-items: center; min-height: 40px; }
 }

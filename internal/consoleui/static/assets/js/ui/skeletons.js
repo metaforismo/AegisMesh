@@ -24,17 +24,34 @@ function rows(n, cols = 5) {
 }
 
 const BUILDERS = {
+  // The brief beside its counts, then the chart (Overview).
   overview: () => [
     head(),
-    h('div', { class: ['grid', 'grid--stats'] }, Array.from({ length: 6 }, () => h('div', { class: 'stat' },
-      h('span', { class: 'stat__label' }, sk('text', 'w-50')), h('span', { class: 'stat__value' }, sk('value')), h('span', { class: 'stat__delta' }, sk('text', 'w-70'))))),
+    h('div', { class: 'lead-row' }, panelShell(lines(4)), panelShell(rows(6, 2))),
     panelShell(sk('block')),
     h('div', { class: ['grid', 'grid--2'] }, panelShell(rows(5, 2)), panelShell(rows(5, 2))),
   ],
   table: () => [head(), panelShell(rows(2, 4)), panelShell(rows(10, 6))],
   cards: () => [head(), h('div', { class: ['grid', 'grid--cards'] }, Array.from({ length: 4 }, () => panelShell(rows(4, 2))))],
   detail: () => [head(), h('div', { class: ['grid', 'grid--2'] }, panelShell(rows(6, 2)), panelShell(rows(3, 2))), panelShell(rows(5, 4))],
+  // A written briefing: one column of short paragraphs (Digest).
+  digest: () => [head(), panelShell(lines(4)), panelShell(rows(3, 3)), panelShell(lines(3))],
+  // Counts, then a checklist (Posture).
+  posture: () => [head(), h('div', { class: ['grid', 'grid--stats'] }, Array.from({ length: 3 }, () => h('div', { class: 'stat' },
+    h('span', { class: 'stat__label' }, sk('text', 'w-50')), h('span', { class: 'stat__value' }, sk('value'))))), panelShell(rows(6, 2))],
+  // A hero, then the timeline beside a side column (session story, campaign).
+  story: () => [head(), panelShell(h('div', { class: 'stack' }, sk('text', 'w-70'), sk('block'))), h('div', { class: ['grid', 'grid--2'] }, panelShell(rows(8, 3)), panelShell(rows(5, 2)))],
+  // Two key/value panels (Node, Fleet node).
+  kv: () => [head(), h('div', { class: ['grid', 'grid--2'] }, panelShell(rows(6, 2)), panelShell(rows(6, 2)))],
+  // Glossary entries (Guide).
+  guide: () => [head(), panelShell(lines(3)), panelShell(lines(3)), panelShell(lines(3))],
 };
+
+function lines(n) {
+  return h('div', { class: 'stack' }, Array.from({ length: n }, (_, i) => sk('text', widths[(i + 2) % widths.length])));
+}
+
+export const SKELETON_KINDS = Object.freeze(Object.keys(BUILDERS));
 
 export function skeleton(kind, title) {
   const build = BUILDERS[kind] || BUILDERS.detail;

@@ -7,6 +7,7 @@
 import { h, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
 import { formatCount, formatDateTime } from '../lib/format.js';
+import { severityRank } from '../lib/taxonomy.js';
 import { formatDurationMs } from '../lib/story.js';
 import { normalizeCampaign, basisSentence, basisText, spanText, plural, isCampaignId } from '../lib/insight.js';
 import { glossaryEntry } from '../lib/glossary.js';
@@ -32,15 +33,15 @@ function sessionsTable(list) {
     caption: 'Sessions in this campaign',
     columns: [
       {
-        label: 'Source', className: 'nowrap',
+        label: 'Source', className: 'nowrap', sort: (s) => s.source,
         cell: (s) => h('span', { class: 'stack-tight' },
           /^[0-9a-f]{32}$/.test(s.id) ? h('a', { href: sessionHref(s.id), 'data-row-link': '' }, evidence(s.source, { max: 24 })) : evidence(s.source, { max: 24 }),
           h('span', { class: 'muted' }, 'started ', timeEl(s.first_seen, { relative: true }))),
       },
-      { label: 'Duration', num: true, className: 'nowrap', cell: (s) => formatDurationMs(s.duration_ms) },
-      { label: 'Events', num: true, cell: (s) => formatCount(s.event_count) },
-      { label: 'Median gap', num: true, className: 'nowrap', cell: (s) => formatDurationMs(s.cadence?.median_gap_ms) },
-      { label: 'Max severity', cell: (s) => sevChip(s.max_severity) },
+      { label: 'Duration', num: true, className: 'nowrap', sort: (s) => s.duration_ms, cell: (s) => formatDurationMs(s.duration_ms) },
+      { label: 'Events', num: true, sort: (s) => s.event_count, cell: (s) => formatCount(s.event_count) },
+      { label: 'Median gap', num: true, className: 'nowrap', sort: (s) => s.cadence?.median_gap_ms, cell: (s) => formatDurationMs(s.cadence?.median_gap_ms) },
+      { label: 'Max severity', sort: (s) => severityRank(s.max_severity), sortFirst: 'desc', cell: (s) => sevChip(s.max_severity) },
       { label: 'Reads as', cell: (s) => (s.actor ? actorChip(s.actor, { compact: true }) : h('span', { class: 'muted' }, 'Not reported')) },
     ],
     rows: list,

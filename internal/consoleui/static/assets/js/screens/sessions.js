@@ -45,7 +45,7 @@ function columns(withActor) {
     { label: 'Events', num: true, cell: (s) => formatCount(s.event_count) },
     { label: 'Surfaces', cell: (s) => kindChips(s.sensor_kinds, { text: true }) },
     { label: 'Max severity', cell: (s) => sevChip(s.max_severity) },
-    { label: 'Rules', cell: (s) => ruleChips(s.rule_ids) },
+    { label: 'Rules', cell: (s) => ruleChips(s.rule_ids, undefined, { max: 2 }) },
     { label: 'Pace', className: 'nowrap', cell: (s) => cadenceStrip(s.cadence) },
     withActor
       ? { label: 'Reads as', cell: (s) => (s.actor ? actorChip(s.actor, { compact: true }) : assessmentChip(s.automation, { compact: true })) }

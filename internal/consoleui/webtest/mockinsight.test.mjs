@@ -10,7 +10,7 @@ import { stepShape, SIGNAL_CODES } from '../devserver/mock-insight.mjs';
 const start = (args) => new Promise((resolve, reject) => {
   const port = 22000 + Math.floor(Math.random() * 1000);
   const proc = spawn(process.execPath, [fileURLToPath(new URL('../devserver/mock-server.mjs', import.meta.url)), '--port', String(port), ...args], { stdio: ['ignore', 'pipe', 'inherit'] });
-  const t = setTimeout(() => reject(new Error('mock did not start')), 5000);
+  const t = setTimeout(() => reject(new Error('mock did not start')), 30000);
   proc.stdout.on('data', (d) => { if (String(d).includes('console mock on')) { clearTimeout(t); resolve({ proc, base: `http://127.0.0.1:${port}` }); } });
 });
 let on;

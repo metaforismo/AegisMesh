@@ -1,21 +1,29 @@
 // Reusable view builders. Every builder returns DOM nodes made through dom.js;
 // API strings only ever become Text nodes or validated attribute values.
 
-import { h, svg } from '../lib/dom.js';
+import { h, svg, mount } from '../lib/dom.js';
 import { classificationMeta, isSeverity, severityLabel, capitalize } from '../lib/taxonomy.js';
 import { formatDateTime, formatRelative, truncate } from '../lib/format.js';
 import { describeError } from '../lib/api.js';
 import { sparkPath } from '../lib/chart.js';
 import { sparkMarks } from '../lib/viz.js';
+import { sortRows, nextSort, ariaSort } from '../lib/tablesort.js';
 import { icon } from './icons.js';
 
 // ---- Severity, classification, badges ------------------------------------
 
-export function sevChip(severity) {
+// The one severity mark: five segments filled to the rank, plus the word.
+// Every table, chip, legend, card and chart key uses it, so severity reads
+// the same without color (fill count) and without sight (the word). A value
+// that is not a severity draws the empty meter with "No finding", or with
+// `none` (e.g. "Signal" for correlation rules) and its `noneTitle`.
+export const SIGNAL_NO_SEVERITY = Object.freeze({ none: 'Signal', noneTitle: 'Correlation rules write signals, which have no severity' });
+
+export function sevChip(severity, { none, noneTitle } = {}) {
   const known = isSeverity(severity);
-  return h('span', { class: ['sev', known ? `sev--${severity}` : 'sev--none'] },
+  return h('span', { class: ['sev', known ? `sev--${severity}` : 'sev--none'], title: !known && noneTitle ? noneTitle : null },
     h('span', { class: 'sev__meter', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'), h('i'), h('i')),
-    severityLabel(known ? severity : ''));
+    known ? severityLabel(severity) : (none || severityLabel('')));
 }
 
 export function glyph(classification) {
@@ -117,6 +125,23 @@ export function stat({ label, value, delta, icon: lead, spark, title, note }) {
     !delta && note ? h('span', { class: 'stat__delta' }, note) : null);
 }
 
+// A divided list of counts: label left, figure right, its change under it on
+// the same right edge. The first row may lead (a larger figure). `delta`
+// comes from formatDelta; changes stay neutral ink and carry their sign in
+// the text, and `baseline` (visually hidden) names what they are against.
+export function tally(items, { baseline = '' } = {}) {
+  return h('dl', { class: 'tally' }, items.filter(Boolean).map((it) =>
+    h('div', { class: ['tally__row', it.lead ? 'tally__row--lead' : ''] },
+      h('dt', { class: 'tally__label' }, it.icon || null, h('span', null, it.label)),
+      h('dd', { class: 'tally__value' },
+        h('span', { class: 'tally__num' }, it.value),
+        it.delta
+          ? h('span', { class: 'tally__delta' }, it.delta.text, baseline && it.delta.detail === 'vs previous window'
+            ? h('span', { class: 'visually-hidden' }, ` ${baseline}`)
+            : it.delta.detail === 'vs previous window' ? null : ` · ${it.delta.detail}`)
+          : it.note ? h('span', { class: 'tally__delta' }, it.note) : null))));
+}
+
 // Decorative trend line beside a printed number (aria-hidden: the number
 // and the chart's table view carry the data). `series` picks a class color.
 export function sparkline(values, { series = '', width = 88, height = 28, label } = {}) {
@@ -146,14 +171,72 @@ export function kv(pairs) {
   return h('dl', { class: 'kv' }, items);
 }
 
-// columns: [{ label, num?, className?, cell(row) → Node|string }]
-export function table({ columns, rows, caption, stack = true, rowClass }) {
-  return h('div', { class: 'table-wrap' },
+// A table wider than its column scrolls inside its own wrapper instead of
+// widening the page. From 1440px wrappers do not clip (so headers can stick
+// under the top bar); a table that still does not fit switches to the
+// scrolling wrapper, whose header sticks within it.
+export function fitTable(wrap) {
+  if (typeof ResizeObserver !== 'function') return wrap;
+  const check = () => {
+    const t = wrap.firstElementChild;
+    if (!t || !wrap.isConnected) return;
+    if (wrap.classList.contains('table-wrap--fit')) {
+      wrap.classList.remove('table-wrap--scroll');
+      if (t.offsetWidth > wrap.clientWidth + 1) wrap.classList.add('table-wrap--scroll');
+    }
+  };
+  wrap.classList.add('table-wrap--fit');
+  new ResizeObserver(check).observe(wrap);
+  return wrap;
+}
+
+// columns: [{ label, num?, className?, cell(row) → Node|string,
+//             sort?(row) → number|string|null, sortFirst?: 'asc'|'desc' }]
+// A column with `sort` gets a header button (aria-sort, keyboard operable)
+// that reorders the rows already in the browser; see lib/tablesort.js for
+// which tables may sort. `sort` ({ key: label, dir }) is the initial order;
+// without it rows keep the server's order until a header is chosen.
+export function table({ columns, rows, caption, stack = true, rowClass, sort = null, scroll = false }) {
+  let state = sort;
+  const tbody = h('tbody');
+  const status = h('span', { class: 'visually-hidden', role: 'status' });
+  const paint = () => {
+    const col = state && columns.find((c) => c.label === state.key && typeof c.sort === 'function');
+    const ordered = col ? sortRows(rows, col.sort, state.dir) : rows;
+    mount(tbody, ordered.map((row) => h('tr', { class: rowClass ? rowClass(row) : null },
+      columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || ''], 'data-label': c.label }, c.cell(row))))));
+  };
+  const syncs = [];
+  const heads = columns.map((c) => {
+    const thClass = [c.num ? 'num' : '', c.className || ''];
+    if (typeof c.sort !== 'function' || rows.length < 2) return h('th', { scope: 'col', class: thClass }, c.label);
+    const name = c.label.toLowerCase();
+    const btn = h('button', { class: 'th-sort', type: 'button' }, h('span', null, c.label), h('span', { class: 'th-sort__mark', 'aria-hidden': 'true' }));
+    const th = h('th', { scope: 'col', class: thClass }, btn);
+    const sync = () => {
+      const dir = ariaSort(state, c.label);
+      th.setAttribute('aria-sort', dir);
+      btn.setAttribute('data-dir', dir);
+      btn.setAttribute('title', dir === 'none' ? `Sort by ${name}` : `Sorted by ${name}, ${dir}`);
+    };
+    btn.addEventListener('click', () => {
+      state = nextSort(state, c.label, c.sortFirst || (c.num ? 'desc' : 'asc'));
+      paint();
+      for (const f of syncs) f();
+      status.textContent = `Sorted by ${name}, ${state.dir === 'asc' ? 'ascending' : 'descending'}.`;
+    });
+    syncs.push(sync);
+    sync();
+    return th;
+  });
+  paint();
+  const wrap = h('div', { class: ['table-wrap', scroll ? 'table-wrap--scroll' : ''] },
     h('table', { class: ['table', stack ? 'table--stack' : ''] },
       caption ? h('caption', { class: 'visually-hidden' }, caption) : null,
-      h('thead', null, h('tr', null, columns.map((c) => h('th', { scope: 'col', class: [c.num ? 'num' : '', c.className || ''] }, c.label)))),
-      h('tbody', null, rows.map((row) => h('tr', { class: rowClass ? rowClass(row) : null },
-        columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || ''], 'data-label': c.label }, c.cell(row))))))));
+      h('thead', null, h('tr', null, heads)),
+      tbody),
+    status);
+  return scroll ? wrap : fitTable(wrap);
 }
 
 // ---- States ----------------------------------------------------------------
@@ -230,6 +313,18 @@ export function errorState(err, onRetry) {
     h('p', { class: 'state__title' }, d.title),
     h('p', null, d.detail),
     onRetry ? h('button', { class: 'btn', type: 'button', on: { click: onRetry } }, icon('refresh'), 'Try again') : null);
+}
+
+// A screen that could not load: what happened, one sentence on why, and a
+// next step (`f` from lib/api.js screenFailure). Retry only where it can help.
+export function failureState(f, onRetry) {
+  return h('div', { class: ['state', f.retry ? 'state--error' : ''], role: f.retry ? 'alert' : 'status' },
+    h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon(f.retry ? 'warn' : 'info')),
+    h('p', { class: 'state__title' }, f.title),
+    h('p', null, f.detail),
+    h('div', { class: ['btn-row', 'state__actions'] },
+      f.retry && onRetry ? h('button', { class: 'btn', type: 'button', on: { click: onRetry } }, icon('refresh'), 'Try again') : null,
+      (f.actions || []).map(([target, label]) => h('a', { class: 'btn', href: target }, label))));
 }
 
 const BANNER_ICON = { info: 'info', warn: 'warn', danger: 'warn' };

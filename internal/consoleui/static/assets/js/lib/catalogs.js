@@ -10,10 +10,10 @@
 // builds markup, and the Markdown export fences every server string.
 
 import { isSeverity, severityLabel } from './taxonomy.js';
+import { formatCount } from './format.js';
 
-const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const isCount = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0;
-const count = (v) => (isCount(v) ? nf.format(v) : '—');
+const count = (v) => (isCount(v) ? formatCount(v) : '—');
 const plural = (n, one, many) => (n === 1 ? one : many);
 const arr = (v) => (Array.isArray(v) ? v : []);
 const str = (v) => (typeof v === 'string' ? v : '');
@@ -225,7 +225,7 @@ export function digestFigures(d) {
     const prev = d?.previous_totals?.[key];
     const known = isCount(cur) && isCount(prev);
     const diff = known ? cur - prev : null;
-    return { key, label, current: isCount(cur) ? cur : null, previous: isCount(prev) ? prev : null, change: diff === null ? '—' : diff === 0 ? 'same' : `${diff > 0 ? '+' : '−'}${nf.format(Math.abs(diff))}` };
+    return { key, label, current: isCount(cur) ? cur : null, previous: isCount(prev) ? prev : null, change: diff === null ? '—' : diff === 0 ? 'same' : `${diff > 0 ? '+' : '−'}${formatCount(Math.abs(diff))}` };
   });
 }
 

@@ -148,9 +148,10 @@ export function applyDensity(d = readDensity()) {
 function densityControl() {
   const btn = h('button', { class: ['btn', 'btn--ghost', 'btn--icon'], type: 'button' });
   const paint = (d) => {
-    btn.replaceChildren(icon(d === 'compact' ? 'rules' : 'menu'));
-    btn.setAttribute('aria-label', `Row density: ${d}. Activate for ${nextDensity(d)} rows.`);
-    btn.setAttribute('title', `Rows: ${d}`);
+    // A toggle keeps one name; aria-pressed says whether it is on.
+    btn.replaceChildren(icon(d === 'compact' ? 'rows-dense' : 'rows-loose'));
+    btn.setAttribute('aria-label', 'Compact rows');
+    btn.setAttribute('title', d === 'compact' ? 'Rows: compact' : 'Rows: comfortable');
     btn.setAttribute('aria-pressed', String(d === 'compact'));
   };
   btn.addEventListener('click', () => {

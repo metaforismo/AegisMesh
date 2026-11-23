@@ -11,7 +11,7 @@
 import { h, mount, svg } from '../lib/dom.js';
 import { tempoLayout } from '../lib/viz.js';
 import { href, withQuery, isEventId, isSessionId } from '../lib/route.js';
-import { formatCount, formatDateTime, formatClock } from '../lib/format.js';
+import { formatCount, formatDateTime, formatClock, formatNumber } from '../lib/format.js';
 import { eventKey, parseEventKey, isNodeId } from '../lib/origin.js';
 import { moveIndex, isTypingTarget } from '../lib/keys.js';
 import { cadence as gapBins } from '../lib/cadence.js';
@@ -103,9 +103,18 @@ function tempoView(d, storySlot, rowHref) {
   const plot = svg('svg', { class: 'tempo', viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': 'Tempo: every event on one compressed time axis. Arrow keys move between events.' });
   for (const b of L.bands) plot.appendChild(svg('rect', { class: ['tempo__band', `tempo__band--${STAGES[b.stage] ? b.stage : 'other'}`], x: b.left, y: 40, width: Math.max(2, b.right - b.left), height: 8, rx: 2 }));
   plot.appendChild(svg('line', { class: 'tempo__axis', x1: 10, x2: W - 10, y1: 34.5, y2: 34.5 }));
+  // Break labels never overlap each other or the end times: a label that
+  // would collide is left out (the break mark stays, and the story's rail
+  // prints every gap). Widths are estimated at 11px tabular figures.
+  const textW = (s) => String(s).length * 6.4;
+  const taken = [[10, 10 + textW(clockMs(timeline[0].time))], [W - 10 - textW(clockMs(timeline[timeline.length - 1].time)), W - 10]];
   for (const br of L.breaks) {
     plot.appendChild(svg('path', { class: 'tempo__break', d: `M${br.x - 3} 30 l4 9 M${br.x + 1} 30 l4 9` }));
-    plot.appendChild(svg('text', { class: 'tempo__label', x: br.x, y: 60, 'text-anchor': 'middle' }, formatDurationMs(br.ms)));
+    const label = formatDurationMs(br.ms);
+    const span = [br.x - textW(label) / 2 - 6, br.x + textW(label) / 2 + 6];
+    if (taken.some(([a, b]) => span[0] < b && span[1] > a)) continue;
+    taken.push(span);
+    plot.appendChild(svg('text', { class: 'tempo__label', x: br.x, y: 60, 'text-anchor': 'middle' }, label));
   }
   const groups = [];
   const hot = (i, on) => {
@@ -168,7 +177,7 @@ function cadencePanel(d) {
     body: [
       h('dl', { class: 'figures' },
         [['Median gap', formatDurationMs(c.median_gap_ms)], ['90th percentile', formatDurationMs(c.p90_gap_ms)], ['Shortest gap', formatDurationMs(c.min_gap_ms)],
-          ['Events per minute', Number.isFinite(c.events_per_minute) ? (Math.round(c.events_per_minute * 10) / 10).toLocaleString('en-US') : '—'], ['Regularity', regularityText(c)]]
+          ['Events per minute', Number.isFinite(c.events_per_minute) ? formatNumber(c.events_per_minute) : '—'], ['Regularity', regularityText(c)]]
           .map(([k, v]) => h('div', { class: 'figures__item' }, h('dt', null, k), h('dd', null, v)))),
       h('p', { class: 'figures__note' }, 'Regularity is the share of gaps within 25% of the median gap (with a zero median, only zero gaps count). The median is the upper median and the 90th percentile is nearest-rank. Zero gaps can be clock precision, not speed.'),
       hist,
