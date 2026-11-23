@@ -3,8 +3,8 @@ import { meshLayout, lastBucketActive } from '../lib/viz.js';
 import { href, normalizeWindow } from '../lib/route.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
 import { formatCount, formatDelta } from '../lib/format.js';
-import { seriesOf, bucketTrace, indexKnownFrom, BY_SENSOR_CAP } from '../lib/chart.js';
-import { pageHead, panel, stat, segmented, glyph, sevChip, evidence, barList, table, timeEl, empty, link, sparkline, helpTip } from '../ui/components.js';
+import { bucketTrace, indexKnownFrom, BY_SENSOR_CAP } from '../lib/chart.js';
+import { pageHead, panel, tally, segmented, glyph, sevChip, evidence, barList, table, timeEl, empty, link, helpTip } from '../ui/components.js';
 import { stackedBarChart, severityShare, activityTrace, SEVERITY_ORDER } from '../ui/charts.js';
 import { icon } from '../ui/icons.js';
 import { rankByNode, describeOrigin } from '../lib/origin.js';
@@ -70,6 +70,11 @@ function briefPanel(ov, window, windowText, kind, sessions) {
       'Computed in your browser from this overview only. Events are observations, not incidents. ',
       h('a', { href: '#/guide?t=classification' }, 'What do the classes mean?')));
 }
+
+// Overview lists are capped so paired panels end level; each links to the
+// full list.
+const RULES_SHOWN = 5;
+const SIGNALS_SHOWN = 7;
 
 const WINDOW_LABELS = [['1h', 'Last hour'], ['24h', 'Last 24 hours'], ['7d', 'Last 7 days']];
 const WINDOW_MS = { '1h': 3600e3, '24h': 86400e3, '7d': 7 * 86400e3 };
@@ -172,17 +177,18 @@ export default {
     const windowText = WINDOW_LABELS.find(([w]) => w === window)[1].toLowerCase();
 
     const buckets = Array.isArray(ov.buckets) ? ov.buckets : [];
-    // Sparklines come from the same buckets as the chart. Sources and active
-    // sensors have no per-bucket series in the API, so they get none.
-    const trend = (key) => (buckets.length > 1 ? sparkline(seriesOf(buckets, key), { series: key || '' }) : null);
-    const tiles = h('div', { class: 'grid grid--stats' },
-      stat({ label: 'Events', value: formatCount(t.events), delta: formatDelta(t.events, p.events), spark: trend('') }),
-      ...CLASSIFICATIONS.map((c) => stat({
-        label: classificationMeta(c).label, icon: glyph(c),
-        value: formatCount(t[c]), delta: formatDelta(t[c], p[c]), spark: trend(c),
-      })),
-      stat({ label: 'Distinct sources', value: formatCount(t.sources), delta: formatDelta(t.sources, p.sources) }),
-      stat({ label: 'Sensors with events', value: formatCount(t.sensors_active), note: 'This window only' }));
+    // The counts sit beside the brief they summarise: one divided list, the
+    // total leading. No sparklines: the chart below draws the trend once.
+    const baseline = `against the ${windowText.replace(/^last /, '')} before`;
+    const counts = panel({
+      title: 'Counts', meta: `The ${windowText}, ${baseline}`,
+      body: tally([
+        { lead: true, label: 'Events', value: formatCount(t.events), delta: formatDelta(t.events, p.events) },
+        ...CLASSIFICATIONS.map((c) => ({ label: classificationMeta(c).label, icon: glyph(c), value: formatCount(t[c]), delta: formatDelta(t[c], p[c]) })),
+        { label: 'Distinct sources', value: formatCount(t.sources), delta: formatDelta(t.sources, p.sources) },
+        { label: 'Sensors with events', value: formatCount(t.sensors_active), note: 'This window only' },
+      ], { baseline: `vs the ${windowText.replace(/^last /, '')} before` }),
+    });
 
     const sev = ov.by_severity || {};
     // "No finding" links to nothing: the minimum-severity filter cannot select it.
@@ -196,6 +202,25 @@ export default {
     const knownFrom = indexKnownFrom(node);
 
     const quietKind = emptyKind(ov);
+    // What to read next: one divided block, each cell a count, what it
+    // counts and the one action it leads to.
+    const nextCell = (title, value, text, to, action) => h('section', { class: 'next__cell' },
+      h('h2', { class: 'next__title' }, title),
+      h('p', { class: 'next__value' }, value),
+      h('p', { class: 'next__text' }, text),
+      h('a', { class: ['btn', 'btn--sm', 'next__go'], href: to }, action, icon('chevron-right', { size: 'sm' })));
+    const nextRow = h('div', { class: ['next', campaignItems ? 'next--3' : 'next--2'] },
+      nextCell('Investigations', formatCount(ov.open_investigations),
+        Number(ov.open_investigations) === 1 ? 'open investigation' : 'open investigations',
+        href('investigations', { status: 'open' }), 'Review open investigations'),
+      nextCell(titled('Sessions', 'session'), sessions ? formatCount(Number(sessions.total_matched) || 0) : '—',
+        sessions ? 'sessions overlapping this window' : 'The sessions view did not answer.',
+        href('sessions', { window }), 'Read the sessions'),
+      campaignItems ? nextCell(titled('Campaigns', 'campaign'), formatCount(campaignItems.length),
+        campaignItems.length
+          ? `playbooks seen from more than one source, ${plural(new Set(campaignItems.flatMap((c) => (Array.isArray(c?.sources) ? c.sources : []))).size, 'source')} in all (indexed events, not this window)`
+          : 'No two sources followed the same steps in the indexed events.',
+        href('campaigns'), 'Compare campaigns') : null);
     mount(root,
       pageHead({
         title: 'Overview',
@@ -205,11 +230,14 @@ export default {
       }),
       historyBanner(node, { accepting: hasByNode }),
       hasByNode ? forwardedNote('counts') : null,
-      briefPanel(ov, window, WINDOW_LABELS.find(([w]) => w === window)[1], quietKind, sessions),
+      // The screen's question, answered first and largest: the brief, with
+      // the counts it summarises beside it.
+      h('div', { class: 'lead-row' },
+        briefPanel(ov, window, WINDOW_LABELS.find(([w]) => w === window)[1], quietKind, sessions),
+        counts),
       // One quiet line, never an alarm: the count links to the review.
       pc ? h('a', { class: ['quiet-line', pc.attention ? 'quiet-line--attention' : ''], href: href('posture', pc.attention ? { show: 'attention' } : {}) },
         icon('posture', { size: 'sm' }), h('span', null, postureLine(pc)), h('span', { class: 'quiet-line__go' }, pc.attention ? 'Review' : 'Open the review', icon('chevron-right', { size: 'xs' }))) : null,
-      tiles,
       panel({
         primary: true,
         title: 'Observations over time', meta: `Stacked by classification · ${buckets.length} buckets · times in UTC`,
@@ -217,12 +245,14 @@ export default {
           ? stackedBarChart(buckets, window, { end: ov.generated_at, onSelect: (range) => ctx.navigate(href('events', range)) })
           : empty('No buckets', 'The server returned no time buckets for this window.'),
       }),
-      h('div', { class: 'grid grid--2' },
+      nextRow,
+      h('div', { class: 'grid grid--pair' },
         panel({ title: titled('By severity', 'severity'), meta: 'Highest finding per event; most events carry no finding', body: severityShare(sevItems) }),
         panel({
-          title: titled('Top rules', 'finding'), meta: 'Rules cited by the most events',
+          title: titled('Top rules', 'finding'), meta: rules.length > RULES_SHOWN ? `The ${RULES_SHOWN} rules cited by the most events` : 'Rules cited by the most events',
+          actions: link(href('rules'), 'All rules'),
           body: rules.length
-            ? barList(rules.map((r) => ({
+            ? barList(rules.slice(0, RULES_SHOWN).map((r) => ({
               label: h('span', { class: 'rule-label' }, h('code', null, r.rule_id),
                 typeof r.title === 'string' && r.title ? h('span', { class: 'rule-label__title', title: r.title }, r.title) : null,
                 r.severity ? sevChip(r.severity) : null),
@@ -230,11 +260,11 @@ export default {
             })))
             : empty('No rule matched', 'No event in this window cited a detection or correlation rule.'),
         })),
-      h('div', { class: 'grid grid--2' },
+      h('div', { class: 'grid grid--pair' },
         panel({
           title: titled('Top sources', 'source'), meta: 'Remote hosts or correlation keys, ranked by events', flush: true,
           actions: link(href('sources', { window }), 'All sources'),
-          body: sources.length ? table({
+          body: sources.length ? h('div', { class: 'overview-sources' }, table({
             caption: 'Top sources',
             columns: [
               { label: 'Source', cell: (s) => link(href('sources', s.source), evidence(s.source, { max: 40 })) },
@@ -243,12 +273,12 @@ export default {
               { label: 'Last seen', cell: (s) => timeEl(s.last_seen, { relative: true }) },
             ],
             rows: sources,
-          }) : empty('No sources', 'Nothing was observed in this window.'),
+          })) : empty('No sources', 'Nothing was observed in this window.'),
         }),
         panel({
-          title: titled('Recent correlation signals', 'correlation'), meta: 'Up to 10, newest first',
+          title: titled('Recent correlation signals', 'correlation'), meta: signals.length > SIGNALS_SHOWN ? `The ${SIGNALS_SHOWN} newest of ${signals.length}` : 'Newest first',
           actions: link(href('events', { classification: 'correlation_signal' }), 'All signals'),
-          body: signals.length ? h('ol', { class: 'timeline' }, signals.map((s) => h('li', { class: 'timeline__item' },
+          body: signals.length ? h('ol', { class: ['timeline', 'timeline--compact'] }, signals.slice(0, SIGNALS_SHOWN).map((s) => h('li', { class: 'timeline__item' },
             glyph('correlation_signal'),
             h('p', { class: 'timeline__time' }, timeEl(s.time)),
             h('div', { class: 'timeline__body' },
@@ -256,7 +286,7 @@ export default {
               sevChip(s.severity))))) : empty('No signals', 'No correlation rule fired in this window.'),
         })),
       hasByNode ? byNodePanel(ov.by_node, window, ov.generated_at) : null,
-      h('div', { class: 'grid grid--2' },
+      h('div', { class: 'grid grid--pair' },
         panel({
           title: 'Events by sensor', flush: false,
           meta: sensorsMeta(sensors),
@@ -267,30 +297,6 @@ export default {
           }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
         }),
         meshPanel(sensors, windowText)),
-      h('div', { class: ['grid', campaignItems ? 'grid--3' : 'grid--2'] },
-        panel({
-          title: 'Investigations',
-          body: h('div', { class: 'inv-summary' },
-            h('p', { class: 'inv-summary__value' }, formatCount(ov.open_investigations)),
-            h('p', { class: 'muted' }, Number(ov.open_investigations) === 1 ? 'open investigation' : 'open investigations'),
-            h('a', { class: ['btn', 'btn--sm'], href: href('investigations', { status: 'open' }) }, 'Review open investigations', icon('chevron-right', { size: 'sm' }))),
-        }),
-        panel({
-          title: titled('Sessions', 'session'),
-          body: h('div', { class: 'inv-summary' },
-            h('p', { class: 'inv-summary__value' }, sessions ? formatCount(Number(sessions.total_matched) || 0) : '—'),
-            h('p', { class: 'muted' }, sessions ? 'sessions overlapping this window' : 'The sessions view did not answer.'),
-            h('a', { class: ['btn', 'btn--sm'], href: href('sessions', { window }) }, 'Read the sessions', icon('chevron-right', { size: 'sm' }))),
-        }),
-        campaignItems ? panel({
-          title: titled('Campaigns', 'campaign'),
-          body: h('div', { class: 'inv-summary' },
-            h('p', { class: 'inv-summary__value' }, formatCount(campaignItems.length)),
-            h('p', { class: 'muted' }, campaignItems.length
-              ? `playbooks seen from more than one source, ${plural(new Set(campaignItems.flatMap((c) => (Array.isArray(c?.sources) ? c.sources : []))).size, 'source')} in all (indexed events, not this window)`
-              : 'No two sources followed the same steps in the indexed events.'),
-            h('a', { class: ['btn', 'btn--sm'], href: href('campaigns') }, 'Compare campaigns', icon('chevron-right', { size: 'sm' }))),
-        }) : null),
       h('p', { class: 'page-note' }, icon('info', { size: 'sm' }),
         h('span', null, 'Counts come from the console’s bounded in-memory index, not from all evidence ever stored. Use ', h('code', null, 'aegismesh inspect'), ' for older evidence.'),
         tip('index')),

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createFakeDocument } from './fakedom.mjs';
 
 globalThis.document = createFakeDocument();
-const { sevChip, clsChip, evidence, table, badge, kv, SIGNAL_NO_SEVERITY } = await import('../static/assets/js/ui/components.js');
+const { sevChip, clsChip, evidence, table, badge, kv, tally, SIGNAL_NO_SEVERITY } = await import('../static/assets/js/ui/components.js');
 const { severityShare } = await import('../static/assets/js/ui/charts.js');
 const { SCREENS } = await import('../static/assets/js/screens/index.js');
 const { parseHash } = await import('../static/assets/js/lib/route.js');
@@ -93,4 +93,27 @@ test('every screen names a loading skeleton that exists and matches its layout f
   assert.equal(SCREENS.digest.skeleton, 'digest');
   assert.equal(SCREENS.attack_session.skeleton, 'story');
   assert.equal(SCREENS.node.skeleton, 'kv');
+});
+
+test('tally: label, figure and neutral change per row; the lead row and the baseline', async () => {
+  const { formatDelta } = await import('../static/assets/js/lib/format.js');
+  const el = tally([
+    { lead: true, label: 'Events', value: '860', delta: formatDelta(860, 234) },
+    { label: 'Distinct sources', value: '18', delta: formatDelta(18, 0) },
+    null,
+    { label: 'Sensors with events', value: '8', note: 'This window only' },
+  ], { baseline: 'vs the 24 hours before' });
+  assert.equal(el.tagName.toLowerCase(), 'dl');
+  const rows = el.childNodes;
+  assert.equal(rows.length, 3, 'null items are skipped');
+  assert.equal(cls(rows[0]), 'tally__row tally__row--lead');
+  assert.equal(cls(rows[1]), 'tally__row');
+  assert.equal(rows[0].childNodes[0].tagName.toLowerCase(), 'dt');
+  assert.equal(rows[0].childNodes[1].tagName.toLowerCase(), 'dd');
+  // The change keeps its sign in the text; the baseline is said once per
+  // row for screen readers, and a "new" change names its own baseline.
+  assert.match(rows[0].textContent, /\+626 \(\+268%\) vs the 24 hours before/);
+  assert.match(rows[1].textContent, /\+18 · none in previous window/);
+  assert.match(rows[2].textContent, /This window only/);
+  assert.doesNotMatch(el.textContent, /vs previous window/);
 });
