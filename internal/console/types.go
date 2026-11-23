@@ -83,6 +83,8 @@ type NodeStorage struct {
 	Bytes int64 `json:"bytes"`
 	// Encrypted reports configured evidence encryption.
 	Encrypted bool `json:"encrypted"`
+	// Healthy reports the runtime's storage health snapshot.
+	Healthy bool `json:"healthy"`
 	// Retention reports configured evidence retention bounds.
 	Retention Retention `json:"retention"`
 }

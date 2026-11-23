@@ -1108,3 +1108,105 @@ SSH command classes, MCP rejected calls and TCP banner classes are not
 represented because the index projection lacks them. No accuracy,
 false-positive or attribution claim is made; thresholds are documented
 constants awaiting field evaluation.
+
+## ADR-0025 — managed accounts, API keys, session administration and read-only settings
+
+**Status:** implemented on branch `feat/accounts-access`; not merged or released.
+
+**Context.** Operators asked for per-person and per-integration access without
+editing the config file and restarting for every change, for visibility into
+who is signed in, for a way to end sessions, and for an audit download. The
+console (ADR-0017) is read-mostly and file-configured; config operators
+(token digests) and OIDC identities (ADR-0019) were the only principals.
+
+**Alternatives.** (A) Let the console edit `console.operators` in the config
+file. Rejected: it turns an authenticated HTTP request into configuration
+mutation (AGENTS.md rule 2), races with operators editing the file, and would
+need a reload path the runtime does not have. (B) Passwords for managed
+accounts. Rejected: a human-password store needs a slow KDF, reset flows and
+breach handling for no gain over high-entropy keys plus SSO. (C) A separate
+state file of managed accounts that authenticate only with high-entropy API
+keys, alongside unchanged config operators. **Chosen: C.**
+
+**Decision.** `console/accounts` persists one versioned snapshot
+(`<state_dir>/accounts/accounts.json`, schema `aegismesh.console.accounts/v1`)
+under a private `os.Root`, replaced atomically with fsync like investigations,
+decoded strictly and validated on load. Bounds: 200 accounts, 10 keys per
+account (inactive keys are pruned first), names of 1..80 printable runes,
+labels of 1..64, 1000 seen OIDC identities (least recently seen evicted), 4 MiB.
+Roles are exactly viewer|analyst|admin: nothing in the store can grant more
+than admin, and the store never contains or changes config operators, which
+remain the authoritative break-glass path. A snapshot changed by another
+writer since load makes later saves fail closed rather than overwrite it.
+
+API keys are `amk_` + 32 random bytes (base64url); only SHA-256 is stored and
+the token is returned once. Expiry is mandatory (1..365 days, default 90).
+Authentication hashes once, scans every config digest and every managed key
+with constant-time comparison (both registries, always), then fails closed for
+revoked or expired keys, disabled accounts and memberships no longer declared.
+Bearer failures share the existing per-address throttle. `last_used_at` changes
+at most once a minute in memory and is flushed every minute and on shutdown.
+Sessions opened with a key never outlive the key and end when it is revoked;
+disabling an account or changing its role or tenants ends its sessions. Event
+streams authenticated directly by a managed key re-verify it through the store
+before each event and on each heartbeat, and stop at the key's expiry.
+
+Principals carry stable ids: `cfg:<name>`, `acc_<16 hex>`, and
+`oidc:<12 hex>` = HMAC-SHA-256 of issuer and subject under a random key kept
+in the store, so neither value is exposed. Sessions stay in memory and gain
+creation/last-seen times, the peer host, a closed-vocabulary client family
+(the User-Agent is never stored) and an opaque handle, an HMAC of the session
+id under a per-process key; handles list and revoke sessions but cannot
+authenticate. `console.session_idle_seconds` (default 1800, 0 disables)
+ends inactive sessions; event streams do not count as activity.
+
+Instance administration (`/api/v1/admin/*`, `/api/v1/system`) requires the
+admin role and membership of `local_tenant`; its changes go to the local
+tenant's audit chain. This is a deliberate, metadata-only exception to the
+ADR-0020 "no all-tenant view": administrators see principals and sessions of
+every tenant, never evidence. A change that would leave no administrator who
+can sign in (config admins with local membership while token login is on,
+plus active managed admins with local membership and a usable key) answers
+409 `last_admin`; OIDC admins are not counted because the IdP can remove them.
+
+**Settings stay file-driven.** `GET /api/v1/admin/settings` is read-only and
+secret-free, with the value's source (config, env, default, or runtime for
+observed facts). UI editing was not added because it would need: a validated
+write path that never lets request data reach configuration (rule 2), a reload
+model the runtime lacks (most values bind listeners or size buffers at
+start), conflict handling with file edits and env overrides, and a review of
+which settings may change without a restart. Until then the note on every item
+says how to change it.
+
+**Audit.** New actions are recorded with actor id, target id and outcome,
+never tokens, digests or session ids: `account.create`, `account.update`,
+`key.create`, `key.revoke`, `session.revoke`, `preferences.update`,
+`audit.export`. Records gain an optional `actor_id`; older records keep their
+canonical hashes. Export is bounded to 10000 records per download, appended
+to the chain before any byte is sent, and its JSONL is the canonical record
+encoding so the chain can be re-verified offline; CSV prefixes cells starting
+with `= + - @` TAB or CR with an apostrophe.
+
+**Offline break-glass.** `aegismesh accounts list|disable|enable|key revoke
+--state-dir DIR` edits the store with the same validation while the console is
+stopped, audits as `cli:local` and skips the last-admin guard. It never mints
+keys or creates accounts.
+
+**Enterprise readiness — what exists.** Per-person and service accounts with
+expiring, revocable API keys; SSO via OIDC with role and tenant mapping;
+viewer/analyst/admin roles; session listing, revocation and idle timeout; a
+hash-chained audit trail with bounded export; a read-only effective settings
+view; component status; logical tenants.
+
+**What does not exist (by design or not yet).** No SCIM or other user
+provisioning API; no password authentication, by design; no MFA beyond what
+the IdP enforces; sessions live in one process and are lost on restart and not
+shared across replicas (there is no supported multi-replica console); no UI
+configuration editing; no fine-grained or custom roles; no IP allowlists per
+key; no external audit anchoring or SIEM streaming of the audit trail; no
+compliance certification of any kind. Managed state and audit are plaintext
+even with evidence encryption; use an encrypted volume when that matters.
+
+**Consequences.** One more fixed-name state file and directory, no new
+dependency, no new egress. Store save and audit append remain separate
+transactions as for investigations (503 says which one failed).

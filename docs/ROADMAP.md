@@ -193,6 +193,15 @@ external body-file planting inference, hard tenancy, cross-node correlation,
 public saturation/p99 measurements and external IdP validation. No automatic
 export/delivery or new runtime network destination exists.
 
+## Round 5 backend — accounts, access and settings (ADR-0025)
+
+- [x] Managed accounts and API keys, session administration with idle timeout,
+  per-principal preferences, read-only settings, bounded audit export, system
+  status, POS-019 and the offline `accounts` break-glass CLI.
+- Not done: UI configuration editing (needs a reload model and a write path
+  that keeps request data out of configuration), SCIM, per-key IP allowlists,
+  custom roles, sessions shared across processes, audit streaming/anchoring.
+
 ## Round 4 backend — campaigns, actor profile, posture (ADR-0024)
 
 - [x] Session `actor` (ten signals, hedged four-value assessment) and

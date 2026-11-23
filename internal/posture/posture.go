@@ -39,6 +39,7 @@ const (
 	docMCP         = "docs/mcp-environments.md"
 	docEncryption  = "docs/evidence-encryption.md"
 	docConsole     = "docs/architecture/console-api.md#transport-and-exposure"
+	docAccounts    = "docs/architecture/console-api.md#accounts-access-and-settings-adr-0025"
 )
 
 // Check is one deterministic finding about configuration or retained evidence.
@@ -114,6 +115,10 @@ type Facts struct {
 	FleetForwarding       bool
 	FleetHubCAPinned      bool
 	EncryptionAtRest      bool
+	// ManagedKnown is true when the console account store was read (never offline);
+	// ManagedAdmins then counts managed admins that can sign in to the local tenant.
+	ManagedKnown  bool
+	ManagedAdmins int
 }
 
 // Evidence summarises the retained analysis sample. Available=false means
@@ -162,7 +167,7 @@ var allChecks = []func(*Facts, Evidence) Check{
 	checkSensorExposure, checkSecurityOptIns, checkConsoleExposure, checkLLMForwarding, checkEvidenceEgress,
 	checkRoleSeparation, checkHoneytokens, checkAgentCanary, checkPlanting, checkTokenObservations,
 	checkAISurface, checkMCPEnvironment, checkDetection, checkCorrelation, checkActions,
-	checkSilentSensors, checkSampleSaturation, checkEncryption,
+	checkSilentSensors, checkSampleSaturation, checkEncryption, checkBreakGlass,
 }
 
 // Public reports whether a listen authority binds beyond loopback.
@@ -537,6 +542,30 @@ func checkSampleSaturation(_ *Facts, e Evidence) Check {
 		c.Recommendation = "Use exports or narrower windows for older evidence, and lower retention if analysis should cover everything retained."
 	default:
 		c.Status, c.Detail = StatusOK, fmt.Sprintf("%d retained event(s) fit within the %d-event analysis sample.", e.Scanned, e.Limit)
+	}
+	return c
+}
+
+func checkBreakGlass(f *Facts, _ Evidence) Check {
+	c := Check{ID: "POS-019", Area: AreaAccess, Title: "Break-glass administrator", Doc: docAccounts}
+	configAdmins := 0
+	if f.TokenLogin {
+		configAdmins = f.OperatorRoles["admin"]
+	}
+	managed := "managed accounts were not evaluated (offline review)"
+	if f.ManagedKnown {
+		managed = fmt.Sprintf("%d managed admin account(s) can sign in", f.ManagedAdmins)
+	}
+	switch {
+	case !f.ConsoleEnabled:
+		c.Status, c.Detail = StatusInfo, "The console is disabled; administrator access was not evaluated."
+	case configAdmins > 0:
+		c.Status = StatusOK
+		c.Detail = fmt.Sprintf("%d config-file admin token(s) can sign in independently of managed accounts and SSO; %s.", configAdmins, managed)
+	default:
+		c.Status = StatusInfo
+		c.Detail = "No config-file admin token can sign in, so recovery depends on " + map[bool]string{true: "OIDC role mapping and ", false: ""}[f.OIDC] + "managed accounts; " + managed + "."
+		c.Recommendation = "Keep one config-file admin operator (console.operators) with its token stored offline as break-glass access."
 	}
 	return c
 }

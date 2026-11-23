@@ -138,6 +138,10 @@ type Config struct {
 
 	// SourcePath records where this config was loaded from; never decoded from YAML.
 	SourcePath string `yaml:"-" json:"-"`
+	// Sources records, for the keys in SettingSourceKeys, whether the loaded
+	// value came from the file ("config"), an environment override ("env") or
+	// the built-in default ("default"). It is nil for programmatic configs.
+	Sources map[string]string `yaml:"-" json:"-"`
 }
 
 // Extensions configures optional out-of-process observer extensions. They run

@@ -325,6 +325,7 @@ other than `local_tenant`, only POS-017 is evaluated (`scope: evidence_only`).
 | POS-016 | evidence | info: a configured sensor has no local observations in the sample |
 | POS-017 | evidence | attention: the newest-8192 analysis sample is saturated, older evidence is not analysed |
 | POS-018 | evidence | info: evidence encryption at rest is off |
+| POS-019 | access | info: no config-file admin token can sign in, so recovery depends on managed accounts or OIDC (the CLI review cannot see managed accounts) |
 
 The CLI reads the newest 8192 verified envelopes from `--data-dir` (default
 `runtime.data_dir`); when evidence is missing, encrypted without `--identity`

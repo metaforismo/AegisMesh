@@ -360,6 +360,29 @@ surrounding whitespace and prints only its SHA-256. Empty/oversized input and
 unknown/extra arguments are usage errors. Token generation has no filesystem,
 network, credential-store or configuration side effects.
 
+## `accounts` (offline break-glass)
+
+```
+aegismesh accounts list --state-dir DIR [--json]
+aegismesh accounts disable --state-dir DIR ACCOUNT_ID
+aegismesh accounts enable --state-dir DIR ACCOUNT_ID
+aegismesh accounts key revoke --state-dir DIR ACCOUNT_ID KEY_ID
+```
+
+Works on console-managed accounts while the console is **stopped**. `DIR` is
+the resolved `console.state_dir` (default `<runtime.data_dir>/console`); the
+store is `DIR/accounts/accounts.json`, which must already exist. `list` prints
+accounts and key metadata (ID, label, `amk_` prefix, status, expiry), never
+digests or tokens. `disable`, `enable` and `key revoke` apply the console's
+validation and append an `account.update` or `key.revoke` record with actor
+`cli:local` to `DIR/tenants/<local-tenant>/` (`--local-tenant`, default
+`default`); the command refuses to run when that chain is missing or invalid
+and never creates tenant state. It does not apply the last-administrator guard:
+config-file operators are the recovery path. Creating accounts and minting keys
+are console-only. A console that was running while the file changed refuses to
+overwrite it (503 on account changes) until restarted. Exit codes: 0 success,
+1 store/audit failure or unknown account/key, 2 argument error.
+
 ## `demo --console`
 
 `aegismesh demo --console` runs the same synthetic HTTP/TCP/MCP/SSH scenario,
@@ -556,7 +579,7 @@ same evidence. Shapes are attacker-influenced text with control characters
 replaced.
 
 `posture` requires `--config`; evidence defaults to the config's
-`runtime.data_dir`. It evaluates POS-001..POS-018 over a secret-free snapshot
+`runtime.data_dir`. It evaluates POS-001..POS-019 over a secret-free snapshot
 of the validated config and the newest 8192 verified envelopes (larger
 directories are sampled, and POS-017 reports the saturation). Missing,
 undecryptable or unverifiable evidence turns POS-010/016/017 into "Not

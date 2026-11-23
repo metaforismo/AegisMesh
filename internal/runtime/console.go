@@ -112,6 +112,7 @@ func (s *System) buildConsole() error {
 		Rules:         rules,
 		Meter:         s.meter,
 		UI:            consoleui.FS(),
+		Sources:       s.cfg.Sources,
 	})
 	if err != nil {
 		return err
@@ -151,6 +152,7 @@ func (s *System) ConsoleNode() (console.Node, error) {
 		Bus: console.NodeBus{DroppedEvents: status.DroppedEvents},
 		Storage: console.NodeStorage{
 			Encrypted: s.cfg.Storage.Encryption != nil && s.cfg.Storage.Encryption.Enabled,
+			Healthy:   status.StoreHealthy,
 			Retention: console.Retention{
 				MaxEvents:  s.cfg.Storage.Retention.MaxEvents,
 				MaxAgeDays: s.cfg.Storage.Retention.MaxAgeDays,

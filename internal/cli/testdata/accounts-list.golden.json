@@ -1,0 +1,55 @@
+{
+  "accounts": [
+    {
+      "id": "acc_00000000000000a2",
+      "name": "Dana Admin",
+      "kind": "person",
+      "role": "admin",
+      "status": "active",
+      "tenants": [
+        "default"
+      ],
+      "created_at": "2026-10-02T09:00:00Z",
+      "created_by": "cfg:alice",
+      "last_seen_at": null,
+      "keys": []
+    },
+    {
+      "id": "acc_00000000000000a1",
+      "name": "SIEM pull",
+      "kind": "service",
+      "role": "viewer",
+      "status": "active",
+      "tenants": [
+        "default"
+      ],
+      "created_at": "2026-10-01T09:00:00Z",
+      "created_by": "cfg:alice",
+      "last_seen_at": "2026-11-01T11:59:00Z",
+      "keys": [
+        {
+          "id": "key_0000000000b1",
+          "label": "splunk",
+          "prefix": "amk_AbCd",
+          "created_at": "2026-10-01T09:00:00Z",
+          "created_by": "cfg:alice",
+          "expires_at": "2026-12-30T09:00:00Z",
+          "last_used_at": "2026-11-01T11:59:00Z",
+          "revoked_at": null,
+          "status": "active"
+        },
+        {
+          "id": "key_0000000000b2",
+          "label": "old",
+          "prefix": "amk_EfGh",
+          "created_at": "2026-08-01T09:00:00Z",
+          "created_by": "cfg:alice",
+          "expires_at": "2026-10-30T09:00:00Z",
+          "last_used_at": null,
+          "revoked_at": null,
+          "status": "expired"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+ID                    NAME        KIND     ROLE    STATUS  TENANTS  ACTIVE KEYS
+acc_00000000000000a2  Dana Admin  person   admin   active  default  0 of 0
+acc_00000000000000a1  SIEM pull   service  viewer  active  default  1 of 2
+
+ACCOUNT               KEY               LABEL   PREFIX    STATUS   EXPIRES
+acc_00000000000000a1  key_0000000000b1  splunk  amk_AbCd  active   2026-12-30T09:00:00Z
+acc_00000000000000a1  key_0000000000b2  old     amk_EfGh  expired  2026-10-30T09:00:00Z

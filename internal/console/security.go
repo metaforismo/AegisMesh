@@ -4,7 +4,10 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/metaforismo/aegismesh/internal/console/audit"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
@@ -104,6 +107,10 @@ func remote(r *http.Request) string {
 }
 
 func (s *Server) record(r *http.Request, principal auth.Principal, action, target, outcome string) error {
+	return s.recordDetail(r, principal, action, target, outcome, "")
+}
+
+func (s *Server) recordDetail(r *http.Request, principal auth.Principal, action, target, outcome, detail string) error {
 	view := s
 	if principal.Tenant != "" {
 		view = s.views[principal.Tenant]
@@ -117,22 +124,54 @@ func (s *Server) record(r *http.Request, principal auth.Principal, action, targe
 	if principal.Tenant == "" && s.unassignedAudit != nil {
 		log = s.unassignedAudit
 	}
+	return appendAudit(log, r, principal, action, target, outcome, detail)
+}
+
+// recordLocal appends instance administration to the local tenant's chain,
+// whichever tenant the administrator's session is active in.
+func (s *Server) recordLocal(r *http.Request, principal auth.Principal, action, target, outcome, detail string) error {
+	view := s.views[s.cfg.LocalTenant]
+	if view == nil {
+		return audit.ErrAudit
+	}
+	return appendAudit(view.audit, r, principal, action, target, outcome, detail)
+}
+
+// appendAudit writes only console-authored action names, validated identifiers
+// and bounded details: never tokens, digests, session ids or request bodies.
+func appendAudit(log *audit.Log, r *http.Request, principal auth.Principal, action, target, outcome, detail string) error {
 	return log.Append(audit.Record{
 		Issuer:  principal.Issuer,
 		Subject: principal.Subject,
-		Actor:   principal.Name,
+		ActorID: principal.ID,
+		Actor:   truncate(principal.Name, 64),
 		Role:    principal.Role,
 		Action:  action,
-		Target:  target,
+		Target:  truncate(target, 128),
 		Outcome: outcome,
 		Remote:  remote(r),
+		Detail:  truncate(detail, 256),
 	})
+}
+
+// truncate cuts at a rune boundary so bounded audit fields never fail an append.
+func truncate(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut]
 }
 
 type caller struct {
 	session auth.Session
 	id      string
 	cookie  bool
+	// expires is the managed key's absolute expiry for bearer callers (zero for config tokens).
+	expires time.Time
 }
 
 func (s *Server) caller(r *http.Request) (caller, bool) {
@@ -143,10 +182,10 @@ func (s *Server) caller(r *http.Request) (caller, bool) {
 		if !strings.HasPrefix(header, "Bearer ") {
 			return caller{}, false
 		}
-		principal, ok := s.auth.Authenticate(strings.TrimPrefix(header, "Bearer "))
+		principal, expires, ok := s.auth.AuthenticateUntil(strings.TrimPrefix(header, "Bearer "))
 		return caller{session: auth.Session{
 			Principal: principal, Tenant: principal.Tenant, Tenants: principal.Tenants,
-		}}, ok
+		}, expires: expires}, ok
 	}
 
 	credentials, err := r.Cookie(CookieName)
@@ -211,6 +250,17 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 				fail(w, 403, "forbidden", "operator role does not grant this action")
 				return
 			}
+			// Instance administration needs membership of the local tenant, not
+			// only the admin role in some partition.
+			if (group == "admin" || group == "system") &&
+				!slices.Contains(credentials.session.Principal.Tenants, s.cfg.LocalTenant) {
+				if s.record(r, credentials.session.Principal, "authz.denied", "", "denied") != nil {
+					fail(w, 503, "unavailable", "audit trail is unavailable")
+					return
+				}
+				fail(w, 403, "forbidden", "administration requires membership of the local tenant")
+				return
+			}
 			if r.Method != "GET" &&
 				r.Method != "HEAD" &&
 				credentials.cookie &&
@@ -226,9 +276,10 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 		}
 		acceptsBody := r.Method == "POST" &&
 			(group == "session" ||
-				group == "investigations" || group == "fleet-tokens") ||
+				group == "investigations" || group == "fleet-tokens" || group == "me" || group == "admin") ||
 			r.Method == "PATCH" &&
-				group == "investigations"
+				(group == "investigations" || group == "admin") ||
+			r.Method == "PUT" && group == "me"
 		if !acceptsBody && (r.ContentLength != 0 || len(r.TransferEncoding) > 0) {
 			fail(w, 400, "invalid_argument", "this endpoint does not accept a request body")
 			return
@@ -244,7 +295,8 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 				return
 			}
 		}
-		if (role == "analyst" || role == "admin") && !view.audit.Ready() {
+		if (role == "analyst" || role == "admin" || group == "me" && r.Method != "GET") && !view.audit.Ready() ||
+			group == "admin" && !s.views[s.cfg.LocalTenant].audit.Ready() {
 			fail(w, 503, "unavailable", "audit trail requires inspection and restart")
 			return
 		}
