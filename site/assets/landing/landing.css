@@ -1,0 +1,246 @@
+/*
+ * AegisMesh landing page: the palette and the page CSS on top of the tasteskill kit
+ * (assets/landing/kit, MIT, unchanged). Linked last, after the kit's layout.css.
+ *
+ * The palette is the console's own (tokens.css, dark theme) passed through the kit's
+ * `start.mjs brand`; the accent is the console's dark-theme cobalt (#8ea5ff) turned 6 degrees
+ * toward blue (#84a8ff, OKLCH hue 266) because the kit refuses hues from 270 to 330.
+ * The faces are the console's system stacks: no web font is fetched (docs/license-policy.md
+ * admits no OFL asset). The page loads no script (internal/consoleui/webtest/site.test.mjs):
+ * the hero's entrance and the one moment are CSS only, and both rest under reduced motion.
+ */
+
+:root {
+  --p-bg: #0d1218; --p-surface: #151b24; --p-ink: #e7ebf1; --p-muted: #909bab;
+  --p-accent: #84a8ff; --p-accent-ink: #0d1218; --p-action: #84a8ff; --p-action-ink: #0d1218;
+  --p-inv-bg: #e7ebf1; --p-inv-surface: #d5dae0; --p-inv-ink: #0d1218; --p-inv-muted: #565b61;
+  --p-inv-accent: #0d1218; --p-inv-accent-ink: #e7ebf1; --p-inv-action: #0d1218; --p-inv-action-ink: #e7ebf1;
+  --font-display: ui-serif, "New York", "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, Cambria, serif;
+  --font-text: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --display-weight: 500;
+  --display-tracking: -0.03em;
+  --display-tracking-xl: -0.04em;
+  /* the system serif sets wider than the kit's library faces: its scale keeps the split hero's h1
+     on three lines at its 45-character stress length */
+  --ly-scale: 0.9;
+  /* the console's lattice (tokens.css, dark): a faint 24px grid of cobalt lines */
+  --lp-lattice: rgb(142 165 255 / 0.05);
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- the mark
+   The project's own shield and mesh (site/assets/icon.svg, the console's brand mark) */
+.lp-mark { width: 24px; height: 24px; flex: none; }
+.lp-mark__plate { fill: var(--p-accent); }
+.lp-mark__edge { fill: none; stroke: var(--p-bg); stroke-width: 1.4; stroke-linejoin: round; }
+.lp-mark__node, .lp-mark__core { fill: var(--p-bg); }
+.footer--statement .lp-mark__plate { fill: #2e4fc9; }
+.footer--statement .lp-mark__edge { stroke: #ffffff; }
+.footer--statement :is(.lp-mark__node, .lp-mark__core) { fill: #ffffff; }
+
+/* ---------------------------------------------------------------- the bar without script
+   The kit's sheet needs system.js; this page has no script, so the bar does what the kit's own
+   (scripting: none) rule does: the words stay in the bar from 640 to 1023 and the phone keeps the
+   name and the main button (the words are in the footer's columns). */
+@media (max-width: 1023px) {
+  .nav__links { display: flex; overflow-x: auto; scrollbar-width: none; margin-right: var(--s-3); padding-right: var(--s-2); }
+}
+@media (max-width: 639px) {
+  .nav__links { display: none; }
+  .nav:not(.is-open) .nav__actions { display: flex; margin-left: auto; }
+}
+
+/* ---------------------------------------------------------------- hero
+   The picture is the console's session timeline at its true size, anchored top-left and cut by
+   the frame's right and bottom edges; the lattice sits behind the whole first screen. */
+.hero--split { background-image:
+    linear-gradient(var(--lp-lattice) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lp-lattice) 1px, transparent 1px);
+  background-size: 24px 24px; background-position: -1px -1px; }
+.hero--split .hero__media { border: 1px solid var(--line); }
+.hero--split .hero__media > picture > img { inset: 0 auto auto 0; width: 700px; height: 750px; object-fit: fill; }
+.hero__kicker { color: var(--muted); }
+/* on a phone the picture is 342 wide: the float card would cover the timeline it describes */
+@media (max-width: 639px) {
+  .hero--split .ly-float { display: none; }
+  .hero--split .hero__media > picture > img { width: 350px; height: 300px; }
+}
+
+/* ---------------------------------------------------------------- the console frame (#story)
+   One real screen of the console across the .wrap: scaled to the frame's width at 1024 and up,
+   at its true size and cropped past the sidebar on a tablet and a phone. */
+.lp-head { align-items: start; row-gap: var(--s-4); }
+.lp-head h2 { margin: 0; }
+.lp-head__aside { display: grid; gap: var(--s-4); justify-items: start; }
+.lp-head__aside p { font-size: var(--t-lead); line-height: 1.5; color: var(--ink); max-width: 52ch; margin: 0; }
+.lp-app { margin-top: var(--s-7); padding: 0; background: var(--p-bg); }
+.lp-app > .lp-app__pic { position: absolute; inset: 0; display: block; overflow: hidden; border-radius: inherit; }
+.lp-app > .lp-app__pic > img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: cover; object-position: 0 0; }
+.lp-app::after { content: ""; position: absolute; inset: auto 0 0 0; height: 64px; z-index: 1;
+  background: linear-gradient(transparent, var(--p-bg)); pointer-events: none; }
+@media (max-width: 1023px) {
+  .lp-app > .lp-app__pic > img { inset: 0 auto auto -232px; width: 1440px; height: 640px; object-fit: fill; }
+}
+/* the phone's file is that crop already (the session's header and actor profile) */
+@media (max-width: 639px) {
+  .lp-app > .lp-app__pic > img { inset: 0 auto auto 0; width: 390px; height: 400px; }
+}
+
+/* ---------------------------------------------------------------- screens on the lit panels
+   Each feature card's panel holds a crop of the console at its true size (2x pixels), set into the
+   panel's corner and cut by its edges, as the kit places a fragment. */
+.lp-shot { display: block; max-width: none; overflow: hidden; border-radius: var(--r-md);
+  border: 1px solid rgb(13 18 24 / 0.35); box-shadow: 0 12px 32px -12px rgb(13 18 24 / 0.45); }
+.lp-shot > img { display: block; width: 100%; height: auto; max-width: none; }
+.lp-shot--decoys, .lp-shot--honeytokens, .lp-shot--techniques { width: 1152px; }
+.lp-shot--campaign, .lp-shot--hit { width: 568px; }
+.lp-shot--event { width: 703px; }
+.panel > .stage > .lp-shot.at-rise { left: 50%; translate: -50% 0; top: var(--ay, 32px); }
+/* a phone loads a 350px crop of each screen (its left part, at 2x) instead of the whole file */
+@media (max-width: 639px) {
+  .panel > .stage > .lp-shot, .frame > .stage > .lp-shot { width: 350px; max-width: none; right: auto; }
+  .panel > .stage > .lp-shot.at-rise { left: 16px; translate: none; }
+}
+
+/* ---------------------------------------------------------------- the statement (#promise)
+   The dealt moment, word-highlight, done in CSS: each word rests at half ink and turns to ink as
+   its line crosses the middle of the screen, the strong words to the accent; scrolling back runs it
+   back. Without scroll-driven animations, and under reduced motion, every word stands in ink. */
+.lp-statement .wrap { gap: var(--s-6); }
+.lp-statement .t-label { color: var(--muted); margin: 0; }
+.lp-wh { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--t-h1);
+  line-height: 1.12; letter-spacing: var(--display-tracking); max-width: 22em; text-wrap: pretty; margin: 0; color: var(--ink); }
+.lp-wh strong { font-weight: inherit; color: var(--accent); }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-wh .lp-w { color: color-mix(in oklab, var(--ink) 50%, var(--bg));
+      animation: lp-word linear both; animation-timeline: view(); animation-range: entry 100% cover 50%; }
+    .lp-wh strong .lp-w { animation-name: lp-word-strong; }
+  }
+}
+@keyframes lp-word { 0%, 70% { color: color-mix(in oklab, var(--ink) 50%, var(--bg)); } 100% { color: var(--ink); } }
+@keyframes lp-word-strong { 0%, 70% { color: color-mix(in oklab, var(--ink) 50%, var(--bg)); } 100% { color: var(--accent); } }
+
+/* ---------------------------------------------------------------- the statement's three facts
+   Docked to the section's foot, so the statement's screen ends where its neighbours' do */
+.lp-never { list-style: none; margin: auto 0 0; padding: 0; row-gap: var(--s-3); }
+.lp-never li { padding-top: var(--s-4); border-top: 1px solid var(--line); font-size: var(--t-body); color: var(--ink); }
+@media (max-width: 639px) { .lp-never { row-gap: 0; } .lp-never li { padding-top: var(--s-3); padding-bottom: var(--s-2); } }
+
+/* ---------------------------------------------------------------- the evidence split */
+.lp-split { align-items: stretch; }
+.lp-split__text { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-5); }
+.lp-split__text h2 { margin: 0; }
+.lp-split__lead { font-size: var(--t-lead); line-height: 1.5; max-width: 42ch; margin: 0; }
+.lp-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
+.lp-facts li { padding-top: var(--s-3); border-top: 1px solid var(--line); }
+.lp-split__frame { padding: 0; }
+@media (max-width: 359px) { .lp-facts { display: none; } }
+
+/* ---------------------------------------------------------------- the three steps
+   Three cards in a row from 1024, one screen; a tablet and a phone take two screens, the heading
+   with step 1, then steps 2 and 3. Each panel is marked [data-visual]: the commands are its picture. */
+.lp-steps .panel { --p-h: 220px; }
+.lp-steps .card > .step-num { margin-bottom: var(--s-3); }
+.lp-steps__a, .lp-steps__b { display: flex; flex-direction: column; gap: var(--s-6); min-height: 0; }
+@media (min-width: 1024px) {
+  #start > .wrap.lp-steps { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); align-content: start; }
+  .lp-steps__a, .lp-steps__b { display: contents; }
+  .lp-steps .section-head { grid-column: 1 / -1; }
+  .lp-steps .card { grid-column: auto / span 4; }
+  .lp-steps .panel { --p-h: clamp(220px, 100svh - 520px, 320px); }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  #start { --h: 2; }
+  #start > .wrap { display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); row-gap: calc(var(--padt) + var(--padb) + var(--bar)); }
+  .lp-steps .panel { --p-h: max(200px, calc((100svh - 520px) / 2)); }
+}
+.lp-term { margin: 0; padding: var(--s-5); width: calc(100% - 2 * var(--s-6)); max-width: none; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 13px/1.7 var(--font-mono); color: #e7ebf1; background: #151b24; border: 1px solid #263040;
+  border-radius: var(--r-md); box-shadow: 0 12px 32px -12px rgb(13 18 24 / 0.45); }
+.lp-term__p { color: #909bab; user-select: none; }
+.panel > .stage > .lp-term.at-rise { left: var(--s-6); top: var(--s-6); right: auto; translate: none; }
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .lp-term { padding: var(--s-4); font-size: 12px; line-height: 1.6; }
+  .panel > .stage > .lp-term.at-rise { left: var(--s-4); top: var(--s-4); width: calc(100% - 2 * var(--s-4)); }
+}
+@media (max-width: 639px) {
+  .lp-steps .panel { --p-h: 180px; }
+  .lp-term { padding: var(--s-4); font-size: 12px; line-height: 1.6; }
+  .panel > .stage > .lp-term.at-rise { left: 16px; top: 16px; width: calc(100% - 32px); }
+}
+
+/* ---------------------------------------------------------------- questions
+   From 1280: the heading and the answers on the left, the console's own wording of a limit on the
+   right, down to the section's foot. From 1024 to 1279 the two halves take a screen each. A tablet
+   stacks them in one screen, the picture taking what the answers leave; a phone leaves the picture
+   out, so the answers fit its one screen. */
+.lp-qa__a, .lp-qa__b { display: flex; flex-direction: column; gap: var(--s-4); align-items: flex-start; min-height: 0; }
+.lp-qa h2 { margin: 0; }
+.lp-qa__panel { --p-h: 300px; align-self: stretch; margin-top: var(--s-5); flex: 1 1 auto; }
+.lp-qa .faq { align-self: stretch; }
+@media (min-width: 1280px) {
+  #questions > .wrap.lp-qa { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto auto 1fr; column-gap: var(--gutter); row-gap: var(--s-4); }
+  .lp-qa__a, .lp-qa__b { display: contents; }
+  .lp-qa h2 { grid-column: 1 / span 5; grid-row: 1; }
+  .lp-qa__b > .faq { grid-column: 1 / span 5; grid-row: 2; margin-top: var(--s-5); }
+  .lp-qa__b > .link { grid-column: 1 / span 5; grid-row: 3; }
+  .lp-qa__panel { grid-column: 7 / -1; grid-row: 1 / span 3; margin-top: 0; }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  #questions { --h: 2; }
+  #questions > .wrap { display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); row-gap: calc(var(--padt) + var(--padb) + var(--bar)); }
+}
+@media (max-width: 1023px) {
+  .lp-qa__a { flex: 1 1 auto; }
+  .lp-qa__panel { --p-h: 0px; flex: 1 1 0; min-height: 160px; }
+  .lp-qa__b { margin-top: var(--s-6); }
+}
+@media (max-width: 639px) {
+  .lp-qa__panel { display: none; }
+  .lp-qa__a { flex: 0 0 auto; }
+  .lp-qa__b { margin-top: var(--s-5); }
+}
+
+/* ---------------------------------------------------------------- a tablet (640 to 1023)
+   The feature cards take the full row (cards.md), two to a screen, their panels sized to the
+   screen; the statement grows with the screen's height so its screen holds no hole; the close's
+   button keeps the page's one button height; the bar's words fit without a scroller. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  #decoys .grid > .card { grid-column: 1 / -1; }
+  #decoys .group .panel { --p-h: max(180px, calc((100svh - 596px) / 2)); }
+  #decoys .wrap > .grid .panel { --p-h: max(180px, calc((100svh - 428px) / 2)); }
+  .closing__links .grid > :first-child { grid-column: 1 / -1; }
+  .closing__links .footer__col { grid-column: auto / span 4; }
+  .lp-wh { font-size: 52px; }
+  .lp-never li { padding-block: var(--s-4); }
+  .closing .btn--xl { height: var(--btn-h); font-size: var(--t-body); font-family: var(--font-text); padding-inline: var(--s-5); }
+  .nav__links { overflow: visible; }
+  .nav__links .nav__link { padding-inline: var(--s-2); }
+}
+@media (max-width: 639px) {
+  #decoys .group .panel { --p-h: 150px; }
+  #decoys .wrap > .grid .panel { --p-h: 175px; }
+  .footer__lede { display: none; }
+  .closing__links .footer__col { grid-column: auto / span 4; }
+}
+
+/* ---------------------------------------------------------------- the hero's entrance, in CSS
+   Once on load: the h1 rises whole out of its line (700ms), then the kicker, the lead and the
+   buttons fade up 12px, 60ms apart; the timeline settles from .98. About 1.1 s, transform and
+   opacity only, never again on scroll; nothing waits under reduced motion. */
+@media screen and (prefers-reduced-motion: no-preference) {
+  .hero[data-enter] h1 { animation: lp-rise 700ms cubic-bezier(.22, 1, .36, 1) both; }
+  .hero[data-enter] .hero__kicker { animation: lp-fade 520ms cubic-bezier(.22, 1, .36, 1) both; }
+  .hero[data-enter] .hero__lead { animation: lp-fade 520ms cubic-bezier(.22, 1, .36, 1) 350ms both; }
+  .hero[data-enter] .btn-row { animation: lp-fade 520ms cubic-bezier(.22, 1, .36, 1) 410ms both; }
+  .hero[data-enter] .hero__media { animation: lp-settle 900ms cubic-bezier(.22, 1, .36, 1) both; }
+}
+@keyframes lp-rise { from { opacity: 0; transform: translateY(0.5em); } to { opacity: 1; transform: none; } }
+@keyframes lp-fade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes lp-settle { from { scale: 0.98; } to { scale: 1; } }
+/* a tall tablet (820x1180): the statement's six lines spaced out, so its screen holds no hole */
+@media (min-width: 640px) and (max-width: 1023px) and (min-height: 1100px) {
+  .lp-wh { line-height: 1.45; }
+}

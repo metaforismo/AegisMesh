@@ -1,251 +1,258 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="m-enter m-enter-done" data-type="software" data-radius="sharp" data-ground="sky" data-buttons="solid" data-motion>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta name="description" content="AegisMesh is open-source, local-first deception and evidence for human and AI-agent attackers: bounded decoys, MCP canary tools, integrity-checked evidence and dry-run recommendations.">
-  <title>AegisMesh</title>
-  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="assets/css/tokens.css">
-  <link rel="stylesheet" href="assets/css/base.css">
-  <link rel="stylesheet" href="assets/css/components.css">
-  <link rel="stylesheet" href="assets/css/site.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>AegisMesh: open-source decoys for AI-driven attacks</title>
+<meta name="description" content="Self-hosted fake AI-service, MCP, SSH and web endpoints that record what attackers try as integrity-checked evidence and explain each session in a local console.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="AegisMesh: open-source decoys for AI-driven attacks">
+<meta property="og:description" content="Fake AI-service, MCP, SSH and web endpoints on your own machine, with evidence you can check later.">
+<meta property="og:image" content="assets/landing/share.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0d1218">
+<!-- rel=canonical: added once the page is hosted on a domain of its own (docs/RELEASE.md) -->
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<!-- The tasteskill kit (MIT, assets/landing/kit/LICENSE), unchanged, then this page's palette and page CSS.
+     No script, no web font, no external request: site.test.mjs keeps the site script-free. -->
+<link rel="stylesheet" href="assets/landing/kit/system.css">
+<link rel="stylesheet" href="assets/landing/kit/ui/cards.css">
+<link rel="stylesheet" href="assets/landing/kit/motion/motion.css">
+<link rel="stylesheet" href="assets/landing/kit/layout/layout.css">
+<link rel="stylesheet" href="assets/landing/landing.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-head">
-    <div class="wrap site-top">
-      <a class="brand" href="./">
-        <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__plate" d="M12 1.75 3.75 4.9v6.35c0 5.05 3.5 9.35 8.25 10.95 4.75-1.6 8.25-5.9 8.25-10.95V4.9z"/><path class="brand__edge" d="M12 7.4L7.6 14.6L16.4 14.6ZM12 7.4L12 11.9M7.6 14.6L12 11.9M16.4 14.6L12 11.9"/><circle class="brand__node" cx="12" cy="7.4" r="1.55"/><circle class="brand__node" cx="7.6" cy="14.6" r="1.55"/><circle class="brand__node" cx="16.4" cy="14.6" r="1.55"/><circle class="brand__core" cx="12" cy="11.9" r="1.9"/></svg>
-        AegisMesh
-      </a>
-      <nav aria-label="Site">
-        <a href="#ai-decoys">AI decoys</a>
-        <a href="#sessions">Attack story</a>
-        <a href="#capabilities">What ships</a>
-        <a href="#limits">What it is not</a>
-        <a href="#start">Get started</a>
-        <a href="https://github.com/metaforismo/AegisMesh">GitHub</a>
-      </nav>
+<!-- type: software (an open-source, self-hosted security tool)
+     deal: hero split, nav nav-centre, close close-type, footer footer-statement, rhythm space, buttons solid,
+           mark stack (replaced by the project's own shield mark), ground sage (shown as sky: the brand's cobalt),
+           palette forest-pale-lime (replaced by the console's own colours through start.mjs brand),
+           pairing reddit (not loaded: OFL fonts are outside docs/license-policy.md; the console's system faces instead)
+     moments: word-highlight in #promise (CSS scroll-driven, no script)
+     effect: none (shader effects need script and WebGL; the site loads no script) -->
+<header class="nav nav--centre">
+  <div class="wrap nav__bar">
+    <a class="skip-link" href="#top">Skip to content</a>
+    <a class="nav__logo" href="#top"><svg class="lp-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="lp-mark__plate" d="M12 1.75 3.75 4.9v6.35c0 5.05 3.5 9.35 8.25 10.95 4.75-1.6 8.25-5.9 8.25-10.95V4.9z"/><path class="lp-mark__edge" d="M12 7.4L7.6 14.6L16.4 14.6ZM12 7.4L12 11.9M7.6 14.6L12 11.9M16.4 14.6L12 11.9"/><circle class="lp-mark__node" cx="12" cy="7.4" r="1.55"/><circle class="lp-mark__node" cx="7.6" cy="14.6" r="1.55"/><circle class="lp-mark__node" cx="16.4" cy="14.6" r="1.55"/><circle class="lp-mark__core" cx="12" cy="11.9" r="1.9"/></svg>AegisMesh</a>
+    <nav class="nav__links" aria-label="Main">
+      <div class="nav__item"><a class="nav__link" href="#story">Sessions</a></div>
+      <div class="nav__item"><a class="nav__link" href="#decoys">Decoys</a></div>
+      <div class="nav__item"><a class="nav__link" href="#evidence">Evidence</a></div>
+      <div class="nav__item"><a class="nav__link" href="#questions">Questions</a></div>
+    </nav>
+    <div class="nav__actions">
+      <a class="nav__link" href="https://github.com/metaforismo/AegisMesh">GitHub</a>
+      <a class="btn btn--primary" href="#start">Try the demo</a>
     </div>
-  </header>
+  </div>
+</header>
 
-  <main id="main">
-    <section class="lp-hero" aria-labelledby="hero-title">
-      <div class="wrap lp-hero__grid">
-        <div class="lp-hero__text">
-          <p class="lp-kicker">Open-source deception and evidence for human and AI-driven attackers</p>
-          <h1 id="hero-title" class="lp-hero__title">Decoys that record what attackers try, and never run it.</h1>
-          <p class="lp-hero__lede">AegisMesh puts believable HTTP, TCP, SSH, MCP and AI-service decoys where no legitimate workflow should go. Every touch becomes redacted, integrity-checked evidence on your own machine, and the console reads it back to you as a short briefing: what happened, how fast, and which rules fired. It never answers with anything real, and it never acts for you.</p>
-          <div class="btn-row">
-            <a class="btn btn--primary btn--lg" href="#start">Run the five-minute demo</a>
-            <a class="btn btn--lg" href="https://github.com/metaforismo/AegisMesh">Read the source</a>
-          </div>
-          <ul class="lp-facts">
-            <li>Apache-2.0</li>
-            <li>Runs offline</li>
-            <li>Loopback by default</li>
-            <li>Never executes attacker input</li>
-          </ul>
-        </div>
-
-        <figure class="lp-show" aria-labelledby="show-cap">
-          <div class="lp-show__stack" aria-hidden="true">
-            <section class="brief lp-show__brief">
-              <div class="brief__head"><span class="brief__eyebrow"><span class="brief__dot"></span>Situation</span><span class="brief__meta">Last 24 hours</span></div>
-              <p class="brief__text lp-serif"><span class="brief__clause"><strong class="brief__num">257</strong> events, <strong class="brief__num">186</strong> more than the window before.</span> <span class="brief__clause"><strong class="brief__num">10</strong> canary invocations.</span> <span class="brief__clause">Most active source: <span class="evidence">203.0.113.66</span>.</span> <span class="brief__clause"><strong class="brief__num">1</strong> session with pace or rules consistent with automation.</span></p>
-            </section>
-            <div class="lp-show__row">
-              <div class="panel lp-show__mesh">
-                <svg class="mesh" viewBox="0 0 240 170" focusable="false">
-                  <line class="mesh__edge mesh__edge--active" x1="120" y1="85" x2="120" y2="25"/>
-                  <line class="mesh__edge mesh__edge--active" x1="120" y1="85" x2="177" y2="66"/>
-                  <line class="mesh__edge" x1="120" y1="85" x2="155" y2="134"/>
-                  <line class="mesh__edge mesh__edge--active" x1="120" y1="85" x2="85" y2="134"/>
-                  <line class="mesh__edge" x1="120" y1="85" x2="63" y2="66"/>
-                  <circle class="mesh__core-ring" cx="120" cy="85" r="12"/><circle class="mesh__core" cx="120" cy="85" r="5"/>
-                  <circle class="mesh__pulse" cx="120" cy="25" r="11"/><circle class="mesh__node mesh__node--active" cx="120" cy="25" r="11"/>
-                  <circle class="mesh__node mesh__node--active" cx="177" cy="66" r="8"/>
-                  <circle class="mesh__node mesh__node--quiet" cx="155" cy="134" r="6"/>
-                  <circle class="mesh__node mesh__node--active" cx="85" cy="134" r="9"/>
-                  <circle class="mesh__node mesh__node--quiet" cx="63" cy="66" r="5"/>
-                  <text class="mesh__label" x="138" y="22">ai-ollama</text>
-                  <text class="mesh__label" x="190" y="70">web</text>
-                  <text class="mesh__label" x="164" y="152">ssh</text>
-                  <text class="mesh__label" x="74" y="157" text-anchor="end">mcp-tools</text>
-                  <text class="mesh__label" x="52" y="70" text-anchor="end">tcp</text>
-                </svg>
-              </div>
-              <div class="panel lp-show__story">
-                <ol class="story">
-                  <li class="story__phase"><span class="stage stage--ai_service_abuse"><span class="stage__mark"></span>AI service use</span></li>
-                  <li class="story__event"><div class="story__when"><time>20:27:37.451</time><span class="story__gap">first</span></div><span class="story__node"><span class="glyph glyph--interaction"></span></span><div class="story__body"><span class="evidence">POST /api/generate num_predict=1</span><div class="story__meta"><span class="chip chip--mono">LLM-002</span></div></div></li>
-                  <li class="story__phase"><span class="stage stage--decoy_credential_replay"><span class="stage__mark"></span>Decoy credential replay</span></li>
-                  <li class="story__event"><div class="story__when"><time>20:27:38.111</time><span class="story__gap story__gap--fast">+660 ms</span></div><span class="story__node"><span class="glyph glyph--interaction"></span></span><div class="story__body"><span class="evidence">Bearer [honeytoken:planted-key]</span><div class="story__meta"><span class="chip chip--mono">HT-001</span></div></div></li>
-                </ol>
-              </div>
-            </div>
-          </div>
-          <figcaption id="show-cap" class="lp-show__cap">Composed from the console’s own components with synthetic data: documentation-range addresses and invented markers. Not a screenshot.</figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <section class="lp-band" id="capabilities" aria-labelledby="cap-title">
-      <div class="wrap">
-        <header class="lp-head">
-          <h2 id="cap-title" class="lp-serif">What ships, and what each part shows you</h2>
-          <p>Each card is a capability on the current branches, with the piece of the console that shows it. Optional parts are off by default.</p>
-        </header>
-        <div class="lp-caps">
-          <article class="lp-cap" id="ai-decoys">
-            <h3>AI-service decoys</h3>
-            <p>One command scaffolds static Ollama, OpenAI-compatible, LiteLLM and vLLM shapes on loopback. No model runs behind them: requests never cause inference, downloads or key creation.</p>
-            <div class="lp-cap__demo">
-              <p><span class="evidence">GET /api/tags → 200</span> <span class="chip chip--mono">LLM-001</span></p>
-              <p><span class="evidence">POST /v1/chat/completions max_tokens=1</span> <span class="chip chip--mono">LLM-002</span></p>
-              <p><span class="evidence">POST /api/pull name="llama3:70b"</span> <span class="chip chip--mono">LLM-003</span></p>
-            </div>
-          </article>
-          <article class="lp-cap" id="mcp-environments">
-            <h3>MCP decoy environments</h3>
-            <p>A synthetic MCP workspace with five tools over declared fake files, environment values and lookups. Nothing real sits behind it: arguments are lookup keys, never paths or commands, and write- or execution-shaped calls get a fixed “not found”. Reading a planted secret, reaching the exploration depth and asking to execute are recorded, observe-only.</p>
-            <div class="lp-cap__demo">
-              <p><span class="evidence">tools/call read_file path=".env"</span> <span class="chip chip--mono">MCP-001</span></p>
-              <p><span class="evidence">tools/call get_env name="OPENAI_API_KEY"</span> <span class="chip chip--mono">MCP-002</span></p>
-              <p><span class="evidence">tools/call run_shell cmd="env"</span> <span class="chip chip--mono">MCP-003</span></p>
-              <p><span class="fam fam--mcp"><span class="fam__glyph" aria-hidden="true"></span>MCP environment</span> <span class="ract ract--observe"><span class="ract__mark" aria-hidden="true"></span>Observe only</span></p>
-            </div>
-          </article>
-          <article class="lp-cap" id="tokens">
-            <h3>Honeytokens and agent canaries</h3>
-            <p>Plant fake credentials and diagnostic instructions in decoy text. A replayed credential (HT-001) or a followed instruction (AGT-001) is recorded by token id; the value never reaches evidence. A hit is consistent with an LLM client, never proof of one.</p>
-            <div class="lp-cap__demo">
-              <p><span class="evidence">Authorization: Bearer [honeytoken:planted-key]</span></p>
-              <p><span class="sev sev--critical"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Critical</span> <span class="chip chip--mono">HT-001</span> <span class="chip chip--mono">AGT-001</span></p>
-            </div>
-          </article>
-          <article class="lp-cap" id="rules">
-            <h3>Rules with framework references</h3>
-            <p>Detection and correlation rules for AI-service abuse, machine-paced cadence and credential replay, each with editorial “relates to” references. The technique view counts what was observed, never coverage.</p>
-            <div class="lp-cap__demo">
-              <div class="fw-groups">
-                <div class="fw-group"><span class="fw-group__label">MITRE ATT&amp;CK</span><span class="chip-row"><span class="chip chip--fw"><code>T1595</code><span class="chip__name">Active Scanning</span></span></span></div>
-                <div class="fw-group"><span class="fw-group__label">MITRE ATLAS</span><span class="chip-row"><span class="chip chip--fw"><code>AML.T0040</code><span class="chip__name">AI Model Inference API Access</span></span></span></div>
-                <div class="fw-group"><span class="fw-group__label">OWASP LLM 2025</span><span class="chip-row"><span class="chip chip--fw"><code>LLM10</code><span class="chip__name">Unbounded Consumption</span></span></span></div>
-              </div>
-            </div>
-          </article>
-          <article class="lp-cap lp-cap--wide" id="sessions">
-            <h3>Sessions and the attack story</h3>
-            <p>Events from one source key become a session until it goes quiet for 30 minutes. The console tells it as a story: stages from the rules that fired, the gap before every event, pace statistics, and an automation reading stated as an observation with its evidence.</p>
-            <div class="lp-cap__demo lp-cap__demo--row">
-              <span class="assess assess--filled"><span class="assess__mark" aria-hidden="true"></span><span class="assess__label">Consistent with automation</span><span class="assess__count"> · 6 observations</span></span>
-              <span class="cstrip"><span class="cstrip__track" aria-hidden="true"><span class="cstrip__range ds-cs-range"></span><span class="cstrip__median ds-cs-median"></span></span><span class="cstrip__value">median 700 ms</span></span>
-              <span class="stage stage--discovery"><span class="stage__mark" aria-hidden="true"></span>Discovery</span>
-              <span class="stage stage--ai_service_abuse"><span class="stage__mark" aria-hidden="true"></span>AI service use</span>
-              <span class="stage stage--decoy_credential_replay"><span class="stage__mark" aria-hidden="true"></span>Decoy credential replay</span>
-            </div>
-          </article>
-          <article class="lp-cap" id="exports">
-            <h3>Reports, indicators and SIEM files</h3>
-            <p>Analysts download a Markdown observation report, IP indicators as STIX 2.1, CSV or a plain list, or the observations themselves as CEF, RFC 5424 syslog, OTLP JSON or ECS files. These are file formats only: AegisMesh ships no exporter and sends nothing. Every download is audited.</p>
-            <pre class="lp-cap__code"># PROPOSED blocklist for operator review; never applied by AegisMesh
-203.0.113.66</pre>
-          </article>
-          <article class="lp-cap" id="digest">
-            <h3>A digest, on demand</h3>
-            <p>A short briefing for the last 24 hours or 7 days against the window before: new and returning sources, sessions consistent with automation, the most cited rules, newly cited techniques and planted-marker hits, with its limits stated. Computed when asked, from the console or the CLI; nothing is scheduled or delivered.</p>
-            <pre class="lp-cap__code">./bin/aegismesh digest --since 24h --data-dir ./data --format md</pre>
-          </article>
-          <article class="lp-cap" id="evidence">
-            <h3>Evidence you can check</h3>
-            <p>A versioned envelope with an integrity hash per event, redaction before storage, and optional age/X25519 encryption at rest with the private key kept off the runtime. Attacker text is always shown as plain text on its violet inset.</p>
-            <div class="lp-cap__demo">
-              <p><span class="seal seal--ok"><span class="seal__mark" aria-hidden="true"></span>Payload sha256 verified</span></p>
-              <p><span class="evidence">GET /&lt;script&gt;alert(1)&lt;/script&gt; → 404</span></p>
-            </div>
-          </article>
-          <article class="lp-cap lp-cap--wide lp-cap--full" id="experimental">
-            <h3>Experimental: fleet, sign-on, tenants</h3>
-            <p>Off by default and labelled experimental: a fleet inventory with best-effort evidence forwarding and counted loss, OpenID Connect sign-in, and logical tenant isolation in one process. Tenant isolation is logical, not a hard boundary.</p>
-            <div class="lp-cap__demo"><p><span class="badge badge--warn">Not forwarded: 3 dropped, 1 gap</span></p></div>
-          </article>
+<main id="top">
+  <section class="hero hero--split" data-enter aria-labelledby="hero-h">
+    <div class="wrap"><div class="hero-text grid hero__grid">
+      <div class="hero__text span-5">
+        <p class="hero__kicker"><span class="dot" aria-hidden="true"></span>Version 0.2.0, an early release built from source</p>
+        <h1 id="hero-h">Open-source decoys for AI-driven attacks</h1>
+        <p class="hero__lead">Fake Ollama, OpenAI-compatible, MCP, SSH and web endpoints run on your own machine. Every request becomes integrity-checked evidence, and the console tells each session as a story.</p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="#start">Try the demo</a>
+          <a class="btn btn--secondary" href="https://github.com/metaforismo/AegisMesh">Read the source</a>
         </div>
       </div>
-    </section>
-
-    <section class="lp-band lp-band--quiet" id="limits" aria-labelledby="limits-title">
-      <div class="wrap lp-not">
-        <header class="lp-head">
-          <h2 id="limits-title" class="lp-serif">What it is not</h2>
-          <p>Stated where it matters, in the product and here.</p>
-        </header>
-        <ul class="lp-not__list">
-          <li><strong>No enforcement.</strong> Nothing in AegisMesh blocks, isolates or changes a real asset. Recommendations are dry-run proposals; the blocklist is proposed, never applied.</li>
-          <li><strong>Observations, not incidents.</strong> Classification is mechanical. Deciding that something matters is a person’s call, recorded in an investigation.</li>
-          <li><strong>No verdicts about who.</strong> A source key is not an identity, and an automation reading says the pace and rules fit automation, not that an AI or a particular actor was behind it.</li>
-          <li><strong>No delivery.</strong> Event files are formats you import; there is no exporter, collector client or scheduler, and the digest is computed only when someone asks for it.</li>
-          <li><strong>Not a coverage claim.</strong> Framework references are editorial. A technique with events means a related rule fired, not that the technique was used or succeeded.</li>
-          <li><strong>Not production-ready.</strong> This is an early release built from source; no container image or signed binary is published.</li>
-        </ul>
+      <div class="hero__media span-6 start-7">
+        <picture><source media="(max-width: 639px)" srcset="assets/landing/img/console-session-timeline-phone.webp 2x"><img src="assets/landing/img/console-session-timeline.webp" width="700" height="750" alt="The AegisMesh console's session timeline: 13 events from 203.0.113.66 over 8.5 seconds, grouped into discovery, AI service use and decoy credential replay" fetchpriority="high" data-source="client" data-subject="the AegisMesh console, session timeline"></picture>
+        <div class="ly-float">
+          <div class="ly-float__row"><span>Decoy credential replay</span><span>+780 ms</span></div>
+          <div class="ly-float__title">The planted key came back on ai-litellm</div>
+        </div>
       </div>
-    </section>
+    </div></div>
+  </section>
 
-    <section class="lp-band" id="start" aria-labelledby="start-title">
-      <div class="wrap">
-        <header class="lp-head">
-          <h2 id="start-title" class="lp-serif">Five minutes, on loopback</h2>
-          <p>Requires Go and a clone of the repository. Everything below binds to 127.0.0.1 and talks to nothing else.</p>
-        </header>
-        <ol class="lp-steps">
-          <li><h3>Build</h3><pre class="lp-cmd">make build</pre></li>
-          <li><h3>See it with synthetic evidence</h3><p>A self-contained scenario behind a local console, with a one-time token printed once.</p><pre class="lp-cmd">./bin/aegismesh demo --console</pre></li>
-          <li><h3>Scaffold AI-service decoys</h3><p>Two loopback listeners with static AI API shapes and an MCP workspace, with fresh fake credentials and an agent marker.</p><pre class="lp-cmd">./bin/aegismesh init --profile ai-decoy --dir ./ai-lab</pre></li>
-          <li><h3>Mint another honeytoken</h3><p>Prints a YAML snippet; it writes nothing and contacts nobody.</p><pre class="lp-cmd">./bin/aegismesh honeytoken new --kind credential --format openai --id planted-key</pre></li>
-          <li><h3>Check, then run</h3><pre class="lp-cmd">./bin/aegismesh run --config ./ai-lab/mesh.yaml --dry-run
-./bin/aegismesh run --config ./ai-lab/mesh.yaml</pre></li>
-        </ol>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-foot">
+  <section class="section" id="story" aria-labelledby="story-h">
     <div class="wrap">
-      <div class="site-foot__top">
-        <div class="site-foot__brand">
-          <a class="brand" href="./"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__plate" d="M12 1.75 3.75 4.9v6.35c0 5.05 3.5 9.35 8.25 10.95 4.75-1.6 8.25-5.9 8.25-10.95V4.9z"/><path class="brand__edge" d="M12 7.4L7.6 14.6L16.4 14.6ZM12 7.4L12 11.9M7.6 14.6L12 11.9M16.4 14.6L12 11.9"/><circle class="brand__node" cx="12" cy="7.4" r="1.55"/><circle class="brand__node" cx="7.6" cy="14.6" r="1.55"/><circle class="brand__node" cx="16.4" cy="14.6" r="1.55"/><circle class="brand__core" cx="12" cy="11.9" r="1.9"/></svg>
-            AegisMesh
-          </a>
-          <p>Open-source, local-first deception and evidence. Decoys record what attackers try; nothing they send is ever run.</p>
+      <div class="grid lp-head">
+        <h2 id="story-h" class="span-5">Every attacker session, told in order</h2>
+        <div class="span-6 start-7 lp-head__aside">
+          <p>Events from one source become a session until it is quiet for 30 minutes. The console shows its stages, the gap before each event and which signals fit automation.</p>
+          <a class="link" href="https://github.com/metaforismo/AegisMesh/blob/master/docs/architecture/console-api.md">Read the console API</a>
         </div>
-        <nav class="site-foot__cols" aria-label="Project links">
-          <div>
-            <p class="site-foot__head">Project</p>
-            <a href="https://github.com/metaforismo/AegisMesh">GitHub</a>
-            <a href="https://github.com/metaforismo/AegisMesh#readme">README</a>
-            <a href="https://github.com/metaforismo/AegisMesh/blob/master/LICENSE">License</a>
-          </div>
-          <div>
-            <p class="site-foot__head">Read first</p>
-            <a href="https://github.com/metaforismo/AegisMesh/blob/master/docs/PRODUCT.md">Product brief</a>
-            <a href="https://github.com/metaforismo/AegisMesh/blob/master/docs/THREAT-MODEL.md">Threat model</a>
-            <a href="https://github.com/metaforismo/AegisMesh/blob/master/docs/canary-model.md">Canary model</a>
-          </div>
-          <div>
-            <p class="site-foot__head">This site</p>
-            <a href="design-system.html">Design system</a>
-            <a href="#limits">What it does not do</a>
-            <a href="#start">Five-minute demo</a>
-          </div>
-        </nav>
       </div>
-      <div class="site-foot__base">
-        <p>Apache License 2.0</p>
-        <p>This page loads no scripts, fonts or trackers.</p>
+      <div class="frame lp-app fill">
+        <picture class="lp-app__pic"><source media="(max-width: 639px)" srcset="assets/landing/img/console-session-phone.webp 2x"><img src="assets/landing/img/console-session.webp" width="1440" height="640" alt="The console's session page: the actor profile reads possibly an AI agent, 13 events in 8.5 seconds with a 700 ms median gap, and the session belongs to a campaign" loading="lazy" data-source="client" data-subject="the AegisMesh console, session page"></picture>
       </div>
     </div>
-  </footer>
+  </section>
+
+  <section class="section g2" id="decoys" aria-labelledby="decoys-h">
+    <div class="wrap">
+      <div class="group">
+        <div class="section-head">
+          <h2 id="decoys-h">Decoys an AI agent will reach for. <span class="muted">Nothing real sits behind them.</span></h2>
+        </div>
+        <div class="grid">
+          <article class="card card--row card--open span-6">
+            <h3>Answers like Ollama and OpenAI</h3>
+            <p>Static Ollama, OpenAI-compatible, LiteLLM and vLLM shapes; no model runs behind them.</p>
+            <div class="panel"><div class="stage stage--fade-br">
+              <picture class="at-corner lp-shot lp-shot--decoys"><source media="(max-width: 639px)" srcset="assets/landing/img/console-decoys-phone.webp 2x"><img src="assets/landing/img/console-decoys.webp" width="1152" height="295" alt="The console's decoy catalog: what a client sees, and what is really there" loading="lazy" data-source="client" data-subject="the AegisMesh console, decoy catalog"></picture>
+            </div></div>
+          </article>
+          <article class="card card--row card--open span-6">
+            <h3>Plants fake keys and agent markers</h3>
+            <p>A replayed key or a followed instruction is recorded by token id; the value never is.</p>
+            <div class="panel"><div class="stage stage--fade-br">
+              <picture class="at-corner lp-shot lp-shot--honeytokens"><source media="(max-width: 639px)" srcset="assets/landing/img/console-honeytokens-phone.webp 2x"><img src="assets/landing/img/console-honeytokens.webp" width="1152" height="269" alt="The console's planted ids: planted-key came back twice, from 198.51.100.212 and 203.0.113.66" loading="lazy" data-source="client" data-subject="the AegisMesh console, honeytokens"></picture>
+            </div></div>
+          </article>
+        </div>
+      </div>
+      <div class="grid">
+        <article class="card card--row card--open span-6">
+          <h3>Groups sources that ran one playbook</h3>
+          <p>Sources that ran the same eight redacted steps are grouped. Never proof of one operator.</p>
+          <div class="panel"><div class="stage stage--fade-b">
+            <picture class="at-rise lp-shot lp-shot--campaign"><source media="(max-width: 639px)" srcset="assets/landing/img/console-campaign-phone.webp 2x"><img src="assets/landing/img/console-campaign.webp" width="568" height="406" alt="A campaign card: model listing, then completion probe, four sources with the same sequence of steps" loading="lazy" data-source="client" data-subject="the AegisMesh console, campaigns"></picture>
+          </div></div>
+        </article>
+        <article class="card card--row card--open span-6">
+          <h3>Relates events to ATT&amp;CK, ATLAS and OWASP</h3>
+          <p>Rules carry editorial framework references. The view counts what fired, never coverage.</p>
+          <div class="panel"><div class="stage stage--fade-br">
+            <picture class="at-corner lp-shot lp-shot--techniques"><source media="(max-width: 639px)" srcset="assets/landing/img/console-techniques-phone.webp 2x"><img src="assets/landing/img/console-techniques.webp" width="1152" height="375" alt="The techniques view for MITRE ATT&amp;CK: T1595 Active Scanning cited by 33 events, T1078 Valid Accounts by 9" loading="lazy" data-source="client" data-subject="the AegisMesh console, techniques"></picture>
+          </div></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section statement lp-statement" id="promise" aria-label="What AegisMesh never does">
+    <div class="wrap">
+      <p class="t-label">What it never does</p>
+      <p class="lp-wh"><span class="lp-w">AegisMesh</span> <span class="lp-w">records</span> <span class="lp-w">what</span> <span class="lp-w">an</span> <span class="lp-w">attacker</span> <span class="lp-w">tried</span> <strong><span class="lp-w">and</span> <span class="lp-w">stops</span> <span class="lp-w">there.</span></strong> <span class="lp-w">It</span> <span class="lp-w">never</span> <span class="lp-w">runs</span> <span class="lp-w">what</span> <span class="lp-w">they</span> <span class="lp-w">send,</span> <span class="lp-w">never</span> <span class="lp-w">answers</span> <span class="lp-w">with</span> <span class="lp-w">anything</span> <span class="lp-w">real,</span> <span class="lp-w">and</span> <span class="lp-w">never</span> <span class="lp-w">blocks</span> <span class="lp-w">or</span> <span class="lp-w">changes</span> <span class="lp-w">a</span> <span class="lp-w">real</span> <span class="lp-w">system</span> <span class="lp-w">for</span> <span class="lp-w">you.</span></p>
+      <ul class="grid lp-never">
+        <li class="span-4">Binds to 127.0.0.1 by default</li>
+        <li class="span-4">Recommendations are dry-run only</li>
+        <li class="span-4">Rules observe; none enforce</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="evidence" aria-labelledby="evidence-h">
+    <div class="wrap">
+      <div class="grid fill lp-split">
+        <div class="span-5 lp-split__text">
+          <h2 id="evidence-h">Evidence you can check later</h2>
+          <p class="lp-split__lead">Each event is redacted, then stored in a versioned envelope with its own integrity hash. Attacker text is always shown as plain text, never rendered.</p>
+          <ul class="lp-facts">
+            <li>Planted values scrubbed before storage</li>
+            <li>Optional age/X25519 encryption at rest</li>
+            <li>Reports, STIX 2.1 indicators and SIEM files on request</li>
+          </ul>
+          <a class="link" href="https://github.com/metaforismo/AegisMesh/blob/master/docs/THREAT-MODEL.md">Read the threat model</a>
+        </div>
+        <div class="frame frame--split frame--fill span-6 start-7 lp-split__frame">
+          <div class="stage stage--fade-br">
+            <picture class="at-corner lp-shot lp-shot--event"><source media="(max-width: 639px)" srcset="assets/landing/img/console-event-phone.webp 2x"><img src="assets/landing/img/console-event.webp" width="703" height="560" alt="One event in the console: the replayed planted key on ai-litellm, payload sha256 verified, rules HT-001, LLM-001 and LLM-002, detection action observe" loading="lazy" data-source="client" data-subject="the AegisMesh console, event detail"></picture>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="questions" aria-labelledby="questions-h">
+    <div class="wrap lp-qa">
+      <div class="lp-qa__a">
+        <h2 id="questions-h">Questions before you deploy it</h2>
+        <div class="panel lp-qa__panel"><div class="stage stage--fade-br">
+          <picture class="at-corner lp-shot lp-shot--hit"><img src="assets/landing/img/console-hit-meaning.webp" width="568" height="359" alt="The console explains a honeytoken hit: what it means, and what it does not mean" loading="lazy" data-source="client" data-subject="the AegisMesh console, honeytoken guidance"></picture>
+        </div></div>
+      </div>
+      <div class="lp-qa__b">
+        <div class="faq">
+          <div class="faq__item"><h3>Does it block attacks?</h3><p>No. Recommendations are dry-run proposals for your review; nothing changes a real asset.</p></div>
+          <div class="faq__item"><h3>Is an event an incident?</h3><p>No. Events are observations. Deciding that one matters is a person’s call, recorded in an investigation.</p></div>
+          <div class="faq__item"><h3>Can it prove an attack was AI-driven?</h3><p>No. An automation reading says the pace and the rules fit automation. A source key is not an identity.</p></div>
+          <div class="faq__item"><h3>Does it send evidence anywhere?</h3><p>Not by default: it runs offline on loopback. Webhooks and fleet forwarding are opt-in.</p></div>
+        </div>
+        <a class="link" href="https://github.com/metaforismo/AegisMesh/issues">Ask on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section g2m" id="start" aria-labelledby="start-h">
+    <div class="wrap lp-steps">
+      <div class="lp-steps__a">
+        <div class="section-head">
+          <h2 id="start-h">Running on loopback in 3 steps</h2>
+          <p>You need Go 1.27.4. Everything binds to 127.0.0.1 and talks to nothing else.</p>
+        </div>
+        <article class="card card--row card--open span-4">
+          <span class="step-num" aria-hidden="true">1</span>
+          <h3>Build AegisMesh from source</h3>
+          <p>Clone the repository, then build one binary.</p>
+          <div class="panel" data-visual><div class="stage">
+            <pre class="at-rise lp-term ui" aria-label="Commands for step 1"><span class="lp-term__p">$</span> cd AegisMesh
+<span class="lp-term__p">$</span> make build</pre>
+          </div></div>
+        </article>
+      </div>
+      <div class="lp-steps__b">
+        <article class="card card--row card--open span-4">
+          <span class="step-num" aria-hidden="true">2</span>
+          <h3>Open the demo console</h3>
+          <p>A synthetic attack behind the console; its token prints once.</p>
+          <div class="panel" data-visual><div class="stage">
+            <pre class="at-rise lp-term ui" aria-label="Command for step 2"><span class="lp-term__p">$</span> ./bin/aegismesh demo --console</pre>
+          </div></div>
+        </article>
+        <article class="card card--row card--open span-4">
+          <span class="step-num" aria-hidden="true">3</span>
+          <h3>Scaffold your own decoys</h3>
+          <p>AI API shapes and an MCP workspace, with fresh fake markers.</p>
+          <div class="panel" data-visual><div class="stage">
+            <pre class="at-rise lp-term ui" aria-label="Commands for step 3"><span class="lp-term__p">$</span> ./bin/aegismesh init \
+    --profile ai-decoy \
+    --dir ./ai-lab
+<span class="lp-term__p">$</span> ./bin/aegismesh run \
+    --config ai-lab/mesh.yaml \
+    --dry-run</pre>
+          </div></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer closing footer--statement" id="contact" aria-labelledby="close-h">
+  <div class="wrap">
+    <div class="closing__cta close--type">
+      <div class="section-head">
+        <h2 id="close-h">See a recorded attack on your laptop</h2>
+        <p class="t-small muted">Apache-2.0, self-hosted, no paid tier and no hosted service.</p>
+      </div>
+      <a class="btn btn--primary btn--xl" href="#start">Try the demo</a>
+    </div>
+    <div class="closing__links">
+      <div class="grid">
+        <div class="span-4 stack-4">
+          <a class="nav__logo" href="#top"><svg class="lp-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="lp-mark__plate" d="M12 1.75 3.75 4.9v6.35c0 5.05 3.5 9.35 8.25 10.95 4.75-1.6 8.25-5.9 8.25-10.95V4.9z"/><path class="lp-mark__edge" d="M12 7.4L7.6 14.6L16.4 14.6ZM12 7.4L12 11.9M7.6 14.6L12 11.9M16.4 14.6L12 11.9"/><circle class="lp-mark__node" cx="12" cy="7.4" r="1.55"/><circle class="lp-mark__node" cx="7.6" cy="14.6" r="1.55"/><circle class="lp-mark__node" cx="16.4" cy="14.6" r="1.55"/><circle class="lp-mark__core" cx="12" cy="11.9" r="1.9"/></svg>AegisMesh</a>
+          <p class="footer__lede">Deception and evidence for defenders.</p>
+        </div>
+        <div class="span-2 start-7 footer__col"><h3>Console</h3><ul><li><a href="#story">Session story</a></li><li><a href="#evidence">Evidence</a></li><li><a href="#questions">Limits</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Decoys</h3><ul><li><a href="#decoys">AI and MCP decoys</a></li><li><a href="#start">Five-minute demo</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Project</h3><ul><li><a href="https://github.com/metaforismo/AegisMesh">GitHub</a></li><li><a href="https://github.com/metaforismo/AegisMesh/blob/master/docs/THREAT-MODEL.md">Threat model</a></li><li><a href="design-system.html">Design system</a></li></ul></div>
+      </div>
+      <div class="footer__legal">
+        <span>AegisMesh, Apache-2.0. No scripts, web fonts or trackers.</span>
+        <div class="socials"></div>
+        <a class="credits" href="CREDITS.md">Credits: console screens, tasteskill kit (MIT)</a>
+      </div>
+    </div>
+  </div>
+</footer>
 </body>
 </html>
