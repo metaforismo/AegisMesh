@@ -318,3 +318,15 @@ test('read-only settings renderer: values as text, closed source marks, copyable
   assert.equal(el.querySelectorAll((n) => ['input', 'select', 'textarea'].includes(n.tagName)).length, 0);
   assert.equal(el.querySelectorAll(byClass('copy')).length, 2);
 });
+
+test('backend deviations: key lifetimes follow the server limits; editable and the runtime source', () => {
+  assert.deepEqual(S.expiryOptions(null), { presets: [30, 90, 180, 365], def: 90 });
+  assert.deepEqual(S.expiryOptions({ max_key_days: 180, default_key_days: 30 }), { presets: [30, 90, 180], def: 30 });
+  assert.deepEqual(S.expiryOptions({ max_key_days: 7, default_key_days: 90 }), { presets: [7], def: 7 });
+  assert.equal(S.accountEditable({ source: 'managed' }), true);
+  assert.equal(S.accountEditable({ source: 'managed', editable: false }), false, 'the server can say no');
+  assert.equal(S.accountEditable({ source: 'config', editable: true }), false, 'never a configured operator');
+  assert.equal(S.settingSourceMeta('runtime').label, 'Measured');
+  const el = kit.settingsSection({ items: [{ key: 'index.occupancy', label: 'Index occupancy', value: '1,284 events', kind: 'text', source: 'runtime' }] });
+  assert.equal(el.querySelectorAll(byClass('src-chip'))[0].getAttribute('class'), 'src-chip src-chip--runtime');
+});

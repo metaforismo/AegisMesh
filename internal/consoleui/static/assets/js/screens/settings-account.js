@@ -7,8 +7,8 @@ import { formatDateTime, formatDurationMs } from '../lib/format.js';
 import { glossaryEntry } from '../lib/glossary.js';
 import { PREF_SOURCES } from '../lib/prefs.js';
 import {
-  roleText, sourceMeta, kindLabel, authLabel, keyStatusMeta, EXPIRY_PRESETS, EXPIRY_DEFAULT, expiryLabel,
-  validateKeyLabel, isSessionHandle, isKeyId, keysLine,
+  roleText, sourceMeta, kindLabel, authLabel, keyStatusMeta, EXPIRY_DEFAULT, expiryLabel, expiryOptions,
+  validateKeyLabel, isSessionHandle, isKeyId, keysLine, sentence,
 } from '../lib/settings.js';
 import { panel, kv, table, badge, chip, timeEl, copyable, banner, empty, toast, helpTip, failureState } from '../ui/components.js';
 import { confirmAction, keyReveal, formField, choices, errorSummary, wireForm, olderServerState } from '../ui/settings-kit.js';
@@ -111,8 +111,8 @@ function preferences(v) {
           paintSource();
         }, (err) => {
           group.set(prev);
-          status.textContent = `${row.legend} was not saved, so the previous value is back. ${describeError(err).detail}`;
-          toast('error', `Could not save ${row.legend.toLowerCase()}: ${describeError(err).detail} The previous value is back.`);
+          status.textContent = `${row.legend} was not saved, so the previous value is back. ${sentence(describeError(err).detail)}`;
+          toast('error', `Could not save ${row.legend.toLowerCase()}: ${sentence(describeError(err).detail)} The previous value is back.`);
         });
       },
     });
@@ -261,14 +261,15 @@ export function revokeKeyFlow(k, { revoke, after, owner = 'your account' }) {
 
 // The create form: a label and a lifetime. `create(body)` returns the
 // minted key; the reveal panel shows its token once.
-export function createKeyForm({ create, onMinted, owner = '' }) {
+export function createKeyForm({ create, onMinted, owner = '', limits = null }) {
+  const lifetimes = expiryOptions(limits);
   const summary = errorSummary();
   const labelField = formField({
     label: 'Label',
     control: h('input', { class: 'input', type: 'text', name: 'label', maxlength: 64, autocomplete: 'off', spellcheck: 'false', placeholder: 'for example siem-pull on splunk-hf-01' }),
     hint: 'Name the script or host that will use the key, so you know what breaks if you revoke it. Never put a secret here.',
   });
-  const expiry = choices({ legend: 'Expires after', name: 'expiry', options: EXPIRY_PRESETS.map((d) => [String(d), expiryLabel(d)]), value: String(EXPIRY_DEFAULT), hint: 'A key stops working at the end of its lifetime. Shorter is safer; create a new one before it ends.' });
+  const expiry = choices({ legend: 'Expires after', name: 'expiry', options: lifetimes.presets.map((d) => [String(d), expiryLabel(d)]), value: String(lifetimes.def), hint: 'A key stops working at the end of its lifetime. Shorter is safer; create a new one before it ends.' });
   const submit = h('button', { class: ['btn', 'btn--primary'], type: 'submit' }, icon('plus', { size: 'sm' }), 'Create key');
   const form = h('form', { class: 'form', novalidate: true },
     summary.el,
@@ -278,7 +279,7 @@ export function createKeyForm({ create, onMinted, owner = '' }) {
     submit, busyLabel: 'Creating…', summary,
     checks: [{ field: labelField, label: 'Label', validate: () => validateKeyLabel(labelField.control.value) }],
     onSubmit: async () => {
-      let minted = await create({ label: labelField.control.value.trim(), expires_in_days: Number(expiry.value()) || EXPIRY_DEFAULT });
+      let minted = await create({ label: labelField.control.value.trim(), expires_in_days: Number(expiry.value()) || lifetimes.def || EXPIRY_DEFAULT });
       labelField.control.value = '';
       onMinted(minted);
       minted = null;

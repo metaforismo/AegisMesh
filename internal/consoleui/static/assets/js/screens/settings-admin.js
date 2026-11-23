@@ -13,7 +13,7 @@ import { saveResponse } from '../lib/download.js';
 import { ROLES } from '../lib/taxonomy.js';
 import {
   ADMIN_SECTIONS, roleText, sourceMeta, kindLabel, accountStatusMeta, validateAccountName, validateTenants,
-  isAccountId, groupSettings, healthMeta, COMPONENT_LABEL, keysLine,
+  isAccountId, groupSettings, healthMeta, COMPONENT_LABEL, keysLine, accountEditable, sentence,
 } from '../lib/settings.js';
 import { panel, kv, table, badge, chip, timeEl, copyable, banner, empty, toast, helpTip, failureState, segmented } from '../ui/components.js';
 import {
@@ -173,7 +173,12 @@ async function accountDetail(v) {
   const revealSlot = h('div');
   let reveal = null;
   v.cleanups.push(() => reveal?.destroy());
-  const first = await attempt(v, () => ctx.api.account(accountId, { signal: ctx.signal }));
+  const [first, listed] = await Promise.all([
+    attempt(v, () => ctx.api.account(accountId, { signal: ctx.signal })),
+    // Only for the server's key limits (max_key_days, default_key_days).
+    attempt(v, () => ctx.api.accounts({ signal: ctx.signal })),
+  ]);
+  const limits = listed.value?.limits || {};
   if (first.error) {
     if (first.error instanceof ApiError && first.error.status === 404) {
       return panel({ body: empty('Account not found', 'It may have been removed, or the link is from another server.', h('a', { href: '#/settings/accounts' }, 'Go to accounts'), { icon: 'search' }) });
@@ -182,11 +187,13 @@ async function accountDetail(v) {
   }
   v.detailName = String(first.value?.name || accountId);
   v.subtitle = `${sourceMeta(first.value?.source).long} · ${kindLabel(first.value?.kind)}`;
-  v.hint = sourceMeta(first.value?.source).editable ? 'Change role, tenants or status; create or revoke its keys; sign out its sessions.' : 'Read-only here. You can still revoke its keys and sign out its sessions.';
+  v.hint = accountEditable(first.value) ? 'Change role, tenants or status; create or revoke its keys; sign out its sessions.' : 'Read-only here. You can still revoke its keys and sign out its sessions.';
 
   const paint = (a) => {
     const src = sourceMeta(a.source);
-    const managed = a.source === 'managed';
+    // The server's `editable` wins when present (false for configured and
+    // single sign-on accounts).
+    const managed = accountEditable(a);
     const isSelf = v.me?.id === a.id;
     const keyItems = Array.isArray(a.keys) ? a.keys : [];
     const sessionItems = Array.isArray(a.sessions) ? a.sessions : [];
@@ -288,7 +295,7 @@ async function accountDetail(v) {
       title: 'API keys', flush: true, meta: keysLine(keyItems),
       body: h('div', null,
         managed && a.status === 'active' ? h('div', { class: 'panel-inset' }, createKeyForm({
-          owner: a.name,
+          owner: a.name, limits,
           create: (body) => ctx.api.createAccountKey(a.id, body),
           onMinted: (minted) => {
             reveal?.destroy();
@@ -315,7 +322,9 @@ async function accountDetail(v) {
 
     mount(holder, h('div', { class: 'stack-lg' },
       ctx.route.query?.created === '1' && managed && !keyItems.length ? banner('info', 'Account created', 'It cannot sign in yet. Create its first API key below, then hand the key over through a channel you trust.') : null,
-      a.status === 'disabled' ? banner('warn', 'This account is disabled', 'It cannot sign in and its keys are refused until it is enabled again.') : null,
+      a.status === 'disabled' ? (a.source === 'config'
+        ? banner('warn', 'Token sign-in is off on this server', 'Configured operators (and managed accounts\u2019 API keys) cannot sign in while console.token_login is false. Change it in the config file and restart.')
+        : banner('warn', 'This account is disabled', 'It cannot sign in and its keys are refused until it is enabled again.')) : null,
       revealSlot,
       h('div', { class: ['grid', 'grid--2'] }, access, overview),
       keyPanel,
@@ -365,7 +374,7 @@ async function configPage(v, page) {
   const sections = (page.settings || []).map((id) => byId.get(id)).filter(Boolean);
   const generated = r.value?.generated_at;
   return h('div', { class: 'stack-lg' },
-    banner('info', 'File-driven settings', FILE_NOTE),
+    banner('info', 'File-driven settings', typeof r.value?.note === 'string' && r.value.note ? `${sentence(r.value.note)} Copy a key to find it in the file.` : FILE_NOTE),
     page.id === 'sso' ? ssoGuide(byId.get('sso')) : null,
     sections.length ? sections.map((s, i) => panel({
       title: String(s.title || s.id), primary: i === 0,
@@ -418,7 +427,7 @@ function auditExport(v) {
       title: 'What the file holds',
       actions: helpTip(glossaryEntry('audit')),
       body: h('ul', { class: 'bullets' },
-        h('li', null, 'Every record of this tenant’s audit chain: who did what, when, from where, and the outcome.'),
+        h('li', null, 'The audit chain of the tenant you are in, oldest first, at most 10,000 records: who did what, when, from where, and the outcome. For a longer chain, export a shorter period.'),
         h('li', null, 'Each record carries its hash and the previous record’s hash, so a copy can be checked against the chain later. It shows the chain was not altered after the fact; it cannot show what was never recorded.'),
         h('li', null, 'No secrets: tokens, keys and session cookies are never written to the audit trail.'),
         h('li', null, h('a', { href: '#/audit' }, 'Read the audit trail in the console'))),
@@ -450,7 +459,9 @@ async function system(v) {
           ['Config schema', String(s.config_schema || '—')],
           ['Started', s.started_at ? timeEl(s.started_at, { relative: true }) : '—'],
           ['Uptime', formatDuration(s.uptime_seconds)],
-          ['Licences', s.licenses_url === '/licenses' ? h('a', { href: '/licenses' }, 'Third-party licences') : h('span', { class: 'muted' }, 'Listed in the NOTICE file of the release')],
+          // The server has no licence page (licenses_url is empty); the
+          // release's LICENSE and NOTICE files list them.
+          ['Licences', h('span', { class: 'muted' }, 'Apache-2.0; third-party notices are in the release’s NOTICE file')],
         ]),
       }),
       panel({

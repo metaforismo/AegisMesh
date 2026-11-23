@@ -2754,12 +2754,14 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 }
 
 /* Where a setting's value comes from: filled square = config file, hollow ring =
-   built-in default, half-filled square = environment. */
+   built-in default, half-filled square = environment, ringed dot = measured by the
+   running server (runtime). */
 .src-chip { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-ink-3); font-size: var(--text-xs); white-space: nowrap; }
 .src-chip__mark { width: 8px; height: 8px; flex: none; border: 1px solid currentColor; }
 .src-chip--config .src-chip__mark { background: currentColor; border-radius: 1px; }
 .src-chip--default .src-chip__mark { border-radius: 50%; }
 .src-chip--env .src-chip__mark { border-radius: 1px; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+.src-chip--runtime .src-chip__mark { border-radius: 50%; background: radial-gradient(currentColor 0 2px, transparent 2.5px); }
 .src-chip--unknown .src-chip__mark { border-style: dashed; border-radius: 1px; }
 
 /* Where an account comes from: filled square = configured (the file), ring with a

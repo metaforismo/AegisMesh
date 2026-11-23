@@ -445,7 +445,7 @@ const IDENTITIES = new Map([
 ]);
 
 const sessions = new Map(); // sid → { name, role, auth_method, tenant, tenants, csrf_token, expires_at, account_id, created_at, last_seen_at, remote, client }
-const accounts = createAccounts({ tenants: TENANTS, localTenant: LOCAL_TENANT, configured: TOKENS });
+const accounts = createAccounts({ tenants: TENANTS, localTenant: LOCAL_TENANT, configured: TOKENS, tokenLogin: TOKEN_AUTH });
 
 const sessionView = (s) => ({
   principal: { name: s.name, role: s.role, auth_method: s.auth_method, tenant: s.tenant, tenants: s.tenants },
@@ -1173,7 +1173,7 @@ async function api(req, res, url) {
       instance: 'node-dev-01', version: { version: '0.3.0-dev', commit: 'mock', go: 'go1.25' },
       started_at: new Date(now - 26 * 3600e3).toISOString().replace(/\.\d+Z$/, 'Z'), uptime_seconds: Math.floor((Date.now() - now) / 1000) + 26 * 3600,
       healthy: true, sensors: { wanted: 4, started: 3 }, bus: { dropped_events: 0 },
-      storage: { segments: 3, bytes: 18_874_368, encrypted: false, retention: { max_events: 100000, max_age_days: 30 } },
+      storage: { healthy: true, segments: 3, bytes: 18_874_368, encrypted: false, retention: { max_events: 100000, max_age_days: 30 } },
       // Accepting hubs report history "unavailable": forwarded copies are live-only.
       index: { events: events.length, capacity: 50000, oldest: events[events.length - 1].time, history: T.fleet.accepting ? 'unavailable' : 'complete' },
       console: { listen: `${HOST}:${PORT}`, tls: false, session_ttl_seconds: SESSION_TTL },

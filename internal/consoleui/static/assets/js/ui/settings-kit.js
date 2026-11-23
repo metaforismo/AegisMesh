@@ -315,7 +315,7 @@ export function settingsSection(section) {
       h('dt', { class: 'setting__label' }, String(it.label ?? it.key ?? '')),
       h('dd', { class: 'setting__value' },
         h('span', { class: ['setting__text', ['address', 'text', 'duration', 'count', 'bytes'].includes(it.kind) ? 'num' : ''] }, String(it.value ?? '—')),
-        h('span', { class: ['src-chip', `src-chip--${['config', 'default', 'env'].includes(it.source) ? it.source : 'unknown'}`], title: src.hint },
+        h('span', { class: ['src-chip', `src-chip--${['config', 'default', 'env', 'runtime'].includes(it.source) ? it.source : 'unknown'}`], title: src.hint },
           h('span', { class: 'src-chip__mark', 'aria-hidden': 'true' }), src.label)),
       h('dd', { class: 'setting__how' },
         it.note ? h('span', { class: 'setting__note' }, String(it.note)) : null,

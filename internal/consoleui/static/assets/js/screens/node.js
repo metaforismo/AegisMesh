@@ -40,6 +40,8 @@ export default {
         panel({
           title: 'Evidence storage',
           body: kv([
+            // `healthy` is newer (round 5); older servers leave the row out.
+            typeof st.healthy === 'boolean' ? ['Health', badge(st.healthy ? 'ok' : 'warn', st.healthy ? 'Writable and consistent' : 'Needs attention')] : null,
             ['Segments', formatCount(st.segments)],
             ['Size on disk', formatBytes(st.bytes)],
             ['Encrypted at rest', st.encrypted ? 'Yes' : 'No'],

@@ -21,7 +21,7 @@ export const PREF_VALUES = Object.freeze({
 export const PREF_DEFAULTS = Object.freeze({ timezone: 'utc', default_window: '24h', density: 'comfortable', theme: 'system', reduce_motion: 'system' });
 const KEY_TOKEN = /^amk_[A-Za-z0-9_-]{43}$/;
 const ACCOUNT_ID = /^(acc_[a-z0-9]{4,64}|cfg:[A-Za-z0-9_.@-]{1,64}|oidc:[0-9a-f]{12})$/;
-const LIMITS = Object.freeze({ max_accounts: 200, max_keys_per_account: 10 });
+const LIMITS = Object.freeze({ max_accounts: 200, max_keys_per_account: 10, max_key_days: 365, default_key_days: 90 });
 
 const iso = (ms) => new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z');
 const digest = (token) => createHash('sha256').update(token).digest('hex');
@@ -39,7 +39,7 @@ export function clientFamily(ua) {
   return os ? `${browser} on ${os}` : browser;
 }
 
-export function createAccounts({ tenants, localTenant, configured, oidc, startedAt = Date.now() }) {
+export function createAccounts({ tenants, localTenant, configured, tokenLogin = true, startedAt = Date.now() }) {
   const secret = randomBytes(32);
   const handleOf = (sid) => `ses_${createHmac('sha256', secret).update(sid).digest('hex').slice(0, 16)}`;
   const accounts = new Map();
@@ -49,7 +49,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
   const day = 86400e3;
   const second = tenants[1] || localTenant;
 
-  const put = (a) => { accounts.set(a.id, { status: 'active', last_seen_at: null, created_by: '', ...a }); return accounts.get(a.id); };
+  const put = (a) => { accounts.set(a.id, { status: 'active', last_seen_at: null, created_by: '', updated_at: a.created_at ?? null, ...a }); return accounts.get(a.id); };
   // Configured operators: the break-glass path, read-only here.
   for (const [, p] of configured) {
     put({ id: `cfg:${p.name}`, name: p.name, kind: 'person', source: 'config', role: p.role, tenants: [...p.tenants], created_at: null, created_by: 'config file' });
@@ -79,7 +79,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
 
   // Sessions of other accounts, so the admin list shows more than you.
   const synthetic = [
-    { handle: 'ses_4f1c9a20b7d3e815', account_id: 'acc_7k2m9q4wz1', auth_method: 'token', tenant: localTenant, created_at: iso(T0 - 3 * 3600e3), last_seen_at: iso(T0 - 50 * 60e3), expires_at: iso(T0 + 5 * 3600e3), idle_expires_at: iso(T0 - 20 * 60e3 + 1800e3), remote: '198.51.100.23', client: 'Firefox on Linux' },
+    { handle: 'ses_4f1c9a20b7d3e815', account_id: 'acc_7k2m9q4wz1', auth_method: 'token', tenant: localTenant, created_at: iso(T0 - 3 * 3600e3), last_seen_at: iso(T0 - 6 * 60e3), expires_at: iso(T0 + 5 * 3600e3), idle: true, remote: '198.51.100.23', client: 'Firefox on Linux' },
     { handle: 'ses_a07e33c51d9b2f64', account_id: oidcAccountId('00u1lin-synthetic-08cd'), auth_method: 'oidc', tenant: localTenant, created_at: iso(T0 - 7 * 3600e3), last_seen_at: iso(T0 - 6 * 3600e3), expires_at: iso(T0 + 1 * 3600e3), idle_expires_at: null, remote: '2001:db8::4c', client: 'Safari on iOS' },
     { handle: 'ses_0b6d2e9f7a14c358', account_id: 'cfg:ada', auth_method: 'token', tenant: localTenant, created_at: iso(T0 - 26 * 3600e3), last_seen_at: iso(T0 - 22 * 3600e3), expires_at: iso(T0 + 2 * 3600e3), idle_expires_at: null, remote: '192.0.2.10', client: 'Chrome on Windows' },
   ];
@@ -103,16 +103,23 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
       }, account_id: s.account_id });
     }
     for (const x of synthetic) {
-      const { account_id, ...view } = x;
-      out.push({ sid: null, view: { current: false, ...view }, account_id });
+      const { account_id, idle, ...view } = x;
+      // An idle deadline stays ahead of now while the mock runs.
+      const idleAt = idle ? iso(Math.max(Date.parse(view.last_seen_at) + 1800e3, Date.now() + 20 * 60e3)) : null;
+      out.push({ sid: null, view: { current: false, ...view, idle_expires_at: idleAt }, account_id });
     }
     return out;
   }
+  const withAccount = (x, current) => ({ ...x.view, current: x.view.handle === current, account_id: x.account_id, account_name: accounts.get(x.account_id)?.name || 'unknown' });
   const activeSessionsOf = (sessionsMap, id) => liveSessions(sessionsMap).filter((x) => x.account_id === id).length;
 
+  // Like the server: a configured operator reads "disabled" while token
+  // sign-in is off; only managed accounts are editable.
   const publicAccount = (a, sessionsMap) => ({
-    id: a.id, name: a.name, kind: a.kind, source: a.source, role: a.role, tenants: [...a.tenants], status: a.status,
-    created_at: a.created_at, created_by: a.created_by, last_seen_at: a.last_seen_at,
+    id: a.id, name: a.name, kind: a.kind, source: a.source, role: a.role, tenants: [...a.tenants],
+    status: a.source === 'config' && !tokenLogin ? 'disabled' : a.status,
+    created_at: a.created_at, created_by: a.created_by, updated_at: a.updated_at ?? null, last_seen_at: a.last_seen_at,
+    editable: a.source === 'managed',
     active_keys: keysOf(a.id).filter((k) => keyStatus(k) === 'active').length,
     active_sessions: activeSessionsOf(sessionsMap, a.id),
   });
@@ -132,7 +139,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
     if (!KEY_TOKEN.test(String(token))) return null;
     const d = digest(token);
     const k = [...keys.values()].find((x) => x.digest === d);
-    if (!k || keyStatus(k) !== 'active') return null;
+    if (!k || keyStatus(k) !== 'active' || !tokenLogin) return null; // token sign-in off disables keys too
     const a = accounts.get(k.account_id);
     if (!a || a.status !== 'active') return null;
     k.last_used_at = iso(Date.now());
@@ -168,6 +175,8 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
     const file = 'Change in the config file and restart.';
     return {
       generated_at: iso(Date.now()),
+      editable: false,
+      note: 'Read-only. Change the config file (or the environment where marked) and restart',
       sections: [
         { id: 'access', title: 'Access and sessions', items: [
           it('console.token_login', 'Operator token sign-in', ctx.tokenAuth ? 'enabled' : 'disabled', 'bool', 'default', file),
@@ -180,6 +189,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
           it('console.oidc.enabled', 'OpenID Connect', ctx.oidc ? 'enabled' : 'disabled', 'bool', ctx.oidc ? 'config' : 'default', file),
           ...(ctx.oidc ? [
             it('console.oidc.issuer', 'Issuer host', 'idp.example', 'text', 'config', file),
+            it('console.oidc.discovery', 'Provider discovery', 'cached 12m ago', 'text', 'runtime', 'Observed by the server; refreshed on demand.'),
             it('console.oidc.client_id', 'Client id', 'aegismesh-console', 'text', 'config', file),
             it('console.oidc.client_secret_file', 'Client secret', 'set (read from a file, never shown)', 'secret', 'config', 'Rotate the file and restart. The console never displays the secret.'),
             it('console.oidc.role_claim', 'Role claim', 'groups', 'text', 'config', file),
@@ -194,13 +204,13 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
         { id: 'listener', title: 'Listener', items: [
           it('console.listen', 'Address', '127.0.0.1:9121', 'address', 'config', file),
           it('console.tls.enabled', 'TLS', 'off (loopback only)', 'bool', 'default', 'A non-loopback address requires TLS. ' + file),
-          it('console.tls.cert_expiry', 'Certificate expiry', 'not applicable', 'text', 'default', 'Shown when TLS is on and the certificate is readable.'),
+          it('console.tls.cert_expiry', 'Certificate expiry', 'not applicable', 'text', 'runtime', 'Measured from the certificate when TLS is on and it is readable.'),
         ] },
         { id: 'evidence', title: 'Evidence and retention', items: [
-          it('storage.data_dir', 'Data directory usage', '412 MiB of 20 GiB budget', 'bytes', 'config', file),
+          it('storage.data_dir', 'Data directory usage', '412 MiB', 'bytes', 'runtime', 'Measured now. The directory itself is set in the config file.'),
           it('storage.encryption.enabled', 'Encryption at rest', 'on (AES-256-GCM, key from file)', 'bool', 'config', 'The key file path is not shown. ' + file),
           it('index.capacity', 'Index capacity', '100,000 events', 'count', 'default', file),
-          it('index.occupancy', 'Index occupancy', '1,284 events (1.3%)', 'text', 'default', 'Measured now. Older evidence stays on disk.'),
+          it('index.occupancy', 'Index occupancy', '1,284 events (1.3%)', 'text', 'runtime', 'Measured now. Older evidence stays on disk.'),
           it('storage.retention_days', 'Retention', '90 days', 'duration', 'config', file),
         ] },
         { id: 'detection', title: 'Detection', items: [
@@ -248,14 +258,16 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
           if (!PREF_VALUES[k].includes(v)) { fail(res, 'invalid_argument', `${k} must be one of ${PREF_VALUES[k].join(', ')}`); return true; }
         }
         if (c.flags.failPrefs) { fail(res, 'unavailable', 'preferences store is read-only (mock --fail-prefs)'); return true; }
+        // Partial bodies merge, like the server.
         const next = { ...PREF_DEFAULTS, ...(prefs.get(me.id) || {}), ...b };
         prefs.set(me.id, next);
+        audit(who.name, who.role, 'preferences.update', me.id, 'ok', remote, Object.keys(b).sort().join(','));
         send(res, 200, next);
         return true;
       }
     }
     if (p === '/me/sessions' && m === 'GET') {
-      const items = liveSessions(sessionsMap).filter((x) => x.account_id === me.id).map((x) => ({ ...x.view, current: x.view.handle === current }));
+      const items = liveSessions(sessionsMap).filter((x) => x.account_id === me.id).map((x) => withAccount(x, current));
       items.sort((a, b) => (b.current - a.current) || Date.parse(b.last_seen_at) - Date.parse(a.last_seen_at));
       send(res, 200, { items });
       return true;
@@ -306,8 +318,8 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
         if (!KINDS.includes(b.kind)) { fail(res, 'invalid_argument', 'kind must be person or service'); return true; }
         if (!ROLES.includes(b.role)) { fail(res, 'invalid_argument', 'role must be viewer, analyst or admin'); return true; }
         if (!Array.isArray(b.tenants) || !b.tenants.length || b.tenants.some((t) => !tenants.includes(t))) { fail(res, 'invalid_argument', 'tenants must name declared tenants'); return true; }
-        if ([...accounts.values()].some((a) => a.name.toLowerCase() === b.name.trim().toLowerCase())) { send(res, 409, { error: { code: 'name_taken', message: 'an account with this name already exists' } }); return true; }
-        if (accounts.size >= LIMITS.max_accounts) { send(res, 409, { error: { code: 'limit_reached', message: `at most ${LIMITS.max_accounts} accounts` } }); return true; }
+        if ([...accounts.values()].some((a) => a.name.toLowerCase() === b.name.trim().toLowerCase())) { send(res, 409, { error: { code: 'conflict', message: 'an account with this name already exists' } }); return true; }
+        if (accounts.size >= LIMITS.max_accounts) { send(res, 409, { error: { code: 'conflict', message: `at most ${LIMITS.max_accounts} accounts` } }); return true; }
         const id = `acc_${randomBytes(5).toString('hex')}`;
         const a = put({ id, name: b.name.trim(), kind: b.kind, source: 'managed', role: b.role, tenants: [...new Set(b.tenants)], created_at: iso(Date.now()), created_by: who.name });
         audit(who.name, who.role, 'account.create', id, 'ok', remote);
@@ -324,7 +336,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
       if (!acc[2]) {
         if (m === 'GET') {
           const ks = keysOf(a.id).map(publicKey);
-          const ss = liveSessions(sessionsMap).filter((x) => x.account_id === a.id).map((x) => ({ ...x.view, current: x.view.handle === current }));
+          const ss = liveSessions(sessionsMap).filter((x) => x.account_id === a.id).map((x) => withAccount(x, current));
           send(res, 200, { ...publicAccount(a, sessionsMap), keys: ks, sessions: ss });
           return true;
         }
@@ -340,6 +352,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
           if (b.name !== undefined) a.name = b.name.trim();
           if (b.role !== undefined) a.role = b.role;
           if (b.tenants !== undefined) a.tenants = [...new Set(b.tenants)];
+          a.updated_at = iso(Date.now());
           if (b.status !== undefined && b.status !== a.status) {
             a.status = b.status;
             if (b.status === 'disabled') for (const x of liveSessions(sessionsMap).filter((y) => y.account_id === a.id)) dropSession(c, x);
@@ -358,10 +371,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
       }
     }
     if (p === '/admin/sessions' && m === 'GET') {
-      const items = liveSessions(sessionsMap).map((x) => {
-        const a = accounts.get(x.account_id);
-        return { ...x.view, current: x.view.handle === current, account_id: x.account_id, account_name: a ? a.name : 'unknown' };
-      }).sort((a, b) => Date.parse(b.last_seen_at) - Date.parse(a.last_seen_at));
+      const items = liveSessions(sessionsMap).map((x) => withAccount(x, current)).sort((a, b) => Date.parse(b.last_seen_at) - Date.parse(a.last_seen_at));
       send(res, 200, { items });
       return true;
     }
@@ -380,7 +390,8 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
       const since = url.searchParams.get('since');
       if (since !== null && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(since) || Number.isNaN(Date.parse(since)))) { fail(res, 'invalid_argument', 'since must be RFC 3339 UTC'); return true; }
       audit(who.name, who.role, 'audit.export', '', 'ok', remote, format);
-      const rows = c.T.audit.filter((r) => !since || Date.parse(r.time) >= Date.parse(since));
+      // The active tenant's chain, oldest first, at most 10,000 records.
+      const rows = c.T.audit.filter((r) => !since || Date.parse(r.time) >= Date.parse(since)).slice(0, 10000);
       const cols = ['seq', 'time', 'actor', 'role', 'action', 'target', 'outcome', 'remote', 'detail', 'prev_hash', 'hash'];
       const csvCell = (v) => {
         let t = String(v ?? '');
@@ -411,7 +422,7 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
           { id: 'fleet', status: c.flags.fleetHub ? 'ok' : 'off', detail: c.flags.fleetHub ? 'Hub with 4 nodes' : 'Not enabled' },
           { id: 'oidc', status: c.flags.oidc ? 'ok' : 'off', detail: c.flags.oidc ? 'Discovery cached 12 min ago' : 'Not configured' },
         ],
-        licenses_url: '/licenses',
+        licenses_url: '',
       });
       return true;
     }
@@ -423,10 +434,11 @@ export function createAccounts({ tenants, localTenant, configured, oidc, started
     const { req, res, fail, send, audit, who, remote } = c;
     return c.readBody(req, ['label', 'expires_in_days']).then((b) => {
       if (!validLabel(b.label)) return fail(res, 'invalid_argument', 'label must be 1 to 64 printable characters');
-      const days = b.expires_in_days === undefined ? 90 : b.expires_in_days;
-      if (!Number.isInteger(days) || days < 1 || days > 365) return fail(res, 'invalid_argument', 'expires_in_days must be 1..365');
+      const days = b.expires_in_days === undefined ? LIMITS.default_key_days : b.expires_in_days;
+      if (!Number.isInteger(days) || days < 1 || days > LIMITS.max_key_days) return fail(res, 'invalid_argument', `expires_in_days must be 1..${LIMITS.max_key_days}`);
+      if (owner.status !== 'active') return send(res, 409, { error: { code: 'conflict', message: 'the account is disabled' } });
       if (keysOf(owner.id).filter((k) => keyStatus(k) === 'active').length >= LIMITS.max_keys_per_account) {
-        return send(res, 409, { error: { code: 'limit_reached', message: `at most ${LIMITS.max_keys_per_account} active keys per account` } });
+        return send(res, 409, { error: { code: 'conflict', message: `at most ${LIMITS.max_keys_per_account} active keys per account` } });
       }
       const minted = mintKey(owner.id, b.label.trim(), days, by);
       audit(who.name, who.role, 'key.create', minted.key.id, 'ok', remote);

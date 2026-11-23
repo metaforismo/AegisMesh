@@ -33,9 +33,9 @@ const call = async (base, who, method, path, body) => {
 };
 
 const ME_KEYS = ['auth_method', 'capabilities', 'created_at', 'id', 'kind', 'last_seen_at', 'name', 'role', 'source', 'tenant', 'tenants'].sort();
-const SESSION_KEYS = ['auth_method', 'client', 'created_at', 'current', 'expires_at', 'handle', 'idle_expires_at', 'last_seen_at', 'remote', 'tenant'].sort();
+const SESSION_KEYS = ['account_id', 'account_name', 'auth_method', 'client', 'created_at', 'current', 'expires_at', 'handle', 'idle_expires_at', 'last_seen_at', 'remote', 'tenant'].sort();
 const KEY_KEYS = ['created_at', 'created_by', 'expires_at', 'id', 'label', 'last_used_at', 'prefix', 'revoked_at', 'status'].sort();
-const ACCOUNT_KEYS = ['active_keys', 'active_sessions', 'created_at', 'created_by', 'id', 'kind', 'last_seen_at', 'name', 'role', 'source', 'status', 'tenants'].sort();
+const ACCOUNT_KEYS = ['active_keys', 'active_sessions', 'created_at', 'created_by', 'editable', 'id', 'kind', 'last_seen_at', 'name', 'role', 'source', 'status', 'tenants', 'updated_at'].sort();
 
 test('client family: a fixed vocabulary, never the raw header', () => {
   assert.equal(clientFamily('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit Chrome/130.0 Safari/537.36'), 'Chrome on macOS');
@@ -108,14 +108,17 @@ test('keys: created once with a token, listed without it, sign in, revoke; viewe
 test('administration: accounts, create, not_managed, disable revokes sessions; non-admins refused', async () => {
   const a = await login(on.base, 'dev-admin');
   const list = (await call(on.base, a, 'GET', '/admin/accounts')).json;
-  assert.deepEqual(list.limits, { max_accounts: 200, max_keys_per_account: 10 });
+  assert.deepEqual(list.limits, { max_accounts: 200, max_keys_per_account: 10, max_key_days: 365, default_key_days: 90 });
+  assert.deepEqual(list.items.filter((x) => x.editable).map((x) => x.source).filter((v, i, arr) => arr.indexOf(v) === i), ['managed']);
   for (const acc of list.items) assert.deepEqual(Object.keys(acc).sort(), ACCOUNT_KEYS);
   assert.deepEqual([...new Set(list.items.map((x) => x.source))].sort(), ['config', 'managed', 'oidc']);
   assert.equal((await call(on.base, a, 'PATCH', '/admin/accounts/cfg%3Aada', { role: 'viewer' })).json.error.code, 'not_managed');
   const made = await call(on.base, a, 'POST', '/admin/accounts', { name: 'collector@soc.example', kind: 'service', role: 'viewer', tenants: ['default'] });
   assert.equal(made.status, 201);
   assert.match(made.json.id, /^acc_[a-z0-9]+$/);
-  assert.equal((await call(on.base, a, 'POST', '/admin/accounts', { name: 'collector@soc.example', kind: 'service', role: 'viewer', tenants: ['default'] })).status, 409);
+  const dup = await call(on.base, a, 'POST', '/admin/accounts', { name: 'collector@soc.example', kind: 'service', role: 'viewer', tenants: ['default'] });
+  assert.equal(dup.status, 409);
+  assert.equal(dup.json.error.code, 'conflict', 'name taken is a plain conflict');
   const key = await call(on.base, a, 'POST', `/admin/accounts/${made.json.id}/keys`, { label: 'pull', expires_in_days: 90 });
   const svc = await login(on.base, key.json.token);
   assert.equal(svc.status, 200);
@@ -136,9 +139,12 @@ test('settings, audit export and system: read-only shapes, attachment, component
   const a = await login(on.base, 'dev-admin');
   const settings = (await call(on.base, a, 'GET', '/admin/settings')).json;
   assert.deepEqual(settings.sections.map((s) => s.id), ['access', 'sso', 'tenants', 'listener', 'evidence', 'detection', 'fleet', 'exports']);
+  assert.equal(settings.editable, false);
+  assert.equal(typeof settings.note, 'string');
+  assert.ok(settings.sections.some((s) => s.items.some((it) => it.source === 'runtime')), 'observed facts are "runtime"');
   for (const s of settings.sections) for (const it of s.items) {
     assert.equal(it.editable, false);
-    assert.ok(['config', 'default', 'env'].includes(it.source));
+    assert.ok(['config', 'default', 'env', 'runtime'].includes(it.source));
     assert.doesNotMatch(String(it.value), /secret-value|BEGIN PRIVATE/);
   }
   const csv = await call(on.base, a, 'GET', '/admin/audit/export?format=csv');
@@ -148,7 +154,7 @@ test('settings, audit export and system: read-only shapes, attachment, component
   assert.equal((await call(on.base, a, 'GET', '/admin/audit/export?format=xml')).status, 400);
   assert.equal((await call(on.base, a, 'GET', '/admin/audit/export?format=jsonl&since=yesterday')).status, 400);
   const sys = (await call(on.base, a, 'GET', '/system')).json;
-  assert.equal(sys.licenses_url, '/licenses');
+  assert.equal(sys.licenses_url, '', 'the server has no licence page');
   assert.ok(sys.components.every((c) => ['ok', 'degraded', 'off'].includes(c.status)));
 });
 

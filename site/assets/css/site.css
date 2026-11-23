@@ -468,3 +468,21 @@ body { font-size: var(--text-md); }
 .ds-mark { width: 10rem; }
 .ds-mark__fill { transform: scaleX(0.62); }
 .lp-cap--full { grid-column: 1 / -1; }
+
+/* ---- Brand panel ------------------------------------------------------------------------ */
+.ds-brand { align-items: stretch; }
+.ds-brand-tile { display: flex; flex: 1 1 15rem; flex-direction: column; gap: var(--space-4); margin: 0; padding: var(--space-5); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); }
+.ds-brand-tile figcaption { color: inherit; opacity: 0.75; font-size: var(--text-xs); }
+.ds-brand-tile--dark { background: #0f141b; color: #e7ebf1; }
+.ds-brand-tile--dark .brand__mark { color: #8ea5ff; }
+.ds-brand-tile--light { background: #ffffff; color: #17202b; }
+.ds-brand-tile--light .brand__mark { color: #2e4fc9; }
+.ds-brand-tile--mono { color: var(--color-ink); }
+.ds-brand-tile--mono .brand__mark { color: var(--color-ink); }
+.ds-brand-sizes { display: flex; align-items: center; gap: var(--space-6); }
+.ds-mark--16 { width: 16px; height: 16px; }
+.ds-mark--24 { width: 24px; height: 24px; }
+.ds-mark--32 { width: 32px; height: 32px; }
+.ds-mark--64 { width: 64px; height: 64px; }
+.ds-brand-lockup { display: flex; align-items: center; gap: var(--space-2); margin: 0; }
+.ds-brand-space { display: inline-flex; padding: 32px; outline: 1px dashed var(--color-border-strong); outline-offset: -1px; }

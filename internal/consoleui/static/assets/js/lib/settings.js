@@ -113,6 +113,7 @@ export const SETTING_SOURCES = Object.freeze({
   config: { label: 'Config file', hint: 'Set in the config file' },
   default: { label: 'Default', hint: 'Not set: the built-in default applies' },
   env: { label: 'Environment', hint: 'Set by an environment variable' },
+  runtime: { label: 'Measured', hint: 'Observed by the running server (usage, occupancy, discovery, certificate expiry), not a setting' },
 });
 export const settingSourceMeta = (s) => SETTING_SOURCES[s] || { label: 'Unknown source', hint: 'The server did not say where this value comes from' };
 
@@ -129,6 +130,18 @@ export const COMPONENT_LABEL = Object.freeze({ console: 'Console', storage: 'Evi
 export const EXPIRY_PRESETS = Object.freeze([30, 90, 180, 365]);
 export const EXPIRY_DEFAULT = 90;
 export const expiryLabel = (d) => (d === 365 ? '1 year' : `${d} days`);
+// The presets the server allows (`limits.max_key_days`) and its default
+// (`limits.default_key_days`), when it says; otherwise the contract's.
+export function expiryOptions(limits) {
+  const max = Number.isInteger(limits?.max_key_days) && limits.max_key_days > 0 ? limits.max_key_days : 365;
+  const presets = EXPIRY_PRESETS.filter((d) => d <= max);
+  const list = presets.length ? presets : [max];
+  const def = Number.isInteger(limits?.default_key_days) && list.includes(limits.default_key_days) ? limits.default_key_days : (list.includes(EXPIRY_DEFAULT) ? EXPIRY_DEFAULT : list[list.length - 1]);
+  return { presets: list, def };
+}
+// Whether the console may change an account: the server's `editable` when
+// present, else the source rule.
+export const accountEditable = (a) => (typeof a?.editable === 'boolean' ? a.editable && a.source === 'managed' : a?.source === 'managed');
 
 // Validation for the forms. Each returns '' when the value is acceptable,
 // otherwise one sentence that says what to change.
@@ -173,6 +186,9 @@ export function refusalMessage(err, { what = 'this change' } = {}) {
   if (err?.status === 0) return 'The console server could not be reached. Nothing was changed.';
   return err?.message ? `${err.message}` : 'The request failed.';
 }
+
+// A server sentence ends with a full stop before another sentence follows.
+export const sentence = (t) => { const s = String(t ?? '').trim(); return !s || /[.!?]$/.test(s) ? s : `${s}.`; };
 
 // Which settings pages this principal sees. `me` may be null (older server).
 export function visibleSections(me) {

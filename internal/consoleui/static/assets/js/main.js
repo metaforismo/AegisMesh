@@ -21,6 +21,7 @@ import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
 import { createShell, applyRail, applyPreferences, setPrefsSink, prefersReducedMotion, cycleTheme, isApple, NAV } from './ui/shell.js';
 import { createPrefsStore } from './lib/prefs.js';
 import { isMissingEndpoint } from './lib/insight.js';
+import { sentence } from './lib/settings.js';
 import { failureState, installPeek, toast, pageHead, panel } from './ui/components.js';
 import { loginErrorCode, loginErrorMessage } from './lib/auth.js';
 import { tenantInfo, switchTargets, routeAfterSwitch, switchBody } from './lib/tenant.js';
@@ -74,7 +75,7 @@ const prefs = createPrefsStore({
 });
 prefs.start();
 setPrefsSink((patch) => prefs.update(patch).catch((err) => {
-  toast('error', `Could not save the preference: ${describeError(err).detail} The previous value is back.`);
+  toast('error', `Could not save the preference: ${sentence(describeError(err).detail)} The previous value is back.`);
 }));
 
 // After sign-in: the account's preferences win. A change to how times or
