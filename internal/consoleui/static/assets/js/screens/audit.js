@@ -2,9 +2,9 @@ import { h, mount } from '../lib/dom.js';
 import { href, normalizeAuditFilters } from '../lib/route.js';
 import { AUDIT_ACTIONS } from '../lib/taxonomy.js';
 import { tenantInfo } from '../lib/tenant.js';
-import { formatDateTime, formatCount, shortId } from '../lib/format.js';
+import { formatCount, shortId } from '../lib/format.js';
 import { waveDelays } from '../lib/chart.js';
-import { pageHead, panel, table, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable, evidence } from '../ui/components.js';
+import { pageHead, panel, table, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable, evidence, timeEl } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 
 const PAGE = 100;
@@ -92,9 +92,11 @@ export default {
     const paint = () => {
       mount(tableSlot, rows.length ? table({
         caption: 'Audit records',
+        // Nine columns do not fit a 1440px column; scroll inside the panel.
+        scroll: true,
         columns: [
           { label: 'Seq', num: true, cell: (r) => String(r.seq) },
-          { label: 'Time (UTC)', className: 'nowrap', cell: (r) => formatDateTime(r.time).replace(' UTC', '') },
+          { label: 'Time', className: 'nowrap', cell: (r) => timeEl(r.time, { relative: true }) },
           { label: 'Actor', cell: (r) => h('span', null, r.actor || '—', ' ', h('span', { class: 'chip' }, labelFor(r.role || '—'))) },
           { label: 'Action', cell: (r) => h('code', null, r.action) },
           { label: 'Target', cell: (r) => (r.target ? h('code', null, r.target) : '—') },

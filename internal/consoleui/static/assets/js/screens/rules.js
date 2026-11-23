@@ -1,5 +1,6 @@
 import { h, clear, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
+import { severityRank } from '../lib/taxonomy.js';
 import { pageHead, panel, table, sevChip, badge, segmented, empty, link, labelFor, helpTip, banner, actionChip, SIGNAL_NO_SEVERITY } from '../ui/components.js';
 import { ruleActionMeta } from '../lib/catalogs.js';
 import { frameworkChips } from '../ui/story.js';
@@ -28,10 +29,10 @@ export default {
         g ? h('p', { class: 'rule-prose__next' }, h('span', { class: 'rule-prose__label' }, 'Check next'), g) : null);
     };
     const columns = [
-      { label: 'Id', className: 'nowrap', cell: (r) => link(href('events', { rule: r.id }), h('code', null, r.id)) },
-      { label: 'Title', className: 'col-title', cell: (r) => r.title || '—' },
-      { label: 'Severity', cell: (r) => sevChip(r.severity, SIGNAL_NO_SEVERITY) },
-      { label: 'State', cell: (r) => badge(r.enabled ? 'ok' : 'neutral', r.enabled ? 'Enabled' : 'Disabled') },
+      { label: 'Id', className: 'nowrap', sort: (r) => r.id, cell: (r) => link(href('events', { rule: r.id }), h('code', null, r.id)) },
+      { label: 'Title', className: 'col-title', sort: (r) => r.title, cell: (r) => r.title || '—' },
+      { label: 'Severity', sort: (r) => severityRank(r.severity), sortFirst: 'desc', cell: (r) => sevChip(r.severity, SIGNAL_NO_SEVERITY) },
+      { label: 'State', sort: (r) => (r.enabled ? 0 : 1), cell: (r) => badge(r.enabled ? 'ok' : 'neutral', r.enabled ? 'Enabled' : 'Disabled') },
       ...(hasAction ? [{ label: 'On a match', className: 'nowrap', cell: (r) => actionChip(ruleActionMeta(r)) }] : []),
       ...(hasFrameworks ? [{ label: 'Relates to', cell: (r) => frameworkChips(r.frameworks) }] : []),
       { label: 'What it observes, and what to check next', className: 'col-desc', cell: describe },

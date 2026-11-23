@@ -3,10 +3,10 @@
 import { h } from '../lib/dom.js';
 import { href, isEventId } from '../lib/route.js';
 import { PRIORITIES } from '../lib/taxonomy.js';
-import { formatClock, formatDateTime } from '../lib/format.js';
+
 import { describeOrigin, eventKey, originQuery, originVisible } from '../lib/origin.js';
 import { icon } from '../ui/icons.js';
-import { banner, table, sevChip, clsChip, evidence, link, chip, openDialog, inputField, selectField, labelFor, badge, empty } from '../ui/components.js';
+import { banner, table, sevChip, clsChip, evidence, link, chip, openDialog, inputField, selectField, labelFor, badge, empty, timeEl, fitTable } from '../ui/components.js';
 
 // Empty state for a 404 while tenants are in play. Another tenant's objects
 // answer exactly like absent ones (no existence probe crosses tenants), so
@@ -93,9 +93,9 @@ function filterable(filterHref, key, value, node, title) {
   return target ? h('a', { class: 'cell-link', href: target, tabindex: '-1', title }, node) : node;
 }
 
-function eventColumns({ showDate = true, extra = [], rowHref, origin = false, filterHref }) {
+function eventColumns({ extra = [], rowHref, origin = false, filterHref }) {
   return [
-    { label: 'Time (UTC)', className: 'nowrap', cell: (ev) => h('time', { datetime: ev.time, title: formatDateTime(ev.time) }, showDate ? formatDateTime(ev.time).replace(' UTC', '') : formatClock(ev.time)) },
+    { label: 'Time', className: 'nowrap', cell: (ev) => timeEl(ev.time, { relative: true }) },
     ...(origin ? [{ label: 'Origin', className: 'nowrap', cell: (ev) => originLabel(ev.node, { stack: true }) }] : []),
     { label: 'Class', cell: (ev) => filterable(filterHref, 'classification', ev.classification, clsChip(ev.classification), 'Show only this class') },
     { label: 'Severity', cell: (ev) => sevChip(ev.severity) },
@@ -150,11 +150,11 @@ export function eventTableView(events, { caption = 'Events', newIds, origin = 'a
     ids.push(eventKey(ev));
     return buildRow(ev, newIds?.has(eventKey(ev)));
   }));
-  const el = h('div', { class: 'table-wrap' },
+  const el = fitTable(h('div', { class: 'table-wrap' },
     h('table', { class: ['table', 'table--stack', withOrigin ? 'table--origin' : ''] },
       h('caption', { class: 'visually-hidden' }, caption),
       h('thead', null, h('tr', null, columns.map((c) => h('th', { scope: 'col', class: [c.num ? 'num' : '', c.className || ''] }, c.label)))),
-      tbody));
+      tbody)));
   let cursor = -1;
   let openId = '';
   const rowAt = (i) => byId.get(ids[i]);

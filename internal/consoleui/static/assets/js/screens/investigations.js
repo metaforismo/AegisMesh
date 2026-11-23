@@ -1,6 +1,7 @@
 import { h, clear, mount } from '../lib/dom.js';
 import { href, isOpaqueId, normalizeStatus } from '../lib/route.js';
-import { INVESTIGATION_STATUSES } from '../lib/taxonomy.js';
+import { INVESTIGATION_STATUSES, PRIORITIES } from '../lib/taxonomy.js';
+import { timeValue } from '../lib/tablesort.js';
 import { formatCount } from '../lib/format.js';
 import { pageHead, panel, table, segmented, timeEl, empty, link, labelFor, toast } from '../ui/components.js';
 import { statusBadge, priorityChip, newInvestigationDialog } from './shared.js';
@@ -40,12 +41,12 @@ export default {
         body: invs.length ? table({
           caption: 'Investigations',
           columns: [
-            { label: 'Title', className: 'col-summary', cell: (i) => (isOpaqueId(i.id) ? link(href('investigations', i.id), i.title || '(untitled)') : i.title) },
-            { label: 'Status', cell: (i) => statusBadge(i.status) },
-            { label: 'Priority', cell: (i) => priorityChip(i.priority) },
-            { label: 'Evidence', num: true, cell: (i) => formatCount((i.event_ids || []).length) },
-            { label: 'Owner', cell: (i) => i.created_by || '—' },
-            { label: 'Updated', cell: (i) => timeEl(i.updated_at, { relative: true }) },
+            { label: 'Title', className: 'col-summary', sort: (i) => i.title, cell: (i) => (isOpaqueId(i.id) ? link(href('investigations', i.id), i.title || '(untitled)') : i.title) },
+            { label: 'Status', sort: (i) => INVESTIGATION_STATUSES.indexOf(i.status), cell: (i) => statusBadge(i.status) },
+            { label: 'Priority', sort: (i) => PRIORITIES.indexOf(i.priority), sortFirst: 'desc', cell: (i) => priorityChip(i.priority) },
+            { label: 'Evidence', num: true, sort: (i) => (i.event_ids || []).length, cell: (i) => formatCount((i.event_ids || []).length) },
+            { label: 'Owner', sort: (i) => i.created_by, cell: (i) => i.created_by || '—' },
+            { label: 'Updated', className: 'nowrap', sort: (i) => timeValue(i.updated_at), sortFirst: 'desc', cell: (i) => timeEl(i.updated_at, { relative: true }) },
           ],
           rows: invs,
         }) : empty(status ? `No ${status} investigations` : 'No investigations yet',
