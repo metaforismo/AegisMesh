@@ -202,7 +202,9 @@ prompts/get name="ignore previous instructions 🙂"</span>
           <span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span>
           <span class="sev sev--critical"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Critical</span>
           <span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span>
+          <span class="sev sev--none" title="Correlation rules write signals, which have no severity"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Signal</span>
         </div>
+        <p>One component (<code>sevChip</code>) draws every severity in the console: tables, cards, the severity share's key and the digest. A correlation rule has no severity and shows the empty meter with “Signal”, never “n/a”.</p>
       </section>
 
       <section class="ds-section" id="classification">
@@ -266,14 +268,15 @@ prompts/get name="ignore previous instructions 🙂"</span>
 
       <section class="ds-section" id="tables">
         <h2>Tables</h2>
-        <p>Sticky header, tabular numerals, right-aligned counts. Below 720px a table becomes a list of labelled cards; labels come from interface text only.</p>
+        <p>Sticky header, tabular numerals, right-aligned counts. Times are relative (“2m ago”) with the absolute UTC time in <code>&lt;time datetime&gt;</code>, the title, the peek and visually hidden text. A header is a sort button (<code>.th-sort</code>, <code>aria-sort</code>) only when every row is already in the browser; paged lists keep the server’s order. The mark is a filled triangle for the active direction, a faint one otherwise; in numeric columns it sits left of the label. A table wider than its column scrolls inside its wrapper. Below 720px a table becomes a list of labelled cards; labels come from interface text only.</p>
         <div class="ds-demo ds-demo--col">
           <div class="table-wrap">
             <table class="table table--stack">
-              <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Class</th><th scope="col">Severity</th><th scope="col" class="col-summary">Summary</th><th scope="col" class="num">Events</th></tr></thead>
+              <caption class="visually-hidden">Example events, sorted by events, descending</caption>
+              <thead><tr><th scope="col">Time</th><th scope="col">Class</th><th scope="col">Severity</th><th scope="col" class="col-summary">Summary</th><th scope="col" class="num" aria-sort="descending"><button class="th-sort" type="button" data-dir="descending" title="Sorted by events, descending"><span>Events</span><span class="th-sort__mark" aria-hidden="true"></span></button></th></tr></thead>
               <tbody>
-                <tr><td data-label="Time (UTC)">09:03:44</td><td data-label="Class"><span class="cls"><span class="glyph glyph--signal" aria-hidden="true"></span>Correlation signal</span></td><td data-label="Severity"><span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span></td><td data-label="Summary" class="col-summary"><span class="evidence">Same source touched several sensors: 203.0.113.7</span></td><td data-label="Events" class="num">6</td></tr>
-                <tr><td data-label="Time (UTC)">09:02:10</td><td data-label="Class"><span class="cls"><span class="glyph glyph--interaction" aria-hidden="true"></span>Interaction</span></td><td data-label="Severity"><span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span></td><td data-label="Summary" class="col-summary"><span class="evidence">GET /.env → 404</span></td><td data-label="Events" class="num">1</td></tr>
+                <tr><td data-label="Time"><time class="reltime" datetime="2026-11-14T09:03:44Z" title="2026-11-14 09:03:44 UTC">2m ago<span class="visually-hidden"> (2026-11-14 09:03:44 UTC)</span></time></td><td data-label="Class"><span class="cls"><span class="glyph glyph--signal" aria-hidden="true"></span>Correlation signal</span></td><td data-label="Severity"><span class="sev sev--high"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>High</span></td><td data-label="Summary" class="col-summary"><span class="evidence">Same source touched several sensors: 203.0.113.7</span></td><td data-label="Events" class="num">6</td></tr>
+                <tr><td data-label="Time"><time class="reltime" datetime="2026-11-14T09:02:10Z" title="2026-11-14 09:02:10 UTC">4m ago<span class="visually-hidden"> (2026-11-14 09:02:10 UTC)</span></time></td><td data-label="Class"><span class="cls"><span class="glyph glyph--interaction" aria-hidden="true"></span>Interaction</span></td><td data-label="Severity"><span class="sev sev--none"><span class="sev__meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>No finding</span></td><td data-label="Summary" class="col-summary"><span class="evidence">GET /.env → 404</span></td><td data-label="Events" class="num">1</td></tr>
               </tbody>
             </table>
           </div>
