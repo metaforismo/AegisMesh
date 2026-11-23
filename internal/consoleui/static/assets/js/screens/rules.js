@@ -1,6 +1,6 @@
 import { h, clear, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
-import { pageHead, panel, table, sevChip, badge, segmented, empty, link, labelFor, helpTip, banner, actionChip } from '../ui/components.js';
+import { pageHead, panel, table, sevChip, badge, segmented, empty, link, labelFor, helpTip, banner, actionChip, SIGNAL_NO_SEVERITY } from '../ui/components.js';
 import { ruleActionMeta } from '../lib/catalogs.js';
 import { frameworkChips } from '../ui/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
@@ -30,7 +30,7 @@ export default {
     const columns = [
       { label: 'Id', className: 'nowrap', cell: (r) => link(href('events', { rule: r.id }), h('code', null, r.id)) },
       { label: 'Title', className: 'col-title', cell: (r) => r.title || '—' },
-      { label: 'Severity', cell: (r) => (r.severity ? sevChip(r.severity) : h('span', { class: 'muted', title: 'Correlation rules emit signals without a severity' }, 'n/a')) },
+      { label: 'Severity', cell: (r) => sevChip(r.severity, SIGNAL_NO_SEVERITY) },
       { label: 'State', cell: (r) => badge(r.enabled ? 'ok' : 'neutral', r.enabled ? 'Enabled' : 'Disabled') },
       ...(hasAction ? [{ label: 'On a match', className: 'nowrap', cell: (r) => actionChip(ruleActionMeta(r)) }] : []),
       ...(hasFrameworks ? [{ label: 'Relates to', cell: (r) => frameworkChips(r.frameworks) }] : []),

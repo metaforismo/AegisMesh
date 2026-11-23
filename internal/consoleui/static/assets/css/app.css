@@ -890,7 +890,7 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
   .digest__title { font-size: 1.5rem; }
   .digest__lead { font-size: 1.0625rem; }
   .digest__rule { grid-template-columns: minmax(0, 1fr) auto; }
-  .digest__rule .sev, .digest__rule .digest__nosev { grid-row: 2; }
+  .digest__rule .sev { grid-row: 2; }
   .digest__limits { grid-template-columns: 1fr; gap: 0 0; }
   .digest__limits dd { margin-bottom: var(--space-2); }
 }

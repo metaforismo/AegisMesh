@@ -11,11 +11,18 @@ import { icon } from './icons.js';
 
 // ---- Severity, classification, badges ------------------------------------
 
-export function sevChip(severity) {
+// The one severity mark: five segments filled to the rank, plus the word.
+// Every table, chip, legend, card and chart key uses it, so severity reads
+// the same without color (fill count) and without sight (the word). A value
+// that is not a severity draws the empty meter with "No finding", or with
+// `none` (e.g. "Signal" for correlation rules) and its `noneTitle`.
+export const SIGNAL_NO_SEVERITY = Object.freeze({ none: 'Signal', noneTitle: 'Correlation rules write signals, which have no severity' });
+
+export function sevChip(severity, { none, noneTitle } = {}) {
   const known = isSeverity(severity);
-  return h('span', { class: ['sev', known ? `sev--${severity}` : 'sev--none'] },
+  return h('span', { class: ['sev', known ? `sev--${severity}` : 'sev--none'], title: !known && noneTitle ? noneTitle : null },
     h('span', { class: 'sev__meter', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'), h('i'), h('i')),
-    severityLabel(known ? severity : ''));
+    known ? severityLabel(severity) : (none || severityLabel('')));
 }
 
 export function glyph(classification) {

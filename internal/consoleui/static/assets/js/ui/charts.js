@@ -9,7 +9,7 @@
 // opens the events in that bucket's time range.
 
 import { h, svg } from '../lib/dom.js';
-import { CLASSIFICATIONS, SEVERITIES, classificationMeta, severityLabel } from '../lib/taxonomy.js';
+import { CLASSIFICATIONS, SEVERITIES, classificationMeta } from '../lib/taxonomy.js';
 import { stackedLayout, labelIndices, bucketTotal, bucketRange, waveDelays } from '../lib/chart.js';
 import { moveIndex } from '../lib/keys.js';
 import { formatBucketLabel, formatCompact, formatCount, formatDateTime } from '../lib/format.js';
@@ -236,7 +236,7 @@ export function severityShare(items) {
   const rows = items.map((i) => {
     const value = Math.max(0, Number(i.value) || 0);
     const content = [
-      i.key === 'none' ? h('span', { class: ['sev', 'sev--none'] }, severityLabel('')) : sevChip(i.key),
+      sevChip(i.key),
       h('span', { class: 'segleg__count' }, formatCount(value)),
       h('span', { class: 'segleg__pct' }, `${pct(value)}%`),
     ];
