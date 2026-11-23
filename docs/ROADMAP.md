@@ -192,3 +192,14 @@ same-sensor read/replay correlation, catalogs for remote effective configs,
 external body-file planting inference, hard tenancy, cross-node correlation,
 public saturation/p99 measurements and external IdP validation. No automatic
 export/delivery or new runtime network destination exists.
+
+## Round 4 backend — campaigns, actor profile, posture (ADR-0024)
+
+- [x] Session `actor` (ten signals, hedged four-value assessment) and
+  `campaign_id`; exact-prefix campaigns across >= 2 sources; posture checks
+  POS-001..018; console routes and `campaigns`/`posture` CLI mirrors.
+- Not done: similarity (non-exact) campaign matching, MCP rejected-call and
+  SSH command signals (not in the index projection), body-file honeytoken
+  planting, demo traffic from a second source (the demo is single-loopback, so
+  it yields no campaign), and any evaluation of signal accuracy on field data.
+  Assessments remain observations; no attribution or accuracy claim follows.

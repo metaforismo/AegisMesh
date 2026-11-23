@@ -16,6 +16,23 @@ moment and are not rewritten; headings carry "(merged as #NN)" where a PR has
 since merged. Historical merge status is in the 2026-11-16 audit entry; the
 new local uncommitted slice is recorded first.
 
+## 2026-11-23 — round 4 backend: campaigns, actor profile, posture (local branch)
+
+Branch `feat/campaigns-posture` cut from `7351bdd`, committed locally; no push,
+PR, merge, release or deployment. `go.mod`/`go.sum`, `internal/consoleui/` and
+`site/` unchanged. Apple M3, Darwin arm64, Go 1.27. Suites ran sequentially.
+
+| Command | Result |
+|---|---|
+| `$(go env GOROOT)/bin/gofmt -l .` | PASS (empty) |
+| `make lint` | PASS (gofmt + `go vet ./...`; golangci-lint not installed, skipped by the Makefile) |
+| `make test` (`go test -race ./...`) | PASS, 51 packages ok |
+| `make secrets-scan` | PASS (`secrets-scan: ok`) |
+| `go test ./internal/evidenceview -fuzz FuzzShape -fuzztime 20s` | PASS (~0.88M execs, no failure) |
+| `go test ./internal/evidenceview -bench SessionsFullSample -benchtime 20x` | about 25 ms/op after the scrub memo (about 111 ms before) |
+| `make sbom` | NOT RUN (known to fail in worktrees) |
+| `aegismesh demo` campaign | NOT RUN: the demo drives all traffic from one loopback source, so it cannot form a campaign; unchanged |
+
 ## 2026-11-22 — round 3 backend (local, uncommitted)
 
 Branch `feat/decoy-environments-siem`, initial clean worktree at

@@ -847,3 +847,83 @@ budgeted from browser login attempts: ten/address/minute across the existing
 do not consume this budget; once exhausted that remote must wait before retrying
 a valid Bearer token. Cookie sessions remain independent. Bounds are process
 local and are not a distributed rate-limit or hard tenant boundary.
+
+### Digest availability and null fields (clarification)
+
+`GET /api/v1/digest` returns **503 `unavailable`** when (1) the recommendation
+input lookup is refused (`digest recommendation inputs exceed limits`; the
+handler caps lookups at 4096 IDs, so this is defensive), (2) recommendation
+generation rejects a retained local envelope, for example a duplicate identity
+or an envelope failing recommendation validation (`digest cannot produce
+verified recommendations`), (3) the encoded report would exceed 2 MiB, or (4)
+the shared admission/shutdown/audit-state conditions every route has. No
+partial digest is returned. Bad `window` or unknown/duplicate query keys are 400.
+
+`open_investigations` is typed `number | null` because the digest schema is
+shared with `aegismesh digest`. The console always computes it from the
+tenant's open investigation store, so the console API returns a number (and
+`limits.investigations_available: true`). The CLI returns `null` with
+`investigations_available: false` when `--investigations-dir` does not exist,
+because an absent store is unknown, not zero. Clients must still accept null.
+
+## Round 4: campaigns, actor profile and posture (ADR-0024)
+
+All three are viewer GET routes with the existing authentication, tenant
+selection, Host/Origin checks, body rejection, eight-handler admission,
+no-store responses and 400 for any query parameter (none are accepted).
+Responses are capped at 2 MiB (503 otherwise). They read the same
+newest-8192 analysis snapshot as sessions; nothing is persisted, no egress,
+model or enforcement is added. Rules and limits:
+[ai-threat-detection.md](../ai-threat-detection.md#campaigns).
+
+| GET route | Result |
+|---|---|
+| `/api/v1/campaigns` | `{items:[Campaign],scanned_sessions,truncated,session_limit:4096,campaign_limit:100,total_campaigns,generated_at,bounds}` |
+| `/api/v1/campaigns/{id}` | Campaign plus `{steps,steps_truncated,sessions,sessions_truncated,caveats,generated_at,bounds}`; malformed ID (not `cmp_` + 12 lowercase hex) 400; unknown, foreign-tenant or no longer sampled 404 |
+| `/api/v1/posture` | `{generated_at,scope,summary:{attention,ok,info},checks:[Check],disclaimer}` |
+
+`truncated` is true when more than 4096 sessions existed or more than 100
+campaigns matched (`total_campaigns` gives the full count). Campaigns sort by
+`last_seen` descending, then ID. Arrays are never null; `automation_counts`
+always has the four actor assessment keys.
+
+```jsonc
+// Campaign (list item). Fields beyond the round-4 contract: fingerprint_steps,
+// session_ids_truncated, client_families.
+{"id":"cmp_ea5e7da9f36e","label":"GET /api/tags → GET /v1/models → POST /v1/chat/completions",
+ "basis":["same_step_sequence","same_client_family"],"fingerprint_steps":3,
+ "source_count":2,"sources":["192.0.2.10","198.51.100.20"],"sources_truncated":false,
+ "session_count":2,"session_ids":["32 hex","32 hex"],"session_ids_truncated":false,
+ "event_count":14,"first_seen":"RFC3339Nano UTC","last_seen":"RFC3339Nano UTC",
+ "sensor_kinds":["http"],"rule_ids":["LLM-001","LLM-002"],"max_severity":"medium",
+ "stages":["discovery","ai_service_abuse"],"client_families":["openai_sdk"],
+ "automation_counts":{"inconclusive":1,"likely_automated":1,"likely_human":0,"possibly_ai_agent":0}}
+// Campaign detail additions
+{"steps":[{"index":0,"sensor_kind":"http","shape":"GET /api/tags","stage":"discovery","sessions":2}],
+ "steps_truncated":false,
+ "sessions":[{/* Session */ "step_marks":[{"index":0,"offset_ms":0},{"index":2,"offset_ms":4000}]}],
+ "sessions_truncated":false,
+ "caveats":["Shared behaviour does not prove a shared operator; …"]}
+// Session additions (list, detail, campaign detail)
+{"campaign_id":"cmp_… or null",
+ "actor":{"assessment":"possibly_ai_agent","summary":"Behaviour is consistent with … not attribution.",
+   "signals":[{"code":"tool_call_chaining","label":"MCP tools were discovered and then called in a chain",
+     "strength":"strong","present":true,"detail":"3 tool call(s) across 2 tool(s); tools/list before first call: true"}]}}
+// Posture check
+{"id":"POS-014","area":"detection","status":"attention","title":"Correlation engine and rules",
+ "detail":"Correlation is disabled, …","recommendation":"Set correlation.enabled: true.",
+ "doc":"docs/ai-threat-detection.md#correlation-rules"}
+```
+
+Step `stage` uses the session phase vocabulary (`discovery`, `ai_service_abuse`,
+`credential_access`, `decoy_credential_replay`); `stages` is the distinct set in
+that order. `steps` holds, per position, the most common kind/shape among
+members long enough to have it (ties lexical), so `sessions` can be below
+`session_count` after the fingerprint prefix. `step_marks` lists positions
+where that member's own step equals the representative step, with the offset
+from the member's first interaction. `shape`, `label` and `sources` are
+attacker-influenced text: render as text. `posture.scope` is
+`configuration_and_evidence` for the configured `local_tenant` and
+`evidence_only` (POS-017 only) for other tenants, which never see local
+configuration. Posture details never contain token values, digests, URLs or
+secret references.

@@ -38,6 +38,8 @@ func newTestApp(stdin ...io.Reader) (*App, *bytes.Buffer, *bytes.Buffer) {
 		NewRecommendCmd(env),
 		NewExportCmd(env),
 		NewDigestCmd(env),
+		NewCampaignsCmd(env),
+		NewPostureCmd(env),
 		NewRulesCmd(env), NewHoneytokenCmd(env),
 		NewMigrateCmd(env),
 		NewExtCmd(env),

@@ -1053,3 +1053,58 @@ all retained events independently of page size; digest/catalog/session work
 uses the bounded newest sample. No hard tenant, complete-history, real SIEM,
 automation attribution, production performance or perimeter-security claim.
 UI/mock changes remain outside this backend task.
+
+## ADR-0024 — exact-prefix campaigns, hedged actor vocabulary and posture checks
+
+**Status:** implemented on branch `feat/campaigns-posture`; not merged or released.
+
+**Context.** Defenders want to know whether separate sources ran the same
+playbook, whether a session looks scripted, agent-driven or human, and whether
+their deployment can observe AI-specific behaviour at all. Inputs are limited to
+the bounded index projection (newest 8192 summaries per tenant): redacted
+one-line summaries, rule IDs, timestamps and sensor metadata. Everything is
+attacker-influenced except catalog data and the configuration.
+
+**Options considered for campaigns.** (A) Similarity scoring (n-gram Jaccard
+or longest common prefix with a threshold, then clustering). It groups more
+variants but needs pairwise comparison (O(n²) over 4096 sessions), produces
+transitive groups that are hard to explain, and makes membership depend on
+threshold tuning nobody has measured. (B) Exact fingerprint over a bounded
+prefix of collapsed, normalised shapes. Linear, deterministic, explainable in
+one sentence, trivially testable; misses near-variants. **Chosen: B.**
+Fingerprint = first `min(len, 8)` kind/shape pairs, at least 3 steps, at least
+2 distinct source keys; ID = `cmp_` + 48 bits of SHA-256(`[tenant,
+fingerprint]`). `basis` states `same_step_sequence` or `same_step_prefix`
+(and `same_client_family` when all members share one).
+
+**Actor vocabulary.** `possibly_ai_agent`, `likely_automated`, `likely_human`,
+`inconclusive`. Agent level needs a content-level, agent-specific signal (agent
+canary followed, chained MCP tool calls after discovery, a request-shape error
+corrected within 3 s); fast or regular timing alone is only
+`likely_automated`. Human level needs positive evidence (irregular
+multi-second think time or typo corrections); absence of automation is
+inconclusive. Conflicts and fewer than 8 interactions are inconclusive. Every
+signal is listed with `present` so the UI shows what was checked. The
+existing `automation` field is unchanged for compatibility.
+
+**Client family.** The projection keeps a closed-vocabulary family derived
+from the HTTP User-Agent claim and the verified HTTP status, both unserialised.
+Raw User-Agents are not retained in the index; the status removes the need to
+parse attacker-controllable summary suffixes.
+
+**Posture.** Checks run over `posture.Facts`, a value snapshot derived once
+from the validated config (token values, operator digests, URLs and secret
+references reduced to booleans, counts and IDs), plus counts from the analysis
+snapshot. Only checks the config or evidence can decide were included: there
+are no configurable redaction or evidence-verification settings, admin
+listeners are forced to loopback, and console cleartext beyond loopback is
+rejected at validation, so those are either omitted or reported as the
+validated state. Non-local console tenants get evidence-only checks.
+
+**Consequences and limits.** Additive API fields; no persistence, egress,
+model or enforcement. Campaign IDs change if the fingerprint leaves the sample
+and differ between CLI (`local`) and console tenants. Near-variant campaigns,
+SSH command classes, MCP rejected calls and TCP banner classes are not
+represented because the index projection lacks them. No accuracy,
+false-positive or attribution claim is made; thresholds are documented
+constants awaiting field evaluation.

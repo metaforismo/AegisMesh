@@ -8,6 +8,13 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Hedged session actor profiles with ten always-listed signals; campaigns that
+  group sessions from at least two sources by an exact eight-step redacted
+  shape fingerprint; `campaigns` CLI and `/api/v1/campaigns[/{id}]` (ADR-0024).
+- Posture review POS-001..018 over a secret-free config snapshot and the
+  retained sample: `posture --config` and `/api/v1/posture`. Advisory only.
+- Documented digest 503 conditions and why `open_investigations` can be null.
+
 - Bounded synthetic MCP workspaces with exact in-memory lookup tools,
   per-connection sequences, observe-only MCP-001..003 and a multi-step demo.
 - Local CEF/RFC5424/OTLP-JSON/ECS event files and audited analyst attachments;

@@ -64,7 +64,15 @@ type Session struct {
 	Frameworks           []rulecatalog.FrameworkMapping `json:"frameworks"`
 	Cadence              Cadence                        `json:"cadence"`
 	Automation           Automation                     `json:"automation"`
-	Events               []evidenceindex.Summary        `json:"-"`
+	// CampaignID references the campaign this session joined, or null.
+	CampaignID *string `json:"campaign_id"`
+	// Actor is a hedged behavioural assessment with every evaluated signal.
+	Actor  Actor                   `json:"actor"`
+	Events []evidenceindex.Summary `json:"-"`
+
+	steps          []step
+	stepsTruncated bool
+	client         string
 }
 
 // TimelineEvent carries safe display metadata and an origin for fleet collisions.
@@ -150,6 +158,7 @@ func Sessions(tenant string, events []evidenceindex.Summary) []Session {
 		}
 		return out[i].ID < out[j].ID
 	})
+	assignCampaigns(tenant, out)
 	return out
 }
 
@@ -189,7 +198,27 @@ func summarize(tenant string, events []evidenceindex.Summary) Session {
 	s.Frameworks = Mappings(s.RuleIDs)
 	s.Cadence = cadence(events)
 	s.Automation = automation(events, rules)
+	items := interactions(events)
+	s.steps, s.stepsTruncated = collapse(items)
+	s.client = singleClient(items)
+	s.Actor = assessActor(items, rules)
 	return s
+}
+
+// singleClient returns the one client family shared by every HTTP interaction
+// that reported one, or "" when none reported or families differ.
+func singleClient(items []interaction) string {
+	family := ""
+	for _, item := range items {
+		if item.client == "" {
+			continue
+		}
+		if family != "" && family != item.client {
+			return ""
+		}
+		family = item.client
+	}
+	return family
 }
 
 func keys(values map[string]bool) []string {

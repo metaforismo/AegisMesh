@@ -1,0 +1,66 @@
+{
+  "items": [
+    {
+      "id": "cmp_1d6a262dcfa4",
+      "label": "GET /api/tags → GET /v1/models → POST /v1/chat/completions",
+      "basis": [
+        "same_step_sequence",
+        "same_client_family"
+      ],
+      "fingerprint_steps": 3,
+      "source_count": 2,
+      "sources": [
+        "192.0.2.10",
+        "198.51.100.20"
+      ],
+      "sources_truncated": false,
+      "session_count": 2,
+      "session_ids": [
+        "c8fa276b03083279f30d60b898130db5",
+        "0e63eb7c43780a33524a5497d2230cbe"
+      ],
+      "session_ids_truncated": false,
+      "event_count": 8,
+      "first_seen": "2026-11-01T12:00:00.000000000Z",
+      "last_seen": "2026-11-01T12:01:04.000000000Z",
+      "sensor_kinds": [
+        "http"
+      ],
+      "rule_ids": [
+        "LLM-001",
+        "LLM-002"
+      ],
+      "max_severity": "medium",
+      "stages": [
+        "discovery",
+        "ai_service_abuse"
+      ],
+      "client_families": [
+        "openai_sdk"
+      ],
+      "automation_counts": {
+        "inconclusive": 2,
+        "likely_automated": 0,
+        "likely_human": 0,
+        "possibly_ai_agent": 0
+      }
+    }
+  ],
+  "scanned_sessions": 3,
+  "truncated": false,
+  "session_limit": 4096,
+  "campaign_limit": 100,
+  "total_campaigns": 1,
+  "generated_at": "2026-11-01T13:00:00Z",
+  "bounds": {
+    "index": {
+      "events": 11,
+      "capacity": 8192,
+      "oldest": "2026-11-01T12:00:00Z",
+      "history": "unavailable"
+    },
+    "scanned_events": 11,
+    "scan_limit": 8192,
+    "scan_truncated": false
+  }
+}

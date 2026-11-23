@@ -4,6 +4,7 @@ package evidenceindex
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -24,6 +25,12 @@ type Node struct {
 type Summary struct {
 	// TokenIDs are bounded finding references used for configured marker counts only.
 	TokenIDs []string `json:"-"`
+	// ClientFamily is a closed-vocabulary label derived from an HTTP User-Agent
+	// claim (see ClientFamily); the raw header value is never retained here.
+	ClientFamily string `json:"-"`
+	// HTTPStatus is the stored decoy response status (100..599) for HTTP
+	// observations, or zero. It lets readers strip the summary suffix exactly.
+	HTTPStatus int `json:"-"`
 	// Node is absent for locally observed events.
 	Node *Node `json:"node,omitempty"`
 	// ID references the stored envelope.
@@ -177,6 +184,13 @@ func Project(envelope event.Envelope) (Summary, []Finding, []string) {
 	observation := object(envelope.Observation)
 	summary.Source = sourceText(observation, "remote_host")
 	summary.Summary = observationSummary(summary.Sensor.Kind, envelope.Classification, observation)
+	if summary.Sensor.Kind == "http" && envelope.Classification != event.ClassificationCorrelationSignal {
+		summary.ClientFamily = ClientFamily(text(observation, "user_agent", 256))
+		if status, valid := nonnegativeInteger(object(observation["response"]), "status"); valid && status >= 100 && status <= 599 &&
+			strings.HasSuffix(summary.Summary, fmt.Sprintf(" → %d", status)) {
+			summary.HTTPStatus = int(status)
+		}
+	}
 	findings := []Finding{}
 	related := []string{}
 	if envelope.Classification == event.ClassificationCorrelationSignal {
