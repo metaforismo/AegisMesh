@@ -93,7 +93,7 @@ Color follows the entity: a filter never repaints the remaining series.
 The filter chip's edge (`--color-accent-line` on `--color-accent-soft`,
 1.41:1 light, 1.71:1 dark) is decorative: the chip is not a control, and its
 remove link is identified by its icon at 7.51:1 / 7.72:1. The cadence fill
-and the brief's left rule use `--color-accent` (6.82:1 / 7.39:1 on surface).
+uses `--color-accent` (6.82:1 / 7.39:1 on surface); the brief has no accent rule since 2026-11-23.
 Ratios for the new pairs were computed with the WCAG 2 formula on 2026-11-22.
 
 `webtest/contrast.test.mjs` recomputes every pair this section relies on
@@ -109,13 +109,15 @@ hairline tokens were retuned (`--color-canvas` light `#edf0f4`, dark `#0d1218`;
 ### Type, space, shape
 
 - `--font-sans` and `--font-mono` are system stacks; nothing is fetched.
-- Scale from a 14px base: `--text-2xs` 11 … `--text-4xl` 52. Stat values are
-  28px (`--text-2xl`) with `--tracking-figure`; page titles 22px. All numerals
+- Scale from a 14px base: `--text-2xs` 11 … `--text-4xl` 52. Nothing in the
+  console renders under 11px (chart ticks included). Stat values are 24px,
+  the Overview lead figure 32px, with `--tracking-figure`; page titles 26px
+  in the display serif (22px on phones); panel titles 16px. All numerals
   are tabular (`font-variant-numeric: tabular-nums` on the body), so counts
   do not jitter as they change.
-- `--tracking-caps` (0.08em) spaces the uppercase monospace micro-labels
-  (`.caps`, the brief's "Situation", the readout head, Guide groups). They
-  name a readout; they are interface text and never evidence.
+- `--tracking-caps` (0.08em) is kept for the landing page. The console has no
+  uppercase tracked labels since 2026-11-23: `.caps`, the readout head, rule
+  prose labels and the digest kicker are 12px sentence case.
 - Space is a 4px grid (`--space-1` = 4px … `--space-24` = 96px).
 - Radii encode hierarchy: chips 2px, controls 5px, panels 8px, dialogs,
   drawers and the palette 12px.
@@ -130,11 +132,12 @@ Three planes, each a token tuned separately per theme:
 | `--elev-2` | Floating over content | Chart tooltip, evidence peek, toasts, the "new events" pill |
 | `--elev-3` | Covering the page | Dialogs, the event side panel, the palette, the mobile nav |
 
-Light depth is shadow-led (soft, low-opacity graphite). Dark depth is
-surface-led: steps from `--color-canvas` to `--color-surface-3` plus
-`--highlight`, a one-pixel inner top highlight, because shadows disappear on
-dark canvases. Panels pair `--elev-1` with `--highlight`. `--shadow-1..3`
-remain as aliases.
+Resting surfaces (panels, buttons, the brief, heroes, cards) carry no
+shadow since 2026-11-23: they are one surface step from the canvas with a
+quiet hairline, in both themes. `--elev-2` and `--elev-3` are used only by
+what floats (tooltips, popovers, toasts, dialogs, the side panel, the
+palette). `--elev-1`, `--highlight` and `--shadow-1..3` remain for the
+landing page.
 
 ### Motion
 
@@ -209,8 +212,8 @@ event views and palette recents; see "Console security rules".
 
 | Class | What it is | Rules |
 |---|---|---|
-| `.btn`, `--primary`, `--ghost`, `--danger`, `--sm` | Buttons | One primary per view. Destructive actions are outlined, never filled |
-| `.segmented` | Mutually exclusive choice (`aria-pressed`) | Time windows, filters with 2–4 options |
+| `.btn`, `--primary`, `--ghost`, `--danger`, `--sm` | Buttons | Fully round, flat, no shadow; outlined by default. One primary (cobalt fill) per view. Destructive actions are outlined, never filled |
+| `.segmented` | Mutually exclusive choice (`aria-pressed`) | Time windows, filters with 2–4 options. No track or filled pill: the chosen label is full ink with a 1px accent line as wide as its word |
 | `.field`, `.input`, `.select`, `.textarea` | Form controls | Always a visible `<label>`. Errors use `.field__error` plus `aria-invalid` |
 | `.chip`, `--mono` | Static tag | Rule ids use `--mono` |
 | `.sev`, `.sev--{info..critical,none}` | Severity meter plus word | The only way severity is shown, always built by `sevChip`. No severity is the empty meter with "No finding", or "Signal" (`SIGNAL_NO_SEVERITY`) for correlation rules |
@@ -219,22 +222,22 @@ event views and palette recents; see "Console security rules".
 | `.seal--ok`, `.seal--fail` | Integrity result | Payload hash and audit chain |
 | `.evidence`, `--block` | Attacker-controlled text | See principle 1 |
 | `.panel` (`__head`, `__title`, `__meta`, `__body`, `__foot`) | Content container | |
-| `.stat` | Stat tile | Delta in neutral ink |
+| `.stat`, `.grid--stats` | Stat cell in a divided container | Peer counts share one container split by 1px dividers (two or four columns, never an orphan); values 24px; delta in neutral ink |
 | `.kv` | Key/value list | Empty values render "—" |
 | `.table`, `.table--stack`, `.col-summary`, `.num` | Data table | Below 720px rows become labelled cards; `data-label` holds interface text only. From 1440px the header sticks under the top bar while the page scrolls; narrower, the table scrolls sideways in its own wrapper and the header sticks within it. `fitTable` switches a wrapper to `--scroll` whenever its table is wider than the column, so no table widens the page. Every table time is `timeEl(…, { relative: true })`; numbers go through `formatCount`/`formatNumber`, durations through `formatDurationMs` (`lib/format.js`), bytes through `formatBytes` |
 | `.th-sort` (`__mark`) | Sortable column header | A button inside `th[aria-sort]`; only on tables whose rows are all loaded (`lib/tablesort.js`): sources, rules, investigations, fleet nodes, a campaign's sessions. Numbers and times start descending, words ascending; missing values sort last; a polite status announces the order |
 | `.tabs`, `.tab` | Tabs | |
-| `.banner--{info,warn,danger,proposal}` | Callout | `--proposal` has the hatched "not executed" edge |
+| `.banner--{info,warn,danger,proposal}` | Callout | `--proposal` has a dashed edge: "not executed", like unloaded time and techniques not observed |
 | `.state`, `--error`, `.state__actions`, `.spinner`, `.skeleton` | Empty, loading, error | Every view has all three. A screen that fails keeps its page head; `screenFailure` picks the words and next step (older server, missing object with a link to its list, retryable outage) |
 | `.dialog`, `.drawer` | Native `<dialog>` | Focus trap, Esc and inert background come from the platform |
 | `.toast` | Transient confirmation | Never the only place an error is reported |
-| `.timeline` | Ordered signals or notes | Order is labelled |
+| `.timeline`, `--compact` | Ordered signals or notes | Order is labelled. `--compact` keeps each entry to one line under its time (summary cut with an ellipsis; the peek shows it whole) |
 | `.code`, `.json-*` | JSON viewer | Tokens built from the parsed value, rendered as text |
 | `.bar-list`, `--aside` | Share within one measure | Fill width is set through CSSOM, not a style attribute. `--aside` adds a small decorative trace between label and value (Overview, Events by sensor); the printed value stays the number of record |
 | `.chart`, `.chart__*`, `.legend` | Hand-written SVG stacked bars | 2px surface gap between segments, focusable buckets, table view |
-| `.shell`, `.nav-link`, `.nav-indicator`, `.brand` | Console frame | Navigation becomes a drawer below 960px; the indicator slides to the active link |
+| `.shell`, `.nav-link`, `.nav-indicator`, `.brand` | Console frame | Navigation becomes a drawer below 960px. The sidebar and top bar sit on the canvas, flat; the current screen is full-ink semibold and the indicator, a 1px accent line on the sidebar edge, slides to it |
 | `.icon`, `--xs`/`--sm`/`--lg` | Icon | See Icons |
-| `.spark` | Sparkline | Beside a printed number only; decorative (`aria-hidden`) |
+| `.spark` | Sparkline | Beside a printed number in a list only (Events by sensor), never on a KPI; decorative (`aria-hidden`) |
 | `.segbar`, `.segleg` | Severity share | Legend rows carry meter, word, count and share; hovering a row isolates its segment |
 | `.trace` | Activity trace | Unloaded time is dashed (`.trace__bar--unknown`) and labelled |
 | `.chain`, `.chain-legend` | Audit chain | State is a `data-state` attribute with shape, color and an accessible label |
@@ -242,12 +245,14 @@ event views and palette recents; see "Console security rules".
 | `.keys`, `kbd` | Shortcut sheet and key caps | |
 | `.copyable`, `.copy` | Value with copy button | Icon morphs to a check; a polite status announces it |
 | `.peek` | Full value of truncated evidence | Hover after 350ms, focus at once; text only |
-| `.skeleton` | Loading placeholder | Shaped like the screen (`overview`, `table`, `cards`, `detail`, `digest`, `posture`, `story`, `kv`, `guide`); a test checks every screen names one; compositor-only sheen |
+| `.skeleton` | Loading placeholder | Shaped like the screen (`overview`, `table`, `cards`, `detail`, `digest`, `posture`, `story`, `kv`, `guide`); a test checks every screen names one; flat bars at the size of the value, no shimmer |
 | `.route-progress` | Thin progress bar | Only when a screen takes more than ~140ms |
 | `.live-pill` | "N new events" | Appears when rows arrive out of view |
 | `.menu` (`__title`, `__list`, `__item`, `__check`, `__hint`, `__note`, `__head`, `__kv`) | Top-bar menu | A native `popover` (light dismiss, Esc, top layer from the platform), placed under its button by CSSOM. Opened many times a day, so it never animates. The current item carries `aria-current`, a check and the word "Current". Route changes close it |
-| `.caps` | Uppercase monospace micro-label | Interface text only |
-| `.panel--primary` | The one panel a screen is about | A firmer, decorative edge and a 16px title; every other panel is secondary |
+| `.caps` | Readout label | Sentence-case 12px sans in muted ink ("Whole window", "Server", "Measured"); interface text only. Uppercase monospace until 2026-11-23 |
+| `.panel--primary` | The one panel a screen is about | Marked by its place, size and a 16px title, not by a louder frame |
+| `.tally` (`__row`, `--lead`, `__label`, `__value`, `__num`, `__delta`) | Divided count list | Label left, figure right, its change beside it on one baseline; the first row may lead at 32px. The baseline window is named in the panel meta and in visually hidden text |
+| `.lead-row`, `.next` (`__cell`, `__title`, `__value`, `__text`, `__go`) | Overview composition | The brief beside its counts; then one divided block of what to read next, each cell a count and its one action |
 | `.brief` (`__head`, `__eyebrow`, `__dot`, `__meta`, `__text`, `__clause`, `__num`, `__foot`) | Situation brief (Overview) | Sentences from `lib/brief.js` only. Each clause links to the view that shows it; numbers are semibold ink; a source key is `.evidence`; a missing field is said, never zeroed |
 | `.readout` (`__head`, `__list`, `__value`, `__total`) | Readout legend | Glyph, series name and value. Whole window at rest; the hovered or focused bucket otherwise. Not a live region: the focused bar's label already announces the values |
 | `.help`, `.help-tip`, `.tip-pop` (`__term`, `__text`, `__more`) | "What is this?" tip | A `?` button beside a non-obvious term opening a native popover with the Guide's short definition and a link to the entry. Never animates |
@@ -468,7 +473,8 @@ New pieces:
   evidence.
 - **Row density** (top bar): comfortable or compact, remembered in this
   browser (`aegismesh.density`, parsed against a closed list) and applied as
-  `html[data-density]`. Stacking tables gain a low-specificity zebra.
+  `html[data-density]`. Stacking tables had a zebra until 2026-11-23; rows
+  are now told apart by rules and alignment only.
 - **Empty-state art** (`emptyArt`, `.empty-art`): a lattice, one decoy and a
   probe line, drawn inline; used where an empty list is a normal state.
 - **Stat hierarchy**: the all-events tile leads (accent top rule, larger value).
@@ -921,6 +927,117 @@ Contrast before → after (light, WCAG 2, against `--sev-track` / surface):
 | Reduced motion emulated on the same seven screens: no element with a running transition or animation | PASS |
 | Print emulation of the Digest, session story and campaign detail from a dark theme | PASS after the fix |
 | Firefox, Safari, screen readers, the real Go console server, a real phone | NOT RUN: only Chromium and the mock were used |
+
+### Console redesign: the data-terminal style (2026-11-23)
+
+A redesign of the existing console, not a rewrite: same stack, routes, data
+and behaviour. The method was the tasteskill (v2.1.5, MIT) app-screen route,
+used as a design method only: nothing from it (CSS, scripts, fonts, images)
+ships in the console. Its dealt style, **data terminal**, is a dark
+monitoring screen read in long sessions where every selection is one 1px
+accent line and numbers carry their sign in the text, not in colour; that
+matches principle 3 (neutral numbers). Palette and typefaces were kept (the
+draw dealt composition only), and `tokens.css` is unchanged. The dealt icon
+rail was declined: the console has 19 destinations, and the skill's own rule
+keeps labels beyond five.
+
+Each key screen answers one question first, with its largest block:
+
+| Screen | Question | Finding read first |
+|---|---|---|
+| Overview | What did the decoys observe in this window, and does any of it need me? | The brief beside its counts (total events and the change against the window before) |
+| Events | What exactly happened, newest first, and which ones matter? | The matching count over the list, severity per row |
+| Sessions / session story | What did this source do, in what order, and how sure are we it was automated? | The actor reading and its hedged sentence, beside duration, events, pace |
+| Campaigns / detail | Are several sources following the same playbook? | The score: shared steps lane by lane |
+| Posture | Is this deployment configured the way a decoy network should be? | Needs attention, first |
+| Digest | What changed, in words I can forward? | The lead paragraph |
+
+What changed:
+
+- **Surfaces**: flat panels, briefs, heroes and cards (one surface step and
+  a hairline, no resting shadow, no top sheen); no lattice behind data (it
+  stays on sign-in, in empty states and on the landing page); an opaque top
+  bar and sidebar on the canvas, no blur; sticky table headers opaque on the
+  panel surface, no band; no zebra.
+- **One selection mark**: the current screen (a 1px cobalt line on the
+  sidebar edge, label in full ink), the time window and other segmented
+  choices (the word with a 1px line under it, no track), tabs (1px), and the
+  active palette row, open table row, current menu item and Guide entry (a
+  neutral `--color-surface-3` step with a 1px line).
+- **Controls**: fully round, flat, outlined; one cobalt primary per view.
+- **Type**: page titles 26px serif (22px on phones), panel titles 16px,
+  stat values 24px, the Overview total 32px; `.caps` and the other readout
+  labels sentence case; nothing under 11px (chart, mesh, tempo and score
+  labels went from 9-10px to 11px).
+- **Overview**: the brief (21px serif from 1200px) beside a divided count
+  list (`.tally`) replaces six sparkline tiles; then the chart; then one
+  divided block of what to read next (investigations, sessions, campaigns);
+  paired panels end level: top rules capped at 5 and recent signals at 7 as
+  compact one-line entries, each with a link to the full list; on phones the
+  ranked sources keep their first five.
+- **Elsewhere**: peer counts (Decoys, Honeytokens) in one divided
+  container; the session hero keeps the reading on the left over the
+  figures and stage ribbon; tempo break labels that would overlap are left
+  out (the marks stay); the sessions list shows two rule chips and counts the
+  rest; proposal callouts get a dashed edge; skeletons are flat; the digest
+  title has no eyebrow; the select chevron is an inline SVG; the score's
+  scroll cue is a visible scrollbar.
+
+Kept on purpose, against the skill: three typefaces (the serif briefing
+voice and monospace for evidence and ids are project rules); hatched textures
+on stages, the automation mix and "no finding" (shape, not colour alone);
+attacker strings shown exactly as received, emoji included; the "what you
+can do here" hint under each title; relative times left-aligned as the first
+column of a log.
+
+Contrast: no token value changed. `webtest/contrast.test.mjs` now also checks
+the 1px selection line (`--color-accent`) on surface, surface-3 and canvas
+(3:1 non-text, both themes). Muted text on the neutral selected step:
+`--color-ink-3` on `--color-surface-3` 4.77:1 light, 5.01:1 dark.
+
+Motion: the skeleton shimmer is gone; the nav indicator still slides (as a
+line); nothing new animates.
+
+### Verification: data-terminal redesign (2026-11-23, Node 25, Go toolchain, headless Chromium via the skill's inspector, mock on port 9161)
+
+The skill's inspector (`inspect.mjs --app`, 1440, 768 and 390px, the
+browser's dark scheme) cannot sign in, so it was run through a scratch
+wrapper that posts the mock's `dev-analyst` token first and marks the tour
+done; nothing in the repository changed for it. FAIL / WARN per screen:
+
+| Screen | Before | After |
+|---|---|---|
+| Overview | 4 / 3 | 0 / 3 |
+| Events | 3 / 2 | 1 / 2 |
+| Sessions | 2 / 2 | 0 / 2 |
+| Session story | 4 / 4 | 1 / 5 |
+| Campaigns | 1 / 1 | 0 / 1 |
+| Campaign detail | 4 / 1 | 0 / 2 |
+| Posture | 3 / 3 | 0 / 2 |
+| Digest | 3 / 1 | 0 / 1 |
+| Sign-in | 2 / 3 | 0 / 2 |
+| Total | 26 / 20 | 2 / 20 |
+
+The two FAILs left are an emoji inside attacker-supplied evidence in the
+mock's synthetic data (Events, session story): evidence is shown exactly as
+received. Remaining WARNs, each defended: three typefaces (serif briefing
+voice, monospace evidence); text under 13px (a dense 13px table with 12px
+meta); relative times left-aligned as a log's first column, and stacked
+phone cards; blocks below the first screen on long screens whose answer is
+on it (Overview, Posture, the story); the story's timeline beside a shorter
+side column, and the campaign hero beside its caveats (a list and its
+detail rail); one empty "Automation observations" card keeping its frame.
+The skill's source lint went from 28 FAIL / 94 WARN to 0 FAIL / 71 WARN
+(the rest: shadows on what floats, monospace evidence, one sticky bar).
+
+| Check | Result |
+|---|---|
+| `make ui-test` (266 tests: adds `tally` and the selection-line contrast pairs) | PASS (one run hit "mock did not start" under load; the re-run passed) |
+| `go build ./...`, `go test ./internal/consoleui/...` | PASS |
+| Viewed, dark and light, 1440 and 390px: Overview, Events, Sessions, a session story, Campaigns, a campaign, Posture, Digest; sign-in dark 1440; the command palette dark 1440 | PASS after fixes (hero band, phone rule labels, surfaces chips, signals balance) |
+| Scripted at 375px light on ten screens (those eight, Decoys, Honeytokens): one h1, no skipped heading level, no horizontal page scroll, `aria-sort` on the sortable campaign table | PASS; panel-head and card-foot links raised to 40px |
+| Page exceptions in the browser on the screens above | PASS (none) |
+| Firefox, Safari, screen readers, the real Go console server, a real phone | NOT RUN: only Chromium and the mock |
 
 ## Interaction
 

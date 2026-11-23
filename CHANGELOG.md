@@ -47,6 +47,16 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   pinned mapping table, synthetic benign/attack-shaped corpus, and an expanded
   loopback-only demo. See ADR-0021 and `docs/ai-threat-detection.md`.
 
+### Changed
+
+- Console redesign (data-terminal style): flat panels and controls with no
+  resting shadows, gradients or glass; one selection mark (a 1px cobalt line)
+  for the current screen, time window and tab; round flat buttons; readout
+  labels in sentence case; nothing under 11px; skeletons without shimmer. The
+  Overview leads with the brief beside a divided count list, then the chart,
+  then what to read next; paired panels end level. Session hero rebalanced;
+  tempo labels never overlap.
+
 ### Fixed
 
 - Console audit pass: one severity mark (also for "no finding" and
