@@ -47,6 +47,13 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   pinned mapping table, synthetic benign/attack-shaped corpus, and an expanded
   loopback-only demo. See ADR-0021 and `docs/ai-threat-detection.md`.
 
+### Changed
+
+- Landing page (`site/index.html`) redesigned: one screen per section, dark
+  console identity, real console screenshots from the synthetic dev mock, a
+  CSS-only hero entrance and statement; still no script, web font or external
+  request. Vendors four MIT stylesheets; see `site/CREDITS.md`.
+
 ### Fixed
 
 - Release SBOM generation for targets other than the build host. The generator
