@@ -408,6 +408,7 @@ console:
   listen: 127.0.0.1:9120
   state_dir: ""                 # <runtime.data_dir>/console
   session_ttl_seconds: 3600      # 60..86400
+  session_idle_seconds: 1800     # 0 disables, otherwise 300..86400
   index_max_events: 50000        # 1000..500000
   tls_cert_file: ""              # certificate and key together
   tls_key_file: ""
@@ -422,6 +423,24 @@ configuration; names and digests must both be unique. `viewer` reads evidence,
 There is no built-in/default password. Tokens do not expire automatically;
 rotate configuration and restart to replace/revoke them. Sessions expire and are
 lost on restart. They are bounded to 1024 per tenant (32768 globally), with oldest-expiring eviction.
+
+`session_idle_seconds` ends a browser session after that many seconds without an
+authenticated API request (default 1800 when omitted; `0` disables it; otherwise
+300..86400; other values fail validation). An open live event stream alone does
+not count as activity. The absolute `session_ttl_seconds` still applies.
+
+Besides config-file operators, admins who are members of `local_tenant` can
+create **managed accounts** and API keys in the console (ADR-0025). They live in
+`<state_dir>/accounts/accounts.json` (mode 0600, directory 0700, at most 4 MiB,
+200 accounts, 10 keys each), not in this file, and never change
+`console.operators`, which stay read-only and authoritative for recovery.
+Managed keys authenticate exactly like operator tokens, so `token_login: false`
+disables them too. A corrupt or interrupted store (stale `accounts.json.tmp`)
+aborts startup; restore a verified backup or move the directory aside (which
+deletes every managed account and key). Use `aegismesh accounts` to disable an
+account or revoke a key while the console is stopped. The console shows the
+effective console settings read-only at `/api/v1/admin/settings`; edit this
+file and restart to change them.
 
 `AEGISMESH_CONSOLE_ENABLED` and `AEGISMESH_CONSOLE_LISTEN` override the matching
 fields. Credentials, TLS and limits stay in the file. Relative `state_dir` and

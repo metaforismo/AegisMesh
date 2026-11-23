@@ -15,6 +15,8 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - A9 Recommendation reports and operator interpretation of their evidence links
 - A10 Sensor-worker lifecycle, IPC projections, readiness state, and sibling availability
 - A11 Node private identity and hub node/token/replay registry
+- A12 Console account store (managed accounts, API key SHA-256 digests, OIDC identity directory key, preferences)
+- A13 Managed API keys (`amk_` bearer tokens held by people and integrations)
 
 ## Trust boundaries
 
@@ -474,3 +476,45 @@ partition and bounded by the unchanged stream/queue limits. This is logical
 isolation within the same process, not isolation from a compromised host.
 The review's reproduced findings, checked controls and untested surfaces are
 in `security-review-2026-11.md`; it does not establish perimeter security.
+
+## Managed accounts and API keys (ADR-0025)
+
+Assets A12/A13. The console can now create principals, which ADR-0017 did not
+allow. Mitigations by threat:
+
+- **Spoofing with a stolen key.** Keys are 256-bit random `amk_` tokens shown
+  once; only SHA-256 is stored, every key expires (≤365 days) and can be
+  revoked or its account disabled with immediate effect for bearer use and for
+  the sessions it opened. Failed bearer attempts share the per-address
+  throttle. A key copied before revocation works until then; there is no per-key
+  network restriction.
+- **Elevation through the store.** Role values are a closed set ending at
+  admin; creation, role and membership changes require an admin who is a member
+  of `local_tenant`, and memberships must be declared tenants. The store never
+  writes config operators. The last-admin guard refuses changes that would leave
+  no administrator who can sign in; OIDC admins are not counted. A compromised
+  admin can mint keys for any role up to admin: that is the admin's authority,
+  recorded in the local audit chain.
+- **Information disclosure.** Responses, logs and audit records never contain
+  tokens or digests; key listings show a 4-character prefix only (24 of 256
+  bits). Session listings show an HMAC handle, a fixed client family and the
+  peer host, never cookie values or User-Agent text. OIDC identities are listed
+  by a keyed hash of issuer and subject. Admins see principals and sessions of
+  every tenant (metadata only, never evidence).
+- **Tampering with state.** The store is strict-decoded and validated on load;
+  corrupt, oversized or interrupted snapshots stop startup, and a snapshot
+  changed by another writer makes later saves fail closed. A same-UID local
+  attacker can still rewrite the file (for example insert a digest); this is the
+  same out-of-scope local writer as for audit and investigations.
+- **Repudiation.** Account, key, session, preference and export actions are
+  appended with actor id, target id and outcome; export is recorded before any
+  byte is sent. Offline CLI changes are recorded as `cli:local`.
+- **Denial of service.** Bounded counts and bytes; `last_used_at` writes are
+  coalesced to one per key per minute. Audit export holds the audit lock only
+  while copying at most 10000 records.
+- **Formula injection.** Audit CSV prefixes cells beginning with `= + - @`,
+  TAB or CR, because display names are administrator-supplied text.
+
+Untrusted data still never reaches exec, path selection, configuration or
+enforcement: request fields select records inside one fixed-name file only, and
+settings are read-only. Sessions remain in memory per process.

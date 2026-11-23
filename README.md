@@ -118,6 +118,7 @@ Or with Docker: `docker compose -f deploy/compose/docker-compose.yaml up` (see
 | Observability | Loopback admin listener: `/healthz`, `/readyz`, `/metrics` (Prometheus text format), `/version`; structured JSON logs via `log/slog` |
 | Packaging | Dockerfile, Compose demo and a contract-tested Helm chart. The chart is not verified in a real cluster ([docs/deploy/kubernetes.md](docs/deploy/kubernetes.md)) |
 | Migration | Clean-room `aegismesh migrate beelzebub` importer: dry-run default, never touches sources, exact unsupported-field report |
+| Access administration | Console-managed person and service accounts with expiring, revocable API keys (SHA-256 stored, shown once); session listing, revocation and idle timeout; read-only effective settings; bounded, audited audit export; component status. Config-file operators stay the break-glass path; no passwords, no SCIM, no UI config editing ([ADR-0025](docs/architecture/adr.md)) |
 
 ## Optional capabilities
 
@@ -138,6 +139,20 @@ unless the experimental features below are enabled. With evidence encryption on,
 evidence observed since process start. Investigations and audit are plaintext. The UI has been checked
 in Chromium only. See [configuration](docs/configuration.md#operator-console-optional), the
 [API contract](docs/architecture/console-api.md) and the [design system](docs/design-system.md).
+
+### Accounts and access administration
+
+Admins who are members of the local tenant can create **managed accounts** (people or services) in the
+console and issue them **API keys**: `amk_` tokens shown once, stored as SHA-256, expiring after 1..365
+days (default 90) and revocable. Everyone can list and end their own sessions and set UI preferences;
+admins can list and end any session, see the effective settings with where each value comes from, and
+download the audit trail as JSONL or CSV. `aegismesh accounts` disables accounts or revokes keys offline.
+
+**Limits:** config-file operators remain read-only and authoritative; settings are not editable in the
+console; sessions are in memory, so a restart signs everyone out and nothing is shared between processes.
+There is no password login, SCIM provisioning, MFA beyond the IdP, or custom role. Account state is
+plaintext like investigations. See [the API](docs/architecture/console-api.md#accounts-access-and-settings-adr-0025)
+and [ADR-0025](docs/architecture/adr.md).
 
 ### Evidence encryption at rest
 
