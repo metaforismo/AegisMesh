@@ -1,0 +1,18 @@
+CAMPAIGN cmp_1d6a262dcfa4  GET /api/tags → GET /v1/models → POST /v1/chat/completions
+basis: same_step_sequence, same_client_family
+sources: 2 (192.0.2.10, 198.51.100.20)
+
+steps (shapes are attacker-influenced text):
+   0  http discovery                  2/2  GET /api/tags
+   1  http discovery                  2/2  GET /v1/models
+   2  http ai_service_abuse           2/2  POST /v1/chat/completions
+
+sessions:
+  c8fa276b03083279f30d60b898130db5  198.51.100.20   4 events  actor: inconclusive
+  0e63eb7c43780a33524a5497d2230cbe  192.0.2.10      4 events  actor: inconclusive
+
+caveats:
+  - Shared behaviour does not prove a shared operator; common tools and public scanners produce identical sequences.
+  - Steps are normalised from retained, redacted summaries; identifiers, numbers and long tokens are collapsed, so different requests can share a shape.
+  - Grouping covers only the newest retained analysis sample of this tenant; evicted or older sessions are not compared.
+  - A source key is an observed peer address; NAT, proxies and shared egress can merge or split real clients.

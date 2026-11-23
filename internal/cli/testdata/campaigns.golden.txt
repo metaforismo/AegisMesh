@@ -1,0 +1,7 @@
+CAMPAIGNS: 1 (scanned 3 sessions; shared behaviour, not attribution)
+
+cmp_1d6a262dcfa4  GET /api/tags → GET /v1/models → POST /v1/chat/completions
+  basis: same_step_sequence, same_client_family
+  sources: 2 (192.0.2.10, 198.51.100.20)  sessions: 2  events: 8
+  seen: 2026-11-01T12:00:00.000000000Z .. 2026-11-01T12:01:04.000000000Z
+  severity: medium  stages: discovery, ai_service_abuse  rules: LLM-001, LLM-002

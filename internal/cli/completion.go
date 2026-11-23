@@ -23,7 +23,7 @@ Install, e.g.:
   fish: aegismesh completion fish > ~/.config/fish/completions/aegismesh.fish`
 }
 
-var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "export", "rules", "honeytoken", "migrate", "version", "completion", "ext", "console"}
+var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "export", "campaigns", "posture", "rules", "honeytoken", "migrate", "version", "completion", "ext", "console"}
 
 func (c *completionCmd) Run(_ context.Context, args []string) error {
 	if len(args) != 1 {

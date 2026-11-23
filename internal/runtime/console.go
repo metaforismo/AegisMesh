@@ -95,7 +95,9 @@ func (s *System) buildConsole() error {
 	}
 
 	decoys, markers := console.DecoyCatalog(s.cfg)
+	facts := console.PostureFacts(s.cfg)
 	server, err := console.New(console.Options{
+		Posture:       &facts,
 		Decoys:        decoys,
 		Honeytokens:   markers,
 		Config:        s.cfg.Console,
