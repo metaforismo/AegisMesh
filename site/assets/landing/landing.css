@@ -30,14 +30,12 @@
 }
 
 /* ---------------------------------------------------------------- the mark
-   The project's own shield and mesh (site/assets/icon.svg, the console's brand mark) */
-.lp-mark { width: 24px; height: 24px; flex: none; }
-.lp-mark__plate { fill: var(--p-accent); }
-.lp-mark__edge { fill: none; stroke: var(--p-bg); stroke-width: 1.4; stroke-linejoin: round; }
-.lp-mark__node, .lp-mark__core { fill: var(--p-bg); }
-.footer--statement .lp-mark__plate { fill: #2e4fc9; }
-.footer--statement .lp-mark__edge { stroke: #ffffff; }
-.footer--statement :is(.lp-mark__node, .lp-mark__core) { fill: #ffffff; }
+   The project's own mark, a net closed around a lure (site/assets/brand/, the console's brand
+   mark): one colour, the accent on this page's ground, white on the cobalt footer. */
+.lp-mark { width: 24px; height: 24px; flex: none; color: var(--p-accent); }
+.lp-mark__net, .lp-mark__links { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.lp-mark__lure { fill: currentColor; }
+.footer--statement .lp-mark { color: #ffffff; }
 
 /* ---------------------------------------------------------------- the bar without script
    The kit's sheet needs system.js; this page has no script, so the bar does what the kit's own
