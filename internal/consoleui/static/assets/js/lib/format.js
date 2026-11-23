@@ -1,7 +1,20 @@
-// Pure formatters. Times are shown in UTC: evidence is compared across
-// machines and logs, so the console never silently shifts to local time.
+// Pure formatters. Times are shown in UTC by default: evidence is compared
+// across machines and logs. An operator may choose local time in Settings
+// (Preferences); then every absolute time carries its UTC offset, so a
+// copied time is never ambiguous. The choice is module state set once by
+// setTimeZone(); the default stays UTC.
 
 const pad = (n, w = 2) => String(n).padStart(w, '0');
+
+export const TIME_ZONES = Object.freeze(['utc', 'local']);
+let zone = 'utc';
+
+export function setTimeZone(value) {
+  zone = TIME_ZONES.includes(value) ? value : 'utc';
+  return zone;
+}
+
+export const timeZone = () => zone;
 
 export function parseTime(value) {
   if (typeof value !== 'string' || value === '') return null;
@@ -9,19 +22,40 @@ export function parseTime(value) {
   return Number.isNaN(ms) ? null : new Date(ms);
 }
 
-// "2026-11-14 09:03:44 UTC"
+// Calendar fields in the chosen zone.
+function fields(d) {
+  return zone === 'local'
+    ? { y: d.getFullYear(), mo: d.getMonth(), da: d.getDate(), h: d.getHours(), mi: d.getMinutes(), s: d.getSeconds() }
+    : { y: d.getUTCFullYear(), mo: d.getUTCMonth(), da: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds() };
+}
+
+// "UTC", or the local offset at that instant ("UTC+1", "UTC−3:30").
+export function zoneLabel(d = new Date()) {
+  if (zone !== 'local') return 'UTC';
+  const off = -d.getTimezoneOffset();
+  if (off === 0) return 'UTC+0';
+  const sign = off > 0 ? '+' : '−';
+  const a = Math.abs(off);
+  return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? `:${pad(a % 60)}` : ''}`;
+}
+
+// How the interface names the zone in captions ("times in UTC").
+export const zoneName = () => (zone === 'local' ? 'local time' : 'UTC');
+
+// "2026-11-14 09:03:44 UTC" (or "… 10:03:44 UTC+1" in local time)
 export function formatDateTime(value) {
   const d = parseTime(value);
   if (!d) return '—';
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
-    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+  const f = fields(d);
+  return `${f.y}-${pad(f.mo + 1)}-${pad(f.da)} ${pad(f.h)}:${pad(f.mi)}:${pad(f.s)} ${zoneLabel(d)}`;
 }
 
 // "09:03:44" — for dense tables where the date is implied by context.
 export function formatClock(value) {
   const d = parseTime(value);
   if (!d) return '—';
-  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  const f = fields(d);
+  return `${pad(f.h)}:${pad(f.mi)}:${pad(f.s)}`;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -30,8 +64,9 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export function formatBucketLabel(value, window) {
   const d = parseTime(value);
   if (!d) return '';
-  if (window === '7d') return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
-  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  const f = fields(d);
+  if (window === '7d') return `${MONTHS[f.mo]} ${f.da}`;
+  return `${pad(f.h)}:${pad(f.mi)}`;
 }
 
 export function formatRelative(value, now = Date.now()) {

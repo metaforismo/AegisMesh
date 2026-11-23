@@ -4,6 +4,7 @@
 
 import { CLASSIFICATIONS, SENSOR_KINDS, SEVERITIES, WINDOWS, INVESTIGATION_STATUSES, AUDIT_ACTIONS, severityRank } from './taxonomy.js';
 import { isNodeFilter, matchesNodeFilter } from './origin.js';
+import { isSectionId, isAccountId } from './settings.js';
 
 const EVENT_ID = /^[0-9a-f]{32}$/;
 const OPAQUE_ID = /^[A-Za-z0-9_.-]{1,128}$/;
@@ -96,6 +97,11 @@ const ROUTES = [
   { name: 'campaigns', pattern: ['campaigns'] },
   { name: 'campaign', pattern: ['campaigns', ':id'], valid: (p) => /^cmp_[0-9a-z]{4,64}$/.test(p.id) },
   { name: 'posture', pattern: ['posture'] },
+  // Settings: your account and, for admins, administration. A section id
+  // comes from a closed list; an account id from its three closed shapes.
+  { name: 'settings', pattern: ['settings'] },
+  { name: 'settings', pattern: ['settings', ':section'], valid: (p) => isSectionId(p.section) },
+  { name: 'settings_account', pattern: ['settings', 'accounts', ':id'], valid: (p) => isAccountId(p.id) },
   { name: 'login', pattern: ['login'] },
 ];
 
@@ -138,8 +144,16 @@ export function parseHash(hash) {
   return { name: 'not_found', params: {}, query, path: pathPart };
 }
 
+// The window a screen opens with when its link names none: 24 hours, or the
+// operator's "default time window" preference (set once by the shell).
+let defaultWindow = '24h';
+export function setDefaultWindow(value) {
+  defaultWindow = WINDOWS.includes(value) ? value : '24h';
+  return defaultWindow;
+}
+
 export function normalizeWindow(value) {
-  return WINDOWS.includes(value) ? value : '24h';
+  return WINDOWS.includes(value) ? value : defaultWindow;
 }
 
 export function normalizeStatus(value) {

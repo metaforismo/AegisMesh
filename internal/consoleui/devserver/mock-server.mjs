@@ -7,6 +7,7 @@
 //
 //   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
 //     [--accept-evidence on|off] [--burst N] [--auth token|oidc|both] [--tenants a,b]
+//     [--round4 on|off] [--round5 on|off] [--fail-prefs]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
@@ -27,6 +28,7 @@ import { createFleet } from './mock-fleet.mjs';
 import { snapshot, sessionsOf, publicSession, sessionDetail, coverageOf, indicatorsOf, renderIndicators, renderReport, RULE_FRAMEWORKS, INTERPRETATION } from './mock-analysis.mjs';
 import { ruleRecord, decoyCatalog, tokenCatalog, decoysView, honeytokensView, interArrival, digestOf, renderEvents, EXPORT_FORMATS, EXPORT_NAMES, EXPORT_TYPES, CATALOG_WINDOWS, DIGEST_WINDOWS } from './mock-catalogs.mjs';
 import { campaignsOf, campaignDetail, publicCampaign, actorOf, postureOf } from './mock-insight.mjs';
+import { createAccounts, clientFamily } from './mock-accounts.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
@@ -64,6 +66,14 @@ const OIDC_AUTH = AUTH_MODE !== 'token';
 // an older server: 404 on the new routes and no new session fields.
 const argRound4 = process.argv.indexOf('--round4');
 const ROUND4 = (argRound4 > 0 ? process.argv[argRound4 + 1] : (process.env.AEGISMESH_MOCK_ROUND4 || 'on')) !== 'off';
+
+// Round-5 endpoints (accounts, access, settings; contract r5). `off` behaves
+// like an older server: 404 on /me, /admin/* and /system, and API keys do not
+// sign in. --fail-prefs makes PUT /me/preferences answer 503, to exercise the
+// console's rollback.
+const argRound5 = process.argv.indexOf('--round5');
+const ROUND5 = (argRound5 > 0 ? process.argv[argRound5 + 1] : (process.env.AEGISMESH_MOCK_ROUND5 || 'on')) !== 'off';
+const FAIL_PREFS = process.argv.includes('--fail-prefs');
 
 const argTenants = process.argv.indexOf('--tenants');
 const TENANTS = (argTenants > 0 ? process.argv[argTenants + 1] : (process.env.AEGISMESH_MOCK_TENANTS || 'default')).split(',').map((t) => t.trim()).filter(Boolean);
@@ -434,7 +444,8 @@ const IDENTITIES = new Map([
   ['nobody', { sub: 'unmapped-synthetic-0000', name: '', role: '', tenants: [] }],
 ]);
 
-const sessions = new Map(); // sid → { name, role, auth_method, tenant, tenants, csrf_token, expires_at }
+const sessions = new Map(); // sid → { name, role, auth_method, tenant, tenants, csrf_token, expires_at, account_id, created_at, last_seen_at, remote, client }
+const accounts = createAccounts({ tenants: TENANTS, localTenant: LOCAL_TENANT, configured: TOKENS, tokenLogin: TOKEN_AUTH });
 
 const sessionView = (s) => ({
   principal: { name: s.name, role: s.role, auth_method: s.auth_method, tenant: s.tenant, tenants: s.tenants },
@@ -443,7 +454,7 @@ const sessionView = (s) => ({
 
 function newSession(fields) {
   const sid = randomBytes(24).toString('base64url');
-  const s = { csrf_token: randomBytes(24).toString('base64url'), expires_at: new Date(Date.now() + SESSION_TTL * 1000).toISOString().replace(/\.\d+Z$/, 'Z'), ...fields };
+  const s = { csrf_token: randomBytes(24).toString('base64url'), expires_at: new Date(Date.now() + SESSION_TTL * 1000).toISOString().replace(/\.\d+Z$/, 'Z'), created_at: stamp(), ...fields };
   sessions.set(sid, s);
   return { sid, s };
 }
@@ -712,7 +723,7 @@ async function api(req, res, url) {
     let body;
     try { body = await readBody(req, ['token']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
     if (!TOKEN_AUTH) return fail(res, 'unauthenticated', 'token sign-in is disabled');
-    const principal = TOKENS.get(body.token);
+    const principal = TOKENS.get(body.token) || (ROUND5 ? accounts.principalForKey(body.token) : null);
     if (!principal) {
       // No tenant resolved: multi-tenant servers keep this in a chain the
       // console API cannot read; single-tenant servers in the only chain.
@@ -720,7 +731,10 @@ async function api(req, res, url) {
       return fail(res, 'unauthenticated', 'invalid token');
     }
     // Token sign-in starts in the first configured membership.
-    const { sid, s: sess } = newSession({ name: principal.name, role: principal.role, auth_method: 'token', tenant: principal.tenants[0], tenants: [...principal.tenants] });
+    const { sid, s: sess } = newSession({
+      name: principal.name, role: principal.role, auth_method: 'token', tenant: principal.tenants[0], tenants: [...principal.tenants],
+      account_id: principal.account_id || accounts.configuredId(principal.name), remote, client: clientFamily(req.headers['user-agent']),
+    });
     const old = cookieSession(req);
     if (old) { sessions.delete(old.id); endStreams(old.id); }
     record(tenants.get(sess.tenant), principal.name, principal.role, 'session.login', '', 'ok', remote);
@@ -729,6 +743,9 @@ async function api(req, res, url) {
 
   const s = cookieSession(req);
   if (!s) return fail(res, 'unauthenticated', 'sign in required');
+  // What the sessions list shows: last activity and address. The client
+  // family is fixed at sign-in.
+  Object.assign(sessions.get(s.id), { last_seen_at: stamp(), remote });
   const who = { name: s.name, role: s.role };
   const T = tenants.get(s.tenant);
   const events = T.events;
@@ -743,6 +760,13 @@ async function api(req, res, url) {
     fail(res, 'forbidden', `requires ${role}`);
     return false;
   };
+
+  // ---- Round 5: accounts, access and settings (mock-accounts.mjs) ----------
+  if (ROUND5 && await accounts.handle({
+    req, res, url, p, m, s, sessions, send, fail, readBody, audit, who, remote, endStreams, T,
+    headers: securityHeaders,
+    flags: { failPrefs: FAIL_PREFS, oidc: OIDC_AUTH, tokenAuth: TOKEN_AUTH, fleetHub: FLEET_MODE === 'hub' || FLEET_MODE === 'both', acceptEvidence: localTenant.fleet.accepting },
+  })) return;
 
   if (p === '/session') {
     if (m === 'GET') return send(res, 200, sessionView(s));
@@ -1149,7 +1173,7 @@ async function api(req, res, url) {
       instance: 'node-dev-01', version: { version: '0.3.0-dev', commit: 'mock', go: 'go1.25' },
       started_at: new Date(now - 26 * 3600e3).toISOString().replace(/\.\d+Z$/, 'Z'), uptime_seconds: Math.floor((Date.now() - now) / 1000) + 26 * 3600,
       healthy: true, sensors: { wanted: 4, started: 3 }, bus: { dropped_events: 0 },
-      storage: { segments: 3, bytes: 18_874_368, encrypted: false, retention: { max_events: 100000, max_age_days: 30 } },
+      storage: { healthy: true, segments: 3, bytes: 18_874_368, encrypted: false, retention: { max_events: 100000, max_age_days: 30 } },
       // Accepting hubs report history "unavailable": forwarded copies are live-only.
       index: { events: events.length, capacity: 50000, oldest: events[events.length - 1].time, history: T.fleet.accepting ? 'unavailable' : 'complete' },
       console: { listen: `${HOST}:${PORT}`, tls: false, session_ttl_seconds: SESSION_TTL },
@@ -1307,7 +1331,10 @@ function oidcRoute(req, res, url, p, m, remote) {
     const sorted = [...id.tenants].sort();
     const old = cookieSession(req);
     if (old) { sessions.delete(old.id); endStreams(old.id); }
-    const { sid, s: sess } = newSession({ name: id.name, role: id.role, auth_method: 'oidc', tenant: sorted[0], tenants: [...id.tenants] });
+    const { sid, s: sess } = newSession({
+      name: id.name, role: id.role, auth_method: 'oidc', tenant: sorted[0], tenants: [...id.tenants],
+      account_id: accounts.touchOidc(id.sub, id.name, id.role, id.tenants), remote, client: clientFamily(req.headers['user-agent']),
+    });
     record(tenants.get(sess.tenant), id.name, id.role, 'session.oidc_login', '', 'ok', remote, '', claims);
     return redirect(res, '/', [sessionCookie(sid), clearOidcCookie]);
   }
@@ -1459,5 +1486,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${localTenant.fleet.accepting ? 'on' : 'off'}; auth: ${AUTH_MODE}; tenants: ${TENANTS.join(',')})`);
+  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${localTenant.fleet.accepting ? 'on' : 'off'}; auth: ${AUTH_MODE}; tenants: ${TENANTS.join(',')}; round4: ${ROUND4 ? 'on' : 'off'}; round5: ${ROUND5 ? 'on' : 'off'})`);
 });

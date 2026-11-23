@@ -19,6 +19,11 @@ export class ApiError extends Error {
 }
 
 const KNOWN_CODES = new Set(['invalid_argument', 'unauthenticated', 'forbidden', 'not_found', 'conflict', 'rate_limited', 'unavailable', 'internal']);
+// A server may answer a conflict with a specific reason in place of the
+// generic code (409 "last_admin", "not_managed", "name_taken",
+// "limit_reached"). The generic code still follows the status; the reason is
+// kept separately, and only as a short lowercase token, never as text.
+const REASON = /^[a-z][a-z0-9_]{1,39}$/;
 const CSRF_HEADER = 'X-AegisMesh-CSRF';
 const MAX_ERROR_MESSAGE = 300;
 
@@ -32,16 +37,20 @@ function codeForStatus(status) {
 async function toApiError(res) {
   let code = codeForStatus(res.status);
   let message = '';
+  let reason = '';
   try {
     const body = await res.json();
     if (body && typeof body.error === 'object' && body.error) {
       if (KNOWN_CODES.has(body.error.code)) code = body.error.code;
+      else if (typeof body.error.code === 'string' && REASON.test(body.error.code)) reason = body.error.code;
+      if (typeof body.error.reason === 'string' && REASON.test(body.error.reason)) reason = body.error.reason;
       if (typeof body.error.message === 'string') message = body.error.message.slice(0, MAX_ERROR_MESSAGE);
     }
   } catch {
     // Non-JSON error bodies (a proxy page, an empty 502) keep the status code.
   }
   const err = new ApiError(res.status, code, message || `Request failed (${res.status})`);
+  err.reason = reason;
   const ra = Number(res.headers?.get?.('Retry-After'));
   if (Number.isFinite(ra) && ra > 0) err._retryAfter = ra;
   return err;
@@ -190,6 +199,32 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     campaigns: (opts) => get('/campaigns', undefined, opts),
     campaign: (id, opts) => get(`/campaigns/${seg(id)}`, undefined, opts),
     posture: (opts) => get('/posture', undefined, opts),
+
+    // Round 5: your account, its preferences, sessions and API keys. An API
+    // key's token is in the create response exactly once; callers show it in
+    // the reveal panel and keep it nowhere else. Older servers answer 404.
+    me: (opts) => get('/me', undefined, opts),
+    preferences: (opts) => get('/me/preferences', undefined, opts),
+    putPreferences: (body) => request('PUT', '/me/preferences', { body }),
+    mySessions: (opts) => get('/me/sessions', undefined, opts),
+    revokeMySession: (handle) => request('DELETE', `/me/sessions/${seg(handle)}`),
+    myKeys: (opts) => get('/me/keys', undefined, opts),
+    createMyKey: (body) => request('POST', '/me/keys', { body }),
+    revokeMyKey: (id) => request('DELETE', `/me/keys/${seg(id)}`),
+
+    // Round 5 administration (admin role in the local tenant).
+    accounts: (opts) => get('/admin/accounts', undefined, opts),
+    account: (id, opts) => get(`/admin/accounts/${seg(id)}`, undefined, opts),
+    createAccount: (body) => request('POST', '/admin/accounts', { body }),
+    updateAccount: (id, body) => request('PATCH', `/admin/accounts/${seg(id)}`, { body }),
+    createAccountKey: (id, body) => request('POST', `/admin/accounts/${seg(id)}/keys`, { body }),
+    revokeAccountKey: (id, keyId) => request('DELETE', `/admin/accounts/${seg(id)}/keys/${seg(keyId)}`),
+    allSessions: (opts) => get('/admin/sessions', undefined, opts),
+    revokeAnySession: (handle) => request('DELETE', `/admin/sessions/${seg(handle)}`),
+    adminSettings: (opts) => get('/admin/settings', undefined, opts),
+    system: (opts) => get('/system', undefined, opts),
+    // Audited download of the whole audit chain (or since a time).
+    exportAudit: (format, since, opts) => get('/admin/audit/export', { format, since }, { ...opts, raw: true }),
 
     fleet: (opts) => get('/fleet', undefined, opts),
     fleetNodes: (status, opts) => get('/fleet/nodes', { status }, opts),

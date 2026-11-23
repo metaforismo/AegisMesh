@@ -4,7 +4,8 @@ import { h, mount } from '../lib/dom.js';
 import { roleAtLeast, capitalize } from '../lib/taxonomy.js';
 import { tenantInfo } from '../lib/tenant.js';
 import { authMethodLabel } from '../lib/auth.js';
-import { formatDateTime } from '../lib/format.js';
+import { formatDateTime, setTimeZone, zoneName } from '../lib/format.js';
+import { setDefaultWindow } from '../lib/route.js';
 import { icon, brandMark } from './icons.js';
 import { parseDensity, nextDensity } from '../lib/viz.js';
 
@@ -39,6 +40,7 @@ export const NAV = [
     { route: 'node', label: 'Node', href: '#/node', icon: 'node' },
     { route: 'fleet', label: 'Fleet', href: '#/fleet', also: ['fleet_node'], icon: 'fleet', tag: 'Experimental' },
     { route: 'audit', label: 'Audit trail', href: '#/audit', role: 'admin', icon: 'audit', keys: 'g a' },
+    { route: 'settings', label: 'Settings', href: '#/settings', also: ['settings_account'], icon: 'settings', keys: 'g ,' },
   ] },
   { group: 'Help', items: [
     { route: 'guide', label: 'Guide', href: '#/guide', icon: 'guide', keys: 'g h' },
@@ -70,21 +72,51 @@ export function applyTheme(theme = readTheme()) {
 }
 
 const themeListeners = new Set();
+const densityListeners = new Set();
+const zoneListeners = new Set();
+
+// Preferences (lib/prefs.js) own the theme, density, time zone, default
+// window and motion. The top-bar controls hand a change to the store through
+// this sink; the store applies it everywhere through applyPreferences().
+let prefsSink = null;
+let currentPrefs = { theme: readTheme(), density: 'comfortable', timezone: 'utc', default_window: '24h', reduce_motion: 'system' };
+export function setPrefsSink(fn) {
+  prefsSink = typeof fn === 'function' ? fn : null;
+}
+
+function changePref(patch) {
+  if (prefsSink) return prefsSink(patch);
+  applyPreferences({ ...currentPrefs, ...patch });
+  return null;
+}
+
+// Apply a complete, parsed preferences object to the page.
+export function applyPreferences(p) {
+  currentPrefs = { ...currentPrefs, ...p };
+  applyTheme(THEMES.includes(p.theme) ? p.theme : 'system');
+  applyDensity(p.density);
+  document.documentElement.toggleAttribute('data-reduce-motion', p.reduce_motion === 'on');
+  setTimeZone(p.timezone);
+  setDefaultWindow(p.default_window);
+  for (const fn of themeListeners) fn(currentPrefs.theme);
+  for (const fn of densityListeners) fn(parseDensity(currentPrefs.density));
+  for (const fn of zoneListeners) fn();
+}
+
+// True when motion should be reduced: the operating system asks for it, or
+// the operator chose "Always reduce" in Preferences.
+export function prefersReducedMotion() {
+  return document.documentElement.hasAttribute?.('data-reduce-motion') || Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
 
 export function setTheme(next) {
   const theme = THEMES.includes(next) ? next : 'system';
-  try {
-    globalThis.localStorage?.setItem(THEME_KEY, theme);
-  } catch {
-    // Storage may be unavailable; the choice still applies to this page.
-  }
-  applyTheme(theme);
-  for (const fn of themeListeners) fn(theme);
+  changePref({ theme });
   return theme;
 }
 
 export function cycleTheme() {
-  return setTheme(THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length]);
+  return setTheme(THEMES[(THEMES.indexOf(currentPrefs.theme) + 1) % THEMES.length]);
 }
 
 const THEME_LABEL = { system: 'Match the system', light: 'Light', dark: 'Dark' };
@@ -107,8 +139,8 @@ function themeControl() {
   const menu = h('div', { class: 'menu', id: 'theme-menu', popover: 'auto', tabindex: '-1', 'aria-labelledby': 'theme-menu-title' },
     h('p', { class: 'menu__title', id: 'theme-menu-title' }, 'Color theme'),
     h('ul', { class: 'menu__list' }, items.map((i) => h('li', null, i.button))),
-    h('p', { class: 'menu__note' }, 'Remembered in this browser only.'));
-  let current = readTheme();
+    h('p', { class: 'menu__note' }, 'Also in Settings, Preferences.'));
+  let current = currentPrefs.theme;
   const paint = (theme) => {
     current = theme;
     mount(btn, icon(THEME_ICON[theme]));
@@ -123,7 +155,7 @@ function themeControl() {
   };
   anchoredMenu(menu, btn, { focusOnOpen: () => items.find((i) => i.t === current)?.button });
   themeListeners.add(paint);
-  paint(readTheme());
+  paint(currentPrefs.theme);
   return [btn, menu];
 }
 
@@ -155,16 +187,10 @@ function densityControl() {
     btn.setAttribute('aria-pressed', String(d === 'compact'));
   };
   btn.addEventListener('click', () => {
-    const next = nextDensity(readDensity());
-    try {
-      globalThis.localStorage?.setItem(DENSITY_KEY, next);
-    } catch {
-      // Storage may be unavailable; the choice still applies to this page.
-    }
-    applyDensity(next);
-    paint(next);
+    changePref({ density: nextDensity(currentPrefs.density) });
   });
-  paint(readDensity());
+  densityListeners.add(paint);
+  paint(parseDensity(currentPrefs.density));
   return btn;
 }
 
@@ -286,6 +312,7 @@ function accountControl(session, meta, onLogout) {
     h('span', { class: 'top-user__name', 'aria-hidden': 'true' }, name),
     h('span', { class: 'chip', 'aria-hidden': 'true' }, capitalize(role)));
   const signOut = h('button', { class: ['btn', 'btn--block', 'menu__action'], type: 'button' }, icon('sign-out'), 'Sign out');
+  const go = (href, ico, label) => h('li', null, h('a', { class: 'menu__item', href }, h('span', { class: 'menu__check', 'aria-hidden': 'true' }, icon(ico, { size: 'sm' })), h('span', { class: 'menu__label' }, label)));
   signOut.addEventListener('click', () => { hideMenu(menu); onLogout?.(); });
   const rows = [
     ['Signed in with', authMethodLabel(p.auth_method || 'token', meta)],
@@ -299,14 +326,32 @@ function accountControl(session, meta, onLogout) {
         h('p', { class: 'menu__name', id: 'account-menu-title' }, name),
         h('p', { class: 'menu__sub' }, capitalize(role)))),
     h('dl', { class: 'menu__kv' }, rows.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
+    h('ul', { class: ['menu__list', 'menu__links'] },
+      go('#/settings/profile', 'user', 'Your profile'),
+      go('#/settings/preferences', 'settings', 'Preferences'),
+      go('#/settings/sessions', 'devices', 'Sessions'),
+      go('#/settings/keys', 'key', 'API keys')),
     signOut);
   anchoredMenu(menu, button);
   return [button, menu];
 }
 
+// The sidebar's reminder of how times are shown; follows the preference.
+function zoneLine() {
+  const p = h('p', { class: 'muted nav-foot__meta' });
+  const paint = () => { p.textContent = `Times in ${zoneName()}`; };
+  zoneListeners.add(paint);
+  paint();
+  return p;
+}
+
 // ---- Shell -----------------------------------------------------------------
 
 export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant }) {
+  // A rebuilt shell (sign-in, tenant switch) replaces the old controls.
+  themeListeners.clear();
+  densityListeners.clear();
+  zoneListeners.clear();
   const role = session?.principal?.role;
   const links = new Map();
   const indicators = [];
@@ -329,11 +374,11 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
   });
 
   const nav = h('nav', { class: 'shell__nav', id: 'primary-nav', 'aria-label': 'Primary' },
-    h('a', { class: 'brand', href: '#/overview' }, brandMark(), 'AegisMesh'),
+    h('a', { class: 'brand', href: '#/overview', 'aria-label': 'AegisMesh, go to the overview' }, brandMark(), h('span', { class: 'brand__word' }, 'AegisMesh')),
     groups,
     h('div', { class: 'nav-foot' },
       railToggle(),
-      h('p', { class: 'muted nav-foot__meta' }, 'Times in UTC'),
+      zoneLine(),
       h('p', { class: 'muted nav-foot__meta' }, `Version ${meta?.version || 'unknown'}`),
       h('a', { href: 'https://github.com/metaforismo/AegisMesh/blob/master/docs/architecture/console-api.md' }, 'API contract')));
 

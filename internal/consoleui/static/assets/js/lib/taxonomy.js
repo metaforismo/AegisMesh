@@ -64,6 +64,9 @@ export const AUDIT_ACTIONS = Object.freeze([
   'fleet.node.rejected',
   'export.indicators', 'session.report', 'investigation.report',
   'export.events', 'event.read',
+  // Round 5: accounts, keys, sessions, preferences, audit export.
+  'account.create', 'account.update', 'key.create', 'key.revoke',
+  'session.revoke', 'preferences.update', 'audit.export',
 ]);
 
 export function roleAtLeast(role, minimum) {

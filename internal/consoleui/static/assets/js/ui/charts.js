@@ -207,7 +207,7 @@ export function stackedBarChart(buckets, window, { title = 'Observations over ti
       caption: title,
       stack: false,
       columns: [
-        { label: 'Bucket start (UTC)', cell: (b) => formatDateTime(b.start) },
+        { label: 'Bucket start', cell: (b) => formatDateTime(b.start) },
         ...CLASSIFICATIONS.map((c) => ({ label: classificationMeta(c).label, num: true, cell: (b) => formatCount(b[c] || 0) })),
         { label: 'Total', num: true, cell: (b) => formatCount(bucketTotal(b)) },
       ],

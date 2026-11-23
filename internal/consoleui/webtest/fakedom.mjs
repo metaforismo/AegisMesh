@@ -8,6 +8,10 @@ class Node {
     c.parentNode = this; this.childNodes.push(c); return c;
   }
   removeChild(c) { this.childNodes = this.childNodes.filter((x) => x !== c); c.parentNode = null; return c; }
+  remove() { this.parentNode?.removeChild(this); }
+  append(...cs) { for (const c of cs) this.appendChild(typeof c === 'string' ? this.ownerDocument.createTextNode(c) : c); }
+  replaceChildren(...cs) { for (const c of [...this.childNodes]) this.removeChild(c); this.append(...cs); }
+  get isConnected() { let n = this; while (n.parentNode) n = n.parentNode; return n === this.ownerDocument.body; }
   get firstChild() { return this.childNodes[0] ?? null; }
   get textContent() { return this.childNodes.map((c) => c.textContent).join(''); }
   set textContent(v) { this.childNodes = []; if (v !== '') this.appendChild(this.ownerDocument.createTextNode(v)); }
@@ -20,6 +24,12 @@ class Element extends Node {
   getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
   addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); }
   dispatch(t, ev = {}) { for (const fn of this.listeners[t] || []) fn(ev); }
+  removeAttribute(k) { this.attributes.delete(k); }
+  hasAttribute(k) { return this.attributes.has(k); }
+  focus() { this.ownerDocument.activeElement = this; }
+  // <dialog> stand-ins: open, close (fires "close"), no top layer.
+  showModal() { this.open = true; }
+  close() { if (!this.open) return; this.open = false; this.dispatch('close', {}); }
   set innerHTML(_v) { throw new Error('innerHTML is forbidden'); }
   querySelectorAll(pred) { const out = []; const walk = (n) => { for (const c of n.childNodes) { if (c.nodeType === 1) { if (pred(c)) out.push(c); walk(c); } } }; walk(this); return out; }
 }
@@ -29,6 +39,8 @@ export function createFakeDocument() {
     createElementNS: (ns, t) => new Element(doc, t, ns),
     createTextNode: (v) => new Text(doc, v),
     createDocumentFragment: () => new Fragment(doc),
+    activeElement: null,
   };
+  doc.body = new Element(doc, 'body', 'html');
   return doc;
 }

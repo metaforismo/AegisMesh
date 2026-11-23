@@ -25,6 +25,9 @@ reference. `site/design-system.html` shows every component rendered.
 | `internal/consoleui/static/assets/js/lib/insight.js`, `ui/insight.js` | Round 4: campaign wording and the score layout (`campaignScore`), actor profile normalisation and signal meanings, posture grouping and docs links, shared `plural`/`listJoin`, and `isMissingEndpoint` for older servers; tested in `webtest/insight.test.mjs` |
 | `internal/consoleui/devserver/mock-insight.mjs` | The mock's twin of contract r4: `/campaigns`, `/campaigns/{id}`, `/posture`, `campaign_id` and `actor` on sessions, from scripted playbook variants; `--round4 off` answers like an older server. Tested in `webtest/mockinsight.test.mjs` |
 | `internal/consoleui/static/assets/js/lib/{auth,tenant}.js` | Sign-in option selection and OIDC error codes; tenant visibility, switch targets and where a switch lands; unit-tested in `webtest/` |
+| `internal/consoleui/static/assets/js/lib/{prefs,settings}.js`, `ui/settings-kit.js`, `screens/settings{,-account,-admin}.js` | Round 5: the preferences store (server, browser copy, optimistic with rollback), the settings registry, role and source wording, validation and refusal messages; the confirmation dialog, one-time key reveal, form helpers and read-only settings renderer; the Settings screen. Tested in `webtest/settings.test.mjs` and `webtest/settingsscreen.test.mjs` |
+| `internal/consoleui/devserver/mock-accounts.mjs` | The mock's twin of contract r5 (accounts, preferences, sessions, API keys, administration, effective settings, audit export, system); `--round5 off` answers like an older server, `--fail-prefs` refuses preference saves. Tested in `webtest/mockaccounts.test.mjs` |
+| `site/assets/brand/` | The mark and the horizontal lockup as standalone SVG: colour, dark-ground and one-colour variants; see "Brand" below |
 
 There is no build step, no npm dependency and no third-party code. The console
 is plain HTML, CSS and ES modules embedded into the binary with `go:embed`.
@@ -44,7 +47,8 @@ is plain HTML, CSS and ES modules embedded into the binary with `go:embed`.
    not red or green. More observations are not "bad" and fewer are not
    "good".
 4. **Calm and dense.** Cool graphite neutrals, one cobalt accent, a 13–14px UI
-   body, a 4px spacing grid. Times are always UTC.
+   body, a 4px spacing grid. Times are UTC unless the operator chooses local
+   time in Settings; then every absolute time carries its UTC offset.
 5. **Honest copy.** Events are observations, not incidents. Recommendations
    are labelled "proposed, not executed". Limits (bounded index, single node,
    what the audit chain proves) are stated where they matter.
@@ -194,8 +198,8 @@ One set in `ui/icons.js`, drawn on a 16-unit grid with a 1.5 stroke, round
 caps and joins, in `currentColor`. Sizes are tokens: `--icon-xs` 12,
 `--icon-sm` 14, `--icon-md` 16 (default), `--icon-lg` 20. An icon always
 sits beside a word, or the button carries an `aria-label`. Icons are
-`aria-hidden`. The brand mark is a shield plate carrying a small mesh (three
-nodes linked to a core) on a 24-unit grid. `site/design-system.html` shows
+`aria-hidden`. The brand mark (a net closed around a lure) is described in
+"Brand". `site/design-system.html` shows
 the full set, generated from the module.
 
 ### Theme resolution
@@ -204,10 +208,12 @@ Light by default, dark when the OS prefers it, and an explicit
 `data-theme="light|dark"` on `<html>` always wins. Both dark blocks are
 screen-only (`@media screen`), so print always uses the light palette. The console's theme button
 opens a menu with an explicit choice (Match the system, Light, Dark; the
-current one checked and labelled "Current") and remembers it in
-`localStorage` (a convenience only). The palette's "Switch color theme"
-still cycles System → Light → Dark. The only other things kept in the browser are saved
-event views and palette recents; see "Console security rules".
+current one checked and labelled "Current"). The theme is one of the
+operator's preferences (Settings, Preferences): saved to the account when the
+server offers `/me/preferences`, in this browser otherwise, and always copied
+to the browser so the next load starts in the right theme. The palette's "Switch color theme"
+still cycles System → Light → Dark. The other things kept in the browser are the
+other preferences, saved event views and palette recents; see "Console security rules".
 
 ## Component inventory
 
@@ -306,8 +312,12 @@ The console server sends
   vocabularies before they reach a request, a class name or a link
   (`lib/route.js`).
 - The CSRF token lives only in the API client's closure; the session is an
-  HttpOnly cookie. Nothing sensitive goes into `localStorage`. Besides the
-  theme it holds, per tenant (`aegismesh.views.<tenant>`,
+  HttpOnly cookie. Nothing sensitive goes into `localStorage`; an API key's
+  token exists only in the create response, one Text node of the reveal
+  panel and that function's closure, and is emptied when the panel is
+  dismissed or the page is left. Besides the
+  preferences (`aegismesh.theme`, `aegismesh.density`, `aegismesh.prefs`:
+  closed values, parsed on read) it holds, per tenant (`aegismesh.views.<tenant>`,
   `aegismesh.recent.<tenant>`): saved event views, with only non-evidence
   filters (node, class, sensor, kind, rule, severity, since, until; source
   keys and search text are attacker-influenced and never written), and up to
@@ -1040,6 +1050,165 @@ The skill's source lint went from 28 FAIL / 94 WARN to 0 FAIL / 71 WARN
 | Page exceptions in the browser on the screens above | PASS (none) |
 | Firefox, Safari, screen readers, the real Go console server, a real phone | NOT RUN: only Chromium and the mock |
 
+### Settings and administration (round 5, 2026-11-23)
+
+What a security team expects from a serious console: who am I and what may I
+do, how the console shows time, where am I signed in, keys for scripts, and,
+for admins, who has access and what the server is running with. Built
+against contract r5 while the backend landed in parallel; every page has an
+older-server state.
+
+**Where it is.** Sidebar, Operate, Settings (`g ,`); the account menu in the
+top bar (Your profile, Preferences, Sessions, API keys); the palette
+(Preferences, Manage API keys, Your sessions; for admins Manage accounts and
+Export the audit trail). Tab titles read "API keys · Settings · AegisMesh";
+detail pages carry crumbs (Settings / Your account / API keys).
+
+**Layout.** One screen, `#/settings[/<section>]` and
+`#/settings/accounts/<id>` (ids from a closed list and three closed shapes,
+`lib/route.js`). Desktop: a sub-navigation beside the section, the current
+item marked with the console's one selection (neutral step and a 1px accent
+line). Below 768px the index is the list (each row its name, what it is for,
+a chevron) and each section is its own page whose crumbs lead back.
+
+| Section | What it does |
+|---|---|
+| Profile | Name, account id (copyable), kind, role, tenants, active tenant, sign-in method, account source with its reason, created, last seen, session expiry; "What the role can do" in two lists, said to explain and not grant |
+| Preferences | Time zone (UTC, local time), default time window, row density, colour theme, motion (follow the system, always reduce). Native radios drawn as words with the 1px line; each applies at once; a polite status says where it was saved |
+| Sessions | Your signed-in sessions: client family, method, address, started, last active, expires and idle expiry; "This browser" marked; Revoke, or Sign out for this browser; sign out all others |
+| API keys | Create (label, lifetime 30/90/180/365 days, default 90), the one-time reveal, the list with status, created by, expires, last used; revoke with the label typed. Accounts that may not manage keys get the reason instead of a form |
+| Accounts (admin) | Every account with a source mark, role, tenants, status, last seen, keys, sessions; a source filter; create a managed person or service; the source legend |
+| Account detail (admin) | Managed: name, role, tenants (form), disable or enable (typed name), create and revoke keys, revoke sessions. Configured and single sign-on: read-only with the reason; their keys and sessions can still be revoked |
+| Active sessions (admin) | Every session with its account; revoke any (your own signs you out) |
+| Single sign-on, Security and access, Data and retention, Detection, Fleet, Exports (admin) | `/admin/settings` sections, read-only: label, value, source mark, how to change it, copyable config key; a banner says they are file-driven. Single sign-on without OIDC links the configuration reference |
+| Audit export (admin) | JSON Lines or CSV, everything or the last 24 hours, 7 or 30 days; the audited download helper with a fixed file name; what the file proves and does not |
+| System (admin) | Version, commit, build, Go, schema, started, uptime, where the licence notices are; component health as a word and a shape; any settings section the console does not know yet |
+
+**Preferences.** `lib/prefs.js` is the one store. It applies the browser copy
+before the first request, then the account's values after sign-in (a change
+of time zone or default window redraws the open screen). A change applies at
+once and is saved; a refused save puts the previous value back on screen and
+in the browser copy, says so in the section's status and in a toast, and
+serialises later saves so an early answer never overwrites a later choice.
+The top-bar theme menu and density toggle change the same store. Local time:
+`formatDateTime` prints `UTC+1` (or `UTC−3:30`) after every absolute time,
+captions say "local time", and event filter inputs stay UTC (they say so).
+"Always reduce" sets `html[data-reduce-motion]`, which zeroes transitions and
+animations like the OS setting does and skips view transitions in script.
+
+**One confirmation pattern.** `confirmAction` (`ui/settings-kit.js`): a
+native modal dialog (focus trap, inert page, Esc), the consequence in one
+sentence, the target named in a definition row, a typed match for keys and
+accounts (exact; the confirm button stays disabled until it matches), both
+buttons disabled while the request runs and Esc held, a refusal kept inside
+the dialog in words (`refusalMessage`: `last_admin`, `not_managed`,
+`name_taken`, `limit_reached`, 403, 404, unreachable). Focus starts on the
+typed field or on Cancel and returns to the opener.
+
+**One feedback pattern.** Forms report inline: each field's error under it
+(`aria-invalid`), and an error summary above the form that takes focus and
+links each problem to its field; submit is disabled with a busy label while
+the request runs; Enter submits. An action's outcome is a toast, in the
+console's polite live region. A server refusal on a form goes in the summary.
+
+**The one-time reveal.** After a key is created, a framed panel replaces the
+top of the section and takes focus: "Copy it now. You will not see this key
+again.", the key in monospace, prefix, expiry, how to send it, Copy key and
+"I have stored it". Dismissing it or leaving the page empties the Text node
+and removes the panel. The list never carries the token.
+
+**Gating.** Administration is drawn only when `/me` says
+`capabilities.administer`. That is a convenience: an admin page reached
+without it says "Your account cannot open this page" without asking the
+server, a 403 from the server says the same in place, a 404 on an older
+server says "This server does not provide account management yet" (no retry
+button: retrying cannot help), and a 401 ends the session as everywhere else.
+
+**Marks.** Account source: filled square Configured, ringed dot Single
+sign-on, hollow diamond Managed (accent). Setting source: filled square
+Config file, ring Default, half-filled square Environment, ringed dot
+Measured (runtime), dashed Unknown.
+Each with its word; the title explains it.
+
+**Reconciled with the backend** (it landed during this work; the mock
+follows it): `/admin/settings` items may have `source: "runtime"` (measured
+facts: usage, occupancy, discovery, certificate expiry), drawn as "Measured"
+with a ringed dot, and the body carries a top-level `note` the banner shows;
+`/system` has no licence page (`licenses_url` is empty), so System names the
+release's NOTICE file instead of linking; accounts carry `editable` (the
+console edits only when it is true and the source is managed) and
+`updated_at`; a configured operator reads "disabled" while token sign-in is
+off, which also stops managed keys (the detail page says so); `limits`
+carries `max_key_days` and `default_key_days`, which set the key lifetime
+choices; sessions carry `account_id` and `account_name`; 409 codes are
+`last_admin`, `not_managed` and a plain `conflict` (name taken, disabled
+account, quota), whose server message is shown as is; the audit export is the
+active tenant's chain, oldest first, at most 10,000 records; `/node` storage
+adds `healthy` (shown on Node when present); the Audit screen's action filter
+knows `account.create`, `account.update`, `key.create`, `key.revoke`,
+`session.revoke`, `preferences.update`, `audit.export`. Still mock-only:
+viewers and OIDC identities cannot manage their own keys (to exercise the
+403 state), and `X-AegisMesh-Audit-Records` on the export.
+
+**Not done.** Nothing in `/admin/settings` is editable (the contract says so
+for this round). `last_admin` cannot be produced by the mock while a
+configured admin exists, so it is covered by a unit test only. Password
+sign-in does not exist and is not planned.
+
+## Brand
+
+The name stays **AegisMesh** (module path, binary, Helm chart and docs depend
+on it). The mark changed on 2026-11-23 from a shield with a mesh to a **net
+closed around a lure**: a diamond perimeter (the protective mesh), four links
+reaching in from its sides, and a solid diamond at the centre that they do
+not touch (the decoy, held in the net). It is the console's decoy glyph
+caught inside a mesh: what the product is, without a padlock, a shield or a
+check.
+
+- **Geometry.** 24-unit grid, three paths (`BRAND_PATHS` in `ui/icons.js`):
+  perimeter `M12 2.75 21.25 12 12 21.25 2.75 12z`, links, lure. Strokes 1.75
+  with round caps and joins (2 in the favicon), lure filled. One colour:
+  `currentColor`.
+- **Files.** `site/assets/brand/aegismesh-mark{,-dark,-mono}.svg` and
+  `aegismesh-lockup{,-dark,-mono}.svg` (mono uses `currentColor`, so an `<img>`
+  draws it black); the favicons (`internal/consoleui/static/assets/icon.svg`,
+  `site/assets/icon.svg`) switch between cobalt `#2e4fc9` and `#8ea5ff` with
+  the colour scheme. `webtest/brand.test.mjs` fails if any copy drifts or the
+  old shield returns.
+- **Lockup.** Mark, then "AegisMesh" in the display serif (`--font-display`,
+  semibold, −0.012em), gap 8px at a 24px mark. In the SVG lockups the wordmark is
+  set as text in the same serif stack, so it renders in the platform serif.
+- **Colour.** Cobalt `--color-accent` on light (the landing footer too),
+  `#8ea5ff` on dark, white on a cobalt fill. Never two colours inside the mark, never a
+  gradient, never on a busy photo.
+- **Clear space.** Half the mark's height on every side (12px at 24px).
+- **Minimum size.** 16px for the mark (favicon, rail sidebar); 96px wide for
+  the lockup. Below 16px use the word alone.
+- **Don't.** Rotate it (it is a diamond already: rotated it becomes a square
+  grid), outline the lure, join the links to the lure, add a shield or a lock,
+  put the mark inside a container shape, stretch it, or set the wordmark in
+  the sans.
+
+Rejected candidates (not in the repository): a hexagon of six nodes with
+three spokes to a hollow core (read as a generic cube or cluster logo); an
+"A" drawn as a mesh with a hollow decoy node on the crossbar (read as a
+compass or a stick figure, and its legs thinned out at 16px); the chosen net
+with filled nodes at its four corners (busy at 16px, read as a molecule);
+and the net with a ringed core (read as a crosshair, the wrong idea for a
+defensive product).
+
+### Verification: settings, administration and brand (2026-11-23, Node 25, Go toolchain, Chromium via Playwright, mocks on ports 9181, 9182 `--round5 off`, 9183 `--fail-prefs`)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (304 tests, after reconciling with the backend: adds preferences store and rollback, time zone and default window, settings routes, gating, validation and refusals, the client's refusal reason, the confirmation dialog, the key reveal lifecycle, the settings renderer, screen rendering for viewer, admin, older server and 403, the r5 mock contract with `--round5 off` and `--fail-prefs`, and brand consistency) | PASS |
+| `go build ./...`, `go test ./internal/consoleui/...` | PASS |
+| Scripted sweep, 104 captures: admin 17 settings routes (index, four account sections, accounts, a managed and a configured account, active sessions, six settings pages, audit export, system), viewer 6 (incl. a denied admin page), older server 3; each dark and light at 1440 and 375px: signed in, one h1, no horizontal page scroll, no text under 11px, no page errors | PASS |
+| Driven in the browser: create a key (empty label shows the summary and takes focus; the reveal takes focus; after "I have stored it" no `amk_` token remains in the page or in storage); revoke with typed label (button disabled until it matches); time zone to local (sidebar says "Times in local time", saved to the account); always reduce motion; density from the top bar updates the radio; theme change against `--fail-prefs` rolled back with a status line and a toast; `g ,`; `?` lists Settings; the account menu links | PASS (found and fixed: a 204 revoke read as "cancelled"; the submit button lost its icon after a request; synthetic idle times in the past) |
+| Brand candidates compared at 16, 32 and 64px on dark and light | Done; see "Brand" |
+| Landing pictures retaken (15 WebP, identical pixel sizes, 0.6 MB in all) and the landing viewed at 1440 and 390px: every picture loads, no horizontal scroll, no console errors; the footer mark was fixed (white on a light footer) | PASS |
+| Firefox, Safari, screen readers, the real Go server with the r5 backend, a real phone | NOT RUN: only Chromium and the mock |
+
 ## Interaction
 
 - **Command palette** (Cmd/Ctrl+K, or the search button): screens, actions
@@ -1049,9 +1218,9 @@ The skill's source lint went from 28 FAIL / 94 WARN to 0 FAIL / 71 WARN
   server-side event search (see "Understanding aids"). Ranking: exact, prefix, word start,
   substring, then fuzzy; tested in `webtest/palette.test.mjs`. A pasted
   32-hex event id offers to open that event.
-- **Shortcuts** (`?` shows them): `g` then `o/b/e/s/c/m/t/i/r/d/k/n/u/p/a/h` to go
+- **Shortcuts** (`?` shows them): `g` then `o/b/e/s/c/m/t/i/r/d/k/n/u/p/a/h/,` to go
   to a screen (`b` Digest, `m` Campaigns, `d` Decoys, `k` Honeytokens, `u` Rules,
-  `p` Posture, `a` Audit for admins). The sheet's "Go to a screen" rows are
+  `p` Posture, `a` Audit for admins, `,` Settings). The sheet's "Go to a screen" rows are
   generated from `NAV`, the same list the router binds, so it cannot drift. `/` to search events, `j`/`k` to move through the events list,
   Enter to open a row, `o` to open the side panel's event as a full page,
   Esc to close. Single-letter shortcuts never fire inside text fields.
@@ -1114,6 +1283,8 @@ paint. The burst figure comes from `GET /__mock/burst?n=200` on the mock.
 # first owns the local sensors, rules and node, the others hold only evidence
 # forwarded by their own, differently named fleet; dev-admin and dev-analyst
 # belong to every tenant, dev-viewer to the first only
+# add --round5 off to answer like a server without accounts and settings
+# (404 on /me, /admin/*, /system), --fail-prefs to refuse preference saves
 make ui-dev
 # UI unit and integration tests (Node.js >= 20, no npm install)
 make ui-test
@@ -1281,7 +1452,7 @@ and does not ship.
 2026-11-23 with the tasteskill design method. It keeps the console's identity:
 the dark graphite ground, the cobalt accent (dark-theme `#8ea5ff`, turned to
 `#84a8ff`, OKLCH hue 266, because the kit refuses violet hues from 270 to 330),
-the system serif for headings, the shield mark and the 24px lattice behind the
+the system serif for headings, the brand mark and the 24px lattice behind the
 hero. The page is always dark (`color-scheme: dark`); it does not follow the
 OS light theme as the console does.
 
@@ -1291,7 +1462,12 @@ OS light theme as the console does.
   what AegisMesh never does, evidence, three setup steps, questions, and the
   close with the footer.
 - **Pictures:** WebP screenshots of the console running on the development
-  mock with synthetic data, at 2x and about 0.5 MB in all. No photographs,
+  mock with synthetic data, at 2x and about 0.5 MB in all. Retaken on
+  2026-11-23 after the data-terminal redesign and the new mark: same routes,
+  crops, file names and pixel sizes (dark, 2x, `cwebp -q 80 -m 6`; phone
+  files are top-left crops of the desktop captures); the event picture is
+  taken at a 970px viewport, where the event page is one column, and
+  `share.jpg` is the new first screen at 1200×750. No photographs,
   third-party logos or web fonts (`docs/license-policy.md`).
 - **No script:** `webtest/site.test.mjs` keeps the site free of scripts and
   inline styles, so the hero entrance and the statement that lights up word by

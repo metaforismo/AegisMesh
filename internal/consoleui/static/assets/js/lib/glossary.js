@@ -378,6 +378,51 @@ export const GLOSSARY = Object.freeze([
     cli: 'aegismesh posture --config mesh.yaml',
     see: ['decoy', 'honeytoken', 'index'],
   },
+  {
+    id: 'account',
+    term: 'Account',
+    group: 'Access and accounts',
+    short: 'Who can sign in to the console, with a role (viewer, analyst, admin) and the tenants it may act in.',
+    body: [
+      'Every request to the console is made by an account. Its role decides what it may do: a viewer reads, an analyst also records investigations and downloads evidence, an admin also manages access and reads the audit trail.',
+      'An account belongs to one or more tenants and acts in one at a time. Settings, Profile shows yours and explains what your role allows.',
+    ],
+    see: ['accountsource', 'apikey', 'signin', 'audit'],
+  },
+  {
+    id: 'accountsource',
+    term: 'Managed vs configured account',
+    group: 'Access and accounts',
+    short: 'Configured operators come from the config file, single sign-on identities from the provider, managed accounts from this console.',
+    body: [
+      'Configured operators are listed in the config file (console.operators). They are the break-glass path: the console shows them but cannot change or disable them.',
+      'Single sign-on identities appear after their first sign-in through the identity provider; their role and tenants come from the claim mapping, so they change at the provider.',
+      'Managed accounts are created by an admin in Settings, Accounts. They have no password: they sign in with API keys, and an admin can change their role and tenants, disable them, and revoke their keys and sessions.',
+    ],
+    see: ['account', 'apikey'],
+  },
+  {
+    id: 'apikey',
+    term: 'API key',
+    group: 'Access and accounts',
+    short: 'A long random token that lets a script or integration act as an account. Shown once, stored only as a fingerprint.',
+    body: [
+      'A key starts with amk_ and acts with its account\u2019s role and tenants. It has a label, an expiry (30 days to one year) and a status: active, expired or revoked.',
+      'The server keeps only a SHA-256 fingerprint, so the full key is shown exactly once, when it is created. Store it in a secret manager. If it is lost or exposed, revoke it and create another; revoking takes effect at the next request.',
+    ],
+    see: ['account', 'signin'],
+  },
+  {
+    id: 'signin',
+    term: 'Console session (sign-in)',
+    group: 'Access and accounts',
+    short: 'One signed-in browser or client. Not the same as an attacker session on the Sessions screen.',
+    body: [
+      'Signing in creates a console session held in a browser cookie the page cannot read. It ends when it expires, when it stays idle too long, when you sign out, or when it is revoked in Settings.',
+      'Settings, Sessions lists yours with the client family and address; admins see every session under Administration. Attacker sessions, the groups of decoy events on the Sessions screen, are a different thing.',
+    ],
+    see: ['account', 'session', 'apikey'],
+  },
 ]);
 
 const BY_ID = new Map(GLOSSARY.map((e) => [e.id, e]));

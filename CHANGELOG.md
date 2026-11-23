@@ -8,6 +8,14 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console: Settings (`g ,`, account menu, palette). Your account: profile and
+  what your role allows, preferences (UTC or local time, default window,
+  density, theme, reduce motion; saved to the account or this browser,
+  optimistic with rollback), your sessions, API keys shown once. Admins:
+  accounts (configured, single sign-on, managed), account detail, every
+  session, read-only effective settings, audit export, system health. One
+  confirmation dialog with typed match; older servers get a plain state.
+- Dev mock: contract r5 (`mock-accounts.mjs`), `--round5 off`, `--fail-prefs`.
 - Console accounts and access (ADR-0025): managed person/service accounts with
   `amk_` API keys (SHA-256 stored, shown once, 1..365-day expiry, revocable),
   `/api/v1/me` with preferences, sessions and own keys, `/api/v1/admin/accounts`
@@ -59,6 +67,11 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   loopback-only demo. See ADR-0021 and `docs/ai-threat-detection.md`.
 
 ### Changed
+
+- Brand: the shield mark is replaced by a net closed around a lure, with a
+  serif wordmark, a scheme-aware favicon and files in `site/assets/brand/`.
+- Landing: console pictures and the share image retaken from the redesigned
+  console (same files and sizes).
 
 - Landing page (`site/index.html`) redesigned: one screen per section, dark
   console identity, real console screenshots from the synthetic dev mock, a
