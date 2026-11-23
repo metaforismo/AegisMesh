@@ -49,6 +49,10 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Changed
 
+- Landing page (`site/index.html`) redesigned: one screen per section, dark
+  console identity, real console screenshots from the synthetic dev mock, a
+  CSS-only hero entrance and statement; still no script, web font or external
+  request. Vendors four MIT stylesheets; see `site/CREDITS.md`.
 - Console redesign (data-terminal style): flat panels and controls with no
   resting shadows, gradients or glass; one selection mark (a 1px cobalt line)
   for the current screen, time window and tab; round flat buttons; readout

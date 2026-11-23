@@ -13,7 +13,8 @@ reference. `site/design-system.html` shows every component rendered.
 | `internal/consoleui/static/assets/css/components.css` | Component library (inventory below) |
 | `internal/consoleui/static/assets/css/app.css` | Console screen layout only |
 | `site/assets/css/{tokens,base,components}.css` | Byte-identical copies for the site. `webtest/site.test.mjs` fails if they drift: edit the console copy, then copy it over |
-| `site/assets/css/site.css` | Landing page and reference-page layout |
+| `site/assets/css/site.css` | Reference-page (`design-system.html`) layout; its `lp-*` rules are no longer loaded by the landing page |
+| `site/assets/landing/` | Landing page only: `landing.css` (palette and page CSS), the vendored tasteskill kit CSS (`kit/`, MIT, unmodified) and console screenshots (`img/`); see `site/CREDITS.md` and "Landing page" below |
 | `internal/consoleui/static/assets/js/ui/icons.js` | The icon set and the brand mark (the site's static SVGs are generated from it) |
 | `internal/consoleui/static/assets/js/lib/{palette,keys,batch,swr,chart}.js` | Pure logic behind the palette, keyboard navigation, live batching, the read cache and the small charts; unit-tested in `webtest/` |
 | `internal/consoleui/static/assets/js/lib/{brief,filters,views,cadence,glossary}.js` | The Overview's situation brief, filter chips and click-to-filter links, saved views and palette recents (browser storage, validated on read), source cadence statistics, and the Guide's glossary; unit-tested in `webtest/brief.test.mjs` and `webtest/understanding.test.mjs` |
@@ -1273,3 +1274,29 @@ and does not ship.
 | Style guide: dark 1440px, Identity and Mesh/tempo/density sections; no horizontal scroll | PASS |
 | Sign-in dark 1440px; tour and rail on Overview dark 1440px; no horizontal scroll at 375px on Overview, Guide, Sessions, a session | PASS |
 | Landing light 1440px and dark 375px; style guide light and 375px; sign-in light and 375px; tour at 375px; reduced motion | NOT RUN |
+
+## Landing page
+
+`site/index.html` (not hosted, not embedded in the binary) was redesigned on
+2026-11-23 with the tasteskill design method. It keeps the console's identity:
+the dark graphite ground, the cobalt accent (dark-theme `#8ea5ff`, turned to
+`#84a8ff`, OKLCH hue 266, because the kit refuses violet hues from 270 to 330),
+the system serif for headings, the shield mark and the 24px lattice behind the
+hero. The page is always dark (`color-scheme: dark`); it does not follow the
+OS light theme as the console does.
+
+- **Structure:** one section per screen (two for the feature cards, the steps
+  and the questions on tablets and phones): the hero (the session timeline),
+  the console's session page, four decoy and analysis cards, a statement of
+  what AegisMesh never does, evidence, three setup steps, questions, and the
+  close with the footer.
+- **Pictures:** WebP screenshots of the console running on the development
+  mock with synthetic data, at 2x and about 0.5 MB in all. No photographs,
+  third-party logos or web fonts (`docs/license-policy.md`).
+- **No script:** `webtest/site.test.mjs` keeps the site free of scripts and
+  inline styles, so the hero entrance and the statement that lights up word by
+  word as it scrolls are CSS (`@keyframes`, `animation-timeline: view()`), and
+  both rest under `prefers-reduced-motion`. Without scroll-driven animation
+  support the statement simply stands in full ink.
+- **Checks:** the kit's checker and finish gate; results and waivers are in
+  `docs/verification.md`.

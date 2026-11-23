@@ -151,3 +151,19 @@ the authority on reachable network behavior. Existing x/crypto, x/sys and age
 versions are unchanged. `make license-check` scans the entire resolved module
 graph, including test-only packages; current execution evidence is recorded in
 verification.md. No third-party source was copied or adapted into the repository.
+
+## Landing page assets review (2026-11-23)
+
+The static landing page (`site/index.html`, not hosted and not embedded in the
+binary) vendors four unmodified stylesheets from the tasteskill design kit
+(v2.5.1, commit `6c0b5c78f5d31776e2210305abaa210cdc0030bf`), MIT licensed,
+under `site/assets/landing/kit/` with the licence text beside them; NOTICE and
+`site/CREDITS.md` record the origin. Why: the page was redesigned with that
+kit's layout method, and its checker measures pages built on these classes.
+They are CSS only: the site test keeps the site free of scripts.
+
+Declined for the same page: web fonts (the kit's pairings are SIL OFL, which is
+not an allowed licence above), stock photographs (Unsplash and CC licences are
+not allowed above) and third-party logos. The page uses the console's system
+font stacks, screenshots of the console's own development mock with synthetic
+data, and product names as plain text.

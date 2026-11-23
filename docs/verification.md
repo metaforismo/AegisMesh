@@ -16,7 +16,32 @@ moment and are not rewritten; headings carry "(merged as #NN)" where a PR has
 since merged. Historical merge status is in the 2026-11-16 audit entry; the
 new local uncommitted slice is recorded first.
 
-## 2026-11-23 — round 4 backend: campaigns, actor profile, posture (local branch)
+## 2026-11-23 — landing page redesign (local branch `feat/landing-taste`)
+
+`site/index.html` rebuilt with the tasteskill design method (v2.5.1) and its
+checker. Static, not hosted, not embedded. Checks run locally on macOS with
+Chrome headless (a busy host: timing verdicts are relative).
+
+| Check | Result |
+|---|---|
+| `make ui-test` (251 tests, including `webtest/site.test.mjs`: no script, no inline style, only local or project links) | PASS |
+| `go build ./...` | PASS |
+| tasteskill `gate.mjs site/index.html` (copy lint, checker at 1440 and 390, layout check, 320 walk) | PASS, with 2 waivers (below) |
+| tasteskill `consistency.mjs`, widths 1440, 1024, 820, 768, 390; rhythm 1440, 820, 768, 390 | 1 FAIL per width, `scroll-linked`, waived (below); 35 WARN |
+| tasteskill `assets/layout/check.mjs`, 1440x900, 1024x768, 820x1180, 768x1024, 390x844 | PASS, no findings |
+| tasteskill `copy-lint.mjs --kind software` | PASS, 0 FAIL, 0 WARN |
+| tasteskill `perf.mjs` | PASS rows; transfer 549 KiB at 1440, 231 KiB at 390; 0 KiB JS, 0 fonts, CLS 0 |
+| No runtime request to another host (`grep` of `src`/`href` and CSS `url()`) | PASS: only plain links to `github.com/metaforismo/AegisMesh` |
+
+Waivers (`.taste-skill/waivers.json`, local): `moment-none` and
+`scroll-linked` on `section#promise`. The dealt moment, a statement that lights
+up word by word, is built in CSS (`animation-timeline: view()`) because the
+site test forbids scripts on site pages; the checker counts a moment only when
+the kit's `moments.js` mounts it.
+
+NOT RUN: browsers other than Chrome; a screen reader pass; real devices; the
+page served from a host (it is not published).
+: campaigns, actor profile, posture (local branch)
 
 Branch `feat/campaigns-posture` cut from `7351bdd`, committed locally; no push,
 PR, merge, release or deployment. `go.mod`/`go.sum`, `internal/consoleui/` and
