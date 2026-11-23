@@ -610,6 +610,8 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 .story-hero__assess .assess { font-size: var(--text-md); white-space: normal; }
 .story-hero__assess .assess__mark { width: 11px; height: 11px; }
 .story-hero__figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3) var(--space-4); align-content: start; }
+/* Surfaces (the last figure) take the rest of their row: chips, not a number. */
+.story-hero__figures > div:last-child { grid-column: span 2; }
 .story-hero__figures dt { color: var(--color-ink-3); font-size: var(--text-xs); }
 .story-hero__figures dd { font-size: var(--text-lg); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-figure); }
 .story-hero__figures dd .sev, .story-hero__figures dd .chip { font-size: var(--text-xs); letter-spacing: normal; font-weight: var(--weight-medium); }
@@ -857,6 +859,11 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
   /* The Overview's ranked sources keep their first five on a phone, where
      each row stacks into a card; "All sources" lists the rest. */
   .overview-sources tbody tr:nth-child(n+6) { display: none; }
+}
+/* Standalone links in panel heads and card feet ("All sources", "Fleet",
+   "View its events") get the same 40px touch height as page actions. */
+@media (max-width: 48rem) {
+  .panel__head .btn-row > a:not(.btn), .decoy__foot a:not(.btn) { display: inline-flex; align-items: center; min-height: 2.5rem; }
 }
 .brief__digest { display: inline-flex; align-items: center; gap: var(--space-1); margin-left: auto; font-size: var(--text-xs); }
 
