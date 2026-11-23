@@ -18,8 +18,8 @@ import { loadRecents, storeRecents, pushRecent } from '../lib/views.js';
 import { formatRelative } from '../lib/format.js';
 import { assessmentOf, frameworkLabel } from '../lib/story.js';
 
-const GROUP_ORDER = ['Recent', 'Go to', 'Actions', 'Sessions', 'Investigations', 'Rules', 'Techniques', 'Nodes', 'Sensors', 'Sources', 'Guide'];
-const PER_GROUP_EMPTY = { Recent: 6, 'Go to': 20, Actions: 10, Sessions: 4, Investigations: 5, Rules: 0, Techniques: 0, Nodes: 5, Sensors: 6, Sources: 5, Guide: 0 };
+const GROUP_ORDER = ['Recent', 'Go to', 'Actions', 'Sessions', 'Campaigns', 'Investigations', 'Rules', 'Techniques', 'Nodes', 'Sensors', 'Sources', 'Guide'];
+const PER_GROUP_EMPTY = { Recent: 6, 'Go to': 20, Actions: 10, Sessions: 4, Campaigns: 3, Investigations: 5, Rules: 0, Techniques: 0, Nodes: 5, Sensors: 6, Sources: 5, Guide: 0 };
 const EVENT_SEARCH_MIN = 2;
 const EVENT_RESULTS = 6;
 
@@ -55,7 +55,7 @@ async function dataItems(api, signal) {
     const res = await api.fleetNodes('', { signal }).catch(() => null);
     return nodeFilterTargets(fleet, res?.nodes);
   };
-  const [sensors, sources, invs, nodes, rules, sessions, coverage] = await Promise.allSettled([
+  const [sensors, sources, invs, nodes, rules, sessions, coverage, campaigns] = await Promise.allSettled([
     api.sensors({ signal }),
     api.sources('24h', 50, { signal }),
     api.investigations('', { signal }),
@@ -63,6 +63,8 @@ async function dataItems(api, signal) {
     api.rules ? api.rules({ signal }) : Promise.resolve({ rules: [] }),
     api.sessions ? api.sessions('24h', '', '', 50, { signal }) : Promise.resolve({ sessions: [] }),
     api.coverage ? api.coverage('7d', { signal }) : Promise.resolve({ frameworks: [] }),
+    // Older servers answer 404: no campaign results, and not a failure.
+    api.campaigns ? api.campaigns({ signal }).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
   ]);
   if (sensors.status === 'fulfilled') {
     for (const s of sensors.value?.sensors || []) {
@@ -99,6 +101,13 @@ async function dataItems(api, signal) {
       if (!/^[0-9a-f]{32}$/.test(x?.id) || typeof x.source !== 'string') continue;
       // The source key is evidence: the label keeps the evidence treatment.
       out.push({ group: 'Sessions', label: x.source, evidence: true, icon: 'story', hint: `${x.event_count ?? 0} events · ${assessmentOf(x.automation).label}`, keywords: ['session', 'story'], run: (p) => p.navigate(href('sessions', x.id)) });
+    }
+  }
+  if (campaigns.status === 'fulfilled') {
+    for (const c of campaigns.value?.items || []) {
+      if (!/^cmp_[0-9a-z]{4,64}$/.test(c?.id)) continue;
+      const n = Number(c.source_count) || 0;
+      out.push({ group: 'Campaigns', label: String(c.label || 'Campaign'), icon: 'campaign', hint: `${n} sources · ${Number(c.session_count) || 0} sessions`, keywords: ['campaign', 'playbook', ...(Array.isArray(c.sources) ? c.sources.slice(0, 5).map(String) : [])], run: (p) => p.navigate(href('campaigns', c.id)) });
     }
   }
   if (coverage.status === 'fulfilled') {
@@ -308,50 +317,51 @@ export function togglePalette(p) {
 
 // ---- Shortcut sheet --------------------------------------------------------
 
-export const SHORTCUTS = [
-  { title: 'Anywhere', keys: [
-    [['mod', 'K'], 'Search events, sources, rules, screens and the guide; run an action'],
-    [['?'], 'Show these shortcuts'],
-    [['g', 'o'], 'Go to Overview'],
-    [['g', 'e'], 'Go to Events'],
-    [['g', 's'], 'Go to Sources'],
-    [['g', 'c'], 'Go to Sessions'],
-    [['g', 'b'], 'Go to Digest (the periodic briefing)'],
-    [['g', 'd'], 'Go to Decoys'],
-    [['g', 'k'], 'Go to Honeytokens'],
-    [['g', 't'], 'Go to Techniques'],
-    [['g', 'i'], 'Go to Investigations'],
-    [['g', 'r'], 'Go to Recommendations'],
-    [['g', 'n'], 'Go to Sensors'],
-    [['g', 'h'], 'Open the guide (what every term means)'],
-  ] },
-  { title: 'Events list', keys: [
-    [['j'], 'Next row'],
-    [['k'], 'Previous row'],
-    [['Enter'], 'Open the row in the side panel'],
-    [['/'], 'Search events'],
-  ] },
-  { title: 'Session story', keys: [
-    [['j'], 'Next event'],
-    [['k'], 'Previous event'],
-    [['Enter'], 'Open the event in the side panel'],
-  ] },
-  { title: 'Event side panel', keys: [
-    [['j'], 'Next event'],
-    [['k'], 'Previous event'],
-    [['o'], 'Open as a full page'],
-    [['Esc'], 'Close and return to the list'],
-  ] },
-  { title: 'Overview chart', keys: [
-    [['←'], 'Previous time bucket'],
-    [['→'], 'Next time bucket'],
-    [['Enter'], 'Open the events in that bucket'],
-  ] },
-];
+// The "go to" rows come from NAV, so the sheet lists exactly the
+// g-sequences the router binds (main.js builds them from the same list).
+export function shortcutGroups(role) {
+  const go = NAV.flatMap((g) => g.items)
+    .filter((i) => i.keys && (!i.role || roleAtLeast(role, i.role)))
+    .map((i) => [i.keys.split(' '), `Go to ${i.label}`]);
+  return [
+    { title: 'Anywhere', keys: [
+      [['mod', 'K'], 'Search events, sources, rules, screens and the guide; run an action'],
+      [['?'], 'Show these shortcuts'],
+      [['/'], 'Focus the search field on Events'],
+      [['Esc'], 'Close a menu, dialog, side panel or this sheet'],
+    ] },
+    { title: 'Go to a screen', keys: go },
+    { title: 'Events list', keys: [
+      [['j'], 'Next row'],
+      [['k'], 'Previous row'],
+      [['Enter'], 'Open the row in the side panel'],
+    ] },
+    { title: 'Session story', keys: [
+      [['j'], 'Next event'],
+      [['k'], 'Previous event'],
+      [['Enter'], 'Open the event in the side panel'],
+      [['←'], 'Tempo ribbon: previous event'],
+      [['→'], 'Tempo ribbon: next event'],
+    ] },
+    { title: 'Event side panel', keys: [
+      [['j'], 'Next event'],
+      [['k'], 'Previous event'],
+      [['o'], 'Open as a full page'],
+      [['Esc'], 'Close and return to the list'],
+    ] },
+    { title: 'Charts and tabs', keys: [
+      [['←'], 'Previous time bucket or tab'],
+      [['→'], 'Next time bucket or tab'],
+      [['Enter'], 'Open the events in that bucket'],
+    ] },
+  ];
+}
+
+export const SHORTCUTS = shortcutGroups('admin');
 
 let sheetOpen = null;
 
-export function toggleShortcuts() {
+export function toggleShortcuts(role = 'admin') {
   if (sheetOpen) {
     sheetOpen.close();
     return;
@@ -360,7 +370,7 @@ export function toggleShortcuts() {
   const close = h('button', { class: ['btn', 'btn--ghost', 'btn--icon', 'btn--sm'], type: 'button', 'aria-label': 'Close' }, icon('close'));
   const dialog = h('dialog', { class: ['dialog', 'dialog--wide'], 'aria-labelledby': 'keys-title' },
     h('div', { class: 'dialog__head' }, h('h2', { id: 'keys-title' }, 'Keyboard shortcuts'), close),
-    h('div', { class: ['dialog__body', 'keys'] }, SHORTCUTS.map((s) => h('section', null,
+    h('div', { class: ['dialog__body', 'keys'] }, shortcutGroups(role).map((s) => h('section', null,
       h('h3', null, s.title),
       h('dl', null, s.keys.map(([combo, what]) => [
         h('dt', null, what),

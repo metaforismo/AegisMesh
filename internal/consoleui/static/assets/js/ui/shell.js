@@ -17,21 +17,25 @@ export { brandMark };
 export const NAV = [
   { group: 'Observe', items: [
     { route: 'overview', label: 'Overview', href: '#/overview', icon: 'overview', keys: 'g o' },
+    { route: 'digest', label: 'Digest', href: '#/digest', icon: 'digest', keys: 'g b' },
     { route: 'events', label: 'Events', href: '#/events', also: ['event'], icon: 'events', keys: 'g e' },
     { route: 'sources', label: 'Sources', href: '#/sources', also: ['source'], icon: 'sources', keys: 'g s' },
-    { route: 'sessions', label: 'Sessions', href: '#/sessions', also: ['attack_session'], icon: 'story', keys: 'g c' },
-    { route: 'digest', label: 'Digest', href: '#/digest', icon: 'digest', keys: 'g b' },
   ] },
-  { group: 'Investigate', items: [
-    { route: 'investigations', label: 'Investigations', href: '#/investigations', also: ['investigation'], icon: 'investigations', keys: 'g i' },
+  { group: 'Understand', items: [
+    { route: 'sessions', label: 'Sessions', href: '#/sessions', also: ['attack_session'], icon: 'story', keys: 'g c' },
+    { route: 'campaigns', label: 'Campaigns', href: '#/campaigns', also: ['campaign'], icon: 'campaign', keys: 'g m' },
     { route: 'techniques', label: 'Techniques', href: '#/techniques', icon: 'matrix', keys: 'g t' },
+    { route: 'investigations', label: 'Investigations', href: '#/investigations', also: ['investigation'], icon: 'investigations', keys: 'g i' },
     { route: 'recommendations', label: 'Recommendations', href: '#/recommendations', icon: 'recommendations', keys: 'g r' },
   ] },
-  { group: 'System', items: [
+  { group: 'Deception', items: [
     { route: 'decoys', label: 'Decoys', href: '#/decoys', icon: 'decoy', keys: 'g d' },
     { route: 'honeytokens', label: 'Honeytokens', href: '#/honeytokens', icon: 'key', keys: 'g k' },
     { route: 'sensors', label: 'Sensors', href: '#/sensors', icon: 'sensors', keys: 'g n' },
-    { route: 'rules', label: 'Rules', href: '#/rules', icon: 'rules' },
+    { route: 'rules', label: 'Rules', href: '#/rules', icon: 'rules', keys: 'g u' },
+  ] },
+  { group: 'Operate', items: [
+    { route: 'posture', label: 'Posture', href: '#/posture', icon: 'posture', keys: 'g p' },
     { route: 'node', label: 'Node', href: '#/node', icon: 'node' },
     { route: 'fleet', label: 'Fleet', href: '#/fleet', also: ['fleet_node'], icon: 'fleet', tag: 'Experimental' },
     { route: 'audit', label: 'Audit trail', href: '#/audit', role: 'admin', icon: 'audit', keys: 'g a' },

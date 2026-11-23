@@ -184,6 +184,13 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     honeytokens: (window, opts) => get('/honeytokens', { window }, opts),
     digest: (window, opts) => get('/digest', { window }, opts),
 
+    // Round 4: campaigns (several sources, one playbook; similar behaviour,
+    // not attribution) and the configuration posture review. Older servers
+    // answer 404 on these collection paths; screens say so plainly.
+    campaigns: (opts) => get('/campaigns', undefined, opts),
+    campaign: (id, opts) => get(`/campaigns/${seg(id)}`, undefined, opts),
+    posture: (opts) => get('/posture', undefined, opts),
+
     fleet: (opts) => get('/fleet', undefined, opts),
     fleetNodes: (status, opts) => get('/fleet/nodes', { status }, opts),
     fleetNode: (id, opts) => get(`/fleet/nodes/${seg(id)}`, undefined, opts),

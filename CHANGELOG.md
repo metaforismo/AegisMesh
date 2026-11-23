@@ -8,6 +8,13 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console: Campaigns list and detail (a lane-per-session score of shared steps,
+  basis, stages, automation mix, caveats), the actor profile on sessions as a
+  checklist of signals present or not observed, and a Posture review grouped
+  by area with attention first; all degrade to an "older server" state on 404.
+- Console: sidebar grouped as Observe, Understand, Deception, Operate; `g m`,
+  `g p`, `g u`; shortcut sheet generated from the navigation; per-screen tab
+  titles; print stylesheet for the session story and campaign detail.
 - Hedged session actor profiles with ten always-listed signals; campaigns that
   group sessions from at least two sources by an exact eight-step redacted
   shape fingerprint; `campaigns` CLI and `/api/v1/campaigns[/{id}]` (ADR-0024).

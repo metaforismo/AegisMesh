@@ -79,6 +79,10 @@ const PATHS = {
   print: `${rrect(1.75, 6, 12.5, 5.5, 1.2)}M4.5 6V2h7v4M4.5 9.5h7V14h-7z`,
   // Cadence: evenly spaced ticks on a baseline.
   cadence: 'M1.75 13h12.5M3.5 13V8M6.5 13V5M9.5 13V8.5M12.5 13V6',
+  // Campaign: three lanes that pass through the same two stops.
+  campaign: `M1.5 3.5h13M1.5 8h13M1.5 12.5h13${circle(5.5, 3.5, 1.1)}${circle(5.5, 8, 1.1)}${circle(5.5, 12.5, 1.1)}${circle(10.5, 3.5, 1.1)}${circle(10.5, 8, 1.1)}${circle(10.5, 12.5, 1.1)}`,
+  // Posture: a clipboard with a checklist.
+  posture: `${rrect(3, 2.5, 10, 12, 1.25)}M6 1.5h4v2H6zM5.5 7l1 1 1.75-1.75M5.5 11l1 1 1.75-1.75M9.75 7.5h1.75M9.75 11.5h1.75`,
 };
 
 export const ICON_NAMES = Object.freeze(Object.keys(PATHS));

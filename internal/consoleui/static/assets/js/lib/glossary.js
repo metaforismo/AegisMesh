@@ -343,6 +343,41 @@ export const GLOSSARY = Object.freeze([
     cli: 'aegismesh export events --data-dir ./data --format cef',
     see: ['blocklist', 'audit'],
   },
+  {
+    id: 'campaign',
+    term: 'Campaign',
+    group: 'Patterns across sources',
+    short: 'Sessions from two or more different sources that followed the same steps. Similar behaviour, not proof of one operator.',
+    body: [
+      'The server compares sessions from the newest indexed events and groups those whose steps match: the same request templates, tool calls or SSH command classes in the same order, sometimes also the same client family or pace. The basis is listed on every campaign.',
+      'Public tools, copied playbooks and shared scanners all produce identical steps, and NAT or relays can make one actor look like several sources. A campaign tells you a pattern is recurring, which is worth knowing when deciding what to harden or watch; it never says who is behind it.',
+      'Step descriptions are normalised from what the attackers sent, so they are shown as evidence text.',
+    ],
+    see: ['session', 'actor', 'source'],
+  },
+  {
+    id: 'actor',
+    term: 'Actor profile',
+    group: 'Patterns across sources',
+    short: 'A hedged reading of whether a session looks automated, agent-like or human, with every signal that was checked, present or not.',
+    body: [
+      'The server evaluates a fixed list of signals on each session: steady rhythm, sub-second bursts, a planted agent instruction followed, a planted credential presented, chained tool calls, a library-shaped client, a quick change after an error, thinking pauses, typing corrections and several surfaces swept. Each comes back as observed or not observed, with a strength and the measurement behind it.',
+      'The reading (likely automated, possibly an AI agent, likely a person, inconclusive) is a summary of those signals, not a score: there is no percentage because the signals are not calibrated probabilities. A throttled script can look human, and a person can paste an agent’s steps.',
+    ],
+    see: ['automation', 'agentcanary', 'regularity'],
+  },
+  {
+    id: 'posture',
+    term: 'Posture review',
+    group: 'Patterns across sources',
+    short: 'A static review of the running configuration and of what the retained evidence shows. It does not certify that a deployment is safe.',
+    body: [
+      'Each check names an area (exposure, deception, detection, evidence, access), a status (needs attention, for your information, looks right), what was observed, a recommendation and the document that explains it.',
+      '“Looks right” means the configuration matches what the check looks for; it does not mean the deployment is secure. The review reads configuration and counts only; it never probes a host.',
+    ],
+    cli: 'aegismesh posture --config mesh.yaml',
+    see: ['decoy', 'honeytoken', 'index'],
+  },
 ]);
 
 const BY_ID = new Map(GLOSSARY.map((e) => [e.id, e]));

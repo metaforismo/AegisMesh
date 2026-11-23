@@ -179,5 +179,6 @@ export default {
   title: 'Event',
   async render(root, ctx) {
     await renderEventDetail(root, ctx, ctx.route.params.id, { node: ctx.route.query.node });
+    ctx.setTitle?.(String(ctx.route.params.id || '').slice(0, 8));
   },
 };
