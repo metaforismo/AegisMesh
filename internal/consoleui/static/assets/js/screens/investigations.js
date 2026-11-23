@@ -2,6 +2,7 @@ import { h, clear, mount } from '../lib/dom.js';
 import { href, isOpaqueId, normalizeStatus } from '../lib/route.js';
 import { INVESTIGATION_STATUSES, PRIORITIES } from '../lib/taxonomy.js';
 import { timeValue } from '../lib/tablesort.js';
+import { plural } from '../lib/insight.js';
 import { formatCount } from '../lib/format.js';
 import { pageHead, panel, table, segmented, timeEl, empty, link, labelFor, toast } from '../ui/components.js';
 import { statusBadge, priorityChip, newInvestigationDialog } from './shared.js';
@@ -36,7 +37,7 @@ export default {
         ],
       }),
       panel({
-        title: `${formatCount(invs.length)} ${status ? labelFor(status).toLowerCase() : ''} investigations`.replace('  ', ' '),
+        title: plural(invs.length, status ? `${labelFor(status).toLowerCase()} investigation` : 'investigation'),
         flush: true,
         body: invs.length ? table({
           caption: 'Investigations',

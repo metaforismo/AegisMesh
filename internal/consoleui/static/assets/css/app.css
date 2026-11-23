@@ -1048,4 +1048,8 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
    text actions beside the one primary button. */
 .page-head__actions > a:not(.btn) { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 var(--space-2); border-radius: var(--radius-sm); color: var(--color-accent); font-size: var(--text-sm); font-weight: var(--weight-medium); text-decoration: none; }
 .page-head__actions > a:not(.btn):hover { text-decoration: underline; }
-@media (pointer: coarse), (max-width: 47.99rem) { .page-head__actions > a:not(.btn) { min-height: 44px; } }
+@media (pointer: coarse), (max-width: 47.99rem) {
+  .page-head__actions > a:not(.btn) { min-height: 44px; }
+  button.top-user { min-height: 2.75rem; }
+  .guide__toc a { display: flex; align-items: center; min-height: 2.5rem; }
+}
