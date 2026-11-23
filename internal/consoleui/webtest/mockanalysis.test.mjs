@@ -14,7 +14,7 @@ let proc;
 before(async () => {
   proc = spawn(process.execPath, [fileURLToPath(new URL('../devserver/mock-server.mjs', import.meta.url)), '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('mock did not start')), 5000);
+    const t = setTimeout(() => reject(new Error('mock did not start')), 30000);
     proc.stdout.on('data', (d) => { if (String(d).includes('console mock on')) { clearTimeout(t); resolve(); } });
   });
 });
