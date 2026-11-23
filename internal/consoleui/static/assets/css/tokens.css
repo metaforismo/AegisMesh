@@ -150,24 +150,28 @@
 
   /* Severity: ordinal marks; text beside them stays ink. Always paired with
      the 1–5 segment meter and the word, so color is never the only cue. */
-  /* Meter fills, measured against surface / surface-2 (non-text, >= 3:1):
-     info 3.59/3.37, low 3.78/3.55, medium 3.41/3.20, high 3.68/3.46,
-     critical 5.52/5.18. */
-  --sev-info: #7d8899;
-  --sev-low: #4f86c6;
-  --sev-medium: #b58200;
-  --sev-high: #d0682f;
+  /* Meter fills (non-text, >= 3:1) against surface / surface-2 / the empty
+     segments (sev-track), which is what tells a level apart:
+     info 4.17/3.91/3.20, low 4.09/3.83/3.14, medium 4.17/3.91/3.20,
+     high 4.19/3.92/3.22, critical 5.52/5.18/4.24 (2026-11-23; the fills
+     were 2.62–2.90:1 on the track before). webtest/contrast.test.mjs
+     re-measures these. */
+  --sev-info: #727d8e;
+  --sev-low: #4a80bf;
+  --sev-medium: #a27400;
+  --sev-high: #c45f28;
   --sev-critical: #c42b4f;
   --sev-track: #dde2e9;
 
   /* Classification series: categorical slots 1–3, run through the dataviz
      validate_palette.js six checks. Light vs #ffffff: all pass; worst adjacent
-     CVD ΔE 9.2 (deutan), normal-vision ΔE 27.6; signal green is 2.82:1 on
-     surface, so charts always ship a legend, direct labels and a table view.
-     Each class also carries a distinct glyph shape. */
+     CVD ΔE 9.2 (deutan), normal-vision ΔE 27.6. Signal green was darkened
+     on 2026-11-23 from #1baf7a (2.82:1) to 3.34:1 on surface and 3.13:1 on
+     surface-2, so every series mark meets 3:1. Charts still ship a legend,
+     direct labels and a table view, and each class has its own glyph shape. */
   --class-interaction: #2a78d6;
   --class-canary: #eb6834;
-  --class-signal: #1baf7a;
+  --class-signal: #17a06f;
 
   --chart-grid: #e6eaef;
   --chart-axis: #a9b3c1;            /* decorative baseline; ticks carry the values */
