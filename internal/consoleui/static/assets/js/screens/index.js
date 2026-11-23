@@ -92,6 +92,11 @@ export const SCREENS = Object.freeze({
     skeleton: 'story',
     prefetch: (api, r) => { api.campaign(r.params.id); },
   }),
+  // Settings and administration: one screen, a section per route. Every
+  // read is uncached and audited where the server audits it, so nothing is
+  // prefetched.
+  settings: lazy('Settings', () => import('./settings.js'), { skeleton: 'settings' }),
+  settings_account: lazy('Account', () => import('./settings.js'), { skeleton: 'settings' }),
   posture: lazy('Posture', () => import('./posture.js'), {
     skeleton: 'posture',
     prefetch: (api) => { api.posture(); },

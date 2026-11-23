@@ -12,13 +12,15 @@
 //   and back/forward navigation shows the last response at once, then
 //   refreshes it. Any write clears the cache.
 
-import { createApi, ApiError, screenFailure } from './lib/api.js';
+import { createApi, ApiError, screenFailure, describeError } from './lib/api.js';
 import { parseHash, viewKey } from './lib/route.js';
 import { roleAtLeast } from './lib/taxonomy.js';
 import { h, clear } from './lib/dom.js';
 import { createSwr, abortable } from './lib/swr.js';
 import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
-import { createShell, applyTheme, applyDensity, applyRail, cycleTheme, isApple, NAV } from './ui/shell.js';
+import { createShell, applyRail, applyPreferences, setPrefsSink, prefersReducedMotion, cycleTheme, isApple, NAV } from './ui/shell.js';
+import { createPrefsStore } from './lib/prefs.js';
+import { isMissingEndpoint } from './lib/insight.js';
 import { failureState, installPeek, toast, pageHead, panel } from './ui/components.js';
 import { loginErrorCode, loginErrorMessage } from './lib/auth.js';
 import { tenantInfo, switchTargets, routeAfterSwitch, switchBody } from './lib/tenant.js';
@@ -36,8 +38,6 @@ const loadPalette = () => {
 const loadLogin = () => import('./screens/login.js');
 const toggleShortcuts = () => loadPalette().then((m) => m.toggleShortcuts(state.session?.principal?.role));
 
-applyTheme();
-applyDensity();
 applyRail();
 
 const appRoot = document.getElementById('app');
@@ -55,6 +55,41 @@ const state = {
 
 const rawApi = createApi({ onUnauthenticated: () => endSession('Your session ended. Sign in again to continue.') });
 
+// Preferences: applied from the browser copy at once, then from the server
+// once signed in (when it stores them). The top-bar theme and density
+// controls change them through the same store.
+const browserStorage = (() => {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+})();
+const prefs = createPrefsStore({
+  load: () => rawApi.preferences(),
+  save: (p) => rawApi.putPreferences(p),
+  apply: applyPreferences,
+  storage: browserStorage,
+  isMissing: isMissingEndpoint,
+});
+prefs.start();
+setPrefsSink((patch) => prefs.update(patch).catch((err) => {
+  toast('error', `Could not save the preference: ${describeError(err).detail} The previous value is back.`);
+}));
+
+// After sign-in: the account's preferences win. A change to how times or
+// the default window read redraws the screen on display.
+async function syncPrefs() {
+  const before = prefs.get();
+  try {
+    await prefs.sync();
+  } catch {
+    // Unreachable or refused: keep the browser copy.
+  }
+  const after = prefs.get();
+  if ((before.timezone !== after.timezone || before.default_window !== after.default_window) && state.current) render({ soft: true });
+}
+
 // ---- Cached API ---------------------------------------------------------------
 
 // Read-only GETs safe to cache and prefetch, with their positional arity
@@ -68,8 +103,11 @@ const CACHEABLE = {
 };
 const CURSOR_ARG = { events: 1, source: 1, sessions: 2 }; // later pages are never cached
 // Downloads are audited reads: never cached or prefetched, and not writes.
+// Account and administration reads are never cached either: they change
+// with every write on the settings screens and must show the server's state.
 const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'switchTenant', 'audit', 'verifyAudit', 'enrollmentTokens',
-  'exportIndicators', 'sessionReport', 'investigationReport', 'exportEvents']);
+  'exportIndicators', 'sessionReport', 'investigationReport', 'exportEvents',
+  'me', 'preferences', 'mySessions', 'myKeys', 'accounts', 'account', 'allSessions', 'adminSettings', 'system', 'exportAudit']);
 
 const nav = { back: false, used: new Set() };
 const swr = createSwr({
@@ -147,7 +185,7 @@ function direction(hash) {
   return 'forward';
 }
 
-const reducedMotion = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const reducedMotion = () => prefersReducedMotion();
 
 // Navigation the operator drives from the keyboard (g-sequences, the
 // palette, Enter on a link) happens many times a day and stays instant;
@@ -230,6 +268,7 @@ function endSession(notice) {
   state.session = null;
   state.shell = null;
   state.notice = notice || '';
+  prefs.reset();
   rawApi.forgetSession();
   if (parseHash(location.hash).name !== 'login') state.returnTo = location.hash;
   if (location.hash !== '#/login') location.hash = '#/login';
@@ -254,6 +293,7 @@ function onLogin(session) {
   state.firstRender = true;
   if (location.hash === target) render();
   else location.hash = target;
+  syncPrefs();
 }
 
 // Move the session to another member tenant. The live view is torn down
@@ -315,6 +355,13 @@ async function openPalette() {
       { label: 'Follow live events', icon: 'live', hint: 'Events in live mode', keywords: ['stream', 'tail'], recentId: 'live', run: (p) => p.navigate('#/events?live=1') },
       { label: 'Switch color theme', icon: 'sun', hint: 'System, light, dark', keywords: ['dark', 'light', 'appearance'], recentId: 'theme', run: () => cycleTheme() },
       { label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: ['keys', 'help'], recentId: 'shortcuts', run: () => toggleShortcuts() },
+      { label: 'Preferences', icon: 'settings', hint: 'Time zone, default window, density, theme, motion', keywords: ['settings', 'timezone', 'utc', 'local', 'density', 'motion'], recentId: 'preferences', run: (p) => p.navigate('#/settings/preferences') },
+      { label: 'Manage API keys', icon: 'key', hint: 'Create or revoke your keys', keywords: ['settings', 'token', 'api key', 'automation'], recentId: 'keys', run: (p) => p.navigate('#/settings/keys') },
+      { label: 'Your sessions', icon: 'devices', hint: 'Where your account is signed in', keywords: ['settings', 'sign out', 'revoke', 'devices'], recentId: 'my-sessions', run: (p) => p.navigate('#/settings/sessions') },
+      ...(state.session.principal?.role === 'admin' ? [
+        { label: 'Manage accounts', icon: 'users', hint: 'Administration', keywords: ['settings', 'users', 'access', 'admin'], recentId: 'accounts', run: (p) => p.navigate('#/settings/accounts') },
+        { label: 'Export the audit trail', icon: 'audit', hint: 'Administration', keywords: ['settings', 'audit', 'download', 'csv', 'jsonl'], recentId: 'audit-export', run: (p) => p.navigate('#/settings/audit-export') },
+      ] : []),
       ...switchTargets(state.session).map((t) => ({
         label: `Switch tenant: ${t}`, icon: 'tenant', hint: `Act in tenant ${t}`, keywords: ['tenant', 'switch', t],
         run: () => switchTenant(t),
@@ -415,6 +462,13 @@ async function render({ soft = false } = {}) {
     liveSlot: shell.liveSlot,
     navigate: (target) => { location.hash = target; },
     rerender: () => render({ soft: true }),
+    prefs,
+    // The operator revoked this browser's own session: it is already gone
+    // on the server, so only the local state is cleared.
+    signedOut: () => {
+      state.returnTo = '';
+      endSession('You revoked this session, so you are signed out.');
+    },
     // A detail screen names itself in the tab ("<name> · Session"). Text
     // only, with control and bidi characters removed and the length capped.
     setTitle: (text) => {
@@ -524,6 +578,7 @@ async function boot() {
         : '';
     }
   }
+  if (state.session) syncPrefs();
   installPeek();
   document.addEventListener('keydown', () => { lastInput = { kind: 'keyboard', at: performance.now() }; }, true);
   document.addEventListener('pointerdown', () => { lastInput = { kind: 'pointer', at: performance.now() }; }, true);

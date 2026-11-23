@@ -282,7 +282,7 @@ export default {
     };
     pillBtn.addEventListener('click', () => {
       const y = window.scrollY + listTop() - topbar() - 8;
-      window.scrollTo({ top: Math.max(0, y), behavior: globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      window.scrollTo({ top: Math.max(0, y), behavior: document.documentElement.hasAttribute('data-reduce-motion') || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       clearUnread();
     });
 

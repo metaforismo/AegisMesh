@@ -130,7 +130,7 @@ export default {
     mount(root, h('main', { class: 'login', id: 'main' },
       mesh(),
       h('div', { class: 'login__card' },
-        h('div', { class: 'brand' }, brandMark(), 'AegisMesh'),
+        h('div', { class: 'brand' }, brandMark(), h('span', { class: 'brand__word' }, 'AegisMesh')),
         h('h1', { id: 'page-title', tabindex: '-1' }, 'Operator console'),
         h('p', { class: 'login__lede' }, 'Decoys record what attackers try. This console reads it back to you: observations, never verdicts.'),
         notice ? banner('info', null, notice) : null,

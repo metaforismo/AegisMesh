@@ -31,7 +31,8 @@ const HASH_HREF = /^#\/[A-Za-z0-9\-._~%/?=&+]*$/;
 // Same-origin server paths the console may link to. The only one is the
 // OIDC sign-in start: a plain navigation, so the server can redirect the
 // browser to the identity provider.
-const SERVER_HREFS = new Set(['/api/v1/auth/oidc/login']);
+// Also the server's licence page, linked from Settings, System.
+const SERVER_HREFS = new Set(['/api/v1/auth/oidc/login', '/licenses']);
 
 // The fixed set of external links the console may render (project docs).
 const EXTERNAL_HREFS = new Set([

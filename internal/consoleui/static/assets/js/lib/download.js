@@ -16,6 +16,9 @@ export const DOWNLOAD_NAMES = Object.freeze({
   'syslog-rfc5424': 'aegismesh-events-syslog-rfc5424.log',
   'otlp-json': 'aegismesh-events-otlp-json.json',
   ecs: 'aegismesh-events-ecs.ndjson',
+  // The audit chain export (GET /admin/audit/export), admin only.
+  'audit-jsonl': 'aegismesh-audit.jsonl',
+  'audit-csv': 'aegismesh-audit.csv',
 });
 
 const int = (v) => {

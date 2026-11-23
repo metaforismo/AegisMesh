@@ -84,6 +84,16 @@ const PATHS = {
   cadence: 'M1.75 13h12.5M3.5 13V8M6.5 13V5M9.5 13V8.5M12.5 13V6',
   // Campaign: three lanes that pass through the same two stops.
   campaign: `M1.5 3.5h13M1.5 8h13M1.5 12.5h13${circle(5.5, 3.5, 1.1)}${circle(5.5, 8, 1.1)}${circle(5.5, 12.5, 1.1)}${circle(10.5, 3.5, 1.1)}${circle(10.5, 8, 1.1)}${circle(10.5, 12.5, 1.1)}`,
+  // Settings: three sliders, each with its knob.
+  settings: `M2 4h6M11 4h3M2 8h2M7 8h7M2 12h8M13 12h1${circle(9.5, 4, 1.5)}${circle(5.5, 8, 1.5)}${circle(11.5, 12, 1.5)}`,
+  // Profile: one person.
+  user: `${circle(8, 5.25, 2.75)}M2.75 14a5.25 5.25 0 0 1 10.5 0`,
+  // Accounts: two people.
+  users: `${circle(6, 5.5, 2.4)}M1.5 13.75a4.5 4.5 0 0 1 9 0M10.25 3.4a2.4 2.4 0 0 1 0 4.4M12.25 9.6a4.5 4.5 0 0 1 2.25 4.15`,
+  // Sessions: a screen and a phone.
+  devices: `${rrect(1.5, 2.75, 9.5, 7, 1)}M4 13.25h4.5M6.25 9.75v3.5${rrect(11.5, 6, 3, 7.25, 0.8)}`,
+  // Data and retention: a stack of records.
+  database: 'M2.75 4c0-1.1 2.35-2 5.25-2s5.25.9 5.25 2-2.35 2-5.25 2-5.25-.9-5.25-2zM2.75 4v8c0 1.1 2.35 2 5.25 2s5.25-.9 5.25-2V4M2.75 8c0 1.1 2.35 2 5.25 2s5.25-.9 5.25-2',
   // Posture: a clipboard with a checklist.
   posture: `${rrect(3, 2.5, 10, 12, 1.25)}M6 1.5h4v2H6zM5.5 7l1 1 1.75-1.75M5.5 11l1 1 1.75-1.75M9.75 7.5h1.75M9.75 11.5h1.75`,
 };
@@ -101,17 +111,21 @@ export function icon(name, { size = 'md', className } = {}) {
   }, parts.map(([d, cls]) => svg('path', { d, class: cls })));
 }
 
-// The brand mark: a shield plate carrying a small mesh (three nodes linked
-// to a core). Drawn on a 24-unit grid; the plate takes the accent color.
+// The brand mark: a net closed around a lure. A diamond perimeter (the
+// protective mesh), four links reaching in from its sides, and a solid
+// diamond at the centre that the links do not touch (the decoy, held in the
+// net). One colour (currentColor), drawn on a 24-unit grid; legible from
+// 16px. The same paths are in site/assets/brand/*.svg, the favicons and the
+// landing page; webtest/brand.test.mjs keeps them identical.
+export const BRAND_PATHS = Object.freeze({
+  net: 'M12 2.75 21.25 12 12 21.25 2.75 12z',
+  links: 'M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4',
+  lure: 'M12 9.6 14.4 12 12 14.4 9.6 12z',
+});
+
 export function brandMark() {
-  const nodes = [[12, 7.4], [7.6, 14.6], [16.4, 14.6]];
-  const core = [12, 11.9];
   return svg('svg', { class: 'brand__mark', viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' },
-    svg('path', { class: 'brand__plate', d: 'M12 1.75 3.75 4.9v6.35c0 5.05 3.5 9.35 8.25 10.95 4.75-1.6 8.25-5.9 8.25-10.95V4.9z' }),
-    svg('path', {
-      class: 'brand__edge',
-      d: `M${nodes[0].join(' ')}L${nodes[1].join(' ')}L${nodes[2].join(' ')}Z${nodes.map((n) => `M${n.join(' ')}L${core.join(' ')}`).join('')}`,
-    }),
-    nodes.map(([cx, cy]) => svg('circle', { class: 'brand__node', cx, cy, r: 1.55 })),
-    svg('circle', { class: 'brand__core', cx: core[0], cy: core[1], r: 1.9 }));
+    svg('path', { class: 'brand__net', d: BRAND_PATHS.net }),
+    svg('path', { class: 'brand__links', d: BRAND_PATHS.links }),
+    svg('path', { class: 'brand__lure', d: BRAND_PATHS.lure }));
 }

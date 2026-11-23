@@ -43,6 +43,10 @@ const BUILDERS = {
   story: () => [head(), panelShell(h('div', { class: 'stack' }, sk('text', 'w-70'), sk('block'))), h('div', { class: ['grid', 'grid--2'] }, panelShell(rows(8, 3)), panelShell(rows(5, 2)))],
   // Two key/value panels (Node, Fleet node).
   kv: () => [head(), h('div', { class: ['grid', 'grid--2'] }, panelShell(rows(6, 2)), panelShell(rows(6, 2)))],
+  // A settings sub-navigation beside one section (Settings).
+  settings: () => [head(), h('div', { class: 'settings' },
+    h('div', { class: 'settings__nav' }, h('div', { class: 'stack' }, Array.from({ length: 8 }, (_, i) => sk('text', widths[i % widths.length])))),
+    h('div', { class: 'settings__detail' }, panelShell(rows(6, 2)), panelShell(rows(3, 2))))],
   // Glossary entries (Guide).
   guide: () => [head(), panelShell(lines(3)), panelShell(lines(3)), panelShell(lines(3))],
 };

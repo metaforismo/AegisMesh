@@ -11,7 +11,7 @@
 import { h, mount, svg } from '../lib/dom.js';
 import { tempoLayout } from '../lib/viz.js';
 import { href, withQuery, isEventId, isSessionId } from '../lib/route.js';
-import { formatCount, formatDateTime, formatClock, formatNumber } from '../lib/format.js';
+import { formatCount, formatDateTime, formatClock, formatNumber, zoneLabel } from '../lib/format.js';
 import { eventKey, parseEventKey, isNodeId } from '../lib/origin.js';
 import { moveIndex, isTypingTarget } from '../lib/keys.js';
 import { cadence as gapBins } from '../lib/cadence.js';
@@ -67,7 +67,7 @@ function timelineView(d, rowHref) {
       const same = it.first === it.last;
       return h('li', { class: 'story__phase' },
         stageTag(it.stage),
-        h('span', { class: 'story__phase-meta' }, `${formatCount(it.count)} event${it.count === 1 ? '' : 's'} · ${same ? formatClock(it.first) : `${formatClock(it.first)}–${formatClock(it.last)}`} UTC`));
+        h('span', { class: 'story__phase-meta' }, `${formatCount(it.count)} event${it.count === 1 ? '' : 's'} · ${same ? formatClock(it.first) : `${formatClock(it.first)}–${formatClock(it.last)}`} ${zoneLabel(new Date(it.first))}`));
     }
     const ev = it.ev;
     const key = keyOfEntry(ev);
@@ -126,7 +126,7 @@ function tempoView(d, storySlot, rowHref) {
     const ev = timeline[t.i];
     const hit = svg('rect', {
       class: 'tempo__hit', x: t.x - 5, y: 8, width: 10, height: 32, tabindex: t.i === 0 ? '0' : '-1', role: 'button',
-      'aria-label': `${clockMs(ev.time)} UTC, ${ev.classification === 'correlation_signal' ? 'correlation signal' : ev.sensor || 'event'}${(ev.rule_ids || []).length ? `, rules ${ev.rule_ids.join(' ')}` : ''}`,
+      'aria-label': `${clockMs(ev.time)} ${zoneLabel(new Date(ev.time))}, ${ev.classification === 'correlation_signal' ? 'correlation signal' : ev.sensor || 'event'}${(ev.rule_ids || []).length ? `, rules ${ev.rule_ids.join(' ')}` : ''}`,
     });
     const g = svg('g', null,
       svg('line', { class: ['tempo__tick', `tempo__tick--${ev.classification === 'correlation_signal' ? 'signal' : ev.classification === 'canary_invocation' ? 'canary_invocation' : 'interaction'}`], x1: t.x, x2: t.x, y1: ev.classification === 'correlation_signal' ? 14 : 20, y2: 34 }),

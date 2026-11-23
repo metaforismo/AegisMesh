@@ -725,6 +725,7 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
   :root[data-rail] .nav-foot > a { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   :root[data-rail] .nav-group__label { overflow: hidden; height: 1px; padding: 0; margin: var(--space-2) 0; background: var(--color-border); color: transparent; }
   :root[data-rail] .brand { justify-content: center; padding: 0; }
+  :root[data-rail] .brand__word { display: none; }
   :root[data-rail] .rail-toggle { justify-content: center; margin-inline: 0; }
   :root[data-rail] .nav-foot { padding-inline: 0; }
 }
@@ -1016,6 +1017,77 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 .parea__count { color: var(--color-ink-2); font-size: var(--text-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .parea__none { padding: var(--space-3) 0; font-size: var(--text-sm); }
 @media (max-width: 45rem) { .parea { padding: var(--space-4) var(--space-4) var(--space-2); } .parea__head { grid-template-columns: auto minmax(0, 1fr); } .parea__count { grid-column: 2; } }
+
+/* ---- Settings and administration (2026-11-23) ----------------------------------------
+   One layout: a sub-navigation beside the section on desktop; on phones the index
+   is the list and each section its own page (the crumbs lead back). */
+.settings { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: var(--space-8); align-items: start; }
+.settings__nav { position: sticky; top: calc(var(--topbar-h) + var(--space-4)); display: flex; flex-direction: column; gap: var(--space-5); }
+.settings__detail { min-width: 0; }
+.settings-nav__label { padding: 0 var(--space-2) var(--space-1); color: var(--color-ink-3); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.settings-nav__list { display: flex; flex-direction: column; gap: 1px; list-style: none; }
+.settings-nav__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.125rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+.settings-nav__link > .icon { flex: none; color: var(--color-ink-3); }
+.settings-nav__link[aria-current="page"] { background: var(--color-surface-3); color: var(--color-ink); font-weight: var(--weight-semibold); box-shadow: inset 1px 0 0 var(--color-accent); }
+.settings-nav__link[aria-current="page"] > .icon { color: var(--color-ink); }
+@media (hover: hover) { .settings-nav__link:not([aria-current="page"]):hover { background: var(--color-surface-3); color: var(--color-ink); } }
+.settings-nav__text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.settings-nav__hint, .settings-nav__go { display: none; }
+.settings-nav__note { padding: 0 var(--space-2); color: var(--color-ink-3); font-size: var(--text-xs); }
+.stack-lg { display: flex; flex-direction: column; gap: var(--space-4); }
+.panel-toolbar { padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
+.panel-inset { padding: var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
+.form { display: flex; flex-direction: column; gap: var(--space-4); }
+.form__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--space-4); align-items: start; }
+.form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.pref-list { display: flex; flex-direction: column; }
+.pref-row { padding: var(--space-4) 0; border-top: var(--border-width) solid var(--color-border); }
+.pref-row:first-child { padding-top: 0; border-top: 0; }
+.pref-row .field__hint { max-width: 62ch; }
+.pref-row__example { margin-top: var(--space-1); color: var(--color-ink-3); font-size: var(--text-xs); }
+.pref-status { min-height: 1.25rem; color: var(--color-ink-2); font-size: var(--text-xs); }
+.pref-status:not(:empty) { padding-top: var(--space-3); border-top: var(--border-width) solid var(--color-border); }
+.settings__detail .table .reltime { white-space: nowrap; }
+@media (max-width: 767px) { .settings--index .settings-nav__link[aria-current="page"] { background: none; box-shadow: none; font-weight: var(--weight-regular); } }
+.role-lists { display: flex; flex-direction: column; gap: var(--space-4); }
+.role-list { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); list-style: none; font-size: var(--text-sm); }
+.role-list li { display: flex; gap: var(--space-2); align-items: flex-start; }
+.role-list .icon { flex: none; margin-top: 2px; }
+.role-list--can .icon { color: var(--color-ok); }
+.role-list--cannot .icon { color: var(--color-ink-3); }
+.session-client { display: inline-flex; align-items: center; gap: var(--space-1); }
+.session-client .icon { color: var(--color-ink-3); }
+.key-label { font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+.account-name { font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+.source-notes { gap: var(--space-4); }
+.source-note { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-ink-2); font-size: var(--text-xs); line-height: var(--leading-snug); }
+.menu__links { margin: 0 0 var(--space-2); padding-bottom: var(--space-2); border-bottom: var(--border-width) solid var(--color-border); }
+.menu__links .menu__item { color: var(--color-ink); text-decoration: none; }
+.menu__links .menu__check { color: var(--color-ink-3); }
+
+@media (max-width: 959px) {
+  .settings { grid-template-columns: 12.5rem minmax(0, 1fr); gap: var(--space-5); }
+}
+@media (max-width: 767px) {
+  .settings { grid-template-columns: minmax(0, 1fr); }
+  .settings__nav { position: static; }
+  .settings--index .settings__detail,
+  .settings--detail .settings__nav { display: none; }
+  .settings--index .settings-nav__link { min-height: 3.25rem; padding: var(--space-2); border-bottom: var(--border-width) solid var(--color-border); border-radius: 0; }
+  .settings--index .settings-nav__hint { display: block; color: var(--color-ink-3); font-size: var(--text-xs); font-weight: var(--weight-regular); }
+  .settings--index .settings-nav__go { display: block; flex: none; color: var(--color-ink-3); }
+  .settings--index .settings-nav__name { font-weight: var(--weight-medium); color: var(--color-ink); }
+}
 
 /* ---- Print ----------------------------------------------------------------------------- */
 /* The digest (and any screen) prints as a document: no frame, no controls,

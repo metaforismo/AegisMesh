@@ -76,7 +76,7 @@ test('brief mentions automation sessions only when the endpoint answered with so
 
 test('downloads: fixed file names, header facts parsed defensively', () => {
   assert.deepEqual(Object.values(DOWNLOAD_NAMES), ['aegismesh-indicators.json', 'aegismesh-indicators.csv', 'aegismesh-indicators.txt', 'aegismesh-observation-report.md',
-    'aegismesh-events-cef.log', 'aegismesh-events-syslog-rfc5424.log', 'aegismesh-events-otlp-json.json', 'aegismesh-events-ecs.ndjson']);
+    'aegismesh-events-cef.log', 'aegismesh-events-syslog-rfc5424.log', 'aegismesh-events-otlp-json.json', 'aegismesh-events-ecs.ndjson', 'aegismesh-audit.jsonl', 'aegismesh-audit.csv']);
   const headers = new Map(Object.entries({ 'X-AegisMesh-Skipped-Non-IP-Sources': '2', 'X-AegisMesh-Skipped-Non-IP-Events': 'x', 'X-AegisMesh-Scan-Truncated': 'true', 'X-AegisMesh-Index-History': '<b>' }));
   const f = downloadFacts({ get: (k) => headers.get(k) ?? null });
   assert.equal(f.skippedSources, 2);

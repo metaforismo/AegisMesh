@@ -2,7 +2,7 @@ import { h, mount, svg } from '../lib/dom.js';
 import { meshLayout, lastBucketActive } from '../lib/viz.js';
 import { href, normalizeWindow } from '../lib/route.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
-import { formatCount, formatDelta } from '../lib/format.js';
+import { formatCount, formatDelta, zoneName } from '../lib/format.js';
 import { bucketTrace, indexKnownFrom, BY_SENSOR_CAP } from '../lib/chart.js';
 import { pageHead, panel, tally, segmented, glyph, sevChip, evidence, barList, table, timeEl, empty, link, helpTip } from '../ui/components.js';
 import { stackedBarChart, severityShare, activityTrace, SEVERITY_ORDER } from '../ui/charts.js';
@@ -240,7 +240,7 @@ export default {
         icon('posture', { size: 'sm' }), h('span', null, postureLine(pc)), h('span', { class: 'quiet-line__go' }, pc.attention ? 'Review' : 'Open the review', icon('chevron-right', { size: 'xs' }))) : null,
       panel({
         primary: true,
-        title: 'Observations over time', meta: `Stacked by classification · ${buckets.length} buckets · times in UTC`,
+        title: 'Observations over time', meta: `Stacked by classification · ${buckets.length} buckets · times in ${zoneName()}`,
         body: buckets.length
           ? stackedBarChart(buckets, window, { end: ov.generated_at, onSelect: (range) => ctx.navigate(href('events', range)) })
           : empty('No buckets', 'The server returned no time buckets for this window.'),
