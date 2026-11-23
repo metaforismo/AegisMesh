@@ -218,10 +218,13 @@ export function eventTableView(events, { caption = 'Events', newIds, origin = 'a
   };
 }
 
-export function ruleChips(ids, filterHref) {
+// `max` caps the chips shown (the rest are counted as "+N"); list rows use
+// a small cap so a row stays two lines tall.
+export function ruleChips(ids, filterHref, { max = 4 } = {}) {
   const list = Array.isArray(ids) ? ids : [];
   if (!list.length) return h('span', { class: 'muted' }, '—');
-  return h('span', { class: 'chip-row' }, list.slice(0, 4).map((id) => filterable(filterHref, 'rule', id, chip(id, { mono: true }), `Show only events citing ${id}`)), list.length > 4 ? chip(`+${list.length - 4}`) : null);
+  const n = Math.max(1, Math.floor(Number(max)) || 4);
+  return h('span', { class: 'chip-row' }, list.slice(0, n).map((id) => filterable(filterHref, 'rule', id, chip(id, { mono: true }), `Show only events citing ${id}`)), list.length > n ? chip(`+${list.length - n}`) : null);
 }
 
 const STATUS_BADGE = { open: 'info', monitoring: 'warn', closed: 'neutral' };
