@@ -8,7 +8,7 @@
 // never a verdict ("AI attacker", "bot"); stages describe which rules fired,
 // not intent or a forced lifecycle.
 
-import { formatGap } from './cadence.js';
+import { formatCount, formatDurationMs } from './format.js';
 
 export const SESSION_IDLE_MS = 30 * 60 * 1000;
 // Gaps longer than this become their own "idle" marker in the timeline.
@@ -61,13 +61,8 @@ export const FRAMEWORK_LABELS = Object.freeze({ 'mitre-attack': 'MITRE ATT&CK', 
 export const frameworkLabel = (f) => FRAMEWORK_LABELS[f] || 'Framework';
 export const isFramework = (f) => Object.hasOwn(FRAMEWORK_LABELS, f);
 
-export function formatDurationMs(ms) {
-  if (ms === null || ms === undefined || ms === '') return '—';
-  const n = Number(ms);
-  if (!Number.isFinite(n) || n < 0) return '—';
-  if (n === 0) return '0 s';
-  return formatGap(n);
-}
+// Kept as a re-export: one duration style lives in format.js.
+export { formatDurationMs };
 
 // "62% of gaps within a quarter of the median gap"
 export function regularityText(c) {
@@ -146,7 +141,7 @@ export function boundsNote(bounds) {
   const b = bounds || {};
   const parts = [];
   if (Number.isFinite(b.scanned_events) && Number.isFinite(b.scan_limit)) {
-    parts.push(`Built from the newest ${b.scanned_events.toLocaleString('en-US')} indexed events${b.scan_truncated ? ` (the ${b.scan_limit.toLocaleString('en-US')}-event scan limit was reached, so older events are not included)` : ''}.`);
+    parts.push(`Built from the newest ${formatCount(b.scanned_events)} indexed events${b.scan_truncated ? ` (the ${formatCount(b.scan_limit)}-event scan limit was reached, so older events are not included)` : ''}.`);
   }
   if (b.index?.history === 'truncated') parts.push('The index has evicted older evidence; it remains on disk.');
   if (b.index?.history === 'unavailable') parts.push('The index starts at process start (evidence at rest is encrypted).');
@@ -162,7 +157,7 @@ export function unfoldSentence(d) {
   const n = Number(d.event_count) || 0;
   const sensors = Array.isArray(d.sensors) ? d.sensors.length : 0;
   const kinds = Array.isArray(d.sensor_kinds) ? d.sensor_kinds.map((k) => String(k).toUpperCase()) : [];
-  const out = [{ t: 'ev', v: String(d.source ?? '') }, { t: 'text', v: ` produced ${n.toLocaleString('en-US')} event${n === 1 ? '' : 's'} over ${formatDurationMs(d.duration_ms)}` }];
+  const out = [{ t: 'ev', v: String(d.source ?? '') }, { t: 'text', v: ` produced ${formatCount(n)} event${n === 1 ? '' : 's'} over ${formatDurationMs(d.duration_ms)}` }];
   if (sensors) out.push({ t: 'text', v: ` on ${sensors} sensor${sensors === 1 ? '' : 's'}${kinds.length ? ` (${kinds.join(', ')})` : ''}` });
   // Stage order, consecutive repeats merged.
   const order = [];

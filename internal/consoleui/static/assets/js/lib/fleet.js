@@ -2,7 +2,7 @@
 // Node data is self-reported by each agent: these helpers validate shape and
 // format it, they never treat it as attestation.
 
-import { parseTime } from './format.js';
+import { formatCount, parseTime } from './format.js';
 
 export const FLEET_STATUSES = Object.freeze(['online', 'stale', 'offline', 'revoked']);
 
@@ -148,7 +148,7 @@ export function forwardingSummary(fw) {
   return s;
 }
 
-const plural = (n, one, many) => `${new Intl.NumberFormat('en-US').format(n)} ${n === 1 ? one : many}`;
+const plural = (n, one, many) => `${formatCount(n)} ${n === 1 ? one : many}`;
 
 // "37 dropped, 2 gaps" — only the parts that are non-zero.
 export function lossText(s) {

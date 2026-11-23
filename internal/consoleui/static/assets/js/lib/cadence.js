@@ -6,6 +6,8 @@
 // labels a source as automated: the strip is an observation from the events
 // that happen to be loaded, not a verdict.
 
+import { formatDurationMs } from './format.js';
+
 // Gap buckets on a roughly logarithmic scale, in milliseconds (upper bound,
 // exclusive). Labels are interface text.
 export const GAP_BINS = Object.freeze([
@@ -62,19 +64,8 @@ export function cadence(times) {
   };
 }
 
-// "850 ms", "4.2 s", "3 min", "1.5 h".
-export function formatGap(ms) {
-  if (!Number.isFinite(ms) || ms < 0) return '—';
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  const s = ms / 1000;
-  if (s < 10) return `${Math.round(s * 10) / 10} s`;
-  if (s < 90) return `${Math.round(s)} s`;
-  const m = s / 60;
-  if (m < 90) return `${m < 10 ? Math.round(m * 10) / 10 : Math.round(m)} min`;
-  const h = m / 60;
-  if (h < 48) return `${Math.round(h * 10) / 10} h`;
-  return `${Math.round((h / 24) * 10) / 10} d`;
-}
+// "850 ms", "4.2 s", "3 min", "1.5 h": the console's one duration style.
+export const formatGap = (ms) => formatDurationMs(ms);
 
 // One neutral sentence about the gaps, or null when there are too few.
 export function describeCadence(c) {

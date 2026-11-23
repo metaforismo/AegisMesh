@@ -17,12 +17,28 @@ test('relative time and durations', () => {
   assert.equal(f.formatRelative('2026-11-14T09:58:00Z', now), '2m ago');
   assert.equal(f.formatRelative('2026-11-12T10:00:00Z', now), '2d ago');
   assert.equal(f.formatRelative('', now), 'never');
-  assert.equal(f.formatDuration(90061), '1d 1h');
-  assert.equal(f.formatDuration(-3), '0s');
+  // One duration style everywhere: seconds go through formatDurationMs.
+  assert.equal(f.formatDuration(90061), '25 h');
+  assert.equal(f.formatDuration(3 * 86400), '3 d');
+  assert.equal(f.formatDuration(-3), '0 s');
+  assert.equal(f.formatDuration(undefined), '—');
+  assert.equal(f.formatDurationMs(0), '0 s');
+  assert.equal(f.formatDurationMs(850.4), '850 ms');
+  assert.equal(f.formatDurationMs(4200), '4.2 s');
+  assert.equal(f.formatDurationMs(45000), '45 s');
+  assert.equal(f.formatDurationMs(5 * 60000), '5 min');
+  assert.equal(f.formatDurationMs(150 * 60000), '2.5 h');
+  assert.equal(f.formatDurationMs(-1), '—');
+  assert.equal(f.formatDurationMs(null), '—');
+  assert.equal(f.formatDurationMs('x'), '—');
 });
 
 test('numbers and bytes', () => {
   assert.equal(f.formatCount(1234567), '1,234,567');
+  assert.equal(f.formatNumber(12.345), '12.3');
+  assert.equal(f.formatNumber(1234.5, 0), '1,235');
+  assert.equal(f.formatNumber(null), '—');
+  assert.equal(f.formatNumber(Infinity), '—');
   assert.equal(f.formatCompact(12345), '12.3K');
   assert.equal(f.formatCompact(2500000), '2.5M');
   assert.equal(f.formatBytes(123456), '121 KiB');
