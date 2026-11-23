@@ -37,6 +37,7 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("%w: %s: %v", errConfig, filepath.Base(path), err)
 	}
 	c.SourcePath = path
+	c.Sources = settingSources(raw, strings.ToLower(filepath.Ext(path)))
 	if err := CheckKindFields(raw, strings.ToLower(filepath.Ext(path))); err != nil {
 		return nil, err
 	}

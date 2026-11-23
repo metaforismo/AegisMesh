@@ -45,6 +45,7 @@ func newTestApp(stdin ...io.Reader) (*App, *bytes.Buffer, *bytes.Buffer) {
 		NewExtCmd(env),
 		NewVersionCmd(env),
 		NewCompletionCmd(env),
+		NewAccountsCmd(env),
 	))
 	return app, &out, &errB
 }

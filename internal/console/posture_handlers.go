@@ -86,5 +86,12 @@ func (s *Server) posture(w http.ResponseWriter, r *http.Request, _ caller) {
 	if _, ok := query(w, r); !ok {
 		return
 	}
-	boundedJSON(w, posture.Evaluate(s.postureFacts, posture.FromSnapshot(s.index.Analysis()), time.Now()))
+	facts := s.postureFacts
+	if facts != nil {
+		// Copy the static snapshot and add the live managed-admin count for POS-019.
+		copied := *facts
+		copied.ManagedKnown, copied.ManagedAdmins = true, s.accounts.UsableAdmins()
+		facts = &copied
+	}
+	boundedJSON(w, posture.Evaluate(facts, posture.FromSnapshot(s.index.Analysis()), time.Now()))
 }

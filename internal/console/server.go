@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/config"
+	"github.com/metaforismo/aegismesh/internal/console/accounts"
 	"github.com/metaforismo/aegismesh/internal/console/audit"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/console/investigations"
@@ -69,6 +71,9 @@ type Options struct {
 	UI fs.FS
 	// Now supplies a trusted clock for session expiry and login throttling; nil uses time.Now.
 	Now func() time.Time
+	// Sources reports where configuration values came from (config.Config.Sources);
+	// nil reports explicitly supplied values as "config".
+	Sources map[string]string
 }
 
 type asset struct {
@@ -102,6 +107,12 @@ type Server struct {
 	auth            *auth.Manager
 	audit           *audit.Log
 	cases           *investigations.Store
+	accounts        *accounts.Store
+	security        config.Security
+	settingSources  map[string]string
+	startedAt       time.Time
+	certExpiry      time.Time
+	now             func() time.Time
 	httpServer      *http.Server
 	listener        net.Listener
 	mux             *http.ServeMux
@@ -139,26 +150,37 @@ func New(opts Options) (_ *Server, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = sessions.SetIdleTimeout(time.Duration(opts.Config.IdleSeconds()) * time.Second); err != nil {
+		return nil, err
+	}
+	now := opts.Now
+	if now == nil {
+		now = time.Now
+	}
 
 	server := &Server{
-		decoyCatalog: append([]Decoy{}, opts.Decoys...),
-		tokenCatalog: append([]Honeytoken{}, opts.Honeytokens...),
-		postureFacts: opts.Posture,
-		cfg:          opts.Config,
-		instanceID:   opts.StateDir,
-		fleetHub:     opts.FleetHub,
-		fleetStatus:  opts.FleetStatus,
-		index:        opts.Index,
-		runtime:      opts.Runtime,
-		rules:        append([]Rule{}, opts.Rules...),
-		ui:           opts.UI,
-		auth:         sessions,
-		done:         make(chan struct{}),
-		mux:          http.NewServeMux(),
-		slots:        make(chan struct{}, 8),
-		streams:      make(chan struct{}, 16),
+		decoyCatalog:   append([]Decoy{}, opts.Decoys...),
+		tokenCatalog:   append([]Honeytoken{}, opts.Honeytokens...),
+		postureFacts:   opts.Posture,
+		cfg:            opts.Config,
+		instanceID:     opts.StateDir,
+		fleetHub:       opts.FleetHub,
+		fleetStatus:    opts.FleetStatus,
+		index:          opts.Index,
+		runtime:        opts.Runtime,
+		rules:          append([]Rule{}, opts.Rules...),
+		ui:             opts.UI,
+		auth:           sessions,
+		security:       opts.Security,
+		settingSources: opts.Sources,
+		startedAt:      now().UTC(),
+		now:            now,
+		done:           make(chan struct{}),
+		mux:            http.NewServeMux(),
+		slots:          make(chan struct{}, 8),
+		streams:        make(chan struct{}, 16),
 		requests: opts.Meter.CounterVec(
-			"aegismesh_console_requests_total", "Console requests by fixed endpoint group", 32,
+			"aegismesh_console_requests_total", "Console requests by fixed endpoint group", 40,
 		),
 		failures: opts.Meter.Counter("aegismesh_console_auth_failures_total", "Console authentication failures"),
 		clients:  opts.Meter.Gauge("aegismesh_console_sse_clients", "Active console SSE clients"),
@@ -179,7 +201,20 @@ func New(opts Options) (_ *Server, err error) {
 		return nil, err
 	}
 
-	if server.listener, err = listen(opts.Config); err != nil {
+	reserved := []string{}
+	for _, operator := range opts.Config.Operators {
+		reserved = append(reserved, operator.Name)
+	}
+	// Fixed directory name under the trusted state root; never request-selected.
+	server.accounts, err = accounts.Open(filepath.Join(opts.StateDir, "accounts"), accounts.Options{
+		Tenants: opts.Config.Tenants, LocalTenant: opts.Config.LocalTenant, Reserved: reserved, Now: opts.Now,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("console accounts: %w", err)
+	}
+	sessions.SetRegistry(server.accounts)
+
+	if server.listener, server.certExpiry, err = listen(opts.Config); err != nil {
 		return nil, err
 	}
 
@@ -259,12 +294,18 @@ func (s *Server) openState(dir string) error {
 	return nil
 }
 
-func listen(cfg config.Console) (net.Listener, error) {
+func listen(cfg config.Console) (net.Listener, time.Time, error) {
 	var tlsConfig *tls.Config
+	var expiry time.Time
 	if cfg.TLSCertFile != "" {
 		certificate, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
 		if err != nil {
-			return nil, errors.New("console: load TLS certificate and key failed")
+			return nil, time.Time{}, errors.New("console: load TLS certificate and key failed")
+		}
+		if len(certificate.Certificate) > 0 {
+			if leaf, err := x509.ParseCertificate(certificate.Certificate[0]); err == nil {
+				expiry = leaf.NotAfter.UTC()
+			}
 		}
 		tlsConfig = &tls.Config{
 			MinVersion:   tls.VersionTLS12,
@@ -274,14 +315,14 @@ func listen(cfg config.Console) (net.Listener, error) {
 
 	listener, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
-		return nil, fmt.Errorf("console: bind: %w", err)
+		return nil, time.Time{}, fmt.Errorf("console: bind: %w", err)
 	}
 
 	if tlsConfig != nil {
 		listener = tls.NewListener(listener, tlsConfig)
 	}
 
-	return listener, nil
+	return listener, expiry, nil
 }
 
 func (s *Server) closeResources() {
@@ -295,7 +336,9 @@ func (s *Server) closeResources() {
 	if s.unassignedAudit != nil {
 		_ = s.unassignedAudit.Close()
 	}
-
+	if s.accounts != nil {
+		_ = s.accounts.Close()
+	}
 }
 
 // Addr returns the actual bound console authority, including an assigned port.
@@ -320,6 +363,21 @@ func (s *Server) Start() {
 			defer s.wg.Done()
 			_ = s.httpServer.Serve(s.listener)
 		}()
+		// last_used_at updates are kept in memory and persisted at most once a minute.
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			ticker := time.NewTicker(accounts.LastUsedResolution)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-s.done:
+					return
+				case <-ticker.C:
+					_ = s.accounts.Flush()
+				}
+			}
+		}()
 	})
 }
 
@@ -340,6 +398,9 @@ func (s *Server) Close(ctx context.Context) error {
 		}
 		if s.unassignedAudit != nil {
 			_ = s.unassignedAudit.Close()
+		}
+		if s.accounts != nil {
+			_ = s.accounts.Close()
 		}
 	})
 	return err

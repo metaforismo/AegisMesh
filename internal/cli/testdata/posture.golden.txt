@@ -1,4 +1,4 @@
-POSTURE REVIEW: 2 attention, 8 ok, 8 info
+POSTURE REVIEW: 2 attention, 8 ok, 9 info
 Static review of the running configuration and of retained evidence; not a security guarantee or a complete audit.
 
 POS-001  ok         exposure   Decoys reachable beyond loopback
@@ -78,5 +78,9 @@ POS-018  info       evidence   Evidence encryption at rest
          Evidence is stored unencrypted; it is redacted but still holds attacker-supplied text and source addresses.
          -> Enable storage.encryption if the data directory is backed up or shared.
          see docs/evidence-encryption.md
+
+POS-019  info       access     Break-glass administrator
+         The console is disabled; administrator access was not evaluated.
+         see docs/architecture/console-api.md#accounts-access-and-settings-adr-0025
 
 generated at 2026-11-01T13:00:00Z

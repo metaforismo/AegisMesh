@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"testing"
@@ -256,5 +257,163 @@ func TestLoginAvailableHonorsCapacityAndPrunesExpiredKeys(t *testing.T) {
 	now = now.Add(time.Minute)
 	if !manager.LoginAvailable("new-remote") || len(manager.attempts) != 0 {
 		t.Fatal("expired quota did not recover")
+	}
+}
+
+func TestClientFamilyIsClosedVocabulary(t *testing.T) {
+	for _, testCase := range []struct{ ua, want string }{
+		{"", ClientUnknown},
+		{"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36", "Chrome on macOS"},
+		{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36 Edg/131.0", "Edge on Windows"},
+		{"Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0", "Firefox on Linux"},
+		{"Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1", "Safari on iOS"},
+		{"curl/8.7.1", "curl"},
+		{"python-requests/2.32", "Python client"},
+		{"Go-http-client/1.1", "Go HTTP client"},
+		{"<script>alert(1)</script>", ClientOther},
+		{strings.Repeat("A", 10000), ClientOther},
+	} {
+		if got := ClientFamily(testCase.ua); got != testCase.want {
+			t.Errorf("ClientFamily(%.40q) = %q; want %q", testCase.ua, got, testCase.want)
+		}
+	}
+}
+
+type fakeRegistry struct {
+	digest [32]byte
+	calls  int
+}
+
+func (registry *fakeRegistry) Match(digest [32]byte) (Principal, time.Time, bool) {
+	registry.calls++
+	if digest != registry.digest {
+		return Principal{}, time.Time{}, false
+	}
+	return Principal{ID: "acc_0123456789abcdef", Source: SourceManaged, Name: "svc", Role: "viewer",
+			AuthMethod: "token", Tenant: "default", Tenants: []string{"default"}, KeyID: "key_000000000001"},
+		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), true
+}
+
+func TestRegistryIsAlwaysScannedAndConfigIdentityIsStable(t *testing.T) {
+	manager := newManager(t, nil)
+	registry := &fakeRegistry{digest: sha256.Sum256([]byte("amk_synthetic"))}
+	manager.SetRegistry(registry)
+	principal, expiry, ok := manager.AuthenticateUntil("synthetic-token")
+	if !ok || principal.ID != "cfg:alice" || principal.Source != SourceConfig || !expiry.IsZero() {
+		t.Fatalf("config principal = %+v %v %v", principal, expiry, ok)
+	}
+	principal, expiry, ok = manager.AuthenticateUntil("amk_synthetic")
+	if !ok || principal.Source != SourceManaged || expiry.IsZero() {
+		t.Fatalf("managed principal = %+v %v %v", principal, expiry, ok)
+	}
+	if _, ok = manager.Authenticate("unknown"); ok {
+		t.Fatal("unknown token authenticated")
+	}
+	if registry.calls != 3 {
+		t.Fatalf("registry scanned %d times; want 3 (every attempt)", registry.calls)
+	}
+}
+
+func TestSessionMetadataIdleHandlesAndRevocation(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	manager := newManager(t, func() time.Time { return now })
+	if err := manager.SetIdleTimeout(time.Minute); err == nil {
+		t.Fatal("idle below five minutes accepted")
+	}
+	if err := manager.SetIdleTimeout(10 * time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	principal, _ := manager.Authenticate("synthetic-token")
+	id, _, err := manager.LoginWith(principal, time.Time{}, Meta{Remote: "203.0.113.7", UserAgent: "curl/8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _, err := manager.LoginWith(principal, time.Time{}, Meta{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := manager.Sessions("cfg:alice", id)
+	if len(list) != 2 {
+		t.Fatalf("sessions = %+v", list)
+	}
+	var current SessionInfo
+	for _, info := range list {
+		if info.Current {
+			current = info
+		}
+		if strings.Contains(info.Handle, id) || strings.Contains(info.Handle, other) || len(info.Handle) != 20 {
+			t.Fatalf("handle %q leaks or has wrong shape", info.Handle)
+		}
+	}
+	if current.Remote != "203.0.113.7" || current.Client != "curl" || current.IdleExpiresAt == nil ||
+		!current.IdleExpiresAt.Equal(now.Add(10*time.Minute)) || current.Handle != manager.Handle(id) {
+		t.Fatalf("current = %+v", current)
+	}
+	// A handle can never be used as a session id.
+	if _, ok := manager.Session(current.Handle); ok {
+		t.Fatal("handle authenticated as a session id")
+	}
+	// Peek does not refresh idle activity; Session does.
+	now = now.Add(9 * time.Minute)
+	if _, ok := manager.Peek(id); !ok {
+		t.Fatal("peek before idle expiry failed")
+	}
+	if _, ok := manager.Session(other); !ok {
+		t.Fatal("session before idle expiry failed")
+	}
+	now = now.Add(2 * time.Minute)
+	if _, ok := manager.Peek(id); ok {
+		t.Fatal("idle session survived")
+	}
+	if _, ok := manager.Session(other); !ok {
+		t.Fatal("recently active session expired")
+	}
+	if _, ok := manager.Revoke(manager.Handle(other), "cfg:bob"); ok {
+		t.Fatal("foreign owner revoked a session")
+	}
+	if _, ok := manager.Revoke(manager.Handle(other), "cfg:alice"); !ok {
+		t.Fatal("owner could not revoke")
+	}
+	if _, ok := manager.Session(other); ok {
+		t.Fatal("revoked session still valid")
+	}
+	managed := Principal{ID: "acc_1", Source: SourceManaged, KeyID: "key_1", Name: "svc", Role: "viewer"}
+	first, _, _ := manager.LoginWith(managed, now.Add(time.Hour), Meta{})
+	second, _, _ := manager.LoginWith(managed, now.Add(time.Hour), Meta{})
+	if manager.RevokeKey("key_1") != 2 {
+		t.Fatal("key revocation did not end its sessions")
+	}
+	if _, ok := manager.Session(first); ok {
+		t.Fatal("session survived key revocation")
+	}
+	third, _, _ := manager.LoginWith(managed, now.Add(time.Hour), Meta{})
+	if manager.RevokePrincipal("acc_1") != 1 {
+		t.Fatal("principal revocation count")
+	}
+	for _, id := range []string{second, third} {
+		if _, ok := manager.Session(id); ok {
+			t.Fatal("session survived principal revocation")
+		}
+	}
+}
+
+func TestSwitchKeepsCreationAndMetadata(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	manager := newManager(t, func() time.Time { return now })
+	principal := Principal{ID: "cfg:alice", Source: SourceConfig, Name: "alice", Role: "admin",
+		Tenants: []string{"default", "bravo"}}
+	id, _, err := manager.LoginWith(principal, time.Time{}, Meta{Remote: "192.0.2.1", UserAgent: "curl/8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Minute)
+	next, _, err := manager.Switch(id, "bravo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := manager.Sessions("cfg:alice", next)
+	if len(list) != 1 || !list[0].Current || list[0].Tenant != "bravo" || list[0].Remote != "192.0.2.1" ||
+		list[0].Client != "curl" || !list[0].CreatedAt.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("switched = %+v", list)
 	}
 }

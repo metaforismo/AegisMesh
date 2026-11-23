@@ -1931,3 +1931,34 @@ ok  	github.com/metaforismo/aegismesh/internal/strictjson	(cached)
 ok  	github.com/metaforismo/aegismesh/internal/webhook	(cached)
 ok  	github.com/metaforismo/aegismesh/tools/sbomcheck	(cached)
 ```
+
+## 2026-11-23 — accounts, API keys, sessions, settings and audit export (ADR-0025)
+
+Scope: branch `feat/accounts-access` in the backend worktree; local commits
+only, no push, PR or deployment. No new dependency. New config field
+`console.session_idle_seconds`. Loopback synthetic proof only: no real IdP,
+no multi-process deployment, no frontend integration in this run.
+
+| Command | Result |
+|---|---|
+| `gofmt -l .` (toolchain gofmt) | **PASS**, empty. The Homebrew `gofmt` disagrees with the go1.27.4 toolchain on one existing test file; the toolchain layout was kept. |
+| `make lint` | **PASS**, exit 0; gofmt check and `go vet ./...`. `golangci-lint` unavailable; Makefile skipped it. |
+| `make test` | **PASS**, exit 0; `go test -race ./...`, 52 packages ok, none failed. |
+| `make secrets-scan` | **PASS**, exit 0 (`secrets-scan: ok`). |
+| `go test -run '^$' -fuzz=FuzzDecode -fuzztime=10s ./internal/console/accounts` | **PASS**, about 90,000 executions, no failure. Target added to `make fuzz-seed`. |
+| `AEGISMESH_UPDATE_CAMPAIGN_GOLDENS=1 go test ./internal/cli -run 'TestAccountsCLI\|Posture'` | **PASS**; regenerated `accounts-list` goldens and the posture goldens for POS-019, then checked by normal runs. |
+| `git diff --check` | **PASS** after removing two trailing blank lines. |
+| `make sbom` | **NOT RUN**: known linked-worktree generator limitation. |
+| `make ui-test`, real IdP, multi-replica sessions | **NOT RUN**: frontend owned elsewhere; OIDC exercised only with the local test provider; sessions are per process by design. |
+
+Loopback integration tests cover: create account → mint key → authenticate
+(bearer and session) → self-service key mint/revoke → disable (key and session
+fail at once) → re-enable → revoke; the last-admin guard across a restart with
+no config admin; `not_managed` for config and OIDC identities; role and
+local-tenant denials; CSRF and Origin on cookie mutations; preference
+validation; session handles not accepted as cookies; idle expiry; admin
+session revocation; key-auth throttling (429); settings provenance and secret
+absence; system components; CSV formula neutralisation; audit exports free of
+tokens, digests and cookie values; OIDC directory ids stable and free of
+issuer/subject; and SSE streams opened with a managed key closing within one
+heartbeat after key revocation or account disable.

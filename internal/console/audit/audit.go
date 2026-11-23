@@ -38,6 +38,8 @@ type Record struct {
 	// Issuer and Subject identify federated identities independently of mutable display names.
 	Issuer  string `json:"issuer,omitempty"`
 	Subject string `json:"subject,omitempty"`
+	// ActorID is the stable principal id (cfg:, acc_ or oidc:); omitted by older records.
+	ActorID string `json:"actor_id,omitempty"`
 	// Seq is the monotonically increasing sequence across segments.
 	Seq uint64 `json:"seq"`
 	// Time is the UTC append time in RFC3339Nano format.
@@ -253,7 +255,7 @@ func (auditLog *Log) Append(record Record) (err error) {
 
 	// Only fixed actions/details and validated principals enter this API.
 	if len(record.Issuer) > 512 || len(record.Subject) > 255 ||
-		len(record.Actor) > 64 ||
+		len(record.Actor) > 64 || len(record.ActorID) > 80 ||
 		len(record.Role) > 16 ||
 		len(record.Action) > 64 ||
 		len(record.Target) > 128 ||
@@ -369,6 +371,37 @@ func (auditLog *Log) Read(before uint64, limit int, action, actor string) ([]Rec
 		records = records[:limit]
 	}
 
+	return records, more, err
+}
+
+// MaxExportRecords bounds one export; callers narrow later exports with since.
+const MaxExportRecords = 10000
+
+// Collect returns, oldest first, at most limit records appended at or after
+// since (zero means all) and whether more matching records exist. It holds the
+// log lock only while scanning, so callers stream the copy without blocking appends.
+func (auditLog *Log) Collect(since time.Time, limit int) ([]Record, bool, error) {
+	if limit < 1 || limit > MaxExportRecords {
+		return nil, false, ErrAudit
+	}
+	auditLog.mu.Lock()
+	defer auditLog.mu.Unlock()
+	records := []Record{}
+	more := false
+	err := auditLog.scan(func(record Record) error {
+		if !since.IsZero() {
+			appended, err := time.Parse(time.RFC3339Nano, record.Time)
+			if err != nil || appended.Before(since) {
+				return nil
+			}
+		}
+		if len(records) >= limit {
+			more = true
+			return nil
+		}
+		records = append(records, record)
+		return nil
+	})
 	return records, more, err
 }
 

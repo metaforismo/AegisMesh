@@ -34,6 +34,8 @@ func (s *Server) scopedServer(name string, opts Options, dir string) (*Server, e
 		fleetHub: s.fleetHub.ForTenant(name), listener: s.listener,
 		done: s.done, slots: s.slots, streams: s.streams, clients: s.clients,
 		requests: s.requests, failures: s.failures, key: s.key,
+		accounts: s.accounts, security: s.security, settingSources: s.settingSources, startedAt: s.startedAt,
+		certExpiry: s.certExpiry, now: s.now, assets: s.assets,
 	}
 	if _, err := rand.Read(view.key[:]); err != nil {
 		return nil, err

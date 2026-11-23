@@ -26,6 +26,7 @@ func main() {
 		cli.NewRunCmd(env),
 		cli.NewDemoCmd(env),
 		cli.NewConsoleCmd(env),
+		cli.NewAccountsCmd(env),
 		cli.NewInspectCmd(env),
 		cli.NewRecommendCmd(env),
 		cli.NewExportCmd(env),

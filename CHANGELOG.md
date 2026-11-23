@@ -16,6 +16,17 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   session, read-only effective settings, audit export, system health. One
   confirmation dialog with typed match; older servers get a plain state.
 - Dev mock: contract r5 (`mock-accounts.mjs`), `--round5 off`, `--fail-prefs`.
+- Console accounts and access (ADR-0025): managed person/service accounts with
+  `amk_` API keys (SHA-256 stored, shown once, 1..365-day expiry, revocable),
+  `/api/v1/me` with preferences, sessions and own keys, `/api/v1/admin/accounts`
+  and `/admin/sessions` with `last_admin`/`not_managed` guards, read-only
+  `/admin/settings` with value provenance, bounded `/admin/audit/export`
+  (JSONL/CSV, formula-neutralised), `/api/v1/system` component status, stable
+  principal ids, a seen-OIDC-identity directory and POS-019 break-glass check.
+- `console.session_idle_seconds` (default 1800, 0 disables) ends inactive sessions.
+- `aegismesh accounts list|disable|enable|key revoke --state-dir DIR`: offline,
+  audited break-glass for managed accounts.
+
 - Console: Campaigns list and detail (a lane-per-session score of shared steps,
   basis, stages, automation mix, caveats), the actor profile on sessions as a
   checklist of signals present or not observed, and a Posture review grouped

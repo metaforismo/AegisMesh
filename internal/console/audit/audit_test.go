@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestChainRotationPaginationAndTamper(t *testing.T) {
@@ -207,5 +208,32 @@ func TestVerificationReportsFirstInvalidSequence(t *testing.T) {
 				t.Fatal("startup accepted damaged audit")
 			}
 		})
+	}
+}
+
+func TestCollectBoundsSinceAndActorID(t *testing.T) {
+	auditLog, err := New(filepath.Join(t.TempDir(), "private"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer auditLog.Close()
+	for i := range 5 {
+		if err := auditLog.Append(Record{Actor: "alice", ActorID: "cfg:alice", Action: "audit.read", Outcome: "ok", Detail: string(rune('a' + i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := auditLog.Append(Record{ActorID: strings.Repeat("x", 81), Action: "audit.read"}); err == nil {
+		t.Fatal("oversized actor id accepted")
+	}
+	records, more, err := auditLog.Collect(time.Time{}, 3)
+	if err != nil || !more || len(records) != 3 || records[0].Seq != 1 || records[2].Seq != 3 || records[0].ActorID != "cfg:alice" {
+		t.Fatalf("collect = %+v more=%v err=%v", records, more, err)
+	}
+	if _, _, err := auditLog.Collect(time.Time{}, MaxExportRecords+1); err == nil {
+		t.Fatal("unbounded collect accepted")
+	}
+	records, more, err = auditLog.Collect(time.Now().Add(time.Hour), 10)
+	if err != nil || more || len(records) != 0 {
+		t.Fatalf("future since = %+v %v %v", records, more, err)
 	}
 }

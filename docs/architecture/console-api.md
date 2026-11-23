@@ -7,7 +7,8 @@ as any behavior change.
 
 The console is a *read-mostly* view over evidence already owned by the runtime.
 It never changes sensor behavior, policy, configuration or evidence, and adds issuer discovery, JWKS and token egress only when OIDC is enabled. Mutable state includes operator-authored investigations,
-audit and optional fleet inventory/token administration (ADR-0018).
+audit, optional fleet inventory/token administration (ADR-0018), and managed accounts, API keys and
+preferences (ADR-0025, [below](#accounts-access-and-settings-adr-0025)).
 
 ## Transport and exposure
 
@@ -43,13 +44,16 @@ Two ways to authenticate:
 
 Token comparison is constant-time over digests. Failed logins are rate-limited
 per remote address (429 with `Retry-After`). Sessions expire after
-`console.session_ttl_seconds` (default 3600, max 86400) and on restart.
+`console.session_ttl_seconds` (default 3600, max 86400), after
+`console.session_idle_seconds` without an authenticated request (default 1800,
+`0` disables), and on restart. Console-managed `amk_` API keys authenticate the
+same two ways (ADR-0025).
 
 | Role | Grants |
 |---|---|
 | `viewer` | read endpoints except analyst downloads and admin audit |
 | `analyst` | viewer + investigation writes |
-| `admin` | analyst + audit trail |
+| `admin` | analyst + audit trail; members of `local_tenant` also administer accounts, sessions, settings and system status |
 
 ## Conventions
 
@@ -59,7 +63,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
   max 200.
 - Errors: `{"error":{"code":"<code>","message":"<human text>"}}` with codes
   `invalid_argument` (400), `unauthenticated` (401), `forbidden` (403),
-  `not_found` (404), `conflict` (409), `rate_limited` (429),
+  `not_found` (404), `conflict` (409), `last_admin` (409), `not_managed` (409), `rate_limited` (429),
   `unavailable` (503), `internal` (500).
 - All evidence text (paths, previews, user agents, tool names, summaries) is
   attacker-controlled data. The API returns it as JSON strings; the UI must
@@ -139,7 +143,7 @@ per remote address (429 with `Retry-After`). Sessions expire after
   "started_at": "…", "uptime_seconds": 3600, "healthy": true,
   "sensors": { "wanted": 4, "started": 4 },
   "bus": { "dropped_events": 0 },
-  "storage": { "segments": 3, "bytes": 123456, "encrypted": false,
+  "storage": { "segments": 3, "bytes": 123456, "encrypted": false, "healthy": true,
                "retention": { "max_events": 100000, "max_age_days": 30 } },
   "index": { "events": 1200, "capacity": 50000, "oldest": "…",
              "history": "complete" },   // complete | truncated | unavailable
@@ -235,7 +239,9 @@ and shared across its node-filter classes; heartbeat frames remain per stream.
 `session.oidc_login`, `session.oidc_denied`, `session.tenant_switch`,
 `investigation.create`, `investigation.update`, `investigation.note`,
 `investigation.attach`, `investigation.detach`, `audit.read`, `audit.verify`,
-`authz.denied`, `event.read`, `export.events`. Token values, session identifiers and note bodies are never
+`authz.denied`, `event.read`, `export.events`, `account.create`, `account.update`, `key.create`,
+`key.revoke`, `session.revoke`, `preferences.update`, `audit.export`. Records may carry `actor_id`
+(stable principal id). Token values, key digests, session identifiers and note bodies are never
 written to the audit trail.
 
 ## Implementation safety bounds and clarified semantics
@@ -927,3 +933,136 @@ attacker-influenced text: render as text. `posture.scope` is
 `evidence_only` (POS-017 only) for other tenants, which never see local
 configuration. Posture details never contain token values, digests, URLs or
 secret references.
+
+## Accounts, access and settings (ADR-0025)
+
+Implements the round-5 contract. All routes use the existing authentication,
+Host/Origin checks, strict 64 KiB JSON bodies, cookie CSRF for mutations and
+the eight-handler admission. Arrays are never null; times are RFC 3339 UTC.
+
+**Principals.** Every principal has a stable `id`: `cfg:<name>` (config-file
+operator, read-only here, the break-glass path), `acc_<16 hex>` (managed
+account, API keys only, no passwords) or `oidc:<12 hex>` (HMAC of issuer and
+subject; neither is exposed). `Principal` in `/session` gains `id`, `source`
+(`config|managed|oidc`) and `kind` (`person|service`). OIDC identities are
+listed after their first sign-in (bounded directory of 1000, least recently
+seen evicted; no tokens are kept).
+
+| Method | Path | Role | Result |
+|---|---|---|---|
+| GET | `/api/v1/me` | viewer | `Me` |
+| GET/PUT | `/api/v1/me/preferences` | viewer | `Preferences`; PUT merges the given keys, unknown keys or values → 400 |
+| GET | `/api/v1/me/sessions` | viewer | `{"items":[Session]}` of the caller's principal |
+| DELETE | `/api/v1/me/sessions/{handle}` | viewer | 204; another principal's or unknown handle → 404; the current one also clears the cookie |
+| GET/POST | `/api/v1/me/keys` | viewer | managed accounts only (else 403): `{"items":[Key]}` / 201 `{"key":Key,"token":"amk_…"}` |
+| DELETE | `/api/v1/me/keys/{key_id}` | viewer | 204 (idempotent for an already revoked key) |
+| GET/POST | `/api/v1/admin/accounts` | admin† | `{"items":[Account],"limits":{…}}` / 201 `Account` |
+| GET/PATCH | `/api/v1/admin/accounts/{id}` | admin† | `Account` + `keys`, `sessions` / `Account`; config or OIDC → 409 `not_managed` |
+| POST | `/api/v1/admin/accounts/{id}/keys` | admin† | 201 `{"key":Key,"token":"amk_…"}`; disabled account → 409 `conflict` |
+| DELETE | `/api/v1/admin/accounts/{id}/keys/{key_id}` | admin† | 204 |
+| GET | `/api/v1/admin/sessions` | admin† | `{"items":[Session]}` for every principal and tenant |
+| DELETE | `/api/v1/admin/sessions/{handle}` | admin† | 204 |
+| GET | `/api/v1/admin/settings` | admin† | `Settings` |
+| GET | `/api/v1/admin/audit/export?format=jsonl\|csv&since=RFC3339` | admin† | attachment |
+| GET | `/api/v1/system` | admin† | `System` |
+
+† admin role **and** membership of `console.local_tenant` (otherwise 403,
+audited as `authz.denied`). Administration changes are appended to the local
+tenant's audit chain. `/admin/sessions` and `/admin/accounts` show principals of
+every tenant: metadata only, never evidence (ADR-0025 exception to ADR-0020).
+
+```jsonc
+// Me
+{"id":"acc_fc92e7e510f57147","name":"Dana Analyst","kind":"person","source":"managed","role":"analyst",
+ "tenants":["default"],"tenant":"default","auth_method":"token","created_at":"…","last_seen_at":"…",
+ "capabilities":{"manage_own_keys":true,"administer":false}}
+// created_at: account creation (managed) or first sign-in (OIDC); null for config operators.
+// last_seen_at: last key use (managed, minute resolution), last sign-in (OIDC), or in-memory
+// activity since process start (config); null when unknown.
+// manage_own_keys: source managed and token authentication enabled.
+// administer: role admin and member of local_tenant.
+
+// Preferences (defaults shown)
+{"timezone":"utc","default_window":"24h","density":"comfortable","theme":"system","reduce_motion":"system"}
+
+// Session
+{"handle":"ses_<16hex>","current":true,"auth_method":"token","tenant":"default","created_at":"…",
+ "last_seen_at":"…","expires_at":"…","idle_expires_at":"… | null","remote":"203.0.113.7",
+ "client":"Chrome on macOS","account_id":"cfg:alice","account_name":"alice"}
+// handle = HMAC of the session id under a per-process key; it is never a credential.
+// client is one of: "<Chrome|Edge|Firefox|Safari|Opera> on <Windows|macOS|Linux|iOS|Android|ChromeOS>",
+// a browser name alone, "curl", "Wget", "Go HTTP client", "Python client", "Node.js client",
+// "PowerShell", "Other client", "Unknown client". Bearer requests have no session.
+
+// Key (never contains the digest; token only in the 201 response)
+{"id":"key_941d642de1f4","label":"laptop","prefix":"amk_VdYe","created_at":"…","created_by":"acc_…",
+ "expires_at":"…","last_used_at":"… | null","revoked_at":"… | null","status":"active|expired|revoked"}
+
+// Account (additions to the contract: updated_at, editable)
+{"id":"acc_…","name":"Dana Analyst","kind":"person","source":"managed","role":"analyst",
+ "tenants":["default"],"status":"active","created_at":"…","created_by":"cfg:admin","updated_at":"…",
+ "last_seen_at":"…","active_keys":2,"active_sessions":0,"editable":true}
+// config operators: created_at/updated_at null, created_by "config", status "disabled" when
+// token_login is false; OIDC identities: created_by "oidc", status always "active".
+// limits: {"max_accounts":200,"max_keys_per_account":10,"max_key_days":365,"default_key_days":90}
+```
+
+**Rules.** Create body `{"name","kind","role","tenants"}`: name 1..80 printable
+runes without surrounding spaces, unique case-insensitively among managed
+accounts and config operator names (409 `conflict`); kind `person|service`;
+role `viewer|analyst|admin`; 1..32 declared tenants. PATCH takes any of
+`name, role, tenants, status` (empty → 400). Role, tenant or status changes
+revoke the account's sessions; disabling also makes its keys fail at once.
+Key body `{"label","expires_in_days"}`: label 1..64 printable runes; days
+1..365, 0/omitted = 90. An account holds at most 10 keys; at the limit the
+longest-inactive revoked or expired key is pruned, and 10 active keys → 409.
+Sessions opened with a key expire no later than the key and end when it is
+revoked. Event streams re-check their credential before every event and on
+every 15 s heartbeat: a stream opened with a managed bearer key closes once the
+key is revoked or expired, the account is disabled, or the account no longer
+belongs to the stream's tenant, and closes at the key's `expires_at` at the latest. A change leaving no administrator who can sign in → 409
+`last_admin`: config admins in `local_tenant` count while token login is on,
+managed admins count when active, in `local_tenant` and holding a usable key;
+OIDC admins do not count.
+
+```jsonc
+// Settings (all items read-only; editable is always false in this round)
+{"generated_at":"…","editable":false,"note":"Settings are read-only in the console; …",
+ "sections":[{"id":"access","title":"Access and sessions","items":[
+   {"key":"console.session_ttl_seconds","label":"Session lifetime","value":"1h","kind":"duration",
+    "source":"config","editable":false,"note":"Change in the config file and restart."}]}]}
+// Section ids in order: access, sso, tenants, listener, evidence, detection, fleet, exports.
+// kind: boolean | duration | count | text | list | bytes | timestamp. Durations are compact ("8h", "30m", "off").
+// source: config | env | default, plus "runtime" for observed facts (usage, occupancy, discovery
+// state, certificate expiry) that are not settings. Built-in limits use "default".
+// Never included: token digests, OIDC client secret (only "file reference"/"environment variable"/"none"),
+// issuer path (host only), filesystem paths.
+
+// System
+{"version":"…","commit":"…","build_date":"…","go_version":"go1.27.4","started_at":"…",
+ "uptime_seconds":3600,"config_schema":"aegismesh.io/v1alpha1",
+ "components":[{"id":"console","status":"ok","detail":"serving; 2 live session(s)"},
+   {"id":"storage","status":"ok","detail":"1.2 MiB in 3 segment(s); encryption off"},
+   {"id":"index","status":"ok","detail":"1200 of 50000 events; history complete"},
+   {"id":"sensors","status":"ok","detail":"4 of 4 running"},
+   {"id":"fleet","status":"off","detail":"hub and agent disabled"},
+   {"id":"oidc","status":"off","detail":"OIDC sign-in is not configured"}],
+ "licenses_url":""}
+// status: ok | degraded | off, derived from live state. licenses_url is "/licenses" only when the
+// embedded UI ships that asset, otherwise "". No host details beyond /api/v1/node.
+```
+
+**Audit export.** `format` defaults to `jsonl`; `since` is an inclusive RFC 3339
+time. The `audit.export` record is appended to the exported (active tenant's)
+chain before any byte is sent. At most 10000 records (oldest first) per
+download; `X-AegisMesh-Export-Records` and `X-AegisMesh-Export-Truncated`
+report the count and whether more matched (continue with a later `since`).
+JSONL lines are the canonical stored records, so the hash chain can be
+re-verified offline. CSV columns: `seq,time,actor,actor_id,role,action,target,
+outcome,remote,detail,issuer,subject,prev_hash,hash`; cells starting with
+`= + - @`, TAB or CR are prefixed with `'`.
+
+**Limits.** Sessions are in memory: a restart signs everyone out and nothing
+is shared between processes. Settings cannot be edited here. `last_used_at` has
+one-minute resolution and is persisted at most once a minute. No SCIM, password
+login or custom roles. Account state is plaintext like investigations.

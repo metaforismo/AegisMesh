@@ -166,6 +166,13 @@ func (m *Manager) discover(ctx context.Context) error {
 	return nil
 }
 
+// Ready reports whether issuer discovery has succeeded at least once.
+func (m *Manager) Ready() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ready != nil
+}
+
 // Begin reserves single-use state bound to an independent pre-login browser cookie.
 func (m *Manager) Begin() (location, browser string, err error) {
 	m.mu.Lock()
