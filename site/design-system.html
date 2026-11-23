@@ -29,6 +29,7 @@
     <nav class="ds-toc" aria-label="Sections">
       <a href="#principles">Principles</a>
       <a href="#identity">Identity</a>
+      <a href="#brand">Brand</a>
       <a href="#instrument">Mesh, tempo, density</a>
       <a href="#color">Color</a>
       <a href="#type">Type</a>
@@ -52,6 +53,7 @@
       <a href="#overlays">Overlays &amp; keys</a>
       <a href="#catalogs">Catalogs &amp; digest</a>
       <a href="#patterns">Campaigns, actors, posture</a>
+      <a href="#settings">Settings</a>
     </nav>
 
     <main id="main">
@@ -78,6 +80,32 @@
         <p>The mesh appears as a faint lattice (<code>--lattice-line</code>, <code>--lattice-node</code>) on the sign-in page, in empty states and behind the landing hero. It is decorative and carries no information, so it never sits behind data: console screens are a flat canvas.</p>
         <p>In the console, colour goes on data, status and the one primary action. A selection (the current screen, a time window, a tab) is the label in full ink with a 1px cobalt line exactly as wide as its word; controls are fully round and flat, panels flat with a quiet hairline and no shadow.</p>
         <div class="ds-demo lattice ds-lattice" aria-hidden="true"></div>
+      </section>
+
+      <section class="ds-section" id="brand">
+        <h2>Brand</h2>
+        <p>The mark is a <strong>net closed around a lure</strong>: a diamond perimeter (the protective mesh), four links reaching in from its sides, and a solid diamond at the centre that they do not touch (the decoy, held in the net). It is one colour, drawn on a 24-unit grid, and legible from 16px. The wordmark is set in the display serif. Files: <code>site/assets/brand/</code> (mark and lockup; colour, dark and one-colour variants).</p>
+        <div class="ds-demo ds-brand">
+          <figure class="ds-brand-tile ds-brand-tile--dark">
+            <div class="ds-brand-sizes"><svg class="brand__mark ds-mark ds-mark--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg><svg class="brand__mark ds-mark ds-mark--32" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg><svg class="brand__mark ds-mark ds-mark--64" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg></div>
+            <p class="ds-brand-lockup"><svg class="brand__mark ds-mark ds-mark--24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg><span class="brand__word">AegisMesh</span></p>
+            <figcaption>Dark ground: #8ea5ff</figcaption>
+          </figure>
+          <figure class="ds-brand-tile ds-brand-tile--light">
+            <div class="ds-brand-sizes"><svg class="brand__mark ds-mark ds-mark--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg><svg class="brand__mark ds-mark ds-mark--32" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg><svg class="brand__mark ds-mark ds-mark--64" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg></div>
+            <p class="ds-brand-lockup"><svg class="brand__mark ds-mark ds-mark--24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg><span class="brand__word">AegisMesh</span></p>
+            <figcaption>Light ground: cobalt #2e4fc9</figcaption>
+          </figure>
+          <figure class="ds-brand-tile ds-brand-tile--mono">
+            <div class="ds-brand-sizes"><svg class="brand__mark ds-mark ds-mark--32" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg><span class="ds-brand-space"><svg class="brand__mark ds-mark ds-mark--64" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="brand__net" d="M12 2.75 21.25 12 12 21.25 2.75 12z"/><path class="brand__links" d="M7.4 7.4l2.4 2.4M16.6 16.6l-2.4-2.4M16.6 7.4l-2.4 2.4M7.4 16.6l2.4-2.4"/><path class="brand__lure" d="M12 9.6 14.4 12 12 14.4 9.6 12z"/></svg></span></div>
+            <figcaption>One colour (<code>currentColor</code>). The dashed box is the clear space: half the mark's height on every side.</figcaption>
+          </figure>
+        </div>
+        <ul class="limits">
+          <li><strong>Minimum size.</strong> 16px for the mark, 96px wide for the lockup; below that, the word alone.</li>
+          <li><strong>Colour.</strong> Cobalt on light, <code>#8ea5ff</code> on dark, white on cobalt. Never two colours inside the mark, never a gradient.</li>
+          <li><strong>Don't.</strong> Rotate it, outline the lure, join the links to the lure, add a shield or a lock, put it inside a container shape, stretch it, or set the wordmark in the sans.</li>
+        </ul>
       </section>
 
       <section class="ds-section" id="instrument">
@@ -590,6 +618,48 @@ prompts/get name="ignore previous instructions 🙂"</span>
           <span class="pstatus pstatus--ok"><span class="pstatus__mark" aria-hidden="true"><svg class="icon icon--xs icon--check" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 8.5l3.25 3.25L13 5"/></svg></span>Looks right</span>
         </div>
         <p>Posture status (<code>.pstatus</code>): a rounded square with “!”, a ring with an italic “i”, a check. The review is a configuration review, not a security guarantee; the console says so in the page header.</p>
+      </section>
+      <section class="ds-section" id="settings">
+        <h2>Settings and administration</h2>
+        <p>Choices drawn as words with the one selection line, over native radios (<code>.choices</code>, <code>.choice</code>):</p>
+        <div class="ds-demo">
+          <fieldset class="choices"><legend class="field__label">Time zone</legend>
+            <div class="choices__row">
+              <label class="choice"><input class="choice__input" type="radio" name="ds-tz" value="utc" checked><span class="choice__label">UTC</span></label>
+              <label class="choice"><input class="choice__input" type="radio" name="ds-tz" value="local"><span class="choice__label">Local time</span></label>
+            </div>
+          </fieldset>
+        </div>
+        <p>Account source (<code>.src-badge</code>) and setting source (<code>.src-chip</code>): a shape plus a word.</p>
+        <div class="ds-demo">
+          <span class="src-badge src-badge--config"><span class="src-badge__mark" aria-hidden="true"></span>Configured</span>
+          <span class="src-badge src-badge--oidc"><span class="src-badge__mark" aria-hidden="true"></span>Single sign-on</span>
+          <span class="src-badge src-badge--managed"><span class="src-badge__mark" aria-hidden="true"></span>Managed</span>
+          <span class="src-chip src-chip--config"><span class="src-chip__mark" aria-hidden="true"></span>Config file</span>
+          <span class="src-chip src-chip--default"><span class="src-chip__mark" aria-hidden="true"></span>Default</span>
+          <span class="src-chip src-chip--env"><span class="src-chip__mark" aria-hidden="true"></span>Environment</span>
+        </div>
+        <p>Read-only effective settings (<code>.setting-list</code>): label, value with its source, how to change it and the config key.</p>
+        <div class="ds-demo ds-demo--col">
+          <dl class="setting-list">
+            <div class="setting"><dt class="setting__label">Session lifetime</dt><dd class="setting__value"><span class="setting__text num">8h</span><span class="src-chip src-chip--config"><span class="src-chip__mark" aria-hidden="true"></span>Config file</span></dd><dd class="setting__how"><span class="setting__note">Change in the config file and restart.</span><code>console.session_ttl_seconds</code></dd></div>
+            <div class="setting"><dt class="setting__label">Idle timeout</dt><dd class="setting__value"><span class="setting__text num">30m</span><span class="src-chip src-chip--default"><span class="src-chip__mark" aria-hidden="true"></span>Default</span></dd><dd class="setting__how"><span class="setting__note">Set 0 to turn it off, or 5m to 24h.</span><code>console.session_idle_seconds</code></dd></div>
+          </dl>
+        </div>
+        <p>The one-time key reveal (<code>.reveal</code>): copy first, said plainly that it will not be shown again; dismissing it empties the value.</p>
+        <div class="ds-demo ds-demo--col">
+          <section class="reveal" aria-label="Example reveal panel">
+            <div class="reveal__head"><p class="reveal__title">Your new API key</p><p class="reveal__label"><span class="muted">Label </span>ci smoke test</p></div>
+            <div class="banner banner--warn"><div><p class="banner__title">Copy it now. You will not see this key again.</p><p>The server keeps only a SHA-256 fingerprint.</p></div></div>
+            <pre class="code reveal__value">amk_EXAMPLEexampleEXAMPLEexampleEXAMPLEexamp</pre>
+            <div class="btn-row reveal__actions"><button class="btn btn--primary" type="button">Copy key</button><button class="btn" type="button">I have stored it</button></div>
+          </section>
+        </div>
+        <p>A form's error summary (<code>.form-summary</code>) takes focus and links each problem to its field. Destructive actions use one confirmation dialog (<code>.confirm</code>): the consequence in one sentence, the target named, a typed match for keys and accounts.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="form-summary"><div><p class="form-summary__title">Fix one problem before saving</p><ul class="form-summary__list"><li><button class="form-summary__link" type="button">Label: Give the key a label.</button></li></ul></div></div>
+          <dl class="confirm__target"><dt>Key</dt><dd><code>ci smoke test (amk_EXAM…)</code></dd></dl>
+        </div>
       </section>
 </main>
   </div>

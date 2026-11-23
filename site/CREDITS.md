@@ -22,7 +22,7 @@ in `docs/license-policy.md`.
 |---|---|---|
 | `assets/landing/img/console-*.webp` | Screenshots of the AegisMesh operator console, taken from the development mock (`internal/consoleui/devserver/mock-server.mjs`) with its synthetic data: documentation-range addresses (RFC 5737, RFC 3849) and invented markers | Apache-2.0, part of this project |
 | `assets/landing/share.jpg` | The landing page's own first screen, for link previews | Apache-2.0, part of this project |
-| `assets/landing/landing.css`, `assets/icon.svg`, the inline brand mark | The project's own page CSS and shield mark | Apache-2.0, part of this project |
+| `assets/landing/landing.css`, `assets/icon.svg`, `assets/brand/*.svg`, the inline brand mark | The project's own page CSS and brand mark (a net closed around a lure) | Apache-2.0, part of this project |
 
 ## Not used, and why
 

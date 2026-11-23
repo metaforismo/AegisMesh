@@ -8,6 +8,14 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console: Settings (`g ,`, account menu, palette). Your account: profile and
+  what your role allows, preferences (UTC or local time, default window,
+  density, theme, reduce motion; saved to the account or this browser,
+  optimistic with rollback), your sessions, API keys shown once. Admins:
+  accounts (configured, single sign-on, managed), account detail, every
+  session, read-only effective settings, audit export, system health. One
+  confirmation dialog with typed match; older servers get a plain state.
+- Dev mock: contract r5 (`mock-accounts.mjs`), `--round5 off`, `--fail-prefs`.
 - Console: Campaigns list and detail (a lane-per-session score of shared steps,
   basis, stages, automation mix, caveats), the actor profile on sessions as a
   checklist of signals present or not observed, and a Posture review grouped
@@ -48,6 +56,9 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   loopback-only demo. See ADR-0021 and `docs/ai-threat-detection.md`.
 
 ### Changed
+
+- Brand: the shield mark is replaced by a net closed around a lure, with a
+  serif wordmark, a scheme-aware favicon and files in `site/assets/brand/`.
 
 - Landing page (`site/index.html`) redesigned: one screen per section, dark
   console identity, real console screenshots from the synthetic dev mock, a
