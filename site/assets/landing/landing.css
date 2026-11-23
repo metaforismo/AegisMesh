@@ -31,11 +31,11 @@
 
 /* ---------------------------------------------------------------- the mark
    The project's own mark, a net closed around a lure (site/assets/brand/, the console's brand
-   mark): one colour, the accent on this page's ground, white on the cobalt footer. */
+   mark): one colour, the accent on this page's dark ground, cobalt on the light footer. */
 .lp-mark { width: 24px; height: 24px; flex: none; color: var(--p-accent); }
 .lp-mark__net, .lp-mark__links { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .lp-mark__lure { fill: currentColor; }
-.footer--statement .lp-mark { color: #ffffff; }
+.footer--statement .lp-mark { color: #2e4fc9; }
 
 /* ---------------------------------------------------------------- the bar without script
    The kit's sheet needs system.js; this page has no script, so the bar does what the kit's own

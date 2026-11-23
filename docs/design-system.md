@@ -1178,8 +1178,8 @@ check.
 - **Lockup.** Mark, then "AegisMesh" in the display serif (`--font-display`,
   semibold, −0.012em), gap 8px at a 24px mark. In the SVG lockups the wordmark is
   set as text in the same serif stack, so it renders in the platform serif.
-- **Colour.** Cobalt `--color-accent` on light, `#8ea5ff` on dark, white on
-  cobalt (the landing footer). Never two colours inside the mark, never a
+- **Colour.** Cobalt `--color-accent` on light (the landing footer too),
+  `#8ea5ff` on dark, white on a cobalt fill. Never two colours inside the mark, never a
   gradient, never on a busy photo.
 - **Clear space.** Half the mark's height on every side (12px at 24px).
 - **Minimum size.** 16px for the mark (favicon, rail sidebar); 96px wide for
@@ -1206,6 +1206,7 @@ defensive product).
 | Scripted sweep, 104 captures: admin 17 settings routes (index, four account sections, accounts, a managed and a configured account, active sessions, six settings pages, audit export, system), viewer 6 (incl. a denied admin page), older server 3; each dark and light at 1440 and 375px: signed in, one h1, no horizontal page scroll, no text under 11px, no page errors | PASS |
 | Driven in the browser: create a key (empty label shows the summary and takes focus; the reveal takes focus; after "I have stored it" no `amk_` token remains in the page or in storage); revoke with typed label (button disabled until it matches); time zone to local (sidebar says "Times in local time", saved to the account); always reduce motion; density from the top bar updates the radio; theme change against `--fail-prefs` rolled back with a status line and a toast; `g ,`; `?` lists Settings; the account menu links | PASS (found and fixed: a 204 revoke read as "cancelled"; the submit button lost its icon after a request; synthetic idle times in the past) |
 | Brand candidates compared at 16, 32 and 64px on dark and light | Done; see "Brand" |
+| Landing pictures retaken (15 WebP, identical pixel sizes, 0.6 MB in all) and the landing viewed at 1440 and 390px: every picture loads, no horizontal scroll, no console errors; the footer mark was fixed (white on a light footer) | PASS |
 | Firefox, Safari, screen readers, the real Go server with the r5 backend, a real phone | NOT RUN: only Chromium and the mock |
 
 ## Interaction
@@ -1461,7 +1462,12 @@ OS light theme as the console does.
   what AegisMesh never does, evidence, three setup steps, questions, and the
   close with the footer.
 - **Pictures:** WebP screenshots of the console running on the development
-  mock with synthetic data, at 2x and about 0.5 MB in all. No photographs,
+  mock with synthetic data, at 2x and about 0.5 MB in all. Retaken on
+  2026-11-23 after the data-terminal redesign and the new mark: same routes,
+  crops, file names and pixel sizes (dark, 2x, `cwebp -q 80 -m 6`; phone
+  files are top-left crops of the desktop captures); the event picture is
+  taken at a 970px viewport, where the event page is one column, and
+  `share.jpg` is the new first screen at 1200×750. No photographs,
   third-party logos or web fonts (`docs/license-policy.md`).
 - **No script:** `webtest/site.test.mjs` keeps the site free of scripts and
   inline styles, so the hero entrance and the statement that lights up word by

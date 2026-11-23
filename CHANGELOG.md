@@ -59,6 +59,8 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 - Brand: the shield mark is replaced by a net closed around a lure, with a
   serif wordmark, a scheme-aware favicon and files in `site/assets/brand/`.
+- Landing: console pictures and the share image retaken from the redesigned
+  console (same files and sizes).
 
 - Landing page (`site/index.html`) redesigned: one screen per section, dark
   console identity, real console screenshots from the synthetic dev mock, a
