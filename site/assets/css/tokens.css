@@ -150,24 +150,28 @@
 
   /* Severity: ordinal marks; text beside them stays ink. Always paired with
      the 1–5 segment meter and the word, so color is never the only cue. */
-  /* Meter fills, measured against surface / surface-2 (non-text, >= 3:1):
-     info 3.59/3.37, low 3.78/3.55, medium 3.41/3.20, high 3.68/3.46,
-     critical 5.52/5.18. */
-  --sev-info: #7d8899;
-  --sev-low: #4f86c6;
-  --sev-medium: #b58200;
-  --sev-high: #d0682f;
+  /* Meter fills (non-text, >= 3:1) against surface / surface-2 / the empty
+     segments (sev-track), which is what tells a level apart:
+     info 4.17/3.91/3.20, low 4.09/3.83/3.14, medium 4.17/3.91/3.20,
+     high 4.19/3.92/3.22, critical 5.52/5.18/4.24 (2026-11-23; the fills
+     were 2.62–2.90:1 on the track before). webtest/contrast.test.mjs
+     re-measures these. */
+  --sev-info: #727d8e;
+  --sev-low: #4a80bf;
+  --sev-medium: #a27400;
+  --sev-high: #c45f28;
   --sev-critical: #c42b4f;
   --sev-track: #dde2e9;
 
   /* Classification series: categorical slots 1–3, run through the dataviz
      validate_palette.js six checks. Light vs #ffffff: all pass; worst adjacent
-     CVD ΔE 9.2 (deutan), normal-vision ΔE 27.6; signal green is 2.82:1 on
-     surface, so charts always ship a legend, direct labels and a table view.
-     Each class also carries a distinct glyph shape. */
+     CVD ΔE 9.2 (deutan), normal-vision ΔE 27.6. Signal green was darkened
+     on 2026-11-23 from #1baf7a (2.82:1) to 3.34:1 on surface and 3.13:1 on
+     surface-2, so every series mark meets 3:1. Charts still ship a legend,
+     direct labels and a table view, and each class has its own glyph shape. */
   --class-interaction: #2a78d6;
   --class-canary: #eb6834;
-  --class-signal: #1baf7a;
+  --class-signal: #17a06f;
 
   --chart-grid: #e6eaef;
   --chart-axis: #a9b3c1;            /* decorative baseline; ticks carry the values */
@@ -195,7 +199,9 @@
   --scrim: rgb(15 20 27 / 0.38);
 }
 
-@media (prefers-color-scheme: dark) {
+/* Dark applies to screens only: paper always gets the light palette, so a
+   page printed from a dark console is dark ink on white, never light ink. */
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --color-canvas: #0d1218;
@@ -252,57 +258,59 @@
   }
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --color-canvas: #0d1218;
-  --color-surface: #151b24;
-  --color-surface-2: #1a212c;
-  --color-surface-3: #232c39;
-  --color-border: #263040;
-  --color-border-strong: #617088;
-  --color-ink: #e7ebf1;             /* 14.46:1 surface */
-  --color-ink-2: #b8c1ce;           /*  9.52:1 surface */
-  --color-ink-3: #909bab;           /*  6.15:1 surface, 5.75:1 surface-2 */
-  --color-ink-inverse: #0e131a;
-  --color-accent: #8ea5ff;
-  --color-accent-hover: #adbdff;
-  --color-accent-soft: #1f2a4d;
-  --color-accent-ink: #0e131a;
-  --color-accent-line: #3a4b8c;
-  --color-focus: #8ea5ff;
-  --color-evidence-bg: #1b1a2b;
-  --color-evidence-border: #34304f;
-  --color-evidence-ink: #dcd7f5;
-  --color-ok: #5fcf85;
-  --color-ok-soft: #14301f;
-  --color-warn: #f0bf4c;
-  --color-warn-soft: #33290f;
-  --color-danger: #ff8a8a;
-  --color-danger-soft: #3a1719;
-  --color-info: #8ea5ff;
-  --color-info-soft: #1f2a4d;
-  --sev-info: #7c8797;
-  --sev-low: #5b97dc;
-  --sev-medium: #e0ab1f;
-  --sev-high: #ef8550;
-  --sev-critical: #ef5f80;
-  --sev-track: #2b3544;
-  /* Validated vs #151b24: all checks pass (see the media block above). */
-  --class-interaction: #3987e5;
-  --class-canary: #d95926;
-  --class-signal: #199e70;
-  --chart-grid: #212a36;
-  --chart-axis: #45526a;
-  --chart-crosshair: #909bab;
-  --mesh-dot: rgb(231 235 241 / 0.07);
-  --mesh-line: rgb(142 165 255 / 0.10);
-  --lattice-line: rgb(142 165 255 / 0.04);
-  --lattice-node: rgb(142 165 255 / 0.10);
-  --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
-  --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
-  --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);
-  --highlight: inset 0 1px 0 rgb(255 255 255 / 0.045);
-  --scrim: rgb(4 7 11 / 0.62);
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-canvas: #0d1218;
+    --color-surface: #151b24;
+    --color-surface-2: #1a212c;
+    --color-surface-3: #232c39;
+    --color-border: #263040;
+    --color-border-strong: #617088;
+    --color-ink: #e7ebf1;             /* 14.46:1 surface */
+    --color-ink-2: #b8c1ce;           /*  9.52:1 surface */
+    --color-ink-3: #909bab;           /*  6.15:1 surface, 5.75:1 surface-2 */
+    --color-ink-inverse: #0e131a;
+    --color-accent: #8ea5ff;
+    --color-accent-hover: #adbdff;
+    --color-accent-soft: #1f2a4d;
+    --color-accent-ink: #0e131a;
+    --color-accent-line: #3a4b8c;
+    --color-focus: #8ea5ff;
+    --color-evidence-bg: #1b1a2b;
+    --color-evidence-border: #34304f;
+    --color-evidence-ink: #dcd7f5;
+    --color-ok: #5fcf85;
+    --color-ok-soft: #14301f;
+    --color-warn: #f0bf4c;
+    --color-warn-soft: #33290f;
+    --color-danger: #ff8a8a;
+    --color-danger-soft: #3a1719;
+    --color-info: #8ea5ff;
+    --color-info-soft: #1f2a4d;
+    --sev-info: #7c8797;
+    --sev-low: #5b97dc;
+    --sev-medium: #e0ab1f;
+    --sev-high: #ef8550;
+    --sev-critical: #ef5f80;
+    --sev-track: #2b3544;
+    /* Validated vs #151b24: all checks pass (see the media block above). */
+    --class-interaction: #3987e5;
+    --class-canary: #d95926;
+    --class-signal: #199e70;
+    --chart-grid: #212a36;
+    --chart-axis: #45526a;
+    --chart-crosshair: #909bab;
+    --mesh-dot: rgb(231 235 241 / 0.07);
+    --mesh-line: rgb(142 165 255 / 0.10);
+    --lattice-line: rgb(142 165 255 / 0.04);
+    --lattice-node: rgb(142 165 255 / 0.10);
+    --elev-1: 0 1px 2px rgb(0 0 0 / 0.35);
+    --elev-2: 0 8px 20px -4px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.3);
+    --elev-3: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 8px 20px -8px rgb(0 0 0 / 0.5);
+    --highlight: inset 0 1px 0 rgb(255 255 255 / 0.045);
+    --scrim: rgb(4 7 11 / 0.62);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

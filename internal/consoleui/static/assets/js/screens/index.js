@@ -46,7 +46,7 @@ export const SCREENS = Object.freeze({
   sensors: lazy('Sensors', () => import('./sensors.js'), { skeleton: 'cards', prefetch: (api) => { api.sensors(); api.overview('24h'); api.node(); } }),
   rules: lazy('Rules', () => import('./rules.js'), { skeleton: 'table', prefetch: (api) => { api.rules(); } }),
   recommendations: lazy('Recommendations', () => import('./recommendations.js'), { skeleton: 'cards' }),
-  node: lazy('Node', () => import('./node.js'), { prefetch: (api) => { api.node(); } }),
+  node: lazy('Node', () => import('./node.js'), { skeleton: 'kv', prefetch: (api) => { api.node(); } }),
   investigations: lazy('Investigations', () => import('./investigations.js'), {
     skeleton: 'table',
     prefetch: (api, r) => { api.investigations(normalizeStatus(r.query.status)); },
@@ -56,15 +56,15 @@ export const SCREENS = Object.freeze({
   // is only ever requested when the operator actually opens the page.
   audit: lazy('Audit trail', () => import('./audit.js'), { role: 'admin', skeleton: 'table' }),
   fleet: lazy('Fleet', () => import('./fleet.js'), { skeleton: 'table' }),
-  fleet_node: lazy('Fleet node', () => import('./fleet-node.js')),
+  fleet_node: lazy('Fleet node', () => import('./fleet-node.js'), { skeleton: 'kv' }),
   // The guide's `t` (the term in focus) scrolls within the open screen.
-  guide: lazy('Guide', () => import('./guide.js'), { viewIgnore: ['t'] }),
+  guide: lazy('Guide', () => import('./guide.js'), { skeleton: 'guide', viewIgnore: ['t'] }),
   sessions: lazy('Sessions', () => import('./sessions.js'), {
     skeleton: 'table',
     prefetch: (api, r) => { const f = normalizeSessionFilters(r.query); api.sessions(f.window, f.source || '', '', 50); },
   }),
   // The story keeps the event side panel's `event` (and `event_node`) in place.
-  attack_session: lazy('Session', () => import('./session.js'), { viewIgnore: ['event', 'event_node'] }),
+  attack_session: lazy('Session', () => import('./session.js'), { skeleton: 'story', viewIgnore: ['event', 'event_node'] }),
   techniques: lazy('Techniques', () => import('./techniques.js'), {
     skeleton: 'cards',
     viewIgnore: ['f'],
@@ -81,6 +81,7 @@ export const SCREENS = Object.freeze({
     prefetch: (api, r) => { api.honeytokens(normalizeWindow(r.query.window)); api.decoys(normalizeWindow(r.query.window)); },
   }),
   digest: lazy('Digest', () => import('./digest.js'), {
+    skeleton: 'digest',
     prefetch: (api, r) => { api.digest(normalizeDigestWindow(r.query.window)); },
   }),
   campaigns: lazy('Campaigns', () => import('./campaigns.js'), {
@@ -88,9 +89,11 @@ export const SCREENS = Object.freeze({
     prefetch: (api) => { api.campaigns(); },
   }),
   campaign: lazy('Campaign', () => import('./campaign.js'), {
+    skeleton: 'story',
     prefetch: (api, r) => { api.campaign(r.params.id); },
   }),
   posture: lazy('Posture', () => import('./posture.js'), {
+    skeleton: 'posture',
     prefetch: (api) => { api.posture(); },
   }),
 });

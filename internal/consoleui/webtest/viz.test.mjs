@@ -68,6 +68,10 @@ test('unfold sentence: built from fields only; the source stays evidence', () =>
   assert.equal(text, ' produced 13 events over 8.5 s on 2 sensors (HTTP): it began with discovery, moved through AI service use, then discovery, and ended with decoy credential replay. The typical gap between events was 700 ms.');
   assert.doesNotMatch(text, /203\.0/);
   assert.deepEqual(unfoldSentence(null), []);
+  // A long back-and-forth is summarised instead of listed stage by stage.
+  const stages = ['discovery', 'credential_access', 'discovery', 'ai_service_abuse', 'discovery', 'credential_access', 'discovery'];
+  const long = unfoldSentence({ source: 'x', event_count: 9, duration_ms: 60000, phases: stages.map((stage) => ({ stage })) }).map((s) => s.v).join('');
+  assert.match(long, /began with discovery, switched between credential access, discovery and AI service use 5 times, and ended with discovery\./);
 });
 
 test('tour: steps filtered to visible targets; key is fixed', async () => {

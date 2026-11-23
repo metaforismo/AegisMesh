@@ -1,9 +1,9 @@
 import { h, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
-import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
+import { CLASSIFICATIONS } from '../lib/taxonomy.js';
 import { formatCount } from '../lib/format.js';
 import { binTimes, bucketTrace, sensorBuckets, indexKnownFrom } from '../lib/chart.js';
-import { pageHead, panel, kv, badge, chip, timeEl, empty, barList, glyph, link, labelFor } from '../ui/components.js';
+import { pageHead, panel, kv, badge, chip, timeEl, empty, barList, clsChip, link, labelFor } from '../ui/components.js';
 import { activityTrace } from '../ui/charts.js';
 import { icon } from '../ui/icons.js';
 
@@ -95,7 +95,7 @@ export default {
             ['Last event', s.last_event_at ? timeEl(s.last_event_at, { relative: true }) : h('span', { class: 'muted' }, 'none indexed')],
           ]),
           barList(CLASSIFICATIONS.map((c) => ({
-            label: h('span', { class: 'cls' }, glyph(c), classificationMeta(c).label),
+            label: clsChip(c),
             value: Number(s.by_classification?.[c]) || 0,
             valueText: formatCount(s.by_classification?.[c] || 0),
           })), { max: Math.max(1, Number(s.events_total) || 0) }),

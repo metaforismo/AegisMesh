@@ -11,7 +11,7 @@
 import { h, mount, svg } from '../lib/dom.js';
 import { tempoLayout } from '../lib/viz.js';
 import { href, withQuery, isEventId, isSessionId } from '../lib/route.js';
-import { formatCount, formatDateTime, formatClock } from '../lib/format.js';
+import { formatCount, formatDateTime, formatClock, formatNumber } from '../lib/format.js';
 import { eventKey, parseEventKey, isNodeId } from '../lib/origin.js';
 import { moveIndex, isTypingTarget } from '../lib/keys.js';
 import { cadence as gapBins } from '../lib/cadence.js';
@@ -168,7 +168,7 @@ function cadencePanel(d) {
     body: [
       h('dl', { class: 'figures' },
         [['Median gap', formatDurationMs(c.median_gap_ms)], ['90th percentile', formatDurationMs(c.p90_gap_ms)], ['Shortest gap', formatDurationMs(c.min_gap_ms)],
-          ['Events per minute', Number.isFinite(c.events_per_minute) ? (Math.round(c.events_per_minute * 10) / 10).toLocaleString('en-US') : '—'], ['Regularity', regularityText(c)]]
+          ['Events per minute', Number.isFinite(c.events_per_minute) ? formatNumber(c.events_per_minute) : '—'], ['Regularity', regularityText(c)]]
           .map(([k, v]) => h('div', { class: 'figures__item' }, h('dt', null, k), h('dd', null, v)))),
       h('p', { class: 'figures__note' }, 'Regularity is the share of gaps within 25% of the median gap (with a zero median, only zero gaps count). The median is the upper median and the 90th percentile is nearest-rank. Zero gaps can be clock precision, not speed.'),
       hist,

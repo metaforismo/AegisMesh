@@ -700,6 +700,45 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .table td.num,
 .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
+/* Sortable header: the whole label is the button. The mark is a filled
+   triangle for the active direction and a faint pair otherwise, so the
+   order is never shown by color alone; aria-sort carries it to AT. */
+.table th[aria-sort] { padding: 0; }
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 2rem;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.table th.num .th-sort { flex-direction: row-reverse; justify-content: flex-start; } /* mark on the left, label over the digits */
+.table th:first-child .th-sort { padding-left: var(--space-4); }
+.table th:last-child .th-sort { padding-right: var(--space-4); }
+.th-sort:focus-visible { outline-offset: -2px; }
+.th-sort__mark {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-inline: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.35;
+}
+.th-sort[data-dir="ascending"] .th-sort__mark { border-top: 0; border-bottom: 5px solid currentColor; opacity: 1; }
+.th-sort[data-dir="descending"] .th-sort__mark { opacity: 1; }
+.th-sort[data-dir="ascending"],
+.th-sort[data-dir="descending"] { color: var(--color-ink); }
+@media (hover: hover) { .th-sort:hover { color: var(--color-ink); } .th-sort:hover .th-sort__mark { opacity: 1; } }
+@media (pointer: coarse), (max-width: 47.99rem) { .th-sort { min-height: 2.75rem; } }
+
 .table tbody tr { transition: background-color var(--duration-instant) var(--ease-color); }
 
 @media (hover: hover) {
@@ -2137,9 +2176,17 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 }
 
 /* ---- Touch targets --------------------------------------------------------- */
-/* On coarse pointers every control is at least 44px in both directions. */
-@media (pointer: coarse) {
-  .btn, .nav-link, .segmented button, .menu__item, .tab, .palette__item { min-height: 2.75rem; }
+/* On coarse pointers, and at phone widths whatever the pointer, every
+   control is at least 44px tall (icon buttons in both directions) and every
+   standalone link at least 40px. Links inside running prose are exempt
+   (WCAG 2.5.8 inline exception). */
+@media (pointer: coarse), (max-width: 47.99rem) {
+  .btn, .nav-link, .segmented button, .menu__item, .tab, .palette__item, .input, .select { min-height: 2.75rem; }
+  .crumbs__item a, .row-open, .fw-link, .token-link, .cell-chip, .session-link, .story__summary,
+  .digest__rulelink, .segleg__row, .brief__digest, .token-sources__more, .tip-pop__more,
+  .table td > a:only-child, .kv dd > a:only-child, .bar-list__label > a {
+    display: inline-flex; align-items: center; min-height: 2.5rem;
+  }
   .btn--icon, .copy { min-width: 2.75rem; min-height: 2.75rem; }
   .help-tip::after { inset: -12px; }
   .fchip { min-height: 2.75rem; }
@@ -2375,7 +2422,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .tempo__tick--canary_invocation { stroke: var(--class-canary); }
 .tempo__tick--interaction { stroke: var(--class-interaction); }
 .tempo__hit { fill: transparent; cursor: pointer; }
-.tempo__hit:focus-visible { outline: none; fill: color-mix(in srgb, var(--color-focus) 18%, transparent); }
+.tempo__hit:focus-visible { outline: none; fill: color-mix(in srgb, var(--color-focus) 18%, transparent); stroke: var(--color-focus); stroke-width: 2; }
 .tempo g.is-hot .tempo__tick { stroke: var(--color-ink); stroke-width: 3; }
 .tempo__label { fill: var(--color-ink-3); font-family: var(--font-sans); font-size: 10px; font-variant-numeric: tabular-nums; }
 .story__event.is-hot { background: var(--color-surface-2); box-shadow: inset 2px 0 0 var(--color-ink-3); }
@@ -2595,6 +2642,6 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   .score__shape .evidence { max-width: 5.5rem; }
 }
 /* Touch: inline links that open a source, rule or campaign get a 40px target. */
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 47.99rem) {
   .source-chip, .campaign-mark, .score__src, .rule-link { display: inline-flex; align-items: center; min-height: 40px; }
 }

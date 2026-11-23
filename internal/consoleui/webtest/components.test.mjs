@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createFakeDocument } from './fakedom.mjs';
 
 globalThis.document = createFakeDocument();
-const { sevChip, clsChip, evidence, table, badge, kv } = await import('../static/assets/js/ui/components.js');
+const { sevChip, clsChip, evidence, table, badge, kv, SIGNAL_NO_SEVERITY } = await import('../static/assets/js/ui/components.js');
+const { severityShare } = await import('../static/assets/js/ui/charts.js');
 const { SCREENS } = await import('../static/assets/js/screens/index.js');
 const { parseHash } = await import('../static/assets/js/lib/route.js');
 
@@ -15,6 +16,27 @@ test('severity chip: known values get a meter class, anything else is "none"', (
   // An unexpected API value never becomes a class name.
   assert.equal(cls(sevChip('high evil')), 'sev sev--none');
   assert.equal(sevChip('').textContent, 'No finding');
+});
+
+test('severity mark: one shape everywhere, including "none" and the signal variant', () => {
+  const meter = (el) => el.childNodes[0];
+  for (const v of ['info', 'low', 'medium', 'high', 'critical', '', null, 'bogus']) {
+    const el = sevChip(v);
+    assert.equal(cls(meter(el)), 'sev__meter', `meter for ${v}`);
+    assert.equal(meter(el).getAttribute('aria-hidden'), 'true');
+    assert.equal(meter(el).childNodes.length, 5, `five segments for ${v}`);
+  }
+  const sig = sevChip(undefined, SIGNAL_NO_SEVERITY);
+  assert.equal(cls(sig), 'sev sev--none');
+  assert.equal(sig.textContent, 'Signal');
+  assert.match(sig.getAttribute('title'), /no severity/);
+  // A known severity ignores the override.
+  assert.equal(sevChip('low', SIGNAL_NO_SEVERITY).textContent, 'Low');
+  // The chart key ("none" row of the severity share) uses the same mark.
+  const share = severityShare([{ key: 'high', value: 2 }, { key: 'none', value: 3 }]);
+  const marks = share.querySelectorAll((n) => /(^| )sev( |$)/.test(cls(n) || ''));
+  assert.equal(marks.length, 2);
+  for (const m of marks) assert.equal(m.querySelectorAll((n) => n.tagName === 'i').length, 5);
 });
 
 test('classification chip uses a shape glyph and the word', () => {
@@ -58,4 +80,17 @@ test('every routable screen except login has a registered module', () => {
   for (const n of names) assert.equal(typeof SCREENS[n].render, 'function', n);
   assert.equal(SCREENS.audit.role, 'admin');
   assert.equal(parseHash('#/login').name, 'login');
+});
+
+test('every screen names a loading skeleton that exists and matches its layout family', async () => {
+  const { SKELETON_KINDS, skeleton } = await import('../static/assets/js/ui/skeletons.js');
+  for (const [name, screen] of Object.entries(SCREENS)) {
+    assert.ok(SKELETON_KINDS.includes(screen.skeleton), `${name} uses skeleton "${screen.skeleton}"`);
+    const el = skeleton(screen.skeleton, screen.title);
+    assert.equal(el.getAttribute('role'), 'status');
+    assert.equal(el.getAttribute('aria-label'), `Loading ${screen.title}`);
+  }
+  assert.equal(SCREENS.digest.skeleton, 'digest');
+  assert.equal(SCREENS.attack_session.skeleton, 'story');
+  assert.equal(SCREENS.node.skeleton, 'kv');
 });

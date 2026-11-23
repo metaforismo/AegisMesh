@@ -49,6 +49,9 @@ const PATHS = {
   inbox: 'M1.75 9.25l1.9-5.5h8.7l1.9 5.5v3a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1zM1.75 9.25h3.5l1 1.5h3.5l1-1.5h3.5',
   refresh: 'M13.25 2.75v3.5h-3.5M2.75 13.25v-3.5h3.5M12.6 6.25A5 5 0 0 0 3.5 5.6M3.4 9.75a5 5 0 0 0 9.1.65',
   menu: 'M2.5 4h11M2.5 8h11M2.5 12h11',
+  // Row density: rows spread apart (comfortable) or packed (compact).
+  'rows-loose': 'M3 2.5h10M3 13.5h10M8 5.5v5M6.25 7.25 8 5.5l1.75 1.75M6.25 8.75 8 10.5l1.75-1.75',
+  'rows-dense': 'M3 2.5h10M3 5.5h10M3 8h10M3 10.5h10M3 13.5h10',
   shield: 'M8 1.5l5.5 2.1v4.2c0 3.3-2.3 5.9-5.5 6.7-3.2-.8-5.5-3.4-5.5-6.7V3.6zM5.6 8l1.7 1.7 3.2-3.2',
   plus: 'M8 3v10M3 8h10',
   clock: `${circle(8, 8, 6.25)}M8 4.5V8l2.25 1.5`,

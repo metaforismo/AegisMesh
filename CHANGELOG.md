@@ -49,6 +49,15 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Fixed
 
+- Console audit pass: one severity mark (also for "no finding" and
+  correlation-rule "Signal"), one table time format (relative with absolute
+  UTC), one duration and number formatter, sortable headers on tables whose
+  rows are all loaded, wide tables scroll in place instead of widening the
+  page, failed screens keep their heading and offer a next step (older
+  server, missing object), layout-matched skeletons, 40px+ targets at phone
+  widths, print always light, light severity fills and signal green raised to
+  3:1 (checked by a token contrast test).
+
 - Release SBOM generation for targets other than the build host. The generator
   was started with `go run` under the target's `GOOS`/`GOARCH`, so it was
   cross-compiled and could not execute; the tag-triggered release workflow

@@ -12,14 +12,14 @@
 //   and back/forward navigation shows the last response at once, then
 //   refreshes it. Any write clears the cache.
 
-import { createApi, ApiError } from './lib/api.js';
+import { createApi, ApiError, screenFailure } from './lib/api.js';
 import { parseHash, viewKey } from './lib/route.js';
 import { roleAtLeast } from './lib/taxonomy.js';
 import { h, clear } from './lib/dom.js';
 import { createSwr, abortable } from './lib/swr.js';
 import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
 import { createShell, applyTheme, applyDensity, applyRail, cycleTheme, isApple, NAV } from './ui/shell.js';
-import { errorState, installPeek, toast } from './ui/components.js';
+import { failureState, installPeek, toast, pageHead, panel } from './ui/components.js';
 import { loginErrorCode, loginErrorMessage } from './lib/auth.js';
 import { tenantInfo, switchTargets, routeAfterSwitch, switchBody } from './lib/tenant.js';
 import { notFoundInTenant } from './screens/shared.js';
@@ -458,14 +458,18 @@ async function render({ soft = false } = {}) {
     progress.done();
     if (err?.name === 'AbortError' || controller.signal.aborted) return;
     if (err instanceof ApiError && err.status === 401) return; // endSession already ran.
+    const first = state.firstRender;
     state.firstRender = false;
     // Another tenant's objects answer 404 exactly like absent ones; with
     // tenants in play the empty state says which tenant was searched.
     const info = tenantInfo(state.session);
     const body = err instanceof ApiError && err.code === 'not_found' && info.show
       ? notFoundInTenant(info)
-      : errorState(err, () => render({ soft: true }));
-    swapView(main, h('div', { class: 'view' }, h('div', { class: 'panel' }, body)), { animate: false, dir });
+      : failureState(screenFailure(err, { name: route.name, title: screen.title }), () => render({ soft: true }));
+    // The failed screen keeps its heading, so the page still has one h1 and
+    // focus lands somewhere meaningful.
+    await swapView(main, h('div', { class: 'view' }, pageHead({ title: screen.title }), panel({ body })), { animate: false, dir });
+    if (!soft && !first) main.querySelector('#page-title')?.focus({ preventScroll: true });
   }
 }
 

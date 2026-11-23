@@ -12,7 +12,8 @@ import { href } from '../lib/route.js';
 import { tenantInfo } from '../lib/tenant.js';
 import { ApiError } from '../lib/api.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
-import { formatBytes, formatCount, formatDateTime, formatRelative, shortId } from '../lib/format.js';
+import { formatBytes, formatCount, formatDateTime, shortId } from '../lib/format.js';
+import { timeValue } from '../lib/tablesort.js';
 import {
   FLEET_STATUSES, fleetStatusMeta, normalizeFleetStatus, sensorSummary, TTL_CHOICES, TOKEN_TTL_DEFAULT,
   validateTokenNote, normalizeExpiry, formatExpiresIn, isTokenId, isNodeId,
@@ -31,12 +32,10 @@ export function fleetStatusBadge(status) {
   return badge(m.badge, m.label);
 }
 
-// "2m ago" with the absolute UTC time underneath; "never" before the first heartbeat.
+// "2m ago" (absolute UTC in the peek and to AT); "never" before the first heartbeat.
 export function seenCell(value, emptyText = 'never') {
   if (!value) return h('span', { class: 'muted' }, emptyText);
-  return h('span', { class: 'stack-tight' },
-    h('time', { datetime: value, title: formatDateTime(value) }, formatRelative(value)),
-    h('span', { class: 'muted' }, formatDateTime(value)));
+  return timeEl(value, { relative: true });
 }
 
 export function sensorsCell(sensors) {
@@ -85,7 +84,7 @@ export function forwardingCell(fw) {
   if (!s.enabled) return h('span', { class: 'fwd' }, badge('neutral', 'Off'), s.forwarded ? h('span', { class: 'muted' }, `${formatCount(s.forwarded)} forwarded before`) : null);
   return h('span', { class: 'fwd' },
     h('span', null, `${formatCount(s.forwarded)} forwarded`),
-    s.lastForwardedAt ? h('span', { class: 'muted' }, `last ${formatRelative(s.lastForwardedAt)}`) : h('span', { class: 'muted' }, 'nothing received yet'),
+    s.lastForwardedAt ? h('span', { class: 'muted' }, 'last ', timeEl(s.lastForwardedAt, { relative: true })) : h('span', { class: 'muted' }, 'nothing received yet'),
     s.loss ? badge('warn', `Not forwarded: ${lossText(s)}`) : null,
     s.lastError ? h('code', { class: 'muted' }, s.lastError) : null);
 }
@@ -164,23 +163,23 @@ function nodesTable(nodes, { accepting = false } = {}) {
   const el = table({
     caption: 'Fleet nodes',
     columns: [
-      { label: 'Status', cell: (n) => fleetStatusBadge(n.status) },
-      { label: 'Name', className: 'nowrap', cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
+      { label: 'Status', sort: (n) => fleetStatusMeta(n.status).label, cell: (n) => fleetStatusBadge(n.status) },
+      { label: 'Name', className: 'nowrap', sort: (n) => n.name, cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
       { label: 'Node id', className: 'nowrap', cell: (n) => h('code', { class: 'hash', title: n.id }, shortId(n.id, 12)) },
       { label: 'Version', className: 'nowrap', cell: (n) => h('code', null, n.version?.version || '—') },
-      { label: 'Last seen', className: 'nowrap', cell: (n) => seenCell(n.last_seen_at, 'never (no heartbeat)') },
+      { label: 'Last seen', className: 'nowrap', sort: (n) => timeValue(n.last_seen_at), sortFirst: 'desc', cell: (n) => seenCell(n.last_seen_at, 'never (no heartbeat)') },
       { label: 'Forwarding', cell: (n) => forwardingCell(n.forwarding) },
       ...(accepting ? [{ label: 'Evidence', className: 'nowrap', cell: (n) => (isNodeId(n.id) ? link(href('events', { node: n.id }), 'View events') : '—') }] : []),
       { label: 'Sensors', cell: (n) => sensorsCell(n.sensors) },
       { label: 'Counters', cell: (n) => countersCell(n.counters) },
-      { label: 'Bus drops', num: true, cell: (n) => formatCount(n.bus_dropped_events ?? 0) },
+      { label: 'Bus drops', num: true, sort: (n) => Number(n.bus_dropped_events ?? 0), cell: (n) => formatCount(n.bus_dropped_events ?? 0) },
       { label: 'Storage', className: 'nowrap', cell: (n) => storageBadge(n.storage_healthy) },
     ],
     rows: nodes,
+    // The inventory is wider than a 1440px column; it scrolls inside its own
+    // panel at every width rather than widening the page.
+    scroll: true,
   });
-  // The inventory is wider than a 1440px column; it scrolls inside its own
-  // panel at every width rather than widening the page.
-  el.setAttribute('class', 'table-wrap table-wrap--scroll');
   return [lossLine(nodes), el];
 }
 
