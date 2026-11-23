@@ -23,7 +23,7 @@ Install, e.g.:
   fish: aegismesh completion fish > ~/.config/fish/completions/aegismesh.fish`
 }
 
-var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "export", "campaigns", "posture", "rules", "honeytoken", "migrate", "version", "completion", "ext", "console"}
+var knownCommands = []string{"init", "doctor", "healthcheck", "validate", "run", "demo", "inspect", "recommend", "export", "campaigns", "posture", "rules", "honeytoken", "migrate", "version", "completion", "ext", "console", "accounts"}
 
 func (c *completionCmd) Run(_ context.Context, args []string) error {
 	if len(args) != 1 {
@@ -87,6 +87,7 @@ _aegismesh_completions() {
     init)
       COMPREPLY=( $(compgen -W "--dir --force --json" -- "$cur"); true ) ;;
     console) COMPREPLY=( $(compgen -W "token hash" -- "$cur") ) ;;
+    accounts) COMPREPLY=( $(compgen -W "list disable enable key revoke --state-dir --local-tenant --json" -- "$cur") ) ;;
     demo) COMPREPLY=( $(compgen -W "--json --console" -- "$cur") ) ;;
     version) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
     completion) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ) ;;
@@ -140,6 +141,7 @@ _aegismesh() {
           '--since[inclusive RFC3339 time]:timestamp:' \
           '--require-sealed[reject open segments]' ;;
         console) _values 'operation' token hash ;;
+        accounts) _arguments '1:operation:(list disable enable key)' '--state-dir[console state directory]:directory:_directories' '--local-tenant[local tenant slug]:tenant:' '--json[emit JSON output]' ;;
         demo) _arguments '--json[emit JSON output]' '--console[keep operator console open]' ;;
         migrate) _values 'target' beelzebub ;;
         completion) _values 'shell' bash zsh fish ;;
@@ -173,6 +175,9 @@ complete -c aegismesh -n '__fish_seen_subcommand_from export' -a 'indicators'
 complete -c aegismesh -n '__fish_seen_subcommand_from export' -l format -r -a 'stix csv txt'
 complete -c aegismesh -n '__fish_seen_subcommand_from export' -l since -r -d 'inclusive RFC3339 time'
 complete -c aegismesh -n '__fish_seen_subcommand_from console' -a 'token hash'
+complete -c aegismesh -n '__fish_seen_subcommand_from accounts' -a 'list disable enable key revoke'
+complete -c aegismesh -n '__fish_seen_subcommand_from accounts' -l state-dir -r -d 'console state directory'
+complete -c aegismesh -n '__fish_seen_subcommand_from accounts' -l local-tenant -r -d 'local tenant slug'
 complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l console -d 'keep operator console open'
 complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l json -d 'JSON output'
 complete -c aegismesh -l config -r -d 'config file'
