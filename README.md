@@ -130,10 +130,15 @@ admin tokens (`aegismesh console token` generates one). It shows a bounded in-me
 (default 50,000 events), a live stream, investigations and a hash-chained audit trail, plus derived
 views: attacker sessions with an actor profile (signals checked, present or not), campaigns (several
 sources that followed the same steps; similar behaviour, not attribution) and a posture review of the
-running configuration (not a security guarantee). Settings shows your profile and role, preferences
-(UTC or local time, default window, theme), your sessions and API keys; admins manage console-managed
-accounts, sessions and keys and read the effective settings, which stay file-driven. These need a
-server that provides the account endpoints; an older server says so. The UI is plain
+running configuration (not a security guarantee), where a known risk can be accepted for a while
+with a reason (it stays listed, never "fixed"). What each operator sees and can do follows their role's
+permissions. Settings shows your profile and permissions, preferences (UTC or local time, default
+window, theme), your sessions and API keys; administrators manage console-managed accounts, built-in
+and custom roles (a permission matrix with a diff before saving), sessions and keys, and read the
+effective settings. A short allowlist of console settings (session and key lifetimes, organisation
+name, sign-in banner, default window) can be changed in place with a reason when the config file
+allows it, with a change history; everything else stays file-driven. These need a server that
+provides the account endpoints; an older server says so. The UI is plain
 HTML, CSS and ES modules embedded in the binary: no build step, no third-party code, evidence rendered
 as text only.
 
@@ -151,9 +156,11 @@ days (default 90) and revocable. Everyone can list and end their own sessions an
 admins can list and end any session, see the effective settings with where each value comes from, and
 download the audit trail as JSONL or CSV. `aegismesh accounts` disables accounts or revokes keys offline.
 
-**Limits:** config-file operators remain read-only and authoritative; settings are not editable in the
-console; sessions are in memory, so a restart signs everyone out and nothing is shared between processes.
-There is no password login, SCIM provisioning, MFA beyond the IdP, or custom role. Account state is
+**Limits:** config-file operators remain read-only and authoritative; only a short allowlist of console
+settings can change in the console, and only when the config file turns editing on; custom roles apply
+to managed accounts (configured operators and single sign-on mappings use the built-in roles); sessions
+are in memory, so a restart signs everyone out and nothing is shared between processes. There is no
+password login, SCIM provisioning or MFA beyond the IdP. Account state is
 plaintext like investigations. See [the API](docs/architecture/console-api.md#accounts-access-and-settings-adr-0025)
 and [ADR-0025](docs/architecture/adr.md).
 

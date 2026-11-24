@@ -54,6 +54,7 @@
       <a href="#catalogs">Catalogs &amp; digest</a>
       <a href="#patterns">Campaigns, actors, posture</a>
       <a href="#settings">Settings</a>
+      <a href="#access">Roles &amp; settings</a>
     </nav>
 
     <main id="main">
@@ -659,6 +660,41 @@ prompts/get name="ignore previous instructions 🙂"</span>
         <div class="ds-demo ds-demo--col">
           <div class="form-summary"><div><p class="form-summary__title">Fix one problem before saving</p><ul class="form-summary__list"><li><button class="form-summary__link" type="button">Label: Give the key a label.</button></li></ul></div></div>
           <dl class="confirm__target"><dt>Key</dt><dd><code>ci smoke test (amk_EXAM…)</code></dd></dl>
+        </div>
+      </section>
+
+      <section class="ds-section" id="access">
+        <h2>Roles, editable settings, accepted risk</h2>
+        <p>Permission risk (<code>.risk</code>): a shape and a word, never colour alone. High risk is a filled triangle, elevated a half-filled square, low a hollow dot.</p>
+        <div class="ds-demo">
+          <span class="risk risk--high"><span class="risk__mark" aria-hidden="true"></span><span class="risk__word">High risk</span></span>
+          <span class="risk risk--elevated"><span class="risk__mark" aria-hidden="true"></span><span class="risk__word">Elevated</span></span>
+          <span class="risk risk--low"><span class="risk__mark" aria-hidden="true"></span><span class="risk__word">Low</span></span>
+        </div>
+        <p>The permission matrix (<code>.perm-matrix</code>, <code>.perm</code>): the plain label, the id, the risk; a high-risk row carries its reason and a warn edge.</p>
+        <div class="ds-demo ds-demo--col">
+          <ul class="perm-list">
+            <li class="perm perm--low"><label class="perm__row"><input type="checkbox" checked><span class="perm__body"><span class="perm__label">Read events, sources, sessions, campaigns, decoys, honeytokens and rules</span><span class="perm__meta"><code class="perm__id">evidence.read</code><span class="risk risk--low"><span class="risk__mark" aria-hidden="true"></span><span class="risk__word">Low</span></span></span></span></label></li>
+            <li class="perm perm--high"><label class="perm__row"><input type="checkbox"><span class="perm__body"><span class="perm__label">Create, change and delete custom roles</span><span class="perm__meta"><code class="perm__id">roles.manage</code><span class="risk risk--high"><span class="risk__mark" aria-hidden="true"></span><span class="risk__word">High risk</span></span></span><span class="perm__why">Can change what every custom role allows, including its own.</span></span></label></li>
+          </ul>
+        </div>
+        <p>The difference before saving a role (<code>.role-diff</code>): a dashed edge, like everything not yet applied.</p>
+        <div class="ds-demo ds-demo--col">
+          <div class="role-diff"><p class="role-diff__title">Not saved yet</p><p>Adds 1, removes 1; affects 3 accounts — takes effect on their next request.</p><ul class="role-diff__list"><li class="role-diff__add"><span class="role-diff__sign" aria-hidden="true">+</span>Read and verify the audit trail</li><li class="role-diff__remove"><span class="role-diff__sign" aria-hidden="true">−</span>Open, update and annotate investigations, attach evidence</li></ul></div>
+        </div>
+        <p>A console override (<code>.src-chip--console</code>) and a change, old value struck through, new value in ink (<code>.change</code>).</p>
+        <div class="ds-demo">
+          <span class="src-chip src-chip--console"><span class="src-chip__mark" aria-hidden="true"></span>Console</span>
+          <span class="change"><span class="change__from">8 hours</span><span class="change__arrow" aria-hidden="true">→</span><span class="change__to">12 hours</span></span>
+        </div>
+        <p>Accepted risk (<code>.pstatus--accepted</code>): known and still present, never the check of "looks right".</p>
+        <div class="ds-demo">
+          <span class="pstatus pstatus--attention"><span class="pstatus__mark" aria-hidden="true">!</span>Needs attention</span>
+          <span class="pstatus pstatus--accepted"><span class="pstatus__mark" aria-hidden="true">–</span>Accepted risk</span>
+        </div>
+        <p>The organisation's notice after sign-in (<code>.notice-bar</code>): plain text, dismissible, never a modal.</p>
+        <div class="ds-demo ds-demo--col">
+          <section class="notice-bar" aria-label="Example notice"><div class="notice-bar__body"><p class="notice-bar__title">Notice from your organisation</p><p class="notice-bar__text">Authorised operators only. Every action in this console is recorded in the audit trail.</p></div><button class="btn btn--sm" type="button">Dismiss</button></section>
         </div>
       </section>
 </main>

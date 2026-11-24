@@ -8,6 +8,20 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console: permission-driven navigation and actions (from `/me.permissions`).
+  Roles in Administration: built-in and custom roles, holders, risk summary;
+  a role page with the permission matrix, live can/cannot summary, the
+  dependency rules with a fix, a diff before saving, duplicate built-ins,
+  typed delete. Account role picker lists custom roles; Profile lists your
+  permissions. Settings edit in place where the server allows (reason
+  required, file value shown, revert, server answer after save), an
+  explanation when editing is off, a change history. Organisation name in
+  the top bar; sign-in banner on sign-in and once per session. Posture:
+  accept risk with a reason and an end date (≤180 days), its own group and
+  count. Audit: grouped action filter, settings changes as from → to.
+- Dev mock: contract r6 (`mock-roles.mjs`), `--round6 off`,
+  `--settings-editing off`.
+
 - Console: Settings (`g ,`, account menu, palette). Your account: profile and
   what your role allows, preferences (UTC or local time, default window,
   density, theme, reduce motion; saved to the account or this browser,
@@ -87,6 +101,11 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Fixed
 
+- Console: the first-run tour no longer covers the counts beside the brief
+  (1440 and 375px); peer counts keep their 1px dividers; phone cards lead
+  with the row's identity; 10px rule ids in technique cells; tabs wrap on
+  phones; Audit shows records first; the Overview chart redraws after a
+  large resize.
 - Console audit pass: one severity mark (also for "no finding" and
   correlation-rule "Signal"), one table time format (relative with absolute
   UTC), one duration and number formatter, sortable headers on tables whose
