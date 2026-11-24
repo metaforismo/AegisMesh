@@ -78,6 +78,18 @@ var builtinRouteAccess = map[string]string{
 	"GET /api/v1/admin/settings":                           "admin",
 	"GET /api/v1/admin/audit/export":                       "admin",
 	"GET /api/v1/system":                                   "admin",
+	// Round 6 routes (permissions, roles, editable settings, accepted posture risks).
+	"GET /api/v1/permissions":                  "viewer",
+	"GET /api/v1/admin/settings/history":       "admin",
+	"PUT /api/v1/admin/settings/{key}":         "admin",
+	"DELETE /api/v1/admin/settings/{key}":      "admin",
+	"GET /api/v1/admin/roles":                  "admin",
+	"POST /api/v1/admin/roles":                 "admin",
+	"GET /api/v1/admin/roles/{id}":             "admin",
+	"PATCH /api/v1/admin/roles/{id}":           "admin",
+	"DELETE /api/v1/admin/roles/{id}":          "admin",
+	"POST /api/v1/posture/{check_id}/accept":   "admin",
+	"DELETE /api/v1/posture/{check_id}/accept": "admin",
 }
 
 var roleRank = map[string]int{"none": 0, "viewer": 1, "analyst": 2, "admin": 3}

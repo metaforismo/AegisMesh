@@ -3,8 +3,9 @@
   "scope": "configuration_and_evidence",
   "summary": {
     "attention": 2,
-    "ok": 8,
-    "info": 9
+    "ok": 9,
+    "info": 11,
+    "accepted": 0
   },
   "checks": [
     {
@@ -14,7 +15,8 @@
       "title": "Decoys reachable beyond loopback",
       "detail": "All 2 sensor(s) bind to loopback; only local clients can reach them.",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#posture-review"
+      "doc": "docs/ai-threat-detection.md#posture-review",
+      "accepted": null
     },
     {
       "id": "POS-002",
@@ -23,7 +25,8 @@
       "title": "Relaxed safety opt-ins",
       "detail": "No safety opt-in is relaxed; loopback binding, unprivileged ports and public-only LLM egress remain enforced.",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#posture-review"
+      "doc": "docs/ai-threat-detection.md#posture-review",
+      "accepted": null
     },
     {
       "id": "POS-003",
@@ -32,7 +35,8 @@
       "title": "Console listener exposure",
       "detail": "The operator console is disabled.",
       "recommendation": "",
-      "doc": "docs/architecture/console-api.md#transport-and-exposure"
+      "doc": "docs/architecture/console-api.md#transport-and-exposure",
+      "accepted": null
     },
     {
       "id": "POS-004",
@@ -41,7 +45,8 @@
       "title": "Attacker input sent to an LLM provider",
       "detail": "No sensor forwards attacker input to a model provider (provider: local, fallback sensors: 0).",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#posture-review"
+      "doc": "docs/ai-threat-detection.md#posture-review",
+      "accepted": null
     },
     {
       "id": "POS-005",
@@ -50,7 +55,8 @@
       "title": "Evidence copies leaving this host",
       "detail": "No webhook or fleet forwarding is configured; evidence stays on this host.",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#posture-review"
+      "doc": "docs/ai-threat-detection.md#posture-review",
+      "accepted": null
     },
     {
       "id": "POS-006",
@@ -59,7 +65,8 @@
       "title": "Operator role separation",
       "detail": "The console is disabled; operator roles were not evaluated.",
       "recommendation": "",
-      "doc": "docs/architecture/console-api.md#transport-and-exposure"
+      "doc": "docs/architecture/console-api.md#transport-and-exposure",
+      "accepted": null
     },
     {
       "id": "POS-007",
@@ -68,7 +75,8 @@
       "title": "Honeytokens configured",
       "detail": "No honeytokens are configured, so a replayed decoy credential cannot be recognised (HT-001, COR-008).",
       "recommendation": "Generate markers with 'aegismesh honeytoken new' and plant them in decoy responses.",
-      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers"
+      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers",
+      "accepted": null
     },
     {
       "id": "POS-008",
@@ -77,7 +85,8 @@
       "title": "Agent canary marker",
       "detail": "No honeytokens are configured (see POS-007), so no agent canary exists.",
       "recommendation": "Add an agent_canary marker; following it is the strongest AI-agent signal (AGT-001).",
-      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers"
+      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers",
+      "accepted": null
     },
     {
       "id": "POS-009",
@@ -86,7 +95,8 @@
       "title": "Honeytokens planted in decoy content",
       "detail": "No honeytokens are configured (see POS-007).",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers"
+      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers",
+      "accepted": null
     },
     {
       "id": "POS-010",
@@ -95,7 +105,8 @@
       "title": "Honeytokens seen in retained evidence",
       "detail": "No honeytokens are configured (see POS-007).",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers"
+      "doc": "docs/ai-threat-detection.md#honeytokens-and-agent-markers",
+      "accepted": null
     },
     {
       "id": "POS-011",
@@ -104,7 +115,8 @@
       "title": "AI decoy surface",
       "detail": "AI surfaces configured: ai-http (openai_compatible).",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#posture-review"
+      "doc": "docs/ai-threat-detection.md#posture-review",
+      "accepted": null
     },
     {
       "id": "POS-012",
@@ -113,7 +125,8 @@
       "title": "MCP synthetic environment",
       "detail": "No MCP sensor is configured.",
       "recommendation": "",
-      "doc": "docs/mcp-environments.md"
+      "doc": "docs/mcp-environments.md",
+      "accepted": null
     },
     {
       "id": "POS-013",
@@ -122,7 +135,8 @@
       "title": "Detection engine and rules",
       "detail": "Detection is enabled with every rule active.",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#detection-rules"
+      "doc": "docs/ai-threat-detection.md#detection-rules",
+      "accepted": null
     },
     {
       "id": "POS-014",
@@ -131,7 +145,8 @@
       "title": "Correlation engine and rules",
       "detail": "Correlation is disabled, so cross-sensor signals (COR-001..COR-008) such as cadence and credential replay are never produced.",
       "recommendation": "Set correlation.enabled: true.",
-      "doc": "docs/ai-threat-detection.md#correlation-rules"
+      "doc": "docs/ai-threat-detection.md#correlation-rules",
+      "accepted": null
     },
     {
       "id": "POS-015",
@@ -140,7 +155,8 @@
       "title": "Detection actions change decoy responses",
       "detail": "Decoy responses change when rules fire (medium=isolate, high=refuse). These actions affect only the decoy, never other systems, but an adaptive client can notice the change.",
       "recommendation": "Use observe for severities where staying convincing matters more than slowing the client.",
-      "doc": "docs/ai-threat-detection.md#detection-rules"
+      "doc": "docs/ai-threat-detection.md#detection-rules",
+      "accepted": null
     },
     {
       "id": "POS-016",
@@ -149,7 +165,8 @@
       "title": "Sensors without retained observations",
       "detail": "No observations among the 11 retained events examined: quiet-tcp. A quiet decoy is not a fault.",
       "recommendation": "If traffic was expected, check the listener is reachable from where attackers would come from.",
-      "doc": "docs/ai-threat-detection.md#posture-review"
+      "doc": "docs/ai-threat-detection.md#posture-review",
+      "accepted": null
     },
     {
       "id": "POS-017",
@@ -158,7 +175,8 @@
       "title": "Analysis sample saturation",
       "detail": "11 retained event(s) fit within the 8192-event analysis sample.",
       "recommendation": "",
-      "doc": "docs/ai-threat-detection.md#posture-review"
+      "doc": "docs/ai-threat-detection.md#posture-review",
+      "accepted": null
     },
     {
       "id": "POS-018",
@@ -167,7 +185,8 @@
       "title": "Evidence encryption at rest",
       "detail": "Evidence is stored unencrypted; it is redacted but still holds attacker-supplied text and source addresses.",
       "recommendation": "Enable storage.encryption if the data directory is backed up or shared.",
-      "doc": "docs/evidence-encryption.md"
+      "doc": "docs/evidence-encryption.md",
+      "accepted": null
     },
     {
       "id": "POS-019",
@@ -176,8 +195,40 @@
       "title": "Break-glass administrator",
       "detail": "The console is disabled; administrator access was not evaluated.",
       "recommendation": "",
-      "doc": "docs/architecture/console-api.md#accounts-access-and-settings-adr-0025"
+      "doc": "docs/architecture/console-api.md#accounts-access-and-settings-adr-0025",
+      "accepted": null
+    },
+    {
+      "id": "POS-020",
+      "area": "access",
+      "status": "info",
+      "title": "Console settings editing",
+      "detail": "The console is disabled; settings editing was not evaluated.",
+      "recommendation": "",
+      "doc": "docs/architecture/console-api.md#permissions-roles-and-editable-settings-adr-0026",
+      "accepted": null
+    },
+    {
+      "id": "POS-021",
+      "area": "access",
+      "status": "info",
+      "title": "Service accounts with high-risk permissions",
+      "detail": "The console is disabled; service accounts were not evaluated.",
+      "recommendation": "",
+      "doc": "docs/architecture/console-api.md#permissions-roles-and-editable-settings-adr-0026",
+      "accepted": null
+    },
+    {
+      "id": "POS-022",
+      "area": "access",
+      "status": "ok",
+      "title": "Console settings overlay",
+      "detail": "Settings editing is off; the configuration file is the only source of settings.",
+      "recommendation": "",
+      "doc": "docs/architecture/console-api.md#permissions-roles-and-editable-settings-adr-0026",
+      "accepted": null
     }
   ],
-  "disclaimer": "Static review of the running configuration and of retained evidence; not a security guarantee or a complete audit."
+  "disclaimer": "Static review of the running configuration and of retained evidence; not a security guarantee or a complete audit.",
+  "acceptances": "applied"
 }

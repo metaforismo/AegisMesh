@@ -148,3 +148,67 @@ sensors:
 		}
 	}
 }
+
+func TestPostureCLIShowsConsoleAcceptances(t *testing.T) {
+	fixedClock(t)
+	dir := campaignFixture(t)
+	workspace := t.TempDir()
+	state := filepath.Join(workspace, "console-state")
+	config := filepath.Join(workspace, "mesh.yaml")
+	body := `api_version: aegismesh.io/v1alpha1
+runtime:
+  data_dir: ` + dir + `
+admin:
+  enabled: false
+console:
+  settings_editing: console
+  state_dir: ` + state + `
+sensors:
+  - id: quiet-tcp
+    kind: tcp
+    listen: 127.0.0.1:18081
+`
+	if err := os.WriteFile(config, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Without console state the review says it could not read acceptances.
+	code, text, stderr := run(t, "posture", "--config", config)
+	if code != 0 || !strings.Contains(text, "accepted risks: could not read console state (not found)") {
+		t.Fatal(code, stderr, text)
+	}
+	until := cliNow().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	accepted := cliNow().Add(-time.Hour).UTC().Format(time.RFC3339)
+	overlay := `{"schema":"aegismesh.console.settings/v1","next_seq":1,"values":{},"accepted":{` +
+		`"POS-014":{"by":"cfg:admin","by_name":"admin","reason":"Correlation is off on this capture node",` +
+		`"until":"` + until + `","accepted_at":"` + accepted + `"},` +
+		`"POS-007":{"by":"cfg:admin","by_name":"admin","reason":"expired","until":"` + accepted + `",` +
+		`"accepted_at":"` + cliNow().Add(-48*time.Hour).UTC().Format(time.RFC3339) + `"}},"history":[]}`
+	if err := os.MkdirAll(filepath.Join(state, "settings"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state, "settings", "settings.json"), []byte(overlay), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, text, stderr = run(t, "posture", "--config", config)
+	if code != 0 || !strings.Contains(text, "accepted risks: 1 read from console state") ||
+		!strings.Contains(text, "POS-014  accepted ") ||
+		!strings.Contains(text, "accepted by cfg:admin until "+until+": Correlation is off on this capture node") ||
+		!strings.Contains(text, "POS-007  attention") {
+		t.Fatal(code, stderr, text)
+	}
+	code, out, _ := run(t, "posture", "--config", config, "--json")
+	if code != 0 || !strings.Contains(out, `"acceptances": "applied"`) || !strings.Contains(out, `"accepted": 1`) {
+		t.Fatal(code, out)
+	}
+	// A corrupt overlay is reported, never repaired.
+	if err := os.WriteFile(filepath.Join(state, "settings", "settings.json"), []byte(`{"schema":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, text, _ = run(t, "posture", "--config", config)
+	if code != 0 || !strings.Contains(text, "could not read console state (unreadable or invalid)") {
+		t.Fatal(code, text)
+	}
+	if after, _ := os.ReadFile(filepath.Join(state, "settings", "settings.json")); string(after) != `{"schema":` {
+		t.Fatal("posture modified console state")
+	}
+}

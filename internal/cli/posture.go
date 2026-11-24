@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/console"
+	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/posture"
@@ -30,9 +34,13 @@ func (c *postureCmd) Help() string {
   posture --config mesh.yaml
   posture --config mesh.yaml --json
 
-Runs checks POS-001..POS-018 (exposure, access, deception, detection,
+Runs checks POS-001..POS-022 (exposure, access, deception, detection,
 evidence) over a secret-free snapshot of the config and the newest 8192
 verified local envelopes in --data-dir (default: the config's runtime.data_dir).
+When console.settings_editing is console, risks accepted in the console are
+read (never written) from the console state directory and shown as
+"accepted"; if that state cannot be read the review says so and shows the
+checks unaccepted. Managed accounts are not read offline.
 If evidence cannot be read (missing directory, encryption without --identity,
 corrupt lines), evidence checks report "Not evaluated" instead of failing.
 Advisory only: it starts, contacts and changes nothing, and a clean review is
@@ -72,13 +80,32 @@ func (c *postureCmd) Run(_ context.Context, args []string) error {
 	facts := console.PostureFacts(cfg)
 	evidence := c.readEvidence(dir, identities)
 	report := posture.Evaluate(&facts, evidence, cliNow())
+	note := ""
+	if cfg.Console.WithDefaults().SettingsEditing != config.SettingsEditingConsole {
+		report = posture.Accept(report, nil)
+		note = "none (console.settings_editing is off)"
+	} else if accepted, err := settings.ReadAccepted(filepath.Join(cfg.ConsoleStateDir(), "settings"), cliNow()); err != nil {
+		reason := "unreadable or invalid"
+		if errors.Is(err, os.ErrNotExist) {
+			reason = "not found"
+		}
+		note = "could not read console state (" + reason + "); checks are shown unaccepted"
+	} else {
+		applied := map[string]posture.Acceptance{}
+		for id, acceptance := range accepted {
+			applied[id] = posture.Acceptance{By: acceptance.By, ByName: acceptance.ByName, Reason: acceptance.Reason,
+				Until: acceptance.Until.UTC().Format(time.RFC3339)}
+		}
+		report = posture.Accept(report, applied)
+		note = fmt.Sprintf("%d read from console state", len(applied))
+	}
 	var out bytes.Buffer
 	if jsonOut.Value() {
 		if err := writeJSON(&out, report); err != nil {
 			return err
 		}
 	} else {
-		writePostureHuman(&out, report)
+		writePostureHuman(&out, report, note)
 	}
 	_, err = c.env.Out.Write(out.Bytes())
 	return err
@@ -148,11 +175,15 @@ func newest[T any](items []T, less func(a, b T) bool) []T {
 	return items[:min(len(items), evidenceindex.AnalysisLimit)]
 }
 
-func writePostureHuman(w io.Writer, r posture.Report) {
-	fmt.Fprintf(w, "POSTURE REVIEW: %d attention, %d ok, %d info\n%s\n", r.Summary.Attention, r.Summary.OK, r.Summary.Info, r.Disclaimer)
+func writePostureHuman(w io.Writer, r posture.Report, note string) {
+	fmt.Fprintf(w, "POSTURE REVIEW: %d attention, %d ok, %d info, %d accepted\n%s\naccepted risks: %s\n",
+		r.Summary.Attention, r.Summary.OK, r.Summary.Info, r.Summary.Accepted, r.Disclaimer, note)
 	for _, c := range r.Checks {
 		fmt.Fprintf(w, "\n%s  %-9s  %-9s  %s\n", c.ID, c.Status, c.Area, c.Title)
 		fmt.Fprintf(w, "         %s\n", c.Detail)
+		if c.Accepted != nil {
+			fmt.Fprintf(w, "         accepted by %s until %s: %s\n", c.Accepted.By, c.Accepted.Until, c.Accepted.Reason)
+		}
 		if c.Recommendation != "" {
 			fmt.Fprintf(w, "         -> %s\n", c.Recommendation)
 		}

@@ -256,7 +256,7 @@ func (auditLog *Log) Append(record Record) (err error) {
 	// Only fixed actions/details and validated principals enter this API.
 	if len(record.Issuer) > 512 || len(record.Subject) > 255 ||
 		len(record.Actor) > 64 || len(record.ActorID) > 80 ||
-		len(record.Role) > 16 ||
+		len(record.Role) > 24 ||
 		len(record.Action) > 64 ||
 		len(record.Target) > 128 ||
 		len(record.Remote) > 255 ||

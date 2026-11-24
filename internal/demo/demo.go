@@ -103,7 +103,7 @@ func run(parent context.Context, ready func(string, string) error) (summary Summ
 		if err != nil {
 			return Summary{}, err
 		}
-		cfg.Console = config.Console{Enabled: true, Listen: "127.0.0.1:0", SessionTTLSeconds: 3600, IndexMaxEvents: 50000, Operators: []config.Operator{{Name: "demo-admin", Role: "admin", TokenSHA256: auth.Digest(token)}}}
+		cfg.Console = config.Console{Enabled: true, Listen: "127.0.0.1:0", SessionTTLSeconds: 3600, IndexMaxEvents: 50000, SettingsEditing: config.SettingsEditingConsole, Operators: []config.Operator{{Name: "demo-admin", Role: "admin", TokenSHA256: auth.Digest(token)}}}
 		if err = cfg.Validate(); err != nil {
 			return Summary{}, err
 		}

@@ -61,6 +61,9 @@ type Store struct {
 	identity   []byte
 	opts       Options
 	now        func() time.Time
+	keyMax     int
+	keyDefault int
+	defaults   Preferences
 }
 
 // Create carries the fields of a new managed account.
@@ -121,7 +124,8 @@ func load(root *os.Root, opts Options) (*Store, error) {
 	if now == nil {
 		now = time.Now
 	}
-	store := &Store{root: root, opts: opts, now: now}
+	store := &Store{root: root, opts: opts, now: now, keyMax: MaxKeyDays, keyDefault: DefaultKeyDays,
+		defaults: DefaultPreferences}
 	body, err := stateio.Read(root, FileName, MaxStoreBytes)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -473,14 +477,47 @@ func (s *Store) Update(id string, patch Patch, actor string, configAdmins int) (
 	return result, change, nil
 }
 
+// SetKeyLimits sets the lifetime bounds for keys minted from now on:
+// 1 <= def <= max <= MaxKeyDays. Existing keys keep their expiry.
+func (s *Store) SetKeyLimits(max, def int) error {
+	if max < 1 || max > MaxKeyDays || def < 1 || def > max {
+		return ErrInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keyMax, s.keyDefault = max, def
+	return nil
+}
+
+// KeyLimits returns the current maximum and default key lifetimes in days.
+func (s *Store) KeyLimits() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.keyMax, s.keyDefault
+}
+
+// SetDefaultWindow sets the time window returned to principals without saved preferences.
+func (s *Store) SetDefaultWindow(window string) error {
+	next := DefaultPreferences
+	next.DefaultWindow = window
+	if !next.Valid() {
+		return ErrInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaults = next
+	return nil
+}
+
 // CreateKey mints a key for an active account and returns the token exactly once.
-// days of 0 selects DefaultKeyDays. When the account already holds the maximum,
+// days of 0 selects the current default lifetime (DefaultKeyDays unless changed). When the account already holds the maximum,
 // the longest-inactive revoked or expired key is pruned; ten active keys is a limit.
 func (s *Store) CreateKey(accountID, label string, days int, actor string) (KeyView, string, error) {
+	maxDays, defaultDays := s.KeyLimits()
 	if days == 0 {
-		days = DefaultKeyDays
+		days = defaultDays
 	}
-	if !ValidLabel(label) || days < 1 || days > MaxKeyDays || !validActor(actor) {
+	if !ValidLabel(label) || days < 1 || days > maxDays || !validActor(actor) {
 		return KeyView{}, "", ErrInvalid
 	}
 	random, err := auth.Token()
@@ -757,7 +794,7 @@ func (s *Store) Preferences(principalID string) Preferences {
 	if preferences, ok := s.data.Preferences[principalID]; ok {
 		return preferences
 	}
-	return DefaultPreferences
+	return s.defaults
 }
 
 // SetPreferences validates and persists the complete preference record.

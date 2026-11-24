@@ -12,6 +12,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/console/accounts"
 	"github.com/metaforismo/aegismesh/internal/console/audit"
+	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/eventexport"
 	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
 )
@@ -25,16 +26,28 @@ const (
 	noteRuntime = "Observed at runtime; not a setting."
 )
 
-// settingItem is one read-only, secret-free effective value.
+// settingItem is one secret-free effective value. Value is display text;
+// Effective and FileValue are canonical raw values for editable items and the
+// display text otherwise.
 type settingItem struct {
-	Key      string `json:"key"`
-	Label    string `json:"label"`
-	Value    string `json:"value"`
-	Kind     string `json:"kind"`
-	Source   string `json:"source"`
-	Editable bool   `json:"editable"`
-	Note     string `json:"note"`
+	Key         string         `json:"key"`
+	Label       string         `json:"label"`
+	Value       string         `json:"value"`
+	Kind        string         `json:"kind"`
+	Source      string         `json:"source"`
+	Editable    bool           `json:"editable"`
+	Note        string         `json:"note"`
+	Effective   string         `json:"effective"`
+	FileValue   string         `json:"file_value"`
+	Overridden  bool           `json:"overridden"`
+	Constraints map[string]any `json:"constraints"`
+	// Applies is live (takes effect without restart), restart, or none for
+	// built-in limits and observed facts.
+	Applies string `json:"applies"`
 }
+
+// SourceConsole marks a value overridden in the console settings overlay.
+const SourceConsole = "console"
 
 type settingSection struct {
 	ID    string        `json:"id"`
@@ -58,15 +71,18 @@ func (s *Server) item(key, label, value, kind string) settingItem {
 	if env := config.SettingSourceKeys[key]; env != "" {
 		note = "Change in the config file or the " + env + " environment variable, then restart."
 	}
-	return settingItem{Key: key, Label: label, Value: value, Kind: kind, Source: s.settingSource(key), Note: note}
+	return settingItem{Key: key, Label: label, Value: value, Kind: kind, Source: s.settingSource(key), Note: note,
+		Effective: value, FileValue: value, Constraints: map[string]any{}, Applies: "restart"}
 }
 
 func fixed(key, label, value, kind string) settingItem {
-	return settingItem{Key: key, Label: label, Value: value, Kind: kind, Source: config.SourceDefault, Note: noteBuiltIn}
+	return settingItem{Key: key, Label: label, Value: value, Kind: kind, Source: config.SourceDefault, Note: noteBuiltIn,
+		Effective: value, FileValue: value, Constraints: map[string]any{}, Applies: "none"}
 }
 
 func observed(key, label, value, kind string) settingItem {
-	return settingItem{Key: key, Label: label, Value: value, Kind: kind, Source: SourceRuntime, Note: noteRuntime}
+	return settingItem{Key: key, Label: label, Value: value, Kind: kind, Source: SourceRuntime, Note: noteRuntime,
+		Effective: value, FileValue: value, Constraints: map[string]any{}, Applies: "none"}
 }
 
 func onOff(value bool) string {
@@ -122,15 +138,22 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request, _ caller) {
 	sections := []settingSection{
 		{ID: "access", Title: "Access and sessions", Items: []settingItem{
 			s.item("console.token_login", "Token sign-in and bearer API keys", onOff(cfg.TokenEnabled()), "boolean"),
-			s.item("console.session_ttl_seconds", "Session lifetime", duration(cfg.SessionTTLSeconds), "duration"),
-			s.item("console.session_idle_seconds", "Idle timeout", duration(cfg.IdleSeconds()), "duration"),
+			s.editableItem(settings.SessionTTL),
+			s.editableItem(settings.SessionIdle),
 			fixed("console.login_throttle", "Sign-in throttling", "10 attempts per address per minute", "text"),
 			fixed("console.session_capacity", "Session capacity", "1024 per tenant, 32768 in total", "text"),
 			s.item("console.operators", "Config-file operators", fmt.Sprintf("%d (%d admin, %d analyst, %d viewer)",
 				len(s.auth.Operators()), roles["admin"], roles["analyst"], roles["viewer"]), "count"),
 			observed("accounts.managed", "Managed accounts", fmt.Sprintf("%d of %d", len(managed), accounts.MaxAccounts), "count"),
-			fixed("accounts.key_lifetime", "API key lifetime", fmt.Sprintf("1..%d days, default %d",
-				accounts.MaxKeyDays, accounts.DefaultKeyDays), "text"),
+			s.editableItem(settings.KeyMaxDays),
+			s.editableItem(settings.KeyDefaultDays),
+		}},
+		{ID: "console", Title: "Console", Items: []settingItem{
+			s.item("console.settings_editing", "Settings editing", cfg.SettingsEditing, "text"),
+			s.editableItem(settings.OrganizationName),
+			s.editableItem(settings.SignInBanner),
+			s.editableItem(settings.DefaultWindow),
+			s.acceptedItem(),
 		}},
 		{ID: "sso", Title: "Single sign-on", Items: s.ssoItems()},
 		{ID: "tenants", Title: "Tenants", Items: []settingItem{
@@ -149,11 +172,23 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request, _ caller) {
 				audit.MaxExportRecords), "text"),
 		}},
 	}
+	note := "Settings are read-only in the console; the config file stays authoritative. " +
+		"Set console.settings_editing: console to allow editing the console-only allowlist."
+	if s.editing() {
+		note = "Allowlisted console settings can be changed here (settings.manage); they are stored in the " +
+			"console state directory and never written to the config file. Everything else is read-only."
+		if problem := s.overlay.Problem(); problem != "" {
+			note = "The settings overlay is unavailable (" + problem + "); file values are in effect and nothing can be changed."
+		}
+	} else if stored := len(s.overlay.Values()); stored > 0 {
+		note += fmt.Sprintf(" %d stored override(s) are not applied while editing is off.", stored)
+	}
 	send(w, 200, map[string]any{
 		"generated_at": s.now().UTC().Format(time.RFC3339Nano),
 		"sections":     sections,
-		"editable":     false,
-		"note":         "Settings are read-only in the console; the config file stays authoritative.",
+		"editing":      cfg.SettingsEditing,
+		"editable":     s.editing() && s.overlay.Problem() == "",
+		"note":         note,
 	})
 }
 
