@@ -201,7 +201,9 @@ func (s *Server) caller(r *http.Request) (caller, bool) {
 	}, ok
 }
 
-func (s *Server) route(pattern, role, group string, handler func(*Server, http.ResponseWriter, *http.Request, caller)) {
+func (s *Server) route(spec routeSpec) {
+	pattern, perm, group := spec.pattern, spec.perm, spec.group
+	local := spec.local || group == "admin" || group == "system"
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		s.requests.Inc(group)
 		switch group {
@@ -212,7 +214,7 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 		}
 		view := s
 		credentials := caller{}
-		if role != "" {
+		if perm != permPublic {
 			var ok bool
 			bearer := r.Header.Get("Authorization") != ""
 			if bearer && !s.auth.LoginAvailable("bearer:"+remote(r)) {
@@ -242,7 +244,9 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 				fail(w, 404, "not_found", "node not found")
 				return
 			}
-			if !auth.Granted(credentials.session.Principal.Role, role) {
+			// Permissions resolve from the role on every request, so role edits
+			// apply to existing sessions and keys at their next request.
+			if perm != permAuthenticated && !s.grants(credentials.session.Principal).has(perm) {
 				if s.record(r, credentials.session.Principal, "authz.denied", "", "denied") != nil {
 					fail(w, 503, "unavailable", "audit trail is unavailable")
 					return
@@ -251,9 +255,8 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 				return
 			}
 			// Instance administration needs membership of the local tenant, not
-			// only the admin role in some partition.
-			if (group == "admin" || group == "system") &&
-				!slices.Contains(credentials.session.Principal.Tenants, s.cfg.LocalTenant) {
+			// only an administrative permission in some partition.
+			if local && !slices.Contains(credentials.session.Principal.Tenants, s.cfg.LocalTenant) {
 				if s.record(r, credentials.session.Principal, "authz.denied", "", "denied") != nil {
 					fail(w, 503, "unavailable", "audit trail is unavailable")
 					return
@@ -279,7 +282,7 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 				group == "investigations" || group == "fleet-tokens" || group == "me" || group == "admin") ||
 			r.Method == "PATCH" &&
 				(group == "investigations" || group == "admin") ||
-			r.Method == "PUT" && group == "me"
+			r.Method == "PUT" && (group == "me" || group == "admin")
 		if !acceptsBody && (r.ContentLength != 0 || len(r.TransferEncoding) > 0) {
 			fail(w, 400, "invalid_argument", "this endpoint does not accept a request body")
 			return
@@ -295,11 +298,15 @@ func (s *Server) route(pattern, role, group string, handler func(*Server, http.R
 				return
 			}
 		}
-		if (role == "analyst" || role == "admin" || group == "me" && r.Method != "GET") && !view.audit.Ready() ||
+		// Routes beyond what a built-in viewer holds write audit records, so
+		// they need a ready audit trail before running.
+		audited := perm != permPublic && perm != permAuthenticated && !viewerHolds(perm)
+		if (audited || group == "me" && r.Method != "GET") && !view.audit.Ready() ||
 			group == "admin" && !s.views[s.cfg.LocalTenant].audit.Ready() {
 			fail(w, 503, "unavailable", "audit trail requires inspection and restart")
 			return
 		}
+		handler := spec.handle
 		handler(view, w, r, credentials)
 	})
 }
