@@ -113,6 +113,7 @@ func (s *System) buildConsole() error {
 		Meter:         s.meter,
 		UI:            consoleui.FS(),
 		Sources:       s.cfg.Sources,
+		Logger:        s.log,
 	})
 	if err != nil {
 		return err

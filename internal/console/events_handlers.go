@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/console/permission"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
 )
@@ -117,19 +118,21 @@ var streamHeartbeat = 15 * time.Second
 
 // streamAuthorized re-checks a long-lived stream's credential. Cookie sessions
 // must still exist (revocation, idle and absolute expiry included). Managed
-// bearer keys must still be usable and still grant viewer access to this
-// tenant; config-file tokens cannot change while the process runs.
+// bearer keys must still be usable and still belong to this tenant;
+// config-file tokens cannot change while the process runs. In every case the
+// principal's role must still grant evidence.read, so removing that
+// permission from a custom role ends its open streams.
 func (s *Server) streamAuthorized(credentials caller) bool {
-	if credentials.cookie {
-		_, ok := s.auth.Peek(credentials.id)
-		return ok
-	}
 	principal := credentials.session.Principal
+	if credentials.cookie {
+		session, ok := s.auth.Peek(credentials.id)
+		return ok && s.grants(session.Principal).has(permission.EvidenceRead)
+	}
 	if principal.Source != auth.SourceManaged {
-		return true
+		return s.grants(principal).has(permission.EvidenceRead)
 	}
 	current, _, ok := s.accounts.Verify(principal.ID, principal.KeyID)
-	return ok && auth.Granted(current.Role, "viewer") && slices.Contains(current.Tenants, s.tenantID)
+	return ok && s.grants(current).has(permission.EvidenceRead) && slices.Contains(current.Tenants, s.tenantID)
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials caller) {

@@ -1962,3 +1962,45 @@ absence; system components; CSV formula neutralisation; audit exports free of
 tokens, digests and cookie values; OIDC directory ids stable and free of
 issuer/subject; and SSE streams opened with a managed key closing within one
 heartbeat after key revocation or account disable.
+
+## 2026-11-24 — permissions, custom roles, settings overlay and accepted risk (ADR-0026)
+
+Scope: branch `feat/roles-settings` in the backend worktree; local commits
+only, no push, PR or deployment. No new dependency. New config fields
+`console.settings_editing`, `key_max_days`, `key_default_days`,
+`sign_in_banner`, `organization_name`, `default_window`. Loopback synthetic
+proof only; no frontend integration in this run.
+
+| Command | Result |
+|---|---|
+| `gofmt -l .` (toolchain gofmt) | **PASS**, empty. |
+| `make lint` | **PASS**, exit 0; gofmt check and `go vet ./...`. `golangci-lint` unavailable; Makefile skipped it. |
+| `make test` | **PASS**, exit 0; `go test -race ./...`, 54 packages ok, none failed. A first run failed one new test because a file was edited while the suite compiled; the committed tree was re-run in full and passed. |
+| `make secrets-scan` | **PASS**, exit 0 (`secrets-scan: ok`). |
+| `go test -run '^$' -fuzz=FuzzDecode -fuzztime=15s ./internal/console/settings` | **PASS**, about 147,000 executions, no failure. Target added to `make fuzz-seed`. |
+| `go test -run '^$' -fuzz=FuzzDecode -fuzztime=15s ./internal/console/accounts` | **PASS**, about 91,000 executions with new v2 role seeds, no failure. |
+| `AEGISMESH_UPDATE_CAMPAIGN_GOLDENS=1 go test ./internal/cli -run TestPostureCLIGolden` | **PASS**; regenerated posture goldens for POS-020..022, the `accepted` count and the `accepted risks:` line, then checked by normal runs. |
+| `make sbom` | **NOT RUN**: known linked-worktree generator limitation. |
+| `make ui-test` | **NOT RUN**: frontend owned by another worktree. |
+
+`TestBuiltinRoleRouteMatrix` was committed before the refactor, recording for
+every registered route the least built-in role that passes the gate on master;
+it stayed green through the permission refactor and pins the new routes.
+Loopback integration tests cover: a custom role passing exactly its
+permissions on every registered route; a role edit applying at the next
+request for a bearer key and an existing cookie session, and closing an open
+event stream; built-in immutability (`builtin`), `in_use`, invalid
+combinations, name conflicts; `last_admin` across custom roles on a console
+whose only administrator holds a custom role; every escalation path (create an
+admin, promote, disable an admin, mint or revoke an admin's key, create or
+widen a role, end an admin's session) refused with `exceeds_own_permissions`
+and audited; settings PUT/DELETE/history with CSRF, permission denial,
+`not_editable`, `editing_disabled`, range and reason validation; live session
+TTL, idle timeout, key limits and `/meta` text; the overlay surviving a
+restart; overrides ignored when editing is off; an out-of-range override
+ignored at startup with a logged warning, POS-022 and a degraded `settings`
+component; a corrupt overlay neither applied nor overwritten; posture
+acceptance validation, expiry and audit; POS-021 for a service account with a
+high-risk custom role; and the offline `posture` command reading acceptances
+read-only or saying it could not. Store tests cover the v1 fixture migration
+with backup, refusal of a newer schema, role validation and quotas.

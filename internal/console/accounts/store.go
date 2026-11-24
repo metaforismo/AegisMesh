@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/console/permission"
 	"github.com/metaforismo/aegismesh/internal/console/stateio"
 	"github.com/metaforismo/aegismesh/internal/strictjson"
 )
@@ -60,6 +61,9 @@ type Store struct {
 	identity   []byte
 	opts       Options
 	now        func() time.Time
+	keyMax     int
+	keyDefault int
+	defaults   Preferences
 }
 
 // Create carries the fields of a new managed account.
@@ -120,7 +124,8 @@ func load(root *os.Root, opts Options) (*Store, error) {
 	if now == nil {
 		now = time.Now
 	}
-	store := &Store{root: root, opts: opts, now: now}
+	store := &Store{root: root, opts: opts, now: now, keyMax: MaxKeyDays, keyDefault: DefaultKeyDays,
+		defaults: DefaultPreferences}
 	body, err := stateio.Read(root, FileName, MaxStoreBytes)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -130,17 +135,34 @@ func load(root *os.Root, opts Options) (*Store, error) {
 		}
 		store.data = snapshot{
 			Schema: Schema, IdentityKey: hex.EncodeToString(key), Accounts: []Account{},
-			Identities: []Identity{}, Preferences: map[string]Preferences{},
+			Identities: []Identity{}, Preferences: map[string]Preferences{}, Roles: []Role{},
 		}
 	case err != nil:
 		return nil, fmt.Errorf("inspect %s before restart: %w", FileName, err)
 	default:
-		store.data, err = decode(body)
+		var migrated bool
+		store.data, migrated, err = decodeVersioned(body)
+		if errors.Is(err, ErrNewer) {
+			return nil, fmt.Errorf("%w: %s uses a newer schema; run the AegisMesh version that wrote it, "+
+				"or restore %s if one exists", ErrNewer, FileName, BackupV1)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s is corrupt or over quota; inspect state and restore a verified backup",
 				ErrInvalid, FileName)
 		}
 		store.disk, store.diskExists = sha256.Sum256(body), true
+		if migrated {
+			// Keep the v1 document for a downgrade, then write v2 so later
+			// saves and foreign-writer detection operate on one format.
+			if _, statErr := root.Lstat(BackupV1); errors.Is(statErr, os.ErrNotExist) {
+				if err := stateio.Atomic(root, BackupV1, body); err != nil {
+					return nil, fmt.Errorf("console accounts: keep v1 backup: %w", err)
+				}
+			}
+			if err := store.save(store.data.clone()); err != nil {
+				return nil, fmt.Errorf("console accounts: migrate to v2: %w", err)
+			}
+		}
 	}
 	store.identity, _ = hex.DecodeString(store.data.IdentityKey)
 	store.reindex()
@@ -155,24 +177,46 @@ func Check(body []byte) error {
 
 // decode strictly parses and validates a snapshot: duplicate keys, unknown
 // fields, trailing data, out-of-vocabulary values and quota overruns fail.
+// A v1 snapshot (no roles) is migrated in memory to the current schema;
+// migrated reports that. A newer schema fails with ErrNewer.
 func decode(body []byte) (snapshot, error) {
+	decoded, _, err := decodeVersioned(body)
+	return decoded, err
+}
+
+func decodeVersioned(body []byte) (snapshot, bool, error) {
 	if len(body) > MaxStoreBytes || !strictjson.ValidObject(body) {
-		return snapshot{}, ErrInvalid
+		return snapshot{}, false, ErrInvalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var decoded snapshot
 	if err := decoder.Decode(&decoded); err != nil {
-		return snapshot{}, ErrInvalid
+		return snapshot{}, false, ErrInvalid
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF {
-		return snapshot{}, ErrInvalid
+		return snapshot{}, false, ErrInvalid
+	}
+	migrated := false
+	switch decoded.Schema {
+	case Schema:
+	case SchemaV1:
+		// v1 has no roles field; one present means a malformed document.
+		if decoded.Roles != nil {
+			return snapshot{}, false, ErrInvalid
+		}
+		decoded.Schema, decoded.Roles, migrated = Schema, []Role{}, true
+	default:
+		if strings.HasPrefix(decoded.Schema, "aegismesh.console.accounts/") {
+			return snapshot{}, false, ErrNewer
+		}
+		return snapshot{}, false, ErrInvalid
 	}
 	if err := validate(decoded); err != nil {
-		return snapshot{}, err
+		return snapshot{}, false, err
 	}
-	return decoded, nil
+	return decoded, migrated, nil
 }
 
 func (s *Store) reindex() {
@@ -270,8 +314,9 @@ func find(data snapshot, id string) int {
 	return -1
 }
 
-// usableAdmins counts managed accounts that can administer: active, admin,
-// member of the local tenant and holding at least one usable key.
+// usableAdmins counts managed accounts that can administer: active, holding a
+// role that can manage both accounts and roles, member of the local tenant and
+// holding at least one usable key.
 func (s *Store) usableAdmins(data snapshot, now time.Time) int {
 	local := s.opts.LocalTenant
 	if local == "" {
@@ -279,7 +324,7 @@ func (s *Store) usableAdmins(data snapshot, now time.Time) int {
 	}
 	count := 0
 	for _, account := range data.Accounts {
-		if account.Status == StatusActive && account.Role == "admin" && slices.Contains(account.Tenants, local) &&
+		if account.Status == StatusActive && permission.Administers(data.permissions(account.Role)) && slices.Contains(account.Tenants, local) &&
 			account.ActiveKeys(now) > 0 {
 			count++
 		}
@@ -307,7 +352,7 @@ func (s *Store) guard(before, after snapshot, configAdmins int) error {
 
 // Create validates and persists a new active account without keys.
 func (s *Store) Create(input Create, actor string) (Account, error) {
-	if !ValidName(input.Name) || !ValidKind(input.Kind) || !ValidRole(input.Role) || !validActor(actor) {
+	if !ValidName(input.Name) || !ValidKind(input.Kind) || !validActor(actor) {
 		return Account{}, ErrInvalid
 	}
 	if !s.declared(input.Tenants) {
@@ -315,6 +360,9 @@ func (s *Store) Create(input Create, actor string) (Account, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.data.roleName(input.Role) == "" {
+		return Account{}, ErrInvalid
+	}
 	if len(s.data.Accounts) >= MaxAccounts {
 		return Account{}, ErrLimit
 	}
@@ -376,7 +424,7 @@ func (s *Store) Update(id string, patch Patch, actor string, configAdmins int) (
 	if patch.Name == nil && patch.Role == nil && patch.Tenants == nil && patch.Status == nil {
 		return Account{}, Change{}, ErrInvalid
 	}
-	if patch.Name != nil && !ValidName(*patch.Name) || patch.Role != nil && !ValidRole(*patch.Role) ||
+	if patch.Name != nil && !ValidName(*patch.Name) || patch.Role != nil && !validRoleRef(*patch.Role) ||
 		patch.Tenants != nil && !s.declared(*patch.Tenants) ||
 		patch.Status != nil && *patch.Status != StatusActive && *patch.Status != StatusDisabled || !validActor(actor) {
 		return Account{}, Change{}, ErrInvalid
@@ -386,6 +434,9 @@ func (s *Store) Update(id string, patch Patch, actor string, configAdmins int) (
 	index := find(s.data, id)
 	if index < 0 {
 		return Account{}, Change{}, ErrNotFound
+	}
+	if patch.Role != nil && s.data.roleName(*patch.Role) == "" {
+		return Account{}, Change{}, ErrInvalid
 	}
 	next := s.data.clone()
 	account := &next.Accounts[index]
@@ -426,14 +477,47 @@ func (s *Store) Update(id string, patch Patch, actor string, configAdmins int) (
 	return result, change, nil
 }
 
+// SetKeyLimits sets the lifetime bounds for keys minted from now on:
+// 1 <= def <= max <= MaxKeyDays. Existing keys keep their expiry.
+func (s *Store) SetKeyLimits(max, def int) error {
+	if max < 1 || max > MaxKeyDays || def < 1 || def > max {
+		return ErrInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keyMax, s.keyDefault = max, def
+	return nil
+}
+
+// KeyLimits returns the current maximum and default key lifetimes in days.
+func (s *Store) KeyLimits() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.keyMax, s.keyDefault
+}
+
+// SetDefaultWindow sets the time window returned to principals without saved preferences.
+func (s *Store) SetDefaultWindow(window string) error {
+	next := DefaultPreferences
+	next.DefaultWindow = window
+	if !next.Valid() {
+		return ErrInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaults = next
+	return nil
+}
+
 // CreateKey mints a key for an active account and returns the token exactly once.
-// days of 0 selects DefaultKeyDays. When the account already holds the maximum,
+// days of 0 selects the current default lifetime (DefaultKeyDays unless changed). When the account already holds the maximum,
 // the longest-inactive revoked or expired key is pruned; ten active keys is a limit.
 func (s *Store) CreateKey(accountID, label string, days int, actor string) (KeyView, string, error) {
+	maxDays, defaultDays := s.KeyLimits()
 	if days == 0 {
-		days = DefaultKeyDays
+		days = defaultDays
 	}
-	if !ValidLabel(label) || days < 1 || days > MaxKeyDays || !validActor(actor) {
+	if !ValidLabel(label) || days < 1 || days > maxDays || !validActor(actor) {
 		return KeyView{}, "", ErrInvalid
 	}
 	random, err := auth.Token()
@@ -710,7 +794,7 @@ func (s *Store) Preferences(principalID string) Preferences {
 	if preferences, ok := s.data.Preferences[principalID]; ok {
 		return preferences
 	}
-	return DefaultPreferences
+	return s.defaults
 }
 
 // SetPreferences validates and persists the complete preference record.

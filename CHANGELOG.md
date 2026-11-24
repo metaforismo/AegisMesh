@@ -21,6 +21,22 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   count. Audit: grouped action filter, settings changes as from → to.
 - Dev mock: contract r6 (`mock-roles.mjs`), `--round6 off`,
   `--settings-editing off`.
+- Console permissions and custom roles (ADR-0026): an 18-id permission
+  catalogue (`/api/v1/permissions`) behind every route, built-in roles pinned
+  to their previous access, custom roles for managed accounts
+  (`/api/v1/admin/roles`, accounts store v2 with v1 migration and backup),
+  `/me` `permissions` and `role_name`, `builtin`/`in_use` guards, a last-admin
+  guard across roles and 403 `exceeds_own_permissions` against escalation.
+- `console.settings_editing: console` (default `off`): audited, reasoned
+  overrides of an allowlist of console settings in a state-dir overlay, live
+  where possible, with history; 409 `editing_disabled`/`not_editable`
+  otherwise. New file fields `key_max_days`, `key_default_days`,
+  `sign_in_banner`, `organization_name`, `default_window`; `/meta` shows the
+  banner and organization name. `aegismesh demo` enables editing.
+- Posture: accepted risk with reason and ≤180-day expiry
+  (`/api/v1/posture/{check_id}/accept`, `accepted` status and count, CLI reads
+  it read-only), checks POS-020..022, `settings` system component, audit
+  actions `role.*`, `settings.update|revert`, `posture.accept|unaccept`.
 
 - Console: Settings (`g ,`, account menu, palette). Your account: profile and
   what your role allows, preferences (UTC or local time, default window,

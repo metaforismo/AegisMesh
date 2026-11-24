@@ -250,3 +250,11 @@ func (harness *consoleHarness) login(t *testing.T, previous *http.Cookie) (*http
 	}
 	return response.cookies[0], session
 }
+
+// close stops the console early (tests that restart on the same state directory).
+func (harness *consoleHarness) close(t *testing.T) {
+	t.Helper()
+	if err := harness.server.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}

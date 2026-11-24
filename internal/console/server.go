@@ -7,7 +7,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/console/investigations"
 	"github.com/metaforismo/aegismesh/internal/console/oidc"
+	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/console/tenant"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/fleet/hub"
@@ -74,6 +77,8 @@ type Options struct {
 	// Sources reports where configuration values came from (config.Config.Sources);
 	// nil reports explicitly supplied values as "config".
 	Sources map[string]string
+	// Logger receives startup warnings such as ignored settings overrides; nil discards them.
+	Logger *slog.Logger
 }
 
 type asset struct {
@@ -108,6 +113,9 @@ type Server struct {
 	audit           *audit.Log
 	cases           *investigations.Store
 	accounts        *accounts.Store
+	overlay         *settings.Store
+	live            *liveSettings
+	log             *slog.Logger
 	security        config.Security
 	settingSources  map[string]string
 	startedAt       time.Time
@@ -213,6 +221,21 @@ func New(opts Options) (_ *Server, err error) {
 		return nil, fmt.Errorf("console accounts: %w", err)
 	}
 	sessions.SetRegistry(server.accounts)
+
+	logger := opts.Logger
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	server.log = logger
+	// Fixed directory name under the trusted state root; never request-selected.
+	server.overlay, err = settings.Open(filepath.Join(opts.StateDir, "settings"), opts.Now)
+	if err != nil {
+		return nil, fmt.Errorf("console settings: %w", err)
+	}
+	server.live = &liveSettings{}
+	if err = server.applySettings(true); err != nil {
+		return nil, err
+	}
 
 	if server.listener, server.certExpiry, err = listen(opts.Config); err != nil {
 		return nil, err
@@ -339,6 +362,9 @@ func (s *Server) closeResources() {
 	if s.accounts != nil {
 		_ = s.accounts.Close()
 	}
+	if s.overlay != nil {
+		_ = s.overlay.Close()
+	}
 }
 
 // Addr returns the actual bound console authority, including an assigned port.
@@ -401,6 +427,9 @@ func (s *Server) Close(ctx context.Context) error {
 		}
 		if s.accounts != nil {
 			_ = s.accounts.Close()
+		}
+		if s.overlay != nil {
+			_ = s.overlay.Close()
 		}
 	})
 	return err

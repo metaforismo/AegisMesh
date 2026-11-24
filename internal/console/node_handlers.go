@@ -3,6 +3,7 @@ package console
 import (
 	"net/http"
 
+	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/version"
 )
 
@@ -48,9 +49,11 @@ func (s *Server) meta(w http.ResponseWriter, _ *http.Request, _ caller) {
 		"auth": map[string]any{"token": s.cfg.TokenEnabled(), "oidc": map[string]any{
 			"enabled": s.cfg.OIDC.Enabled, "display_name": s.cfg.OIDC.DisplayName,
 		}},
-		"product":     "AegisMesh",
-		"api_version": "v1",
-		"version":     version.Version,
+		"product":           "AegisMesh",
+		"api_version":       "v1",
+		"version":           version.Version,
+		"organization_name": s.live.value(settings.OrganizationName),
+		"sign_in_banner":    s.live.value(settings.SignInBanner),
 	})
 }
 

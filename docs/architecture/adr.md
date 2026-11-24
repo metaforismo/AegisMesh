@@ -1112,6 +1112,7 @@ constants awaiting field evaluation.
 ## ADR-0025 — managed accounts, API keys, session administration and read-only settings
 
 **Status:** implemented on branch `feat/accounts-access`; not merged or released.
+The read-only settings and fixed-role parts are refined by ADR-0026.
 
 **Context.** Operators asked for per-person and per-integration access without
 editing the config file and restarting for every change, for visibility into
@@ -1210,3 +1211,103 @@ even with evidence encryption; use an encrypted volume when that matters.
 **Consequences.** One more fixed-name state file and directory, no new
 dependency, no new egress. Store save and audit append remain separate
 transactions as for investigations (503 says which one failed).
+
+## ADR-0026 — permission catalogue, custom roles and a narrow settings overlay
+
+**Status:** implemented on branch `feat/roles-settings`; not merged or released.
+
+**Context.** Teams asked for roles between analyst and admin (an auditor, an
+account manager, an integration that only exports), and for routine console
+settings (session lifetime, idle timeout, key lifetimes, a sign-in banner, an
+organization name) without a file edit and restart. ADR-0017 keeps the console
+read-mostly with no remote sensor, policy or config control; ADR-0025 kept
+settings file-driven and roles fixed, listing what editing would need.
+
+**Alternatives.** (A) Edit the config file from the console. Rejected for the
+reasons in ADR-0025: request data would mutate configuration (AGENTS.md rule
+2), races with file edits, and most values need a restart. (B) Make every
+setting editable through an overlay. Rejected: listeners, TLS, tenants, OIDC,
+storage, encryption, detection actions and fleet change what the node exposes
+or enforces. (C) A fixed allowlist of console-only values with low blast
+radius, in a separate overlay, off by default. **Chosen: C.** For roles, (A)
+more fixed roles or (B) a permission catalogue with custom combinations;
+**chosen: B**, with the built-in roles expressed in it.
+
+**Decision — permissions.** `console/permission` compiles in a versioned
+catalogue of 18 ids (`evidence.read`, `analysis.read`, `evidence.export`,
+`reports.download`, `investigations.read|write`, `audit.read|export`,
+`fleet.read|manage`, `accounts.read|manage`, `roles.manage`,
+`sessions.manage`, `settings.read|manage`, `system.read`, `keys.self`) with a
+risk level (high = can grant access or change behaviour). Every route declares
+one id, or none for a principal's own session, profile and preferences.
+viewer = evidence, analysis, investigations and fleet reads plus `keys.self`;
+analyst adds exports, reports and investigation writes; admin holds all. A
+test sends a real request for every route as each built-in role and pins the
+result recorded before the refactor. Administration routes keep the
+`local_tenant` membership requirement. A principal's role resolves to
+permissions on every request, so a role edit applies at the next request of
+every key and session holding it, and event streams re-check `evidence.read`
+on each event and heartbeat. `auth.Granted` remains only to choose the
+highest mapped built-in role in OIDC role mapping.
+
+**Decision — custom roles.** Up to 32 roles (`role_<12 hex>`, names 1..40
+runes unique case-insensitively and distinct from built-in names) are stored
+in the accounts snapshot, schema v2; v1 migrates on open, keeping the v1
+document as `accounts.v1.json`, and a newer schema is refused with a clear
+error. Only managed accounts may hold them; config operators and OIDC
+mappings keep built-in names this round because their values come from files
+and the IdP. Combination rules: `roles.manage` and `settings.manage` need
+`accounts.manage`; `accounts.manage` and `sessions.manage` need
+`accounts.read`; `settings.manage` needs `settings.read`. Built-ins are
+immutable (409 `builtin`); assigned roles cannot be deleted (409 `in_use`);
+the last-admin guard counts principals that can manage both accounts and
+roles. **No escalation:** every administration change is refused with 403
+`exceeds_own_permissions` when it would grant or touch permissions the
+caller's role lacks — creating or re-roling an account to a wider role,
+changing, disabling, minting or revoking keys for an account holding more,
+creating or widening a role beyond the caller's set, editing or deleting a
+role holding more, and ending a session of a more privileged principal. Built-in
+admin holds every permission and is never refused.
+
+**Decision — settings overlay.** `console.settings_editing` is `off` by
+default; `console` lets principals with `settings.manage` override exactly:
+session lifetime (900..86400 s), idle timeout (0 or 300..86400 s), maximum and
+default API key lifetime, sign-in banner, organization name, default time
+window, and accepted posture risks. The overlay
+(`<state_dir>/settings/settings.json`, `aegismesh.console.settings/v1`) is
+strict-decoded, size-capped, atomically replaced and checked for foreign
+writers; its keys come from the compiled allowlist, values are validated
+before storage and again before use, and every change needs a reason and is
+audited (`settings.update`, `settings.revert`) with key, previous and new
+values and a history entry (capped at 500). The config file is never written.
+Values apply live through existing setters (session TTL for new sessions,
+idle timeout at once, key limits for new keys, banner and organization name in
+`/api/v1/meta`). With editing off the overlay is retained but not applied, so
+the file is again the only source. An override that no longer validates at
+startup is ignored with a warning, POS-022 and the `settings` system component
+report it, and the console starts; an unreadable or newer overlay is neither
+applied nor written.
+
+**Decision — accepted risk.** An attention posture check may be accepted
+with a reason and an expiry at most 180 days ahead (`posture.accept`,
+`posture.unaccept`); it reports `accepted` and is counted separately; expired
+acceptances are ignored and pruned. New checks POS-020 (who can change
+settings), POS-021 (service accounts holding high-risk permissions through a
+custom role) and POS-022 (ignored overlay values).
+
+**Why this is acceptable under ADR-0017 and AGENTS.md rule 2.** Request data
+selects a value only within a fixed allowlist of console-presentation and
+session-lifetime keys, each bounded by the same or stricter limits as the
+file; nothing reaches `os/exec`, path selection, sensor behaviour, listeners,
+storage, encryption, detection actions, fleet, tenants or OIDC endpoints. The
+feature is opt-in per deployment and its use is attributable.
+
+**What remains forbidden.** Editing anything outside the allowlist; writing
+the config file; remote sensor, policy, listener or fleet control; custom
+roles for config operators or OIDC mappings; any permission beyond the
+catalogue.
+
+**Consequences.** One more fixed-name state file; no new dependency or egress.
+Audit records' role field allows 24 bytes for custom role ids. Overlay save
+and audit append remain separate transactions (503 says which failed). A
+same-UID local writer can still edit the overlay or accounts file, as before.

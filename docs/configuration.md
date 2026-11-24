@@ -413,6 +413,12 @@ console:
   tls_cert_file: ""              # certificate and key together
   tls_key_file: ""
   operators: []                  # 1..32 required when enabled
+  settings_editing: "off"        # off | console (ADR-0026)
+  key_max_days: 365              # managed API key lifetime cap, 1..365
+  key_default_days: 90           # 1..key_max_days (default 90, or key_max_days if lower)
+  sign_in_banner: ""             # <= 500 printable characters, newlines allowed
+  organization_name: ""          # <= 80 printable characters, one line
+  default_window: 24h            # 1h | 24h | 7d, for principals without saved preferences
 ```
 
 Generate a token with `aegismesh console token` and paste its `operators:` snippet
@@ -439,8 +445,43 @@ disables them too. A corrupt or interrupted store (stale `accounts.json.tmp`)
 aborts startup; restore a verified backup or move the directory aside (which
 deletes every managed account and key). Use `aegismesh accounts` to disable an
 account or revoke a key while the console is stopped. The console shows the
-effective console settings read-only at `/api/v1/admin/settings`; edit this
-file and restart to change them.
+effective console settings at `/api/v1/admin/settings`; edit this file and
+restart to change them, except for the allowlist below.
+
+Managed accounts take a built-in role or a **custom role** (ADR-0026): a
+named set of permission ids from a fixed catalogue, stored with the accounts
+(`accounts.json` schema v2; a v1 file is migrated on first start and the v1
+document kept as `accounts.v1.json` for a downgrade; an older binary refuses
+v2). Config operators (`console.operators[].role`) and OIDC
+`role_mapping` values still accept only `viewer`, `analyst` and `admin`.
+
+**Console settings editing.** `settings_editing: off` (default) keeps every
+setting file-driven. With `settings_editing: console`, principals whose role
+grants `settings.manage` may override only these keys in the console, with a
+required reason; everything else answers 409 `not_editable`:
+
+| Key | Console range | Applies |
+|---|---|---|
+| `console.session_ttl_seconds` | 900..86400 (stricter than the file's 60..86400) | new sessions |
+| `console.session_idle_seconds` | 0 or 300..86400 | immediately |
+| `console.key_max_days` | 1..365, not below the effective default | new keys |
+| `console.key_default_days` | 1..effective `key_max_days` | new keys |
+| `console.sign_in_banner` | ≤ 500 printable characters, newlines allowed | immediately (`/api/v1/meta`) |
+| `console.organization_name` | ≤ 80 printable characters | immediately (`/api/v1/meta`) |
+| `console.default_window` | `1h`, `24h`, `7d` | principals without saved preferences |
+| `posture.accepted` | accepted posture risks, ≤ 180 days each | immediately |
+
+Overrides live in `<state_dir>/settings/settings.json` (mode 0600, schema
+`aegismesh.console.settings/v1`, at most 2 MiB, history capped at 500
+changes); this file is never written. The effective value is the override when
+present and valid, otherwise the file, environment or default value. While
+`settings_editing` is `off`, stored overrides and acceptances are kept but not
+applied. At startup an override that no longer validates (for example a
+default above a lowered file maximum) is ignored with a logged warning, the
+`settings` system component reports `degraded` and posture check POS-022 needs
+attention; a corrupt, interrupted or newer overlay is neither applied nor
+written, and the console still starts with file values. `aegismesh demo`
+enables `settings_editing: console`.
 
 `AEGISMESH_CONSOLE_ENABLED` and `AEGISMESH_CONSOLE_LISTEN` override the matching
 fields. Credentials, TLS and limits stay in the file. Relative `state_dir` and

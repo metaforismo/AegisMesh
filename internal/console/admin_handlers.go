@@ -8,6 +8,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/console/accounts"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/console/permission"
 )
 
 // accountView is the administration projection shared by all three sources.
@@ -17,6 +18,7 @@ type accountView struct {
 	Kind           string     `json:"kind"`
 	Source         string     `json:"source"`
 	Role           string     `json:"role"`
+	RoleName       string     `json:"role_name"`
 	Tenants        []string   `json:"tenants"`
 	Status         string     `json:"status"`
 	CreatedAt      *time.Time `json:"created_at"`
@@ -38,7 +40,8 @@ type accountDetail struct {
 func (s *Server) managedView(account accounts.Account, now time.Time) accountView {
 	return accountView{
 		ID: account.ID, Name: account.Name, Kind: account.Kind, Source: auth.SourceManaged, Role: account.Role,
-		Tenants: slices.Clone(account.Tenants), Status: account.Status, CreatedAt: timePointer(account.CreatedAt),
+		RoleName: s.grants(auth.Principal{Role: account.Role}).name,
+		Tenants:  slices.Clone(account.Tenants), Status: account.Status, CreatedAt: timePointer(account.CreatedAt),
 		CreatedBy: account.CreatedBy, UpdatedAt: timePointer(account.UpdatedAt), LastSeenAt: account.LastSeenAt,
 		ActiveKeys: account.ActiveKeys(now), ActiveSessions: s.auth.CountSessions(account.ID), Editable: true,
 	}
@@ -53,7 +56,7 @@ func (s *Server) configViews() []accountView {
 	views := []accountView{}
 	for _, operator := range s.auth.Operators() {
 		view := accountView{
-			ID: operator.ID, Name: operator.Name, Kind: "person", Source: auth.SourceConfig, Role: operator.Role,
+			ID: operator.ID, Name: operator.Name, Kind: "person", Source: auth.SourceConfig, Role: operator.Role, RoleName: operator.Role,
 			Tenants: slices.Clone(operator.Tenants), Status: status, CreatedBy: "config",
 			ActiveSessions: s.auth.CountSessions(operator.ID),
 		}
@@ -69,7 +72,7 @@ func (s *Server) identityViews() []accountView {
 	views := []accountView{}
 	for _, identity := range s.accounts.Identities() {
 		views = append(views, accountView{
-			ID: identity.ID, Name: identity.Name, Kind: "person", Source: auth.SourceOIDC, Role: identity.Role,
+			ID: identity.ID, Name: identity.Name, Kind: "person", Source: auth.SourceOIDC, Role: identity.Role, RoleName: identity.Role,
 			Tenants: identity.Tenants, Status: accounts.StatusActive, CreatedAt: timePointer(identity.FirstSeenAt),
 			CreatedBy: "oidc", LastSeenAt: timePointer(identity.LastSeenAt),
 			ActiveSessions: s.auth.CountSessions(identity.ID),
@@ -80,6 +83,7 @@ func (s *Server) identityViews() []accountView {
 
 func (s *Server) listAccounts(w http.ResponseWriter, _ *http.Request, _ caller) {
 	now := s.now()
+	maxDays, defaultDays := s.accounts.KeyLimits()
 	items := s.configViews()
 	for _, account := range s.accounts.List() {
 		items = append(items, s.managedView(account, now))
@@ -89,7 +93,7 @@ func (s *Server) listAccounts(w http.ResponseWriter, _ *http.Request, _ caller) 
 		"items": items,
 		"limits": map[string]int{
 			"max_accounts": accounts.MaxAccounts, "max_keys_per_account": accounts.MaxKeysPerAccount,
-			"max_key_days": accounts.MaxKeyDays, "default_key_days": accounts.DefaultKeyDays,
+			"max_key_days": maxDays, "default_key_days": defaultDays,
 		},
 	})
 }
@@ -100,12 +104,24 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request, credentia
 		return
 	}
 	principal := credentials.session.Principal
+	if s.roleExceeds(s.grants(principal), body.Role) {
+		s.denyEscalation(w, r, principal, "account.create", "")
+		return
+	}
 	account, err := s.accounts.Create(body, principal.ID)
 	if !s.audited(w, r, principal, "account.create", account.ID, err,
-		"kind="+safeWord(body.Kind)+" role="+safeWord(body.Role), true) {
+		"kind="+safeWord(body.Kind)+" role="+safeRole(body.Role), true) {
 		return
 	}
 	send(w, 201, s.managedView(account, s.now()))
+}
+
+// safeRole keeps only role-id-shaped request values in audit details.
+func safeRole(value string) string {
+	if permission.IsBuiltin(value) || accounts.ValidRoleID(value) {
+		return value
+	}
+	return "invalid"
 }
 
 // safeWord keeps only enum-shaped request words in audit details.
@@ -156,7 +172,7 @@ func (s *Server) patchAccount(w http.ResponseWriter, r *http.Request, credential
 		return
 	}
 	id := r.PathValue("id")
-	_, managed, ok := s.lookupAccount(w, id)
+	detail, managed, ok := s.lookupAccount(w, id)
 	if !ok {
 		return
 	}
@@ -167,6 +183,12 @@ func (s *Server) patchAccount(w http.ResponseWriter, r *http.Request, credential
 			return
 		}
 		notManaged(w)
+		return
+	}
+	// Neither the account's current role nor a requested one may exceed the caller's.
+	caller := s.grants(principal)
+	if s.roleExceeds(caller, detail.Role) || body.Role != nil && s.roleExceeds(caller, *body.Role) {
+		s.denyEscalation(w, r, principal, "account.update", id)
 		return
 	}
 	account, change, err := s.accounts.Update(id, body, principal.ID, s.configAdmins())
@@ -187,7 +209,7 @@ func (s *Server) createAccountKey(w http.ResponseWriter, r *http.Request, creden
 		return
 	}
 	id := r.PathValue("id")
-	_, managed, ok := s.lookupAccount(w, id)
+	detail, managed, ok := s.lookupAccount(w, id)
 	if !ok {
 		return
 	}
@@ -199,17 +221,27 @@ func (s *Server) createAccountKey(w http.ResponseWriter, r *http.Request, creden
 		notManaged(w)
 		return
 	}
+	// A key authenticates as its account: minting one for a more privileged
+	// account would hand the caller that account's permissions.
+	if s.roleExceeds(s.grants(credentials.session.Principal), detail.Role) {
+		s.denyEscalation(w, r, credentials.session.Principal, "key.create", id)
+		return
+	}
 	s.mintKey(w, r, credentials.session.Principal, id, body, true)
 }
 
 func (s *Server) revokeAccountKey(w http.ResponseWriter, r *http.Request, credentials caller) {
 	id := r.PathValue("id")
-	_, managed, ok := s.lookupAccount(w, id)
+	detail, managed, ok := s.lookupAccount(w, id)
 	if !ok {
 		return
 	}
 	if !managed {
 		notManaged(w)
+		return
+	}
+	if s.roleExceeds(s.grants(credentials.session.Principal), detail.Role) {
+		s.denyEscalation(w, r, credentials.session.Principal, "key.revoke", id)
 		return
 	}
 	s.revokeKey(w, r, credentials.session.Principal, id, r.PathValue("key_id"), true)
@@ -223,6 +255,13 @@ func (s *Server) revokeAdminSession(w http.ResponseWriter, r *http.Request, cred
 	handle := r.PathValue("handle")
 	if !validHandle(handle) {
 		fail(w, 404, "not_found", "session not found")
+		return
+	}
+	// Ending a more privileged principal's session is refused like any other
+	// action on access the caller does not hold.
+	if target, live := s.auth.SessionPrincipal(handle); live &&
+		exceeds(s.grants(credentials.session.Principal), s.grants(target).perms) {
+		s.denyEscalation(w, r, credentials.session.Principal, "session.revoke", handle)
 		return
 	}
 	info, ok := s.auth.Revoke(handle, "")

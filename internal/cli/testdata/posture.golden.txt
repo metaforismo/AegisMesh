@@ -1,5 +1,6 @@
-POSTURE REVIEW: 2 attention, 8 ok, 9 info
+POSTURE REVIEW: 2 attention, 9 ok, 11 info, 0 accepted
 Static review of the running configuration and of retained evidence; not a security guarantee or a complete audit.
+accepted risks: none (console.settings_editing is off)
 
 POS-001  ok         exposure   Decoys reachable beyond loopback
          All 2 sensor(s) bind to loopback; only local clients can reach them.
@@ -82,5 +83,17 @@ POS-018  info       evidence   Evidence encryption at rest
 POS-019  info       access     Break-glass administrator
          The console is disabled; administrator access was not evaluated.
          see docs/architecture/console-api.md#accounts-access-and-settings-adr-0025
+
+POS-020  info       access     Console settings editing
+         The console is disabled; settings editing was not evaluated.
+         see docs/architecture/console-api.md#permissions-roles-and-editable-settings-adr-0026
+
+POS-021  info       access     Service accounts with high-risk permissions
+         The console is disabled; service accounts were not evaluated.
+         see docs/architecture/console-api.md#permissions-roles-and-editable-settings-adr-0026
+
+POS-022  ok         access     Console settings overlay
+         Settings editing is off; the configuration file is the only source of settings.
+         see docs/architecture/console-api.md#permissions-roles-and-editable-settings-adr-0026
 
 generated at 2026-11-01T13:00:00Z

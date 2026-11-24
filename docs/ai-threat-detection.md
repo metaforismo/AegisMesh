@@ -300,7 +300,8 @@ shared behaviour, never a shared operator.
 
 `GET /api/v1/posture` and `aegismesh posture --config FILE [--json]` run fixed
 checks over a secret-free snapshot of the validated configuration and the
-retained sample. Statuses are `attention`, `ok` or `info`; `ok` carries no
+retained sample. Statuses are `attention`, `ok` or `info`, plus `accepted` for
+an attention check whose risk an operator accepted (ADR-0026); `ok` carries no
 recommendation. It is advisory, never a security guarantee. Details never
 include token values, digests, URLs or secret references. For a console tenant
 other than `local_tenant`, only POS-017 is evaluated (`scope: evidence_only`).
@@ -326,6 +327,19 @@ other than `local_tenant`, only POS-017 is evaluated (`scope: evidence_only`).
 | POS-017 | evidence | attention: the newest-8192 analysis sample is saturated, older evidence is not analysed |
 | POS-018 | evidence | info: evidence encryption at rest is off |
 | POS-019 | access | info: no config-file admin token can sign in, so recovery depends on managed accounts or OIDC (the CLI review cannot see managed accounts) |
+| POS-020 | access | info: `console.settings_editing` is `console`; names the roles holding `settings.manage` and what they can change |
+| POS-021 | access | attention: an active service account holds a high-risk permission through a custom role; info: service accounts hold built-in admin (console only) |
+| POS-022 | access | attention: stored settings overrides were ignored at startup, or the overlay could not be loaded (console only) |
+
+**Accepted risks.** With `console.settings_editing: console`, a principal with
+`settings.manage` may accept an attention check with a reason (≤200
+characters) until a time at most 180 days ahead
+(`POST /api/v1/posture/{check_id}/accept`). The check then reports
+`accepted` with `{"by","by_name","reason","until"}`, the summary counts it
+under `accepted`, and once the time passes it needs attention again.
+Acceptances never change checks that are `ok` or `info`, and are not applied
+while editing is off. The CLI reads them read-only from the console state
+directory and says when it could not.
 
 The CLI reads the newest 8192 verified envelopes from `--data-dir` (default
 `runtime.data_dir`); when evidence is missing, encrypted without `--identity`

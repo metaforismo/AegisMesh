@@ -10,12 +10,15 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/console/accounts"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/console/permission"
 )
 
 type capabilities struct {
 	// ManageOwnKeys is true for managed accounts while token authentication is enabled.
 	ManageOwnKeys bool `json:"manage_own_keys"`
-	// Administer is true for admins who are members of the local tenant.
+	// Administer is true when the role grants any administration read
+	// (accounts.read, settings.read, system.read or audit.export) and the
+	// principal is a member of the local tenant.
 	Administer bool `json:"administer"`
 }
 
@@ -25,6 +28,8 @@ type meResponse struct {
 	Kind         string       `json:"kind"`
 	Source       string       `json:"source"`
 	Role         string       `json:"role"`
+	RoleName     string       `json:"role_name"`
+	Permissions  []string     `json:"permissions"`
 	Tenants      []string     `json:"tenants"`
 	Tenant       string       `json:"tenant"`
 	AuthMethod   string       `json:"auth_method"`
@@ -52,10 +57,14 @@ type preferencesPatch struct {
 }
 
 func (s *Server) capabilities(principal auth.Principal) capabilities {
+	granted := s.grants(principal)
+	administer := false
+	for _, perm := range []string{permission.AccountsRead, permission.SettingsRead, permission.SystemRead, permission.AuditExport} {
+		administer = administer || granted.has(perm)
+	}
 	return capabilities{
-		ManageOwnKeys: principal.Source == auth.SourceManaged && s.cfg.TokenEnabled(),
-		Administer: principal.Role == "admin" &&
-			slices.Contains(principal.Tenants, s.cfg.LocalTenant),
+		ManageOwnKeys: principal.Source == auth.SourceManaged && s.cfg.TokenEnabled() && granted.has(permission.KeysSelf),
+		Administer:    administer && slices.Contains(principal.Tenants, s.cfg.LocalTenant),
 	}
 }
 
@@ -84,9 +93,10 @@ func timePointer(value time.Time) *time.Time {
 
 func (s *Server) me(w http.ResponseWriter, _ *http.Request, credentials caller) {
 	principal := credentials.session.Principal
+	granted := s.grants(principal)
 	response := meResponse{
 		ID: principal.ID, Name: principal.Name, Kind: principal.Kind, Source: principal.Source,
-		Role: principal.Role, Tenants: slices.Clone(principal.Tenants), Tenant: credentials.session.Tenant,
+		Role: principal.Role, RoleName: granted.name, Permissions: granted.perms, Tenants: slices.Clone(principal.Tenants), Tenant: credentials.session.Tenant,
 		AuthMethod: principal.AuthMethod, Capabilities: s.capabilities(principal),
 	}
 	if response.Tenant == "" {
@@ -285,7 +295,7 @@ func (s *Server) mintKey(w http.ResponseWriter, r *http.Request, principal auth.
 	view, token, err := s.accounts.CreateKey(accountID, body.Label, body.ExpiresInDays, principal.ID)
 	days := body.ExpiresInDays
 	if days == 0 {
-		days = accounts.DefaultKeyDays
+		_, days = s.accounts.KeyLimits()
 	}
 	// The detail names the account and lifetime only; the token and its digest never reach the audit trail.
 	if !s.audited(w, r, principal, "key.create", view.ID, err,

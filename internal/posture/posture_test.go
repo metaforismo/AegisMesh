@@ -38,7 +38,8 @@ func baseline() (*Facts, Evidence) {
 func TestBaselineIsAllOKOrExpectedInfo(t *testing.T) {
 	facts, evidence := baseline()
 	r := Evaluate(facts, evidence, time.Date(2026, 11, 23, 0, 0, 0, 0, time.UTC))
-	if len(r.Checks) != 19 || r.Summary.Attention != 0 || r.Summary.OK+r.Summary.Info != 19 || r.Scope != "configuration_and_evidence" {
+	if len(r.Checks) != 22 || r.Summary.Attention != 0 || r.Summary.OK+r.Summary.Info != 22 || r.Scope != "configuration_and_evidence" ||
+		r.Acceptances != AcceptancesUnavailable || r.Summary.Accepted != 0 {
 		t.Fatalf("%+v", r.Summary)
 	}
 	for i, c := range r.Checks {
@@ -121,6 +122,25 @@ func TestChecks(t *testing.T) {
 		}, StatusInfo, "2 managed admin account(s)"},
 		{"POS-019", "token login off", func(f *Facts, _ *Evidence) { f.TokenLogin, f.OIDC = false, true }, StatusInfo, "OIDC role mapping"},
 		{"POS-019", "offline", func(f *Facts, _ *Evidence) { f.OperatorRoles = map[string]int{} }, StatusInfo, "not evaluated (offline review)"},
+		{"POS-020", "editing off", func(*Facts, *Evidence) {}, StatusOK, "settings_editing is off"},
+		{"POS-020", "editing on", func(f *Facts, _ *Evidence) {
+			f.SettingsEditing, f.SettingsManagers = "console", []string{"admin", "Settings owners"}
+		}, StatusInfo, "roles: Settings owners, admin"},
+		{"POS-020", "console off", func(f *Facts, _ *Evidence) { f.ConsoleEnabled = false }, StatusInfo, "not evaluated"},
+		{"POS-021", "offline", func(*Facts, *Evidence) {}, StatusInfo, "offline review"},
+		{"POS-021", "custom high risk", func(f *Facts, _ *Evidence) {
+			f.ManagedKnown, f.ServiceGrants = true, []string{"ci-bot (Automation)"}
+		}, StatusAttention, "ci-bot (Automation)"},
+		{"POS-021", "builtin admin service", func(f *Facts, _ *Evidence) { f.ManagedKnown, f.ServiceAdmins = true, 1 }, StatusInfo, "1 service account(s) hold the built-in admin"},
+		{"POS-021", "none", func(f *Facts, _ *Evidence) { f.ManagedKnown = true }, StatusOK, "No service account"},
+		{"POS-022", "editing off", func(f *Facts, _ *Evidence) { f.OverlayIgnored = []string{"x"} }, StatusOK, "only source"},
+		{"POS-022", "ignored", func(f *Facts, _ *Evidence) {
+			f.SettingsEditing, f.ManagedKnown, f.OverlayIgnored = "console", true, []string{"console.session_ttl_seconds"}
+		}, StatusAttention, "console.session_ttl_seconds"},
+		{"POS-022", "unavailable", func(f *Facts, _ *Evidence) {
+			f.SettingsEditing, f.ManagedKnown, f.OverlayProblem = "console", true, "settings.json is corrupt or over quota"
+		}, StatusAttention, "corrupt"},
+		{"POS-022", "applied", func(f *Facts, _ *Evidence) { f.SettingsEditing, f.ManagedKnown = "console", true }, StatusOK, "validated"},
 	} {
 		t.Run(tc.id+"/"+tc.name, func(t *testing.T) {
 			facts, evidence := baseline()
@@ -167,3 +187,35 @@ func TestFromSnapshotSkipsForwardedEvents(t *testing.T) {
 }
 
 func sensorRef(id string) event.SensorRef { return event.SensorRef{ID: id, Kind: "http"} }
+
+func TestAcceptMarksAttentionChecks(t *testing.T) {
+	facts, evidence := baseline()
+	facts.Honeytokens = nil
+	r := Accept(Evaluate(facts, evidence, time.Unix(0, 0)), map[string]Acceptance{
+		"POS-007": {By: "cfg:admin", ByName: "admin", Reason: "lab node", Until: "2027-01-01T00:00:00Z"},
+		"POS-001": {By: "cfg:admin", ByName: "admin", Reason: "fine", Until: "2027-01-01T00:00:00Z"},
+	})
+	if r.Acceptances != AcceptancesApplied || r.Summary.Attention != 0 || r.Summary.Accepted != 1 {
+		t.Fatalf("summary = %+v", r.Summary)
+	}
+	for _, c := range r.Checks {
+		switch c.ID {
+		case "POS-007":
+			if c.Status != StatusAccepted || c.Accepted == nil || c.Accepted.Reason != "lab node" {
+				t.Fatalf("%+v", c)
+			}
+		case "POS-001":
+			// An acceptance never changes a check that does not need attention.
+			if c.Status != StatusOK || c.Accepted == nil {
+				t.Fatalf("%+v", c)
+			}
+		case "POS-008":
+			if c.Status != StatusAttention && c.Status != StatusInfo || c.Accepted != nil {
+				t.Fatalf("%+v", c)
+			}
+		}
+	}
+	if ids := IDs(); len(ids) != 22 || ids[21] != "POS-022" {
+		t.Fatalf("ids = %v", ids)
+	}
+}
