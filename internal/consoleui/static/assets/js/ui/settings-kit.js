@@ -28,12 +28,12 @@ export const OLDER_SERVER = Object.freeze({
 
 // What a section shows when the server is older than the console (404 on
 // the round-5 paths). Retrying cannot help, so there is no retry button.
-export function olderServerState({ title = OLDER_SERVER.title, detail = OLDER_SERVER.detail } = {}) {
+export function olderServerState({ title = OLDER_SERVER.title, detail = OLDER_SERVER.detail, actions = null } = {}) {
   return h('div', { class: 'state', role: 'status' },
     h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon('info')),
     h('p', { class: 'state__title' }, title),
     h('p', null, detail),
-    h('div', { class: ['btn-row', 'state__actions'] }, h('a', { class: 'btn', href: '#/settings/preferences' }, 'Open preferences'), h('a', { class: 'btn', href: '#/guide?t=account' }, 'Read about accounts')));
+    h('div', { class: ['btn-row', 'state__actions'] }, actions || [h('a', { class: 'btn', href: '#/settings/preferences' }, 'Open preferences'), h('a', { class: 'btn', href: '#/guide?t=account' }, 'Read about accounts')]));
 }
 
 // What a section shows when the role (or the server's 403) refuses it.

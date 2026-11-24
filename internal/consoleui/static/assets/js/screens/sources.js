@@ -32,7 +32,7 @@ export default {
         body: sources.length ? table({
           caption: 'Sources',
           columns: [
-            { label: 'Source', className: 'col-summary', sort: (s) => s.source, cell: (s) => link(href('sources', s.source), evidence(s.source, { max: 60 })) },
+            { label: 'Source', className: 'col-summary', lead: true, sort: (s) => s.source, cell: (s) => link(href('sources', s.source), evidence(s.source, { max: 60 })) },
             { label: 'Events', num: true, sort: (s) => s.events, cell: (s) => formatCount(s.events) },
             { label: 'Canary invocations', num: true, sort: (s) => s.canary_invocations, cell: (s) => formatCount(s.canary_invocations) },
             { label: 'Signals', num: true, sort: (s) => s.signals, cell: (s) => formatCount(s.signals) },

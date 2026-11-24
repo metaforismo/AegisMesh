@@ -29,6 +29,8 @@ function lazy(title, loader, extra = {}) {
 export const SCREENS = Object.freeze({
   overview: lazy('Overview', () => import('./overview.js'), {
     skeleton: 'overview',
+    // The chart is drawn at the viewport's width: redraw after a large resize.
+    redrawOnResize: true,
     prefetch: (api, r) => { api.overview(normalizeWindow(r.query.window)); api.node(); },
   }),
   events: lazy('Events', () => import('./events.js'), {

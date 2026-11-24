@@ -158,7 +158,8 @@ function settingRow(initial, ctx, opts) {
     const history = EDITABLE_KEYS.includes(item.key) && !isPosture && opts.history
       ? h('a', { class: 'setting__history', href: href('settings', 'history', { key: item.key }) }, icon('history', { size: 'sm' }), 'History', h('span', { class: 'visually-hidden' }, ` of ${label}`)) : null;
     const why = {
-      permission: `Changing it needs “${permissionLabel('settings.manage')}”, which your role does not include.`,
+      // Said once, in the page's banner.
+      permission: '',
       off: 'Editable here when console editing is on (see above).',
       posture: '',
     }[st.why] || '';
@@ -171,7 +172,8 @@ function settingRow(initial, ctx, opts) {
     const multiline = item.key === 'console.sign_in_banner' && valueText.length > 60;
     const children = [
       h('dt', { class: 'setting__label' }, label,
-        st.editable ? h('span', { class: 'setting__tag' }, 'Editable') : null),
+        // The server's word: editable in the console (for whoever may).
+        item.editable === true && !isPosture ? h('span', { class: 'setting__tag' }, 'Editable') : null),
       h('dd', { class: 'setting__value' },
         h('span', { class: ['setting__text', valueKind(item), multiline ? 'setting__text--block' : ''] }, valueText),
         sourceChip(item)),

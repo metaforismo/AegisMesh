@@ -23,10 +23,11 @@ import { panel, table, badge, timeEl, banner, empty, toast, failureState, kv } f
 import { confirmAction, formField, errorSummary, olderServerState, notPermittedState } from '../ui/settings-kit.js';
 import { icon } from '../ui/icons.js';
 
-const OLDER = {
+const OLDER = () => ({
   title: 'This server does not provide custom roles yet',
   detail: 'The console is newer than the AegisMesh server answering it. Until the server is updated, accounts use the three built-in roles below, whose permissions are fixed.',
-};
+  actions: [h('a', { class: 'btn', href: '#/settings/accounts' }, 'Go to accounts')],
+});
 
 // Why a high-risk permission is high risk, in one sentence each.
 export const HIGH_RISK_WHY = Object.freeze({
@@ -69,7 +70,7 @@ async function loadCatalogue(ctx) {
 export function riskMark(risk, { compact = false } = {}) {
   const m = riskMeta(risk);
   return h('span', { class: ['risk', `risk--${m.key}`, compact ? 'risk--compact' : ''], title: m.text },
-    h('span', { class: 'risk__mark', 'aria-hidden': 'true' }, m.key === 'high' ? '!' : ''),
+    h('span', { class: 'risk__mark', 'aria-hidden': 'true' }),
     h('span', { class: compact ? 'visually-hidden' : 'risk__word' }, m.label));
 }
 
@@ -102,7 +103,7 @@ export async function rolesPage(v) {
   const list = table({
     caption: 'Roles',
     columns: [
-      { label: 'Role', className: 'col-summary', cell: (r) => h('span', { class: 'stack-tight' },
+      { label: 'Role', className: 'col-summary', lead: true, cell: (r) => h('span', { class: 'stack-tight' },
         older ? h('strong', null, roleDisplayName(r)) : h('a', { class: 'role-name', href: href('settings', 'roles', r.id) }, roleDisplayName(r)),
         r.description || r.builtin ? h('span', { class: ['muted', 'role-desc'] }, r.builtin ? roleText(r.id).summary : String(r.description)) : null), sort: (r) => roleDisplayName(r).toLowerCase() },
       { label: 'Kind', cell: kindBadge, sort: (r) => (r.builtin ? 0 : 1) },
@@ -127,7 +128,7 @@ export async function rolesPage(v) {
   });
 
   return h('div', { class: 'stack-lg' },
-    older ? olderServerState(OLDER) : null,
+    older ? olderServerState(OLDER()) : null,
     !older && !canManage ? h('p', { class: ['page-note'] }, icon('info', { size: 'sm' }), h('span', null, `You can read roles. Creating or changing them needs “${permissionLabel('roles.manage', catalogue)}”.`)) : null,
     panel({ title: 'Roles', primary: true, flush: true, meta: `${plural(items.length, 'role')}: ${plural(items.filter((r) => r.builtin).length, 'built-in')}, ${plural(risk.custom, 'custom')}`, actions: create, body: list }),
     summary);
@@ -256,7 +257,7 @@ export async function roleEditor(v) {
   }
   if (creating && !canManage) {
     v.detailName = 'New role';
-    return loaded.older ? olderServerState(OLDER) : notPermittedState(v.roleName, 'to create roles', 'roles.manage');
+    return loaded.older ? olderServerState(OLDER()) : notPermittedState(v.roleName, 'to create roles', 'roles.manage');
   }
   const source = creating ? (loaded.items.find((r) => r.id === fromId) || null) : role;
   const editable = canManage && (creating || !role.builtin);

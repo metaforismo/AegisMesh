@@ -526,6 +526,7 @@ async function render({ soft = false } = {}) {
   nav.used = new Set();
   const main = shell.main;
   const keepY = soft ? window.scrollY : 0;
+  drawnWidth = globalThis.innerWidth || drawnWidth;
   const view = h('div', { class: 'view' });
 
   const ctx = {
@@ -646,6 +647,21 @@ function onKeydown(e) {
   }
 }
 
+// Screens drawn at the viewport's width (the Overview chart) redraw in
+// place after the window changes width by a quarter or more, so a tick
+// drawn for a phone never stretches across a desktop.
+let drawnWidth = globalThis.innerWidth || 0;
+let resizeTimer = 0;
+function onResize() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const w = globalThis.innerWidth || 0;
+    if (!drawnWidth || Math.abs(w - drawnWidth) / drawnWidth < 0.25) return;
+    drawnWidth = w;
+    if (state.current?.screen?.redrawOnResize && !document.querySelector('dialog[open]') && !isTypingTarget(document.activeElement)) render({ soft: true });
+  }, 250);
+}
+
 async function boot() {
   const [meta, session] = await Promise.allSettled([rawApi.meta(), rawApi.session()]);
   state.meta = meta.status === 'fulfilled' ? meta.value : null;
@@ -672,6 +688,7 @@ async function boot() {
   document.addEventListener('keydown', () => { lastInput = { kind: 'keyboard', at: performance.now() }; }, true);
   document.addEventListener('pointerdown', () => { lastInput = { kind: 'pointer', at: performance.now() }; }, true);
   window.addEventListener('hashchange', () => render());
+  window.addEventListener('resize', onResize, { passive: true });
   document.addEventListener('keydown', onKeydown);
   render();
 }

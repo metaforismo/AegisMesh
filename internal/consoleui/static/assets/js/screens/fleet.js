@@ -164,7 +164,7 @@ function nodesTable(nodes, { accepting = false } = {}) {
     caption: 'Fleet nodes',
     columns: [
       { label: 'Status', sort: (n) => fleetStatusMeta(n.status).label, cell: (n) => fleetStatusBadge(n.status) },
-      { label: 'Name', className: 'nowrap', sort: (n) => n.name, cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
+      { label: 'Name', className: 'nowrap', lead: true, sort: (n) => n.name, cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
       { label: 'Node id', className: 'nowrap', cell: (n) => h('code', { class: 'hash', title: n.id }, shortId(n.id, 12)) },
       { label: 'Version', className: 'nowrap', cell: (n) => h('code', null, n.version?.version || '—') },
       { label: 'Last seen', className: 'nowrap', sort: (n) => timeValue(n.last_seen_at), sortFirst: 'desc', cell: (n) => seenCell(n.last_seen_at, 'never (no heartbeat)') },

@@ -7,7 +7,7 @@ import { waveDelays } from '../lib/chart.js';
 import { pageHead, panel, table, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable, evidence, timeEl } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { parseAuditDetail, formatSettingRaw, settingLabel, isSettingKey } from '../lib/settings.js';
-import { permissionLabel, isRoleId } from '../lib/perms.js';
+import { permissionLabel, isRoleId, roleNameOf } from '../lib/perms.js';
 
 // Actions grouped for the filter, each with words beside its code.
 export const ACTION_GROUPS = [
@@ -154,7 +154,8 @@ export default {
         columns: [
           { label: 'Seq', num: true, cell: (r) => String(r.seq) },
           { label: 'Time', className: 'nowrap', cell: (r) => timeEl(r.time, { relative: true }) },
-          { label: 'Actor', cell: (r) => h('span', null, r.actor || '—', ' ', h('span', { class: 'chip' }, labelFor(r.role || '—'))) },
+          // A custom role's id says nothing to a reader: "Custom role", id in the title.
+          { label: 'Actor', cell: (r) => h('span', null, r.actor || '—', ' ', r.role ? h('span', { class: 'chip', title: isRoleId(r.role) ? r.role : null }, roleNameOf(r.role)) : null) },
           { label: 'Action', cell: (r) => h('span', { class: 'stack-tight' }, h('code', null, r.action), ACTION_WORDS[r.action] ? h('span', { class: 'muted' }, ACTION_WORDS[r.action]) : null) },
           { label: 'Target', cell: (r) => (r.target ? h('code', null, r.target) : '—') },
           { label: 'Outcome', cell: (r) => badge(OUTCOME[r.outcome] || 'neutral', labelFor(r.outcome || 'unknown')) },
@@ -217,10 +218,15 @@ export default {
       pageHead({
         title: 'Audit trail',
         subtitle: `Append-only, hash-chained record of console sign-ins, tenant switches, account, role and setting changes, investigation changes and fleet administration. Reading it is itself audited.${tenants.show ? ` Each tenant keeps its own chain; this is the chain of tenant ${tenants.active}.` : ''}`,
-        hint: 'Verify the chain, then filter by action or actor to see who did what.',
+        hint: 'Filter by action or actor to see who did what; verify the chain below the records.',
       }),
-      panel({ title: 'Chain integrity', actions: verifyBtn, body: verifySlot }),
-      panel({ title: 'Filters', body: form }),
-      panel({ title: 'Records', meta: 'Newest first', flush: true, body: tableSlot, foot: pagerSlot }));
+      // Who did what comes first; the filters sit on the records they narrow.
+      panel({
+        title: 'Records', primary: true, flush: true,
+        meta: Object.keys(filters).length ? 'Newest first, filtered' : 'Newest first',
+        body: h('div', null, h('div', { class: ['panel-toolbar', 'audit-filters'] }, form), tableSlot),
+        foot: pagerSlot,
+      }),
+      panel({ title: 'Chain integrity', actions: verifyBtn, body: verifySlot }));
   },
 };

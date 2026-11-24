@@ -539,6 +539,8 @@
    follows the item count so no cell is orphaned (four, or two by two). */
 .grid--stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-border); }
 .grid--stats > .stat { border: 0; border-radius: 0; }
+/* With .grid (app.css, 16px gap) the dividers must stay 1px: peer counts share one container. */
+.grid.grid--stats { gap: 1px; }
 @media (min-width: 64rem) { .grid--stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 /* Counts as one divided list: label left, figure right, the change under
@@ -867,6 +869,11 @@ a.segleg__row:focus-visible { outline-offset: 0; }
   }
 
   .table--stack td.num { text-align: left; }
+  /* A row's identity (a source, a title, a name) heads its card: no label,
+     first, a step larger. Opt in per column (table({ columns: [{ lead }] })). */
+  .table--stack tr:has(> .cell-lead) { display: flex; flex-direction: column; }
+  .table--stack td.cell-lead { order: -1; display: block; padding: 0 0 var(--space-2); font-size: var(--text-md); font-weight: var(--weight-medium); }
+  .table--stack td.cell-lead::before { content: none; }
   .table .col-summary { min-width: 0; max-width: none; }
   .table .col-summary .evidence,
   .table .nowrap .evidence { white-space: normal; overflow-wrap: anywhere; }
@@ -2331,6 +2338,7 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .tcell__none { color: var(--color-ink-3); font-size: var(--text-2xs); font-style: italic; }
 .tcell__name { font-size: var(--text-sm); font-weight: var(--weight-medium); }
 .tcell__rules { display: flex; flex-wrap: wrap; gap: var(--space-1); font-size: var(--text-2xs); color: var(--color-ink-3); }
+.tcell__rules code { font-size: var(--text-2xs); }
 .tcell__seen { margin-top: auto; color: var(--color-ink-3); font-size: var(--text-2xs); }
 
 /* ==== Identity: briefing voice, lattice, evidence tag ======================= */
@@ -2809,15 +2817,15 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .audit-change { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .audit-change__link { font-size: var(--text-xs); }
 
-/* Permission risk: shape and word. High = filled triangle with "!", elevated =
+/* Permission risk: shape and word. High = filled triangle, elevated =
    half-filled square, low = hollow dot. The word is always printed (or
    visually hidden in compact use beside a count). */
 .risk { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-ink-3); font-size: var(--text-2xs); font-weight: var(--weight-medium); white-space: nowrap; }
-.risk__mark { display: inline-grid; place-items: center; flex: none; width: 10px; height: 10px; border: 1.25px solid currentColor; border-radius: 50%; font-size: 8px; font-weight: var(--weight-bold); line-height: 1; }
+.risk__mark { display: inline-block; flex: none; width: 10px; height: 10px; border: 1.25px solid currentColor; border-radius: 50%; }
 .risk--elevated { color: var(--color-ink-2); }
 .risk--elevated .risk__mark { border-radius: 1px; background: linear-gradient(0deg, currentColor 50%, transparent 50%); }
 .risk--high { color: var(--color-warn); }
-.risk--high .risk__mark { width: 12px; height: 11px; border: 0; border-radius: 0; background: var(--color-warn); color: var(--color-surface); clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 3px; }
+.risk--high .risk__mark { width: 12px; height: 11px; border: 0; border-radius: 0; background: var(--color-warn); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .risk--unknown .risk__mark { border-style: dashed; border-radius: 1px; }
 .risk-legend { display: flex; flex-direction: column; gap: var(--space-2); list-style: none; font-size: var(--text-xs); }
 .risk-legend li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: var(--space-2); align-items: baseline; }

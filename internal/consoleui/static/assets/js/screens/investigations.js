@@ -42,7 +42,7 @@ export default {
         body: invs.length ? table({
           caption: 'Investigations',
           columns: [
-            { label: 'Title', className: 'col-summary', sort: (i) => i.title, cell: (i) => (isOpaqueId(i.id) ? link(href('investigations', i.id), i.title || '(untitled)') : i.title) },
+            { label: 'Title', className: 'col-summary', lead: true, sort: (i) => i.title, cell: (i) => (isOpaqueId(i.id) ? link(href('investigations', i.id), i.title || '(untitled)') : i.title) },
             { label: 'Status', sort: (i) => INVESTIGATION_STATUSES.indexOf(i.status), cell: (i) => statusBadge(i.status) },
             { label: 'Priority', sort: (i) => PRIORITIES.indexOf(i.priority), sortFirst: 'desc', cell: (i) => priorityChip(i.priority) },
             { label: 'Evidence', num: true, sort: (i) => (i.event_ids || []).length, cell: (i) => formatCount((i.event_ids || []).length) },

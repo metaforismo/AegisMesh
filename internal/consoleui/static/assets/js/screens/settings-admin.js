@@ -65,7 +65,7 @@ function accountsTable(items, roles = []) {
   return table({
     caption: 'Accounts',
     columns: [
-      { label: 'Name', className: 'col-summary', cell: (a) => h('span', { class: 'stack-tight' },
+      { label: 'Name', className: 'col-summary', lead: true, cell: (a) => h('span', { class: 'stack-tight' },
         isAccountId(a.id) ? h('a', { class: 'account-name', href: href('settings', 'accounts', a.id) }, String(a.name || a.id)) : String(a.name || '—'),
         h('span', { class: 'muted' }, kindLabel(a.kind))), sort: (a) => String(a.name || '').toLowerCase() },
       { label: 'Source', cell: (a) => sourceBadge(a.source), sort: (a) => a.source },
@@ -417,7 +417,7 @@ async function configPage(v, page) {
   return h('div', { class: 'stack-lg' },
     lead,
     page.id === 'sso' ? ssoGuide(byId.get('sso')) : null,
-    page.id === 'console' && !sections.length ? olderServerState({ title: 'This server does not provide console settings yet', detail: 'The organisation name, sign-in banner and default window arrive with a newer AegisMesh server. Until then, the console shows no organisation name and no banner.' }) : null,
+    page.id === 'console' && !sections.length ? olderServerState({ title: 'This server does not provide console settings yet', detail: 'The organisation name, sign-in banner and default window arrive with a newer AegisMesh server. Until then, the console shows no organisation name and no banner.', actions: [] }) : null,
     sections.length ? sections.map((sec, i) => panel({
       title: String(sec.title || sec.id), primary: i === 0,
       meta: generated ? h('span', null, 'Effective values, read ', timeEl(generated, { relative: true })) : 'Effective values',
@@ -436,7 +436,7 @@ async function historyPage(v) {
     attempt(v, () => ctx.api.adminSettings({ signal: ctx.signal })),
   ]);
   if (hist.error) {
-    return panel({ body: sectionFailure(v, hist.error, () => ctx.rerender(), { title: 'This server does not record setting changes yet', detail: 'Settings on this server come only from the config file, so there is no change history in the console. Your configuration repository’s history is the record.' }) });
+    return panel({ body: sectionFailure(v, hist.error, () => ctx.rerender(), { title: 'This server does not record setting changes yet', detail: 'Settings on this server come only from the config file, so there is no change history in the console. Your configuration repository’s history is the record.', actions: [h('a', { class: 'btn', href: '#/settings/security' }, 'Read the effective settings')] }) });
   }
   const entries = normalizeHistory(hist.value);
   const labels = { ...SETTING_LABELS };

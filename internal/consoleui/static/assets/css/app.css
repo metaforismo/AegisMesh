@@ -1185,3 +1185,10 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
   button.top-user { min-height: 2.75rem; }
   .guide__toc a { display: flex; align-items: center; min-height: 2.5rem; }
 }
+
+/* Audit: the filters sit on the records they narrow, in one row from 720px. */
+.audit-filters .filters { display: grid; grid-template-columns: minmax(0, 18rem) minmax(0, 14rem) auto; gap: var(--space-3); align-items: end; }
+@media (max-width: 45rem) { .audit-filters .filters { grid-template-columns: minmax(0, 1fr); } }
+
+/* Tabs wrap on phones instead of hiding the last ones off the edge. */
+@media (max-width: 45rem) { .tabs { flex-wrap: wrap; overflow-x: visible; } }

@@ -205,7 +205,7 @@ test('settings: a server refusal stays in the form; no permission shows the reas
   assert.match(root.textContent, /Accepted and revoked on Posture/);
   const reader = await render(ctx('#/settings/console', { me: AUDITOR }));
   assert.equal(byText(reader, 'button', /^Change/).length, 0);
-  assert.match(reader.textContent, /Changing it needs “Change console settings and accept posture risk”/);
+  assert.match(reader.textContent, /marked Editable for people with “Change console settings and accept posture risk”, which your role does not include/);
 });
 
 test('settings: editing off explains how to turn it on, with no disabled form', async () => {

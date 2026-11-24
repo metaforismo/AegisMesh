@@ -30,7 +30,7 @@ export default {
     };
     const columns = [
       { label: 'Id', className: 'nowrap', sort: (r) => r.id, cell: (r) => link(href('events', { rule: r.id }), h('code', null, r.id)) },
-      { label: 'Title', className: 'col-title', sort: (r) => r.title, cell: (r) => r.title || '—' },
+      { label: 'Title', className: 'col-title', lead: true, sort: (r) => r.title, cell: (r) => r.title || '—' },
       { label: 'Severity', sort: (r) => severityRank(r.severity), sortFirst: 'desc', cell: (r) => sevChip(r.severity, SIGNAL_NO_SEVERITY) },
       { label: 'State', sort: (r) => (r.enabled ? 0 : 1), cell: (r) => badge(r.enabled ? 'ok' : 'neutral', r.enabled ? 'Enabled' : 'Disabled') },
       ...(hasAction ? [{ label: 'On a match', className: 'nowrap', cell: (r) => actionChip(ruleActionMeta(r)) }] : []),

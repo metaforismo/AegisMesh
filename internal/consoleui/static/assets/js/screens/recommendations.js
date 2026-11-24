@@ -21,9 +21,10 @@ function card(r) {
       h('div', { class: 'rec__head' },
         h('p', { class: 'rec__kicker' }, h('span', { class: 'chip' }, 'Proposed · not executed'), clsChip(r.classification), r.sensor_id ? chip(`${r.sensor_id} (${r.sensor_kind || '?'})`, { mono: true }) : null),
         h('h2', { class: 'rec__title' }, r.summary || 'Recommendation'),
-        ruleChips(r.rule_ids)),
+        // A card without rule ids shows nothing there, not a lone dash.
+        (r.rule_ids || []).length ? ruleChips(r.rule_ids) : null),
       h('div', { class: 'grid grid--2' },
-        h('section', null, h('h3', null, 'Operator review'), h('p', null, r.operator_review || '—')),
+        h('section', null, h('h3', null, 'Operator review'), r.operator_review ? h('p', null, r.operator_review) : h('p', { class: 'muted' }, 'None given')),
         h('section', null, h('h3', null, 'Suggested next steps'), list(r.next_steps))),
       h('section', null, h('h3', null, 'Known false-positive patterns'), list(r.false_positive_notes)),
       (r.conflicts || []).length ? h('section', null, h('h3', null, 'Conflicting signals'),
