@@ -14,7 +14,7 @@ import { ACCOUNT_SECTIONS, isAdminSection, sectionMeta, visibleSections } from '
 import { pageHead } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { olderServerState, notPermittedState } from '../ui/settings-kit.js';
-import { SECTION_PERMS, roleNameOf } from '../lib/perms.js';
+import { SECTION_PERMS, principalRoleName } from '../lib/perms.js';
 
 function navList(title, items, current, { index }) {
   return h('div', { class: 'settings-nav__group' },
@@ -56,7 +56,7 @@ export default {
     const vis = meMissing ? visibleSections(null) : visibleSections(me, ctx.can);
     const meta = sectionMeta(shown);
     const cleanups = [];
-    const roleName = me?.role_name || roleNameOf(role);
+    const roleName = principalRoleName(role, me?.role_name);
     const view = { ctx, me, meMissing, meError, role, roleName, accountId, roleId, cleanups, index };
 
     let body;

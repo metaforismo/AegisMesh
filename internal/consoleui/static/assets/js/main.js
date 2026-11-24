@@ -14,7 +14,7 @@
 
 import { createApi, ApiError, screenFailure, describeError } from './lib/api.js';
 import { parseHash, viewKey } from './lib/route.js';
-import { permissionsOf, toCan, ROUTE_PERMS, BUILTIN_PERMS } from './lib/perms.js';
+import { permissionsOf, toCan, ROUTE_PERMS, BUILTIN_PERMS, principalRoleName } from './lib/perms.js';
 import { h, clear } from './lib/dom.js';
 import { createSwr, abortable } from './lib/swr.js';
 import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
@@ -534,7 +534,7 @@ async function render({ soft = false } = {}) {
     route,
     session: state.session,
     role,
-    roleName: state.me?.role_name || '',
+    roleName: principalRoleName(role, state.me?.role_name),
     me: state.me,
     // can('investigations.write'): what the signed-in principal may do.
     can: state.can,

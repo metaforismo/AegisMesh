@@ -250,4 +250,7 @@ export function roleNameOf(id, roles) {
   if (r?.name) return String(r.name);
   return typeof id === 'string' && id.startsWith('role_') ? 'Custom role' : 'Unknown role';
 }
+// A principal's role in words: built-ins as words (the server names them by
+// id), a custom role by /me.role_name.
+export const principalRoleName = (roleId, roleName = '') => BUILTIN_LABEL[roleId] || (typeof roleName === 'string' && roleName.trim() ? roleName.trim() : roleNameOf(roleId));
 export const roleDisplayName = (r) => (BUILTIN_LABEL[r?.id] && r?.builtin !== false ? BUILTIN_LABEL[r.id] : String(r?.name || r?.id || 'Unknown role'));

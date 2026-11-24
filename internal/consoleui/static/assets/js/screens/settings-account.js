@@ -13,7 +13,7 @@ import {
 import { panel, kv, table, badge, chip, timeEl, copyable, banner, empty, toast, helpTip, failureState } from '../ui/components.js';
 import { confirmAction, keyReveal, formField, choices, errorSummary, wireForm, olderServerState } from '../ui/settings-kit.js';
 import { icon } from '../ui/icons.js';
-import { CATALOGUE, groupCatalogue, roleSummary, roleNameOf, isRoleId } from '../lib/perms.js';
+import { CATALOGUE, groupCatalogue, roleSummary, principalRoleName, isRoleId } from '../lib/perms.js';
 import { href } from '../lib/route.js';
 
 // "in 3 h" / "expired" for times ahead (sessions, keys).
@@ -40,7 +40,7 @@ function profile(v) {
   const who = me || { name: p.name, role: p.role, auth_method: p.auth_method, tenant: ctx.session?.tenant, tenants: ctx.session?.tenants || [] };
   const rt = roleText(who.role);
   // A custom role (round 6) has no fixed text: its name from /me.
-  const roleLabel = me?.role_name || (rt.label !== 'Unknown role' ? rt.label : roleNameOf(who.role));
+  const roleLabel = principalRoleName(who.role, me?.role_name);
   const src = me ? sourceMeta(me.source) : null;
   const tenants = Array.isArray(who.tenants) ? who.tenants : [];
   v.hint = 'Read who you are signed in as and what your role allows. Your role and tenants are set by an admin, the config file or the identity provider.';

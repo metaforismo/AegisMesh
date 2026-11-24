@@ -2,7 +2,7 @@
 
 import { h, mount } from '../lib/dom.js';
 import { capitalize } from '../lib/taxonomy.js';
-import { toCan, ROUTE_PERMS, roleNameOf } from '../lib/perms.js';
+import { toCan, ROUTE_PERMS, principalRoleName } from '../lib/perms.js';
 import { tenantInfo } from '../lib/tenant.js';
 import { authMethodLabel } from '../lib/auth.js';
 import { formatDateTime, setTimeZone, zoneName } from '../lib/format.js';
@@ -308,7 +308,7 @@ function tenantControl(session, onSwitchTenant) {
 function accountControl(session, meta, onLogout, me) {
   const p = session?.principal || {};
   // A custom role's id is not a name: /me.role_name (round 6) says it.
-  const role = me?.role_name || (p.role?.startsWith?.('role_') ? roleNameOf(p.role) : capitalize(p.role || 'unknown'));
+  const role = p.role ? principalRoleName(p.role, me?.role_name) : 'Unknown role';
   const info = tenantInfo(session);
   const name = p.name || 'unknown';
   const button = h('button', { class: ['btn', 'btn--ghost', 'top-user'], type: 'button', popovertarget: 'account-menu', 'aria-label': `Account: ${name}, ${role}` },
