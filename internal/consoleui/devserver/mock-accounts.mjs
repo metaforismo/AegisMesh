@@ -8,6 +8,9 @@
 // keys that are obviously fake and valid nowhere else.
 
 import { createHash, createHmac, randomBytes } from 'node:crypto';
+import {
+  BUILTIN, MAX_ROLES, SEED_ROLE_IDS, isRoleId, createRoles, createSettingsOverlay, checkRoleBody, wouldLeaveNoAdmin, newRoleId, EDITABLE, EDITABLE_KEYS, PERMISSIONS,
+} from './mock-roles.mjs';
 
 const ROLES = ['viewer', 'analyst', 'admin'];
 const KINDS = ['person', 'service'];
@@ -39,7 +42,11 @@ export function clientFamily(ua) {
   return os ? `${browser} on ${os}` : browser;
 }
 
-export function createAccounts({ tenants, localTenant, configured, tokenLogin = true, startedAt = Date.now() }) {
+export function createAccounts({ tenants, localTenant, configured, tokenLogin = true, startedAt = Date.now(), round6 = true, settingsEditing = true }) {
+  const R = createRoles({ startedAt, round6 });
+  const overlay = createSettingsOverlay({ editing: settingsEditing, round6, startedAt });
+  const limits = () => (round6 ? { ...LIMITS, ...overlay.keyLimits() } : LIMITS);
+  const validRole = (r) => (round6 ? R.exists(r) : ROLES.includes(r));
   const secret = randomBytes(32);
   const handleOf = (sid) => `ses_${createHmac('sha256', secret).update(sid).digest('hex').slice(0, 16)}`;
   const accounts = new Map();
@@ -60,7 +67,8 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
   // Managed accounts: created in the console, keys only.
   put({ id: 'acc_7k2m9q4wz1', name: 'morgan@soc.example', kind: 'person', source: 'managed', role: 'analyst', tenants: [localTenant], created_at: iso(T0 - 30 * day), created_by: 'ada', last_seen_at: iso(T0 - 50 * 60e3) });
   put({ id: 'acc_3p8x1d6vt4', name: 'siem-pull', kind: 'service', source: 'managed', role: 'viewer', tenants: [localTenant, second].filter((v, i, a) => a.indexOf(v) === i), created_at: iso(T0 - 64 * day), created_by: 'ada', last_seen_at: iso(T0 - 4 * 60e3) });
-  put({ id: 'acc_9c4n2h7rb5', name: 'ticket-bridge', kind: 'service', source: 'managed', role: 'analyst', tenants: [localTenant], created_at: iso(T0 - 120 * day), created_by: 'ada', last_seen_at: iso(T0 - 19 * day) });
+  put({ id: 'acc_9c4n2h7rb5', name: 'ticket-bridge', kind: 'service', source: 'managed', role: round6 ? SEED_ROLE_IDS.ticket : 'analyst', tenants: [localTenant], created_at: iso(T0 - 120 * day), created_by: 'ada', last_seen_at: iso(T0 - 19 * day) });
+  if (round6) put({ id: 'acc_8r6t2y4ua9', name: 'auditor@soc.example', kind: 'person', source: 'managed', role: SEED_ROLE_IDS.auditor, tenants: [localTenant], created_at: iso(T0 - 17 * day), created_by: 'ada', last_seen_at: iso(T0 - 2 * day) });
   put({ id: 'acc_5w1j8f3ky2', name: 'former-contractor@soc.example', kind: 'person', source: 'managed', role: 'viewer', tenants: [localTenant], status: 'disabled', created_at: iso(T0 - 200 * day), created_by: 'ada', last_seen_at: iso(T0 - 75 * day) });
 
   // Keys: digests only. The seeded ones have no known token.
@@ -156,13 +164,25 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
     return id;
   }
 
-  const capabilitiesOf = (a) => ({
-    // Viewers in this mock cannot manage their own keys, to exercise the
-    // 403 path; OIDC identities neither (the provider owns them).
-    manage_own_keys: a.source !== 'oidc' && a.role !== 'viewer',
-    administer: a.role === 'admin',
-  });
+  // Permissions come from the account's current role, so a role edit
+  // takes effect on its next request.
+  const permsOfAccount = (a) => (a ? R.permsOf(a.role) : []);
+  const capabilitiesOf = (a) => {
+    const perms = permsOfAccount(a);
+    return round6 ? {
+      manage_own_keys: a.source !== 'oidc' && perms.includes('keys.self'),
+      administer: ['accounts.read', 'settings.read', 'system.read', 'audit.export'].some((x) => perms.includes(x)),
+    } : {
+      // Round 5: viewers in this mock cannot manage their own keys, to
+      // exercise the 403 path; OIDC identities neither (the provider owns them).
+      manage_own_keys: a.source !== 'oidc' && a.role !== 'viewer',
+      administer: a.role === 'admin',
+    };
+  };
+  // Every principal that can sign in now, for the last-admin rule.
+  const principals = (sessionsMap) => [...accounts.values()].map((a) => ({ id: a.id, role: a.role, active: publicAccount(a, sessionsMap).status === 'active' }));
 
+  const prefDefaults = () => (round6 ? { ...PREF_DEFAULTS, default_window: overlay.defaultWindow() } : PREF_DEFAULTS);
   const validName = (v) => typeof v === 'string' && v.trim().length >= 1 && v.length <= 64 && /^[\p{L}\p{N} ._@()-]+$/u.test(v);
   const validLabel = (v) => typeof v === 'string' && v.trim().length >= 1 && v.length <= 64 && !/[\u0000-\u001f\u007f]/.test(v);
   const activeAdmins = (except, patch = {}) => [...accounts.values()].filter((a) => {
@@ -171,17 +191,27 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
   }).length;
 
   function settingsBody(ctx) {
-    const it = (key, label, value, kind, source, note) => ({ key, label, value, kind, source, editable: false, note });
+    const it = (key, label, value, kind, source, note) => {
+      if (round6 && EDITABLE[key]) return overlay.item(key);
+      const base = { key, label, value, kind, source, editable: false, note };
+      if (round6 && key === 'posture.accepted') return { ...base, editable: true, effective: String(ctx.acceptedCount ?? 0), file_value: '', overridden: false, constraints: { max_days: 180 }, applies: 'live' };
+      return round6 ? { ...base, effective: String(value), file_value: source === 'runtime' ? '' : String(value), overridden: false, constraints: {}, applies: 'restart' } : base;
+    };
     const file = 'Change in the config file and restart.';
-    return {
+    const body = {
       generated_at: iso(Date.now()),
-      editable: false,
-      note: 'Read-only. Change the config file (or the environment where marked) and restart',
+      editable: round6 ? overlay.editing : false,
+      ...(round6 ? { editing: overlay.editing ? 'console' : 'off' } : {}),
+      note: round6 && overlay.editing
+        ? 'Most values are file-driven: change the config file and restart. Values marked editable can be changed here; the change is stored by the console and the config file is never written'
+        : 'Read-only. Change the config file (or the environment where marked) and restart',
       sections: [
         { id: 'access', title: 'Access and sessions', items: [
+          ...(round6 ? [it('console.settings_editing', 'Console editing', overlay.editing ? 'console' : 'off', 'enum', 'config', overlay.editing ? 'Console settings marked editable can be changed here. Set console.settings_editing: off and restart to make every setting file-only.' : 'Off by default, so the config file stays the only source of truth. Set console.settings_editing: console and restart to change the allowlisted console settings here.')] : []),
           it('console.token_login', 'Operator token sign-in', ctx.tokenAuth ? 'enabled' : 'disabled', 'bool', 'default', file),
           it('console.session_ttl_seconds', 'Session lifetime', '8h', 'duration', 'config', file),
           it('console.session_idle_seconds', 'Idle timeout', '30m', 'duration', 'default', 'Set 0 to turn it off, or 5m to 24h. Change in the config file and restart.'),
+          ...(round6 ? [overlay.item('console.key_max_days'), overlay.item('console.key_default_days')] : []),
           it('console.login_throttle', 'Sign-in throttling', '10 failures per 5m per address', 'text', 'default', 'Fixed in this release.'),
           it('console.operators', 'Configured operators', String(configured.size), 'count', 'config', 'Break-glass accounts. Edit the config file; they cannot be changed in the console.'),
         ] },
@@ -230,8 +260,14 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
           it('export.indicators.formats', 'Indicator formats', 'STIX 2.1, CSV, text', 'list', 'default', 'Fixed in this release.'),
           it('export.max_events', 'Largest export', '10,000 events', 'count', 'default', file),
         ] },
+        ...(round6 ? [{ id: 'console', title: 'Console', items: [
+          ...EDITABLE_KEYS.filter((k) => EDITABLE[k].section === 'console').map((k) => overlay.item(k)),
+          it('posture.accepted', 'Accepted posture risks', `${ctx.acceptedCount ?? 0} accepted ${ctx.acceptedCount === 1 ? 'risk' : 'risks'}`, 'count', 'config', 'Accepted and revoked on Posture.'),
+        ] }] : []),
       ],
     };
+    if (round6 && !overlay.editing) for (const s of body.sections) for (const x of s.items) x.editable = false;
+    return body;
   }
 
   // Returns true when it answered. ctx: { req, res, url, p, m, s, sessions,
@@ -246,11 +282,14 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
     const current = handleOf(s.id);
 
     if (p === '/me' && m === 'GET') {
-      send(res, 200, { id: me.id, name: me.name, kind: me.kind, source: me.source, role: me.role, tenants: [...me.tenants], tenant: s.tenant, auth_method: s.auth_method, created_at: me.created_at, last_seen_at: me.last_seen_at, capabilities: caps });
+      send(res, 200, {
+        id: me.id, name: me.name, kind: me.kind, source: me.source, role: me.role, tenants: [...me.tenants], tenant: s.tenant, auth_method: s.auth_method, created_at: me.created_at, last_seen_at: me.last_seen_at, capabilities: caps,
+        ...(round6 ? { role_name: R.nameOf(me.role) || me.role, permissions: [...permsOfAccount(me)].sort() } : {}),
+      });
       return true;
     }
     if (p === '/me/preferences') {
-      if (m === 'GET') { send(res, 200, { ...PREF_DEFAULTS, ...(prefs.get(me.id) || {}) }); return true; }
+      if (m === 'GET') { send(res, 200, { ...prefDefaults(), ...(prefs.get(me.id) || {}) }); return true; }
       if (m === 'PUT') {
         let b;
         try { b = await readBody(req, Object.keys(PREF_VALUES)); } catch (err) { fail(res, 'invalid_argument', err.message); return true; }
@@ -259,7 +298,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
         }
         if (c.flags.failPrefs) { fail(res, 'unavailable', 'preferences store is read-only (mock --fail-prefs)'); return true; }
         // Partial bodies merge, like the server.
-        const next = { ...PREF_DEFAULTS, ...(prefs.get(me.id) || {}), ...b };
+        const next = { ...prefDefaults(), ...(prefs.get(me.id) || {}), ...b };
         prefs.set(me.id, next);
         audit(who.name, who.role, 'preferences.update', me.id, 'ok', remote, Object.keys(b).sort().join(','));
         send(res, 200, next);
@@ -297,18 +336,21 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
 
     // ---- Administration -------------------------------------------------
     if (p.startsWith('/admin') || p === '/system') {
-      if (!caps.administer || !me.tenants.includes(localTenant) || s.tenant !== localTenant) {
+      const perm = adminPermission(p, m);
+      const perms = permsOfAccount(me);
+      if (!perm || !perms.includes(perm) || !me.tenants.includes(localTenant) || s.tenant !== localTenant) {
         audit(who.name, who.role, 'authz.denied', '', 'denied', remote, p);
-        fail(res, 'forbidden', 'requires admin in the local tenant');
+        fail(res, 'forbidden', perm ? `requires ${perm} in the local tenant` : 'requires admin in the local tenant');
         return true;
       }
     }
+    if (round6 && await handleRound6(c, me)) return true;
     if (p === '/admin/accounts') {
       if (m === 'GET') {
         const items = [...accounts.values()].map((a) => publicAccount(a, sessionsMap));
         const order = { config: 0, managed: 1, oidc: 2 };
         items.sort((a, b) => (order[a.source] - order[b.source]) || a.name.localeCompare(b.name));
-        send(res, 200, { items, limits: LIMITS });
+        send(res, 200, { items, limits: limits() });
         return true;
       }
       if (m === 'POST') {
@@ -316,7 +358,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
         try { b = await readBody(req, ['name', 'kind', 'role', 'tenants']); } catch (err) { fail(res, 'invalid_argument', err.message); return true; }
         if (!validName(b.name)) { fail(res, 'invalid_argument', 'name must be 1 to 64 letters, digits, spaces or . _ @ ( ) -'); return true; }
         if (!KINDS.includes(b.kind)) { fail(res, 'invalid_argument', 'kind must be person or service'); return true; }
-        if (!ROLES.includes(b.role)) { fail(res, 'invalid_argument', 'role must be viewer, analyst or admin'); return true; }
+        if (!validRole(b.role)) { fail(res, 'invalid_argument', round6 ? 'role must name an existing role' : 'role must be viewer, analyst or admin'); return true; }
         if (!Array.isArray(b.tenants) || !b.tenants.length || b.tenants.some((t) => !tenants.includes(t))) { fail(res, 'invalid_argument', 'tenants must name declared tenants'); return true; }
         if ([...accounts.values()].some((a) => a.name.toLowerCase() === b.name.trim().toLowerCase())) { send(res, 409, { error: { code: 'conflict', message: 'an account with this name already exists' } }); return true; }
         if (accounts.size >= LIMITS.max_accounts) { send(res, 409, { error: { code: 'conflict', message: `at most ${LIMITS.max_accounts} accounts` } }); return true; }
@@ -345,10 +387,13 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
           try { b = await readBody(req, ['name', 'role', 'tenants', 'status']); } catch (err) { fail(res, 'invalid_argument', err.message); return true; }
           if (a.source !== 'managed') { send(res, 409, { error: { code: 'not_managed', message: `${a.source === 'config' ? 'configured operators are changed in the config file' : 'single sign-on identities are changed at the identity provider'}` } }); return true; }
           if (b.name !== undefined && !validName(b.name)) { fail(res, 'invalid_argument', 'name must be 1 to 64 letters, digits, spaces or . _ @ ( ) -'); return true; }
-          if (b.role !== undefined && !ROLES.includes(b.role)) { fail(res, 'invalid_argument', 'role must be viewer, analyst or admin'); return true; }
+          if (b.role !== undefined && !validRole(b.role)) { fail(res, 'invalid_argument', round6 ? 'role must name an existing role' : 'role must be viewer, analyst or admin'); return true; }
           if (b.status !== undefined && !['active', 'disabled'].includes(b.status)) { fail(res, 'invalid_argument', 'status must be active or disabled'); return true; }
           if (b.tenants !== undefined && (!Array.isArray(b.tenants) || !b.tenants.length || b.tenants.some((t) => !tenants.includes(t)))) { fail(res, 'invalid_argument', 'tenants must name declared tenants'); return true; }
-          if (a.role === 'admin' && a.status === 'active' && activeAdmins(a.id, b) === 0) { send(res, 409, { error: { code: 'last_admin', message: 'this change would leave no active admin' } }); return true; }
+          const leavesNone = round6
+            ? wouldLeaveNoAdmin(principals(sessionsMap), R.permsOf, { principalId: a.id, role: b.role, active: b.status === undefined ? undefined : b.status === 'active' })
+            : (a.role === 'admin' && a.status === 'active' && activeAdmins(a.id, b) === 0);
+          if (leavesNone) { send(res, 409, { error: { code: 'last_admin', message: 'this change would leave no active admin' } }); return true; }
           if (b.name !== undefined) a.name = b.name.trim();
           if (b.role !== undefined) a.role = b.role;
           if (b.tenants !== undefined) a.tenants = [...new Set(b.tenants)];
@@ -382,7 +427,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
       revokeSession(c, hit, 'session.revoke');
       return true;
     }
-    if (p === '/admin/settings' && m === 'GET') { send(res, 200, settingsBody(c.flags)); return true; }
+    if (p === '/admin/settings' && m === 'GET') { send(res, 200, settingsBody({ ...c.flags, acceptedCount: c.acceptedCount?.() })); return true; }
     if (p === '/admin/audit/export' && m === 'GET') {
       for (const k of url.searchParams.keys()) if (!['format', 'since'].includes(k)) { fail(res, 'invalid_argument', `unknown parameter "${k}"`); return true; }
       const format = url.searchParams.get('format') || 'jsonl';
@@ -434,8 +479,9 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
     const { req, res, fail, send, audit, who, remote } = c;
     return c.readBody(req, ['label', 'expires_in_days']).then((b) => {
       if (!validLabel(b.label)) return fail(res, 'invalid_argument', 'label must be 1 to 64 printable characters');
-      const days = b.expires_in_days === undefined ? LIMITS.default_key_days : b.expires_in_days;
-      if (!Number.isInteger(days) || days < 1 || days > LIMITS.max_key_days) return fail(res, 'invalid_argument', `expires_in_days must be 1..${LIMITS.max_key_days}`);
+      const L = limits();
+      const days = b.expires_in_days === undefined ? L.default_key_days : b.expires_in_days;
+      if (!Number.isInteger(days) || days < 1 || days > L.max_key_days) return fail(res, 'invalid_argument', `expires_in_days must be 1..${L.max_key_days}`);
       if (owner.status !== 'active') return send(res, 409, { error: { code: 'conflict', message: 'the account is disabled' } });
       if (keysOf(owner.id).filter((k) => keyStatus(k) === 'active').length >= LIMITS.max_keys_per_account) {
         return send(res, 409, { error: { code: 'conflict', message: `at most ${LIMITS.max_keys_per_account} active keys per account` } });
@@ -468,5 +514,150 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
     return c.send(c.res, 204, null, self ? { 'Set-Cookie': 'aegismesh_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' } : {});
   }
 
-  return { handle, principalForKey, touchOidc, configuredId: (name) => `cfg:${name}`, handleOf, accounts, keys };
+  // Which permission an /admin path or /system needs (null: unknown path,
+  // refused like the server's admin gate).
+  function adminPermission(p, m) {
+    if (p === '/system') return 'system.read';
+    if (p === '/admin/audit/export') return 'audit.export';
+    if (p === '/admin/settings' || p === '/admin/settings/history') return 'settings.read';
+    if (p.startsWith('/admin/settings/')) return m === 'GET' ? 'settings.read' : 'settings.manage';
+    if (p === '/admin/roles' || p.startsWith('/admin/roles/')) return m === 'GET' ? 'accounts.read' : 'roles.manage';
+    if (p === '/admin/sessions') return 'accounts.read';
+    if (p.startsWith('/admin/sessions/')) return m === 'GET' ? 'accounts.read' : 'sessions.manage';
+    if (p === '/admin/accounts' || p.startsWith('/admin/accounts/')) return m === 'GET' ? 'accounts.read' : 'accounts.manage';
+    return 'accounts.read';
+  }
+
+  const publicRole = (r, sessionsMap) => {
+    const assigned = { managed: 0, config: 0, oidc: 0 };
+    for (const a of accounts.values()) if (a.role === r.id && assigned[a.source] !== undefined) assigned[a.source]++;
+    return { id: r.id, name: r.name, description: r.description, builtin: r.builtin, permissions: [...r.permissions].sort(), assigned, created_at: r.created_at, created_by: r.created_by, updated_at: r.updated_at };
+  };
+
+  // Like the server: Go-quoted values, the history entry's seq, cut to 256 bytes.
+  const auditDetail = (ch, reason, seq) => Buffer.from(`from=${JSON.stringify(ch.from)} to=${JSON.stringify(ch.to)} seq=${seq} reason=${JSON.stringify(reason)}`).subarray(0, 256).toString('utf8').replace(/\uFFFD$/, '');
+
+  // Round 6: roles, editable settings and their history.
+  async function handleRound6(c, me) {
+    const { req, res, url, p, m, sessions: sessionsMap, send, fail, readBody, audit, who, remote } = c;
+    const err = (status, code, message, reason) => send(res, status, { error: { code, message, ...(reason ? { reason } : {}) } });
+    const nameTaken = (name, except) => [...R.roles.values()].some((r) => r.id !== except && r.name.toLowerCase() === name.trim().toLowerCase());
+
+    if (p === '/admin/roles') {
+      if (m === 'GET') {
+        const order = (r) => (r.builtin ? ['viewer', 'analyst', 'admin'].indexOf(r.id) : 10);
+        const items = [...R.roles.values()].sort((a, b) => (order(a) - order(b)) || a.name.localeCompare(b.name)).map((r) => publicRole(r, sessionsMap));
+        send(res, 200, { items, limits: { max_roles: MAX_ROLES } });
+        return true;
+      }
+      if (m === 'POST') {
+        let b;
+        try { b = await readBody(req, ['name', 'description', 'permissions']); } catch (e) { fail(res, 'invalid_argument', e.message); return true; }
+        const bad = checkRoleBody(b);
+        if (bad) { err(bad.status, bad.code, bad.message, bad.reason); return true; }
+        if (nameTaken(b.name)) { err(409, 'conflict', 'a role with this name already exists'); return true; }
+        if ([...R.roles.values()].filter((x) => !x.builtin).length >= MAX_ROLES) { err(409, 'conflict', `at most ${MAX_ROLES} custom roles`); return true; }
+        const now = iso(Date.now());
+        const r = { id: newRoleId(), name: b.name.trim(), description: (b.description || '').trim(), builtin: false, permissions: [...b.permissions].sort(), created_at: now, created_by: who.name, updated_at: now };
+        R.roles.set(r.id, r);
+        audit(who.name, who.role, 'role.create', r.id, 'ok', remote, `name=${JSON.stringify(r.name)} permissions=${r.permissions.join(',')}`);
+        send(res, 201, publicRole(r, sessionsMap));
+        return true;
+      }
+    }
+    const rm = p.match(/^\/admin\/roles\/([^/]+)$/);
+    if (rm) {
+      let id;
+      try { id = decodeURIComponent(rm[1]); } catch { id = ''; }
+      const r = isRoleId(id) && R.roles.get(id);
+      if (!r) { fail(res, 'not_found', 'role not found'); return true; }
+      if (m === 'GET') { send(res, 200, publicRole(r, sessionsMap)); return true; }
+      if (m === 'PATCH' || m === 'DELETE') {
+        if (r.builtin) { err(409, 'builtin', 'built-in roles cannot be changed; duplicate it as a custom role'); return true; }
+      }
+      if (m === 'PATCH') {
+        let b;
+        try { b = await readBody(req, ['name', 'description', 'permissions']); } catch (e) { fail(res, 'invalid_argument', e.message); return true; }
+        const bad = checkRoleBody(b, { partial: true });
+        if (bad) { err(bad.status, bad.code, bad.message, bad.reason); return true; }
+        if (b.name !== undefined && nameTaken(b.name, r.id)) { err(409, 'conflict', 'a role with this name already exists'); return true; }
+        if (b.permissions !== undefined && wouldLeaveNoAdmin(principals(sessionsMap), R.permsOf, { roleId: r.id, permissions: b.permissions })) {
+          err(409, 'last_admin', 'this change would leave no active principal able to manage access'); return true;
+        }
+        const changed = [];
+        if (b.name !== undefined && b.name.trim() !== r.name) { r.name = b.name.trim(); changed.push('name'); }
+        if (b.description !== undefined && b.description.trim() !== r.description) { r.description = b.description.trim(); changed.push('description'); }
+        if (b.permissions !== undefined) {
+          const next = [...b.permissions].sort();
+          if (next.join() !== r.permissions.join()) {
+            const added = next.filter((x) => !r.permissions.includes(x));
+            const removed = r.permissions.filter((x) => !next.includes(x));
+            r.permissions = next;
+            changed.push(`permissions(+${added.join('+') || '0'} -${removed.join('-') || '0'})`);
+          }
+        }
+        if (changed.length) {
+          r.updated_at = iso(Date.now());
+          audit(who.name, who.role, 'role.update', r.id, 'ok', remote, `name=${JSON.stringify(r.name)} permissions=${r.permissions.join(',')}`);
+        }
+        send(res, 200, publicRole(r, sessionsMap));
+        return true;
+      }
+      if (m === 'DELETE') {
+        const held = [...accounts.values()].filter((a) => a.role === r.id).length;
+        if (held) { err(409, 'in_use', `assigned to ${held} ${held === 1 ? 'account' : 'accounts'}`); return true; }
+        R.roles.delete(r.id);
+        audit(who.name, who.role, 'role.delete', r.id, 'ok', remote, `name=${JSON.stringify(r.name)} permissions=${r.permissions.join(',')}`);
+        send(res, 204, null);
+        return true;
+      }
+    }
+
+    if (p === '/admin/settings/history' && m === 'GET') {
+      for (const k of url.searchParams.keys()) if (k !== 'key') { fail(res, 'invalid_argument', `unknown parameter "${k}"`); return true; }
+      const key = url.searchParams.get('key') || '';
+      if (key && !/^[a-z][a-z0-9_.]{1,80}$/.test(key)) { fail(res, 'invalid_argument', 'malformed key'); return true; }
+      send(res, 200, { items: overlay.history(key) });
+      return true;
+    }
+    const sm = p.match(/^\/admin\/settings\/([^/]+)$/);
+    if (sm && (m === 'PUT' || m === 'DELETE')) {
+      let key;
+      try { key = decodeURIComponent(sm[1]); } catch { key = ''; }
+      const known = settingsBody(c.flags).sections.some((sec) => sec.items.some((x) => x.key === key));
+      if (!known) { fail(res, 'not_found', 'no such setting'); return true; }
+      if (!overlay.editing) { err(409, 'editing_disabled', 'console settings editing is off (console.settings_editing: off)'); return true; }
+      if (!EDITABLE[key]) { err(409, 'not_editable', 'this setting is file-driven; change the config file and restart'); return true; }
+      let b;
+      try { b = await readBody(req, m === 'PUT' ? ['value', 'reason'] : ['reason']); } catch (e) { fail(res, 'invalid_argument', e.message); return true; }
+      const reason = typeof b.reason === 'string' ? b.reason.trim() : '';
+      if (m === 'PUT' && (!reason || Array.from(reason).length > 200 || /[\u0000-\u001f\u007f]/.test(reason))) { fail(res, 'invalid_argument', 'reason is required, at most 200 printable characters'); return true; }
+      if (m === 'DELETE' && (Array.from(reason).length > 200 || /[\u0000-\u001f\u007f]/.test(reason))) { fail(res, 'invalid_argument', 'reason must be at most 200 printable characters'); return true; }
+      const actor = { id: me.id, name: me.name };
+      if (m === 'PUT') {
+        if (b.value === undefined) { fail(res, 'invalid_argument', 'value is required'); return true; }
+        const parsed = overlay.parse(key, b.value);
+        if (parsed.error) { fail(res, 'invalid_argument', parsed.error); return true; }
+        const ch = overlay.set(key, parsed.value, { reason, actor });
+        audit(who.name, who.role, 'settings.update', key, 'ok', remote, auditDetail(ch, reason, overlay.lastSeq()));
+      } else {
+        const why = reason || 'Reverted to the config file value.';
+        const ch = overlay.revert(key, { reason: why, actor });
+        audit(who.name, who.role, 'settings.revert', key, 'ok', remote, auditDetail(ch, why, overlay.lastSeq()));
+      }
+      send(res, 200, overlay.item(key));
+      return true;
+    }
+    return false;
+  }
+
+  // The permissions a request carries: the account's current role, else
+  // (an older server's session without an account) the built-in role.
+  const permissionsOf = (s) => {
+    const a = accounts.get(s.account_id);
+    if (a) return permsOfAccount(a);
+    return BUILTIN[s.role] ? [...BUILTIN[s.role]] : [];
+  };
+
+  return { handle, principalForKey, touchOidc, configuredId: (name) => `cfg:${name}`, handleOf, accounts, keys, roles: R, overlay, permissionsOf, permissions: { version: 1, items: PERMISSIONS.map((x) => ({ ...x })) } };
 }
