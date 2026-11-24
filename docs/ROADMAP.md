@@ -193,6 +193,16 @@ external body-file planting inference, hard tenancy, cross-node correlation,
 public saturation/p99 measurements and external IdP validation. No automatic
 export/delivery or new runtime network destination exists.
 
+## Round 6 backend — permissions, custom roles, editable settings (ADR-0026)
+
+- [x] Permission catalogue with every route pinned per built-in role, custom
+  roles (accounts store v2), no-escalation rule, opt-in settings overlay for a
+  console-only allowlist, accepted posture risk, POS-020..022.
+- Not done: custom roles for config operators and OIDC role mapping, editing
+  any setting outside the allowlist (listeners, TLS, tenants, OIDC, storage,
+  detection actions, fleet), per-tenant roles, approval workflows (two-person
+  rule) for settings or role changes, overlay export/import between nodes.
+
 ## Round 5 backend — accounts, access and settings (ADR-0025)
 
 - [x] Managed accounts and API keys, session administration with idle timeout,

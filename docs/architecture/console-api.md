@@ -7,8 +7,10 @@ as any behavior change.
 
 The console is a *read-mostly* view over evidence already owned by the runtime.
 It never changes sensor behavior, policy, configuration or evidence, and adds issuer discovery, JWKS and token egress only when OIDC is enabled. Mutable state includes operator-authored investigations,
-audit, optional fleet inventory/token administration (ADR-0018), and managed accounts, API keys and
-preferences (ADR-0025, [below](#accounts-access-and-settings-adr-0025)).
+audit, optional fleet inventory/token administration (ADR-0018), managed accounts, API keys and
+preferences (ADR-0025, [below](#accounts-access-and-settings-adr-0025)), custom roles and, only when
+`console.settings_editing` is `console`, a fixed allowlist of console settings and accepted posture
+risks (ADR-0026, [below](#permissions-roles-and-editable-settings-adr-0026)).
 
 ## Transport and exposure
 
@@ -55,6 +57,10 @@ same two ways (ADR-0025).
 | `analyst` | viewer + investigation writes |
 | `admin` | analyst + audit trail; members of `local_tenant` also administer accounts, sessions, settings and system status |
 
+Since ADR-0026 each route declares a permission and these roles are fixed
+permission sets granting exactly the access above; managed accounts may also
+hold custom roles ([permissions](#permissions-roles-and-editable-settings-adr-0026)).
+
 ## Conventions
 
 - Timestamps are RFC 3339 UTC strings. IDs are opaque strings.
@@ -63,7 +69,9 @@ same two ways (ADR-0025).
   max 200.
 - Errors: `{"error":{"code":"<code>","message":"<human text>"}}` with codes
   `invalid_argument` (400), `unauthenticated` (401), `forbidden` (403),
-  `not_found` (404), `conflict` (409), `last_admin` (409), `not_managed` (409), `rate_limited` (429),
+  `not_found` (404), `conflict` (409), `last_admin` (409), `not_managed` (409), `builtin` (409),
+  `in_use` (409), `editing_disabled` (409), `not_editable` (409), `exceeds_own_permissions` (403),
+  `rate_limited` (429),
   `unavailable` (503), `internal` (500).
 - All evidence text (paths, previews, user agents, tool names, summaries) is
   attacker-controlled data. The API returns it as JSON strings; the UI must
@@ -183,7 +191,7 @@ Unauthenticated:
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/api/v1/meta` | `{ "product": "AegisMesh", "api_version": "v1", "version": "…", "auth": {"token": true, "oidc": {"enabled": false, "display_name": "Single sign-on"}} }` |
+| GET | `/api/v1/meta` | `{ "product": "AegisMesh", "api_version": "v1", "version": "…", "auth": {"token": true, "oidc": {"enabled": false, "display_name": "Single sign-on"}}, "organization_name": "", "sign_in_banner": "" }` (both plain text, `""` when unset) |
 | GET | `/api/v1/auth/oidc/login` | 302 to the configured IdP, with short-lived pre-login cookie |
 | GET | `/api/v1/auth/oidc/callback` | code exchange; 302 to `/` on success, fixed-code login error otherwise |
 | POST | `/api/v1/session` | body `{ "token": "…" }` → `Session` + cookie |
@@ -240,7 +248,8 @@ and shared across its node-filter classes; heartbeat frames remain per stream.
 `investigation.create`, `investigation.update`, `investigation.note`,
 `investigation.attach`, `investigation.detach`, `audit.read`, `audit.verify`,
 `authz.denied`, `event.read`, `export.events`, `account.create`, `account.update`, `key.create`,
-`key.revoke`, `session.revoke`, `preferences.update`, `audit.export`. Records may carry `actor_id`
+`key.revoke`, `session.revoke`, `preferences.update`, `audit.export`, `role.create`, `role.update`,
+`role.delete`, `settings.update`, `settings.revert`, `posture.accept`, `posture.unaccept`. Records may carry `actor_id`
 (stable principal id). Token values, key digests, session identifiers and note bodies are never
 written to the audit trail.
 
@@ -1010,7 +1019,7 @@ every tenant: metadata only, never evidence (ADR-0025 exception to ADR-0020).
 **Rules.** Create body `{"name","kind","role","tenants"}`: name 1..80 printable
 runes without surrounding spaces, unique case-insensitively among managed
 accounts and config operator names (409 `conflict`); kind `person|service`;
-role `viewer|analyst|admin`; 1..32 declared tenants. PATCH takes any of
+role `viewer|analyst|admin` or a custom role id (ADR-0026); 1..32 declared tenants. PATCH takes any of
 `name, role, tenants, status` (empty → 400). Role, tenant or status changes
 revoke the account's sessions; disabling also makes its keys fail at once.
 Key body `{"label","expires_in_days"}`: label 1..64 printable runes; days
@@ -1026,12 +1035,12 @@ managed admins count when active, in `local_tenant` and holding a usable key;
 OIDC admins do not count.
 
 ```jsonc
-// Settings (all items read-only; editable is always false in this round)
+// Settings (round 5 shape; ADR-0026 adds editing, effective, file_value, overridden, constraints, applies)
 {"generated_at":"…","editable":false,"note":"Settings are read-only in the console; …",
  "sections":[{"id":"access","title":"Access and sessions","items":[
    {"key":"console.session_ttl_seconds","label":"Session lifetime","value":"1h","kind":"duration",
     "source":"config","editable":false,"note":"Change in the config file and restart."}]}]}
-// Section ids in order: access, sso, tenants, listener, evidence, detection, fleet, exports.
+// Section ids in order: access, console, sso, tenants, listener, evidence, detection, fleet, exports.
 // kind: boolean | duration | count | text | list | bytes | timestamp. Durations are compact ("8h", "30m", "off").
 // source: config | env | default, plus "runtime" for observed facts (usage, occupancy, discovery
 // state, certificate expiry) that are not settings. Built-in limits use "default".
@@ -1063,6 +1072,161 @@ outcome,remote,detail,issuer,subject,prev_hash,hash`; cells starting with
 `= + - @`, TAB or CR are prefixed with `'`.
 
 **Limits.** Sessions are in memory: a restart signs everyone out and nothing
-is shared between processes. Settings cannot be edited here. `last_used_at` has
-one-minute resolution and is persisted at most once a minute. No SCIM, password
-login or custom roles. Account state is plaintext like investigations.
+is shared between processes. Only the ADR-0026 allowlist of settings can be
+edited here, and only when enabled. `last_used_at` has one-minute resolution and
+is persisted at most once a minute. No SCIM or password login. Account state is
+plaintext like investigations.
+
+## Permissions, roles and editable settings (ADR-0026)
+
+Implements the round-6 contract. Same conventions as above: strict 64 KiB JSON
+bodies, cookie CSRF and Origin on mutations, arrays never null, RFC 3339 UTC.
+Administration changes are appended to the local tenant's audit chain.
+
+**Permission catalogue** (`GET /api/v1/permissions`, any authenticated
+principal → `{"version":1,"items":[{"id","group","label","risk"}]}`):
+
+| Permission | Risk | Routes | Built-in |
+|---|---|---|---|
+| `evidence.read` | low | overview, events, event detail, stream, sources, sensors, rules, node, decoys, honeytokens, attacker sessions, campaigns | viewer |
+| `analysis.read` | low | digest, posture, coverage, recommendations | viewer |
+| `investigations.read` | low | `GET /investigations[/{id}]` | viewer |
+| `fleet.read` | low | `GET /fleet`, `/fleet/nodes[/{id}]` | viewer |
+| `keys.self` | low | `/me/keys` (managed accounts only) | viewer |
+| `evidence.export` | elevated | `/export/events`, `/export/indicators` | analyst |
+| `reports.download` | elevated | session and investigation reports | analyst |
+| `investigations.write` | elevated | investigation create, patch, notes, attach/detach | analyst |
+| `audit.read` | elevated | `/audit`, `/audit/verify` | admin |
+| `audit.export` | elevated | `/admin/audit/export`† | admin |
+| `fleet.manage` | high | node revoke, enrollment tokens (list, mint, delete) | admin |
+| `accounts.read` | elevated | `GET /admin/accounts[/{id}]`, `GET /admin/sessions`, `GET /admin/roles[/{id}]`† | admin |
+| `accounts.manage` | high | account create/patch, account key mint/revoke† | admin |
+| `sessions.manage` | high | `DELETE /admin/sessions/{handle}`† | admin |
+| `roles.manage` | high | `POST /admin/roles`, `PATCH`/`DELETE /admin/roles/{id}`† | admin |
+| `settings.read` | elevated | `GET /admin/settings`, `GET /admin/settings/history`† | admin |
+| `settings.manage` | high | `PUT`/`DELETE /admin/settings/{key}`, `POST`/`DELETE /posture/{check_id}/accept`† | admin |
+| `system.read` | elevated | `/system`† | admin |
+
+No permission (any authenticated principal): `/session` (GET, DELETE),
+`/session/tenant`, `/me`, `/me/preferences`, `/me/sessions`, `/permissions`.
+† also requires membership of `local_tenant`. viewer holds the viewer rows,
+analyst adds the analyst rows, admin holds every permission; a test pins every
+route against each built-in role. Permissions resolve from the role on every
+request: a role edit applies at the next request of every key and session
+holding it, and event streams close at the next event or heartbeat once
+`evidence.read` is gone. A denied permission answers 403 `forbidden` and is
+audited as `authz.denied`.
+
+**Roles.**
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/api/v1/admin/roles` | accounts.read† | `{"items":[Role],"limits":{"max_roles":32,"max_name_runes":40,"max_description_runes":200}}` (built-ins first) |
+| POST | `/api/v1/admin/roles` | roles.manage† | body `{"name","description","permissions":[…]}` → 201 `Role` |
+| GET | `/api/v1/admin/roles/{id}` | accounts.read† | `Role` |
+| PATCH | `/api/v1/admin/roles/{id}` | roles.manage† | any of `name, description, permissions` → `Role` |
+| DELETE | `/api/v1/admin/roles/{id}` | roles.manage† | 204 |
+
+```jsonc
+// Role (from a test run)
+{"id":"role_b2f285701ad4","name":"Responder","description":"Triage without administration","builtin":false,
+ "permissions":["analysis.read","evidence.read","investigations.read","investigations.write"],
+ "assigned":{"managed":1,"config":0,"oidc":0},"created_at":"…","created_by":"cfg:admin","updated_at":"…"}
+// Built-ins: id = name = viewer|analyst|admin, builtin true, created_by "builtin", created_at/updated_at null.
+```
+
+Rules: names 1..40 printable runes, unique case-insensitively, never a
+built-in name (409 `conflict`); permissions are catalogue ids, stored sorted
+and deduplicated; `roles.manage` and `settings.manage` need `accounts.manage`,
+`accounts.manage` and `sessions.manage` need `accounts.read`, and
+`settings.manage` needs `settings.read` (400 `invalid_argument`); at most 32
+custom roles (409 `conflict`); built-ins cannot be changed or deleted (409
+`builtin`); an assigned role cannot be deleted (409 `in_use`); no change may
+leave zero active principals able to manage both accounts and roles (409
+`last_admin`, counted as in ADR-0025). Managed accounts take `role` = any role
+id; account views gain `role_name`. Config operators and OIDC `role_mapping`
+keep built-in names. `/me` gains `"role_name"` and `"permissions"` (sorted);
+`capabilities.administer` is true when the role grants any of `accounts.read`,
+`settings.read`, `system.read` or `audit.export` and the principal belongs to
+`local_tenant`; `manage_own_keys` also needs `keys.self`.
+
+**No escalation.** 403 `exceeds_own_permissions` (audited with that detail)
+refuses any change that would grant or touch permissions the caller's role
+does not hold: creating an account with, or moving one to, a wider role;
+changing, disabling, or minting or revoking keys for an account whose role
+holds more; creating or widening a role beyond the caller's set; editing or
+deleting a role holding more; ending a session of a more privileged principal.
+
+**Editable settings.** `GET /api/v1/admin/settings` (settings.read†) gains a
+top-level `"editing":"off|console"`, `editable` (true when editing is on and
+the overlay loaded), and per item `effective` and `file_value` (canonical raw
+values for allowlisted keys, the display text otherwise), `overridden`,
+`constraints` (`{}` when none) and `applies` (`live`, `restart`, or `none` for
+built-in limits and observed facts). Overridden items report source `console`.
+A new section `console` holds `console.settings_editing`,
+`console.organization_name`, `console.sign_in_banner`,
+`console.default_window` and `posture.accepted`; `access` holds the session and
+key lifetime keys (the round-5 `accounts.key_lifetime` item is replaced by
+`console.key_max_days` and `console.key_default_days`).
+
+```jsonc
+// Editable item (from a test run)
+{"key":"console.session_ttl_seconds","label":"Session lifetime","value":"2h","kind":"duration","source":"console",
+ "editable":true,"note":"Editable here with settings.manage; reverting restores the config file value.",
+ "effective":"7200","file_value":"60","overridden":true,
+ "constraints":{"max":86400,"min":900,"reason_max_len":200,"unit":"s"},"applies":"live"}
+// Non-editable item
+{"key":"console.listen","label":"Console address","value":"127.0.0.1:51219","kind":"text","source":"config",
+ "editable":false,"note":"Change in the config file or the AEGISMESH_CONSOLE_LISTEN environment variable, then restart.",
+ "effective":"127.0.0.1:51219","file_value":"127.0.0.1:51219","overridden":false,"constraints":{},"applies":"restart"}
+```
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| PUT | `/api/v1/admin/settings/{key}` | settings.manage† | body `{"value":…,"reason":"…"}` → item |
+| DELETE | `/api/v1/admin/settings/{key}` | settings.manage† | item reverted to the file value (no body) |
+| GET | `/api/v1/admin/settings/history` | settings.read† | `{"items":[Change],"limits":{"max_items":500}}`, newest first |
+
+`value` is a JSON integer for `console.session_ttl_seconds` (900..86400),
+`console.session_idle_seconds` (0 or 300..86400), `console.key_max_days`
+(1..365, not below the effective default) and `console.key_default_days`
+(1..effective maximum), and a JSON string for `console.sign_in_banner` (≤500
+printable runes, newlines allowed), `console.organization_name` (≤80, one
+line) and `console.default_window` (`1h|24h|7d`). `reason` is required, 1..200
+printable characters. Out-of-range values → 400 `invalid_argument`; editing off
+→ 409 `editing_disabled`; any other key (including `posture.accepted`, which
+uses the posture endpoints) → 409 `not_editable`; an unloadable overlay → 503.
+Changes apply live: session lifetime for sessions created afterwards, idle
+timeout at once, key limits for keys minted afterwards, banner and
+organization name in `/meta`, default window for principals without saved
+preferences. With editing off, stored overrides are kept but not applied.
+
+```jsonc
+// Change (history; from a test run)
+{"seq":1,"key":"console.session_ttl_seconds","from":"60","to":"7200","actor_id":"cfg:admin","actor_name":"admin",
+ "reason":"Longer shifts","at":"…"}
+// posture.accepted entries: "from":"POS-007: not accepted","to":"POS-007: accepted until 2026-12-24T18:05:19Z"
+```
+
+Audit: `settings.update` / `settings.revert` with target = key and detail
+`from="…" to="…" seq=N reason="…"` (Go-quoted, truncated to the 256-byte detail
+limit; the history entry holds the full values). Values are not secret by
+construction.
+
+**Posture acceptance.**
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| POST | `/api/v1/posture/{check_id}/accept` | settings.manage† | body `{"reason":"…","until":"RFC3339"}` → the posture `Check` |
+| DELETE | `/api/v1/posture/{check_id}/accept` | settings.manage† | 204; none recorded → 404 |
+
+Only a check whose current status is `attention` can be accepted (409
+`conflict` otherwise; unknown id → 404). `until` must be in the future and at
+most 180 days ahead. Every posture check gains `"accepted":{"by","by_name",
+"reason","until"}|null`; an accepted attention check reports status
+`accepted`, `summary` gains `accepted`, and reports gain
+`"acceptances":"applied|unavailable"`. Expired acceptances are ignored and
+pruned on the next write. Audit: `posture.accept` (detail `until=… reason="…"`)
+and `posture.unaccept`, target = check id. New checks POS-020..022 are listed in
+`docs/ai-threat-detection.md`. `/api/v1/system` gains component `settings`
+(`off|ok|degraded`).

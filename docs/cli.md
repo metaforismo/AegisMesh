@@ -579,11 +579,17 @@ same evidence. Shapes are attacker-influenced text with control characters
 replaced.
 
 `posture` requires `--config`; evidence defaults to the config's
-`runtime.data_dir`. It evaluates POS-001..POS-019 over a secret-free snapshot
+`runtime.data_dir`. It evaluates POS-001..POS-022 over a secret-free snapshot
 of the validated config and the newest 8192 verified envelopes (larger
 directories are sampled, and POS-017 reports the saturation). Missing,
 undecryptable or unverifiable evidence turns POS-010/016/017 into "Not
-evaluated" and prints the read error on stderr. Exit codes: 0 when a review is
+evaluated" and prints the read error on stderr. When
+`console.settings_editing` is `console`, risks accepted in the console are read
+(never written) from `<state_dir>/settings/settings.json` and shown as
+`accepted`; the header line `accepted risks:` says how many were read, or that
+the console state could not be read (then checks are shown unaccepted, and
+`--json` reports `"acceptances": "unavailable"`). Managed accounts are not read
+offline, so POS-021 reports "offline review". Exit codes: 0 when a review is
 printed regardless of statuses, 1 config/output failure, 2 argument error. It
 starts, contacts and changes nothing; a clean review is not a security
 guarantee.
