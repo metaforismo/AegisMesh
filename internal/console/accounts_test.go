@@ -381,7 +381,7 @@ func TestSettingsSystemAndCSVNeutralisation(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(ids, ",") != "access,sso,tenants,listener,evidence,detection,fleet,exports" ||
+	if strings.Join(ids, ",") != "access,console,sso,tenants,listener,evidence,detection,fleet,exports" ||
 		sources["console.session_ttl_seconds"] != "config" || sources["console.listen"] != "env" ||
 		sources["console.session_idle_seconds"] != "default" || sources["console.login_throttle"] != "default" ||
 		sources["accounts.managed"] != "runtime" {
@@ -402,7 +402,7 @@ func TestSettingsSystemAndCSVNeutralisation(t *testing.T) {
 		componentIDs = append(componentIDs, component.ID+"="+component.Status)
 	}
 	if parsedSystem.ConfigSchema != config.APIVersionV1Alpha1 ||
-		strings.Join(componentIDs, ",") != "console=ok,storage=ok,index=ok,sensors=ok,fleet=off,oidc=off" {
+		strings.Join(componentIDs, ",") != "console=ok,storage=ok,index=ok,sensors=ok,fleet=off,oidc=off,settings=off" {
 		t.Fatalf("system = %s", system.body)
 	}
 

@@ -66,6 +66,18 @@ func TestEveryRouteAuthorization(t *testing.T) {
 		"GET /api/v1/admin/settings":                       {role: "admin", status: 200},
 		"GET /api/v1/admin/audit/export":                   {role: "admin", status: 200},
 		"GET /api/v1/system":                               {role: "admin", status: 200},
+		"GET /api/v1/permissions":                          {role: "viewer", status: 200},
+		"GET /api/v1/admin/settings/history":               {role: "admin", status: 200},
+		// settings_editing is off in the harness: the allowlist is read-only.
+		"PUT /api/v1/admin/settings/{key}":         {role: "admin", body: `{"value":1,"reason":"matrix"}`, status: 409},
+		"DELETE /api/v1/admin/settings/{key}":      {role: "admin", status: 409},
+		"GET /api/v1/admin/roles":                  {role: "admin", status: 200},
+		"POST /api/v1/admin/roles":                 {role: "admin", body: `{"name":"Matrix","permissions":["evidence.read"]}`, status: 201},
+		"GET /api/v1/admin/roles/{id}":             {role: "admin", status: 404},
+		"PATCH /api/v1/admin/roles/{id}":           {role: "admin", body: `{"name":"Renamed"}`, status: 404},
+		"DELETE /api/v1/admin/roles/{id}":          {role: "admin", status: 404},
+		"POST /api/v1/posture/{check_id}/accept":   {role: "admin", body: `{"reason":"matrix","until":"2030-01-01T00:00:00Z"}`, status: 404},
+		"DELETE /api/v1/posture/{check_id}/accept": {role: "admin", status: 404},
 		"GET /api/v1/fleet": {
 			role:   "viewer",
 			status: 200,

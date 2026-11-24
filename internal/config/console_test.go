@@ -289,3 +289,52 @@ func TestSettingSources(t *testing.T) {
 		t.Fatalf("sources = %d keys; want %d", len(cfg.Sources), len(SettingSourceKeys))
 	}
 }
+
+func TestConsoleRound6Fields(t *testing.T) {
+	for _, testCase := range []struct {
+		name, block string
+		bad         bool
+	}{
+		{"editing console", "console:\n  settings_editing: console", false},
+		{"editing off", "console:\n  settings_editing: \"off\"", false},
+		{"editing unknown", "console:\n  settings_editing: file", true},
+		{"key max 1", "console:\n  key_max_days: 1", false},
+		{"key max 365", "console:\n  key_max_days: 365", false},
+		{"key max 366", "console:\n  key_max_days: 366", true},
+		{"key max negative", "console:\n  key_max_days: -1", true},
+		{"key default within", "console:\n  key_max_days: 30\n  key_default_days: 30", false},
+		{"key default above max", "console:\n  key_max_days: 30\n  key_default_days: 31", true},
+		{"key default negative", "console:\n  key_default_days: -5", true},
+		{"banner multiline", "console:\n  sign_in_banner: \"Authorized use only.\\nActivity is logged.\"", false},
+		{"banner too long", "console:\n  sign_in_banner: \"" + strings.Repeat("b", 501) + "\"", true},
+		{"banner control", "console:\n  sign_in_banner: \"bell\\u0007\"", true},
+		{"banner padded", "console:\n  sign_in_banner: \" padded\"", true},
+		{"organization", "console:\n  organization_name: \"Example SOC\"", false},
+		{"organization newline", "console:\n  organization_name: \"a\\nb\"", true},
+		{"organization too long", "console:\n  organization_name: \"" + strings.Repeat("o", 81) + "\"", true},
+		{"window 7d", "console:\n  default_window: 7d", false},
+		{"window bad", "console:\n  default_window: 30d", true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := Load(writeTemp(t, "mesh.yaml", minimalValid+"\n"+testCase.block))
+			if (err != nil) != testCase.bad {
+				t.Fatalf("error=%v", err)
+			}
+		})
+	}
+	cfg, err := Load(writeTemp(t, "mesh.yaml", minimalValid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cfg.Console; c.SettingsEditing != SettingsEditingOff || c.KeyMaxDays != 365 || c.KeyDefaultDays != 90 ||
+		c.DefaultWindow != "24h" || c.SignInBanner != "" || c.OrganizationName != "" {
+		t.Fatalf("round-6 defaults: %+v", c)
+	}
+	cfg, err = Load(writeTemp(t, "mesh.yaml", minimalValid+"\nconsole:\n  key_max_days: 30\n"))
+	if err != nil || cfg.Console.KeyDefaultDays != 30 {
+		t.Fatalf("default days follow a lower maximum: %v %d", err, cfg.Console.KeyDefaultDays)
+	}
+	if cfg.Sources["console.key_max_days"] != SourceConfig || cfg.Sources["console.settings_editing"] != SourceDefault {
+		t.Fatalf("provenance: %v", cfg.Sources)
+	}
+}

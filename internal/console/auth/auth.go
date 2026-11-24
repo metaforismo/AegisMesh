@@ -56,7 +56,7 @@ type Principal struct {
 	Subject string `json:"-"`
 	// Name identifies the configured operator.
 	Name string `json:"name"`
-	// Role is the configured viewer, analyst, or admin role.
+	// Role is the role id: viewer, analyst, admin, or a custom role_<12hex> (managed accounts only).
 	Role string `json:"role"`
 }
 
@@ -221,6 +221,18 @@ func (manager *Manager) SetIdleTimeout(idle time.Duration) error {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 	manager.idle = idle
+	return nil
+}
+
+// SetTTL changes the absolute lifetime of sessions created from now on;
+// existing sessions keep their expiry.
+func (manager *Manager) SetTTL(ttl time.Duration) error {
+	if ttl < time.Minute || ttl > 24*time.Hour {
+		return errors.New("auth: invalid TTL")
+	}
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	manager.ttl = ttl
 	return nil
 }
 
@@ -532,6 +544,22 @@ func (manager *Manager) Revoke(handle, owner string) (SessionInfo, bool) {
 	return SessionInfo{}, false
 }
 
+// SessionPrincipal returns the principal of the live session with handle.
+func (manager *Manager) SessionPrincipal(handle string) (Principal, bool) {
+	if len(handle) != 20 {
+		return Principal{}, false
+	}
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	now := manager.now()
+	for _, existing := range manager.sessions {
+		if subtle.ConstantTimeCompare([]byte(existing.handle), []byte(handle)) == 1 && !manager.expired(existing, now) {
+			return clonePrincipal(existing.session.Principal), true
+		}
+	}
+	return Principal{}, false
+}
+
 // RevokePrincipal deletes every session of one principal and returns how many ended.
 func (manager *Manager) RevokePrincipal(principalID string) int {
 	manager.mu.Lock()
@@ -617,7 +645,9 @@ func (manager *Manager) AllowLogin(remote string) bool {
 	return true
 }
 
-// Granted checks the fixed viewer, analyst, and admin role ordering.
+// Granted checks the fixed viewer, analyst, and admin role ordering. Route
+// authorization uses permissions (package permission); OIDC role mapping still
+// uses this rank to pick the highest mapped built-in role.
 func Granted(role, required string) bool {
 	rank := map[string]int{
 		"viewer":  1,

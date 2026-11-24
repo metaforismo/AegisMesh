@@ -17,6 +17,8 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - A11 Node private identity and hub node/token/replay registry
 - A12 Console account store (managed accounts, API key SHA-256 digests, OIDC identity directory key, preferences)
 - A13 Managed API keys (`amk_` bearer tokens held by people and integrations)
+- A14 Custom role definitions (permission sets stored with the accounts) and the console settings
+  overlay (allowlisted overrides, accepted posture risks, change history)
 
 ## Trust boundaries
 
@@ -517,4 +519,54 @@ allow. Mitigations by threat:
 
 Untrusted data still never reaches exec, path selection, configuration or
 enforcement: request fields select records inside one fixed-name file only, and
-settings are read-only. Sessions remain in memory per process.
+settings are read-only (ADR-0026 below narrows this). Sessions remain in memory
+per process.
+
+## Custom roles and the console settings overlay (ADR-0026)
+
+Asset A14. Roles are now data rather than a fixed rank, and with
+`console.settings_editing: console` an HTTP request can change a few console
+settings. Mitigations by threat:
+
+- **Privilege escalation through custom roles.** Roles combine only ids from a
+  compiled-in catalogue; nothing can exceed built-in admin. A principal holding
+  `accounts.manage`, `roles.manage` or `sessions.manage` cannot reach
+  permissions it lacks: creating or re-roling an account to a wider role,
+  touching or minting keys for an account holding more, creating or widening a
+  role beyond the caller's set, editing or deleting a role holding more, and
+  ending a more privileged session all answer 403 `exceeds_own_permissions`
+  and are audited. `roles.manage` and `settings.manage` require
+  `accounts.manage` (and reads), so no role changes behaviour without seeing
+  who holds access. Built-in roles are immutable; assigned roles cannot be
+  deleted; the last-admin guard counts principals able to manage both accounts
+  and roles. Permissions resolve per request, so revoking a permission applies
+  at the next request and ends open event streams at the next event or
+  heartbeat. Config operators and OIDC mappings cannot name custom roles.
+  Residual: a principal holding every permission (built-in admin or an
+  equivalent custom role) still has full authority; POS-021 flags service
+  accounts given high-risk permissions through custom roles.
+- **Settings tampering.** Off by default. Only an allowlist of console-only
+  keys (session lifetime ≥ 900 s, idle timeout, key lifetimes, banner,
+  organization name, default window, posture acceptances) is editable; listeners,
+  TLS, tenants, OIDC, storage, encryption, detection actions, fleet and
+  sensors are not, and every other key answers 409 `not_editable`. Values are
+  validated before storage and again before use, the config file is never
+  written, and nothing reaches exec, path selection or enforcement. Each change
+  needs `settings.manage`, CSRF and Origin checks for cookies, and a reason;
+  it is audited and kept in a 500-entry history. Overrides that no longer
+  validate are ignored at startup (POS-022, `settings` component degraded); a
+  corrupt or foreign-modified overlay is not applied and not written. Turning
+  editing off makes the file the only source again. Residual: a banner or
+  organization name is administrator-supplied text that the UI must render as
+  text; a same-UID local writer can edit the overlay like any console state.
+- **Hiding risk by acceptance.** Accepting a posture check needs
+  `settings.manage`, a reason and an expiry at most 180 days ahead; it is
+  audited, shown with who accepted it and until when, counted separately, and
+  lapses automatically. It never changes `ok`/`info` checks. Residual: an
+  administrator can keep re-accepting a risk; the history shows it.
+- **Insider risk.** Every role, setting and acceptance change is attributed to
+  a stable principal id in the local audit chain, with the previous and new
+  values (settings) or the permission diff (roles). Administrators remain
+  trusted for their own permissions; the controls above stop partial
+  administrators from widening their own reach, not a full administrator
+  acting maliciously.

@@ -98,7 +98,8 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request, _ caller) {
 			}
 		}
 	}
-	response.Components = append(response.Components, storage, index, sensors, s.fleetComponent(local), s.oidcComponent())
+	response.Components = append(response.Components, storage, index, sensors, s.fleetComponent(local), s.oidcComponent(),
+		s.settingsComponent())
 	send(w, 200, response)
 }
 
@@ -141,6 +142,23 @@ func (s *Server) oidcComponent() component {
 		return component{ID: "oidc", Status: "ok", Detail: "issuer discovery succeeded"}
 	default:
 		return component{ID: "oidc", Status: "degraded", Detail: "issuer discovery pending or failing; token sign-in unaffected"}
+	}
+}
+
+// settingsComponent reports whether the settings overlay applies.
+func (s *Server) settingsComponent() component {
+	_, overridden := s.live.snapshot()
+	switch {
+	case !s.editing():
+		return component{ID: "settings", Status: "off", Detail: "settings editing is off; the config file is the only source"}
+	case s.overlay.Problem() != "":
+		return component{ID: "settings", Status: "degraded", Detail: "overlay not applied: " + s.overlay.Problem()}
+	case len(s.live.ignoredAtStartup()) > 0:
+		return component{ID: "settings", Status: "degraded", Detail: fmt.Sprintf(
+			"%d stored override(s) ignored at startup: %s", len(s.live.ignoredAtStartup()),
+			strings.Join(s.live.ignoredAtStartup(), ", "))}
+	default:
+		return component{ID: "settings", Status: "ok", Detail: fmt.Sprintf("editing on; %d override(s) applied", len(overridden))}
 	}
 }
 

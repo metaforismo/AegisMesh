@@ -196,7 +196,7 @@ func TestCampaignsSessionsActorAndPostureOverHTTP(t *testing.T) {
 	if err := json.Unmarshal(review.body, &report); err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Checks) != 19 || report.Scope != "configuration_and_evidence" || report.Summary.Attention+report.Summary.OK+report.Summary.Info != 19 {
+	if len(report.Checks) != 22 || report.Scope != "configuration_and_evidence" || report.Summary.Attention+report.Summary.OK+report.Summary.Info != 22 {
 		t.Fatalf("%s", review.body)
 	}
 	if strings.Contains(string(review.body), value) || strings.Contains(string(review.body), "token_sha256") {

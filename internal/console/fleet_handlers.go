@@ -4,54 +4,20 @@ import (
 	"net/http"
 
 	"github.com/metaforismo/aegismesh/internal/console/audit"
+	"github.com/metaforismo/aegismesh/internal/console/permission"
 	"github.com/metaforismo/aegismesh/internal/fleet/hub"
 	"github.com/metaforismo/aegismesh/internal/fleet/protocol"
 )
 
 func (s *Server) fleetRoutes() []routeSpec {
 	return []routeSpec{
-		{
-			pattern: "GET /api/v1/fleet",
-			role:    "viewer",
-			group:   "fleet",
-			handle:  (*Server).fleet,
-		},
-		{
-			pattern: "GET /api/v1/fleet/nodes",
-			role:    "viewer",
-			group:   "fleet-nodes",
-			handle:  (*Server).fleetNodes,
-		},
-		{
-			pattern: "GET /api/v1/fleet/nodes/{id}",
-			role:    "viewer",
-			group:   "fleet-nodes",
-			handle:  (*Server).fleetNode,
-		},
-		{
-			pattern: "POST /api/v1/fleet/nodes/{id}/revoke",
-			role:    "admin",
-			group:   "fleet-nodes",
-			handle:  (*Server).fleetRevoke,
-		},
-		{
-			pattern: "GET /api/v1/fleet/enrollment-tokens",
-			role:    "admin",
-			group:   "fleet-tokens",
-			handle:  (*Server).fleetTokens,
-		},
-		{
-			pattern: "POST /api/v1/fleet/enrollment-tokens",
-			role:    "admin",
-			group:   "fleet-tokens",
-			handle:  (*Server).fleetMint,
-		},
-		{
-			pattern: "DELETE /api/v1/fleet/enrollment-tokens/{id}",
-			role:    "admin",
-			group:   "fleet-tokens",
-			handle:  (*Server).fleetDeleteToken,
-		},
+		{pattern: "GET /api/v1/fleet", perm: permission.FleetRead, group: "fleet", handle: (*Server).fleet},
+		{pattern: "GET /api/v1/fleet/nodes", perm: permission.FleetRead, group: "fleet-nodes", handle: (*Server).fleetNodes},
+		{pattern: "GET /api/v1/fleet/nodes/{id}", perm: permission.FleetRead, group: "fleet-nodes", handle: (*Server).fleetNode},
+		{pattern: "POST /api/v1/fleet/nodes/{id}/revoke", perm: permission.FleetManage, group: "fleet-nodes", handle: (*Server).fleetRevoke},
+		{pattern: "GET /api/v1/fleet/enrollment-tokens", perm: permission.FleetManage, group: "fleet-tokens", handle: (*Server).fleetTokens},
+		{pattern: "POST /api/v1/fleet/enrollment-tokens", perm: permission.FleetManage, group: "fleet-tokens", handle: (*Server).fleetMint},
+		{pattern: "DELETE /api/v1/fleet/enrollment-tokens/{id}", perm: permission.FleetManage, group: "fleet-tokens", handle: (*Server).fleetDeleteToken},
 	}
 }
 

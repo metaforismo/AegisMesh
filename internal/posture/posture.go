@@ -17,6 +17,8 @@ const (
 	StatusAttention = "attention"
 	StatusOK        = "ok"
 	StatusInfo      = "info"
+	// StatusAccepted marks an attention check whose risk an operator accepted until a date.
+	StatusAccepted = "accepted"
 )
 
 // Check areas.
@@ -40,6 +42,7 @@ const (
 	docEncryption  = "docs/evidence-encryption.md"
 	docConsole     = "docs/architecture/console-api.md#transport-and-exposure"
 	docAccounts    = "docs/architecture/console-api.md#accounts-access-and-settings-adr-0025"
+	docRoles       = "docs/architecture/console-api.md#permissions-roles-and-editable-settings-adr-0026"
 )
 
 // Check is one deterministic finding about configuration or retained evidence.
@@ -51,13 +54,24 @@ type Check struct {
 	Detail         string `json:"detail"`
 	Recommendation string `json:"recommendation"`
 	Doc            string `json:"doc"`
+	// Accepted is the unexpired operator acceptance of this check, or null.
+	Accepted *Acceptance `json:"accepted"`
 }
 
-// Summary counts checks by status.
+// Acceptance is an operator's recorded acceptance of a check's risk.
+type Acceptance struct {
+	By     string `json:"by"`
+	ByName string `json:"by_name"`
+	Reason string `json:"reason"`
+	Until  string `json:"until"`
+}
+
+// Summary counts checks by status; accepted attention checks count only as accepted.
 type Summary struct {
 	Attention int `json:"attention"`
 	OK        int `json:"ok"`
 	Info      int `json:"info"`
+	Accepted  int `json:"accepted"`
 }
 
 // Report is the full review. Scope is "configuration_and_evidence" when the
@@ -68,7 +82,17 @@ type Report struct {
 	Summary     Summary `json:"summary"`
 	Checks      []Check `json:"checks"`
 	Disclaimer  string  `json:"disclaimer"`
+	// Acceptances is "applied" when accepted risks were read and applied, or
+	// "unavailable" when the reviewer could not read them (offline review
+	// without readable console state).
+	Acceptances string `json:"acceptances"`
 }
+
+// Acceptances values.
+const (
+	AcceptancesApplied     = "applied"
+	AcceptancesUnavailable = "unavailable"
+)
 
 // Disclaimer is included verbatim in every report.
 const Disclaimer = "Static review of the running configuration and of retained evidence; not a security guarantee or a complete audit."
@@ -119,6 +143,19 @@ type Facts struct {
 	// ManagedAdmins then counts managed admins that can sign in to the local tenant.
 	ManagedKnown  bool
 	ManagedAdmins int
+	// SettingsEditing is the configured console.settings_editing mode.
+	SettingsEditing string
+	// SettingsManagers names the roles granting settings.manage (live review only).
+	SettingsManagers []string
+	// ServiceGrants names active service accounts holding a high-risk
+	// permission through a custom role; ServiceAdmins counts service accounts
+	// holding the built-in admin role (live review only).
+	ServiceGrants []string
+	ServiceAdmins int
+	// OverlayIgnored lists overlay keys ignored at startup because they no
+	// longer validate; OverlayProblem says why the overlay could not be loaded.
+	OverlayIgnored []string
+	OverlayProblem string
 }
 
 // Evidence summarises the retained analysis sample. Available=false means
@@ -137,7 +174,8 @@ type Evidence struct {
 // configuration belongs to another tenant: only evidence checks that need no
 // configuration are returned.
 func Evaluate(facts *Facts, evidence Evidence, now time.Time) Report {
-	r := Report{GeneratedAt: now.UTC().Format(time.RFC3339Nano), Scope: "configuration_and_evidence", Checks: []Check{}, Disclaimer: Disclaimer}
+	r := Report{GeneratedAt: now.UTC().Format(time.RFC3339Nano), Scope: "configuration_and_evidence", Checks: []Check{},
+		Disclaimer: Disclaimer, Acceptances: AcceptancesUnavailable}
 	var checks []func(*Facts, Evidence) Check
 	if facts == nil {
 		r.Scope = "evidence_only"
@@ -168,6 +206,48 @@ var allChecks = []func(*Facts, Evidence) Check{
 	checkRoleSeparation, checkHoneytokens, checkAgentCanary, checkPlanting, checkTokenObservations,
 	checkAISurface, checkMCPEnvironment, checkDetection, checkCorrelation, checkActions,
 	checkSilentSensors, checkSampleSaturation, checkEncryption, checkBreakGlass,
+	checkSettingsEditing, checkServiceGrants, checkSettingsOverlay,
+}
+
+// IDs returns the ids of every check a configuration review can report.
+func IDs() []string {
+	ids := []string{}
+	for _, check := range allChecks {
+		ids = append(ids, check(&Facts{}, Evidence{}).ID)
+	}
+	return ids
+}
+
+// Accept applies unexpired acceptances (keyed by check id) to a report: an
+// attention check that is accepted reports status "accepted" and the summary
+// counts it as accepted instead of attention. Acceptances of checks that no
+// longer need attention are shown but change nothing.
+func Accept(r Report, accepted map[string]Acceptance) Report {
+	r.Acceptances = AcceptancesApplied
+	r.Summary = Summary{}
+	checks := make([]Check, 0, len(r.Checks))
+	for _, c := range r.Checks {
+		if acceptance, ok := accepted[c.ID]; ok {
+			copied := acceptance
+			c.Accepted = &copied
+			if c.Status == StatusAttention {
+				c.Status = StatusAccepted
+			}
+		}
+		switch c.Status {
+		case StatusAttention:
+			r.Summary.Attention++
+		case StatusOK:
+			r.Summary.OK++
+		case StatusAccepted:
+			r.Summary.Accepted++
+		default:
+			r.Summary.Info++
+		}
+		checks = append(checks, c)
+	}
+	r.Checks = checks
+	return r
 }
 
 // Public reports whether a listen authority binds beyond loopback.
@@ -579,5 +659,68 @@ func checkEncryption(f *Facts, _ Evidence) Check {
 	c.Status = StatusInfo
 	c.Detail = "Evidence is stored unencrypted; it is redacted but still holds attacker-supplied text and source addresses."
 	c.Recommendation = "Enable storage.encryption if the data directory is backed up or shared."
+	return c
+}
+
+func checkSettingsEditing(f *Facts, _ Evidence) Check {
+	c := Check{ID: "POS-020", Area: AreaAccess, Title: "Console settings editing", Doc: docRoles}
+	switch {
+	case !f.ConsoleEnabled:
+		c.Status, c.Detail = StatusInfo, "The console is disabled; settings editing was not evaluated."
+	case f.SettingsEditing != "console":
+		c.Status, c.Detail = StatusOK, "console.settings_editing is off: the console cannot change any setting or accept posture risks."
+	default:
+		who := "principals whose role grants settings.manage"
+		if len(f.SettingsManagers) > 0 {
+			who += " (roles: " + list(f.SettingsManagers) + ")"
+		}
+		c.Status = StatusInfo
+		c.Detail = "console.settings_editing is console: " + who + " can change session lifetime, idle timeout, " +
+			"API key lifetimes, sign-in banner, organization name and default window, and accept posture risks. " +
+			"Changes are stored in the console state directory, audited, and never written to the config file."
+		c.Recommendation = "Grant settings.manage only to administrators, review /api/v1/admin/settings/history, and set settings_editing: off when the file should be the only source."
+	}
+	return c
+}
+
+func checkServiceGrants(f *Facts, _ Evidence) Check {
+	c := Check{ID: "POS-021", Area: AreaAccess, Title: "Service accounts with high-risk permissions", Doc: docRoles}
+	switch {
+	case !f.ConsoleEnabled:
+		c.Status, c.Detail = StatusInfo, "The console is disabled; service accounts were not evaluated."
+	case !f.ManagedKnown:
+		c.Status, c.Detail = StatusInfo, "Managed accounts were not evaluated (offline review)."
+	case len(f.ServiceGrants) > 0:
+		c.Status = StatusAttention
+		c.Detail = "Service accounts holding a high-risk permission (accounts, roles, sessions, settings or fleet management) through a custom role: " + list(f.ServiceGrants) + "."
+		c.Recommendation = "Give integrations the narrowest role that works; a leaked service key with these permissions can change who has access."
+	case f.ServiceAdmins > 0:
+		c.Status = StatusInfo
+		c.Detail = fmt.Sprintf("No custom role grants a service account high-risk permissions; %d service account(s) hold the built-in admin role.", f.ServiceAdmins)
+		c.Recommendation = "Prefer a custom role without administration permissions for integrations."
+	default:
+		c.Status, c.Detail = StatusOK, "No service account holds a high-risk permission."
+	}
+	return c
+}
+
+func checkSettingsOverlay(f *Facts, _ Evidence) Check {
+	c := Check{ID: "POS-022", Area: AreaAccess, Title: "Console settings overlay", Doc: docRoles}
+	switch {
+	case !f.ConsoleEnabled || f.SettingsEditing != "console":
+		c.Status, c.Detail = StatusOK, "Settings editing is off; the configuration file is the only source of settings."
+	case !f.ManagedKnown:
+		c.Status, c.Detail = StatusInfo, "The settings overlay was not evaluated (offline review)."
+	case f.OverlayProblem != "":
+		c.Status = StatusAttention
+		c.Detail = "The settings overlay is not applied and not written: " + f.OverlayProblem + ". File values are in effect."
+		c.Recommendation = "Inspect settings.json in the console state directory, restore or move it aside, and restart."
+	case len(f.OverlayIgnored) > 0:
+		c.Status = StatusAttention
+		c.Detail = "Stored overrides that no longer validate were ignored at startup; file values apply instead: " + list(f.OverlayIgnored) + "."
+		c.Recommendation = "Set the values again in the console or revert them to the file value."
+	default:
+		c.Status, c.Detail = StatusOK, "Every stored override validated and is applied."
+	}
 	return c
 }

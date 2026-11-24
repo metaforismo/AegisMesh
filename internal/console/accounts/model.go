@@ -4,7 +4,8 @@
 // The store is a single versioned JSON snapshot under a private os.Root with a
 // fixed file name, replaced atomically. Request data never selects a path.
 // Config-file operators are never stored or changed here: they remain the
-// authoritative break-glass identities. No record can carry a role above admin.
+// authoritative break-glass identities. Custom roles combine only catalogue
+// permissions (package permission), so no record can grant more than admin.
 package accounts
 
 import (
@@ -17,6 +18,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/metaforismo/aegismesh/internal/console/permission"
 	"github.com/metaforismo/aegismesh/internal/console/tenant"
 )
 
@@ -24,8 +26,18 @@ import (
 const (
 	// FileName is the only state file this package writes, besides its fixed .tmp sibling.
 	FileName = "accounts.json"
-	// Schema identifies the snapshot format.
-	Schema = "aegismesh.console.accounts/v1"
+	// Schema identifies the snapshot format written by this version.
+	Schema = "aegismesh.console.accounts/v2"
+	// SchemaV1 is the round-5 format without custom roles; it is migrated on open.
+	SchemaV1 = "aegismesh.console.accounts/v1"
+	// BackupV1 keeps the pre-migration v1 snapshot for a downgrade.
+	BackupV1 = "accounts.v1.json"
+	// MaxRoles bounds custom roles (the three built-in roles are not stored).
+	MaxRoles = 32
+	// MaxRoleNameRunes bounds role names.
+	MaxRoleNameRunes = 40
+	// MaxRoleDescriptionRunes bounds role descriptions.
+	MaxRoleDescriptionRunes = 200
 	// MaxAccounts bounds managed accounts.
 	MaxAccounts = 200
 	// MaxKeysPerAccount bounds stored keys per account, including revoked and expired ones.
@@ -73,6 +85,12 @@ var (
 	ErrLastAdmin = errors.New("accounts: change would leave no active administrator")
 	// ErrDisabled marks an operation that needs an active account.
 	ErrDisabled = errors.New("accounts: account is disabled")
+	// ErrBuiltin marks an attempt to change or delete a built-in role.
+	ErrBuiltin = errors.New("accounts: built-in roles cannot be changed")
+	// ErrInUse marks a role that is still assigned.
+	ErrInUse = errors.New("accounts: role is assigned")
+	// ErrNewer marks a snapshot written by a newer version.
+	ErrNewer = errors.New("accounts: state was written by a newer AegisMesh version")
 	// ErrModified marks a snapshot changed by another writer since this process loaded it.
 	ErrModified = errors.New("accounts: state changed outside this process; restart the console")
 )
@@ -142,17 +160,30 @@ type KeyView struct {
 	Status     string     `json:"status"`
 }
 
-// snapshot is the complete persisted document.
+// Role is a persisted custom role: a named, sorted set of catalogue permissions.
+type Role struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedBy   string    `json:"created_by"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// snapshot is the complete persisted document. Roles is absent in v1.
 type snapshot struct {
 	Schema      string                 `json:"schema"`
 	IdentityKey string                 `json:"identity_key"`
 	Accounts    []Account              `json:"accounts"`
 	Identities  []Identity             `json:"oidc_identities"`
 	Preferences map[string]Preferences `json:"preferences"`
+	Roles       []Role                 `json:"roles"`
 }
 
 var (
 	accountIDPattern = regexp.MustCompile(`^acc_[0-9a-f]{16}$`)
+	roleIDPattern    = regexp.MustCompile(`^role_[0-9a-f]{12}$`)
 	keyIDPattern     = regexp.MustCompile(`^key_[0-9a-f]{12}$`)
 	oidcIDPattern    = regexp.MustCompile(`^oidc:[0-9a-f]{12}$`)
 	configIDPattern  = regexp.MustCompile(`^cfg:[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$`)
@@ -197,9 +228,60 @@ func printable(text string, min, max int) bool {
 	return true
 }
 
-// ValidRole accepts only the fixed console roles; nothing above admin exists.
-func ValidRole(role string) bool {
-	return role == "viewer" || role == "analyst" || role == "admin"
+// ValidRole accepts only the fixed built-in roles (config operators and OIDC identities).
+func ValidRole(role string) bool { return permission.IsBuiltin(role) }
+
+// ValidRoleID reports the custom role id grammar.
+func ValidRoleID(id string) bool { return roleIDPattern.MatchString(id) }
+
+// ValidRoleName accepts 1..40 printable runes without surrounding whitespace.
+func ValidRoleName(name string) bool { return printable(name, 1, MaxRoleNameRunes) }
+
+// ValidRoleDescription accepts 0..200 printable runes without surrounding whitespace.
+func ValidRoleDescription(text string) bool { return printable(text, 0, MaxRoleDescriptionRunes) }
+
+// ValidPermissions accepts a sorted, duplicate-free, coherent set of catalogue ids.
+func ValidPermissions(ids []string) bool {
+	if ids == nil || len(ids) > len(permission.Catalogue()) || !slices.Equal(ids, permission.Normalize(ids)) {
+		return false
+	}
+	for _, id := range ids {
+		if !permission.Valid(id) {
+			return false
+		}
+	}
+	return permission.Coherent(ids)
+}
+
+func cloneRole(role Role) Role {
+	role.Permissions = slices.Clone(role.Permissions)
+	return role
+}
+
+// roleName returns a role's display name, or "" when it does not exist.
+func (s snapshot) roleName(id string) string {
+	if permission.IsBuiltin(id) {
+		return id
+	}
+	for _, role := range s.Roles {
+		if role.ID == id {
+			return role.Name
+		}
+	}
+	return ""
+}
+
+// permissions resolves a role id to its permission set; unknown → nil.
+func (s snapshot) permissions(id string) []string {
+	if permission.IsBuiltin(id) {
+		return permission.Builtin(id)
+	}
+	for _, role := range s.Roles {
+		if role.ID == id {
+			return role.Permissions
+		}
+	}
+	return nil
 }
 
 // ValidKind accepts person and service accounts.
@@ -299,6 +381,10 @@ func (s snapshot) clone() snapshot {
 		Accounts:    make([]Account, 0, len(s.Accounts)),
 		Identities:  make([]Identity, 0, len(s.Identities)),
 		Preferences: make(map[string]Preferences, len(s.Preferences)),
+		Roles:       make([]Role, 0, len(s.Roles)),
+	}
+	for _, role := range s.Roles {
+		next.Roles = append(next.Roles, cloneRole(role))
 	}
 	for _, account := range s.Accounts {
 		next.Accounts = append(next.Accounts, cloneAccount(account))
@@ -316,18 +402,28 @@ func (s snapshot) clone() snapshot {
 func validate(s snapshot) error {
 	key, err := hex.DecodeString(s.IdentityKey)
 	if s.Schema != Schema || err != nil || len(key) != 32 || s.Accounts == nil || s.Identities == nil ||
-		s.Preferences == nil || len(s.Accounts) > MaxAccounts || len(s.Identities) > MaxIdentities ||
+		s.Preferences == nil || s.Roles == nil || len(s.Roles) > MaxRoles || len(s.Accounts) > MaxAccounts || len(s.Identities) > MaxIdentities ||
 		len(s.Preferences) > MaxPreferences {
 		return ErrInvalid
 	}
 	ids := map[string]bool{}
+	roleNames := map[string]bool{permission.Viewer: true, permission.Analyst: true, permission.Admin: true}
+	for _, role := range s.Roles {
+		folded := strings.ToLower(role.Name)
+		if !roleIDPattern.MatchString(role.ID) || ids[role.ID] || !ValidRoleName(role.Name) || roleNames[folded] ||
+			!ValidRoleDescription(role.Description) || !ValidPermissions(role.Permissions) ||
+			role.CreatedAt.IsZero() || role.UpdatedAt.Before(role.CreatedAt) || !validActor(role.CreatedBy) {
+			return ErrInvalid
+		}
+		ids[role.ID], roleNames[folded] = true, true
+	}
 	names := map[string]bool{}
 	keys := map[string]bool{}
 	digests := map[string]bool{}
 	for _, account := range s.Accounts {
 		folded := strings.ToLower(account.Name)
 		if !accountIDPattern.MatchString(account.ID) || ids[account.ID] || !ValidName(account.Name) ||
-			names[folded] || !ValidKind(account.Kind) || !ValidRole(account.Role) || !validTenants(account.Tenants) ||
+			names[folded] || !ValidKind(account.Kind) || s.roleName(account.Role) == "" || !validTenants(account.Tenants) ||
 			(account.Status != StatusActive && account.Status != StatusDisabled) || account.CreatedAt.IsZero() ||
 			account.UpdatedAt.Before(account.CreatedAt) || !validActor(account.CreatedBy) ||
 			account.Keys == nil || len(account.Keys) > MaxKeysPerAccount {
