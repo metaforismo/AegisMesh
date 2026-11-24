@@ -2763,6 +2763,119 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .src-chip--env .src-chip__mark { border-radius: 1px; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
 .src-chip--runtime .src-chip__mark { border-radius: 50%; background: radial-gradient(currentColor 0 2px, transparent 2.5px); }
 .src-chip--unknown .src-chip__mark { border-style: dashed; border-radius: 1px; }
+/* Changed in the console (round 6): a hollow square under a 1px accent line, the
+   word "Console" beside it. */
+.src-chip--console { color: var(--color-ink-2); }
+.src-chip--console .src-chip__mark { border-radius: 1px; box-shadow: 0 2px 0 -1px var(--color-accent); }
+
+/* Editable settings (round 6): the same row, plus what may be changed, the file
+   value it overrides, and the editor opened in place. */
+.setting__label { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); }
+.setting__tag { padding: 0 var(--space-1); border: var(--border-width) solid var(--color-border-strong, var(--color-border)); border-radius: var(--radius-xs); color: var(--color-ink-3); font-size: var(--text-2xs); font-weight: var(--weight-medium); }
+.setting.is-overridden .setting__label { color: var(--color-ink); }
+.setting__text--block { display: block; flex-basis: 100%; max-width: 70ch; font-size: var(--text-sm); white-space: pre-line; }
+.setting__override { color: var(--color-ink-2); }
+.setting__override strong { color: var(--color-ink); font-weight: var(--weight-semibold); }
+.setting__how .setting__note { flex-basis: 100%; max-width: 72ch; }
+.setting__actions { flex-basis: 100%; margin-top: var(--space-1); }
+.setting__history { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 2rem; font-size: var(--text-xs); }
+.setting__status { flex-basis: 100%; color: var(--color-ink-2); font-size: var(--text-xs); }
+.setting__status:empty { display: none; }
+.setting__editor { grid-column: 2; min-width: 0; margin-top: var(--space-2); }
+.setting-edit { max-width: 40rem; padding: var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-2); box-shadow: inset 1px 0 0 var(--color-accent); }
+.setting-edit__duration { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.setting-edit__duration .input { width: 8rem; }
+.setting-edit__duration .select { width: auto; }
+.setting-edit__words, .setting-edit__count { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.setting-edit__count.is-over { color: var(--color-danger); font-weight: var(--weight-medium); }
+.setting-edit__applies { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-xs); }
+.setting-edit__applies > .icon { flex: none; margin-top: 1px; }
+.input--num { font-variant-numeric: tabular-nums; }
+@media (max-width: 719px) { .setting__editor { grid-column: 1; } .setting-edit { padding: var(--space-3); } }
+
+/* Console editing is off: the reason and the one line of config to turn it on. */
+.editing-off .panel__body { display: flex; flex-direction: column; gap: var(--space-3); max-width: 72ch; color: var(--color-ink-2); font-size: var(--text-sm); }
+.editing-off__title { display: flex; align-items: center; gap: var(--space-2); color: var(--color-ink); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.editing-off__code { align-self: flex-start; }
+
+/* A change: old value, arrow, new value (history, audit), then the reason. */
+.change { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); font-variant-numeric: tabular-nums; }
+.change__from { color: var(--color-ink-2); text-decoration: line-through; text-decoration-color: var(--color-ink-3); text-decoration-thickness: 1px; }
+.change__to { color: var(--color-ink); font-weight: var(--weight-semibold); }
+.change__arrow { color: var(--color-ink-3); }
+.change__key { color: var(--color-ink-2); }
+.change__reason { max-width: 60ch; color: var(--color-ink-2); overflow-wrap: anywhere; }
+.change__reason .caps { margin-right: var(--space-1); }
+.audit-change { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.audit-change__link { font-size: var(--text-xs); }
+
+/* Permission risk: shape and word. High = filled triangle with "!", elevated =
+   half-filled square, low = hollow dot. The word is always printed (or
+   visually hidden in compact use beside a count). */
+.risk { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-ink-3); font-size: var(--text-2xs); font-weight: var(--weight-medium); white-space: nowrap; }
+.risk__mark { display: inline-grid; place-items: center; flex: none; width: 10px; height: 10px; border: 1.25px solid currentColor; border-radius: 50%; font-size: 8px; font-weight: var(--weight-bold); line-height: 1; }
+.risk--elevated { color: var(--color-ink-2); }
+.risk--elevated .risk__mark { border-radius: 1px; background: linear-gradient(0deg, currentColor 50%, transparent 50%); }
+.risk--high { color: var(--color-warn); }
+.risk--high .risk__mark { width: 12px; height: 11px; border: 0; border-radius: 0; background: var(--color-warn); color: var(--color-surface); clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 3px; }
+.risk--unknown .risk__mark { border-style: dashed; border-radius: 1px; }
+.risk-legend { display: flex; flex-direction: column; gap: var(--space-2); list-style: none; font-size: var(--text-xs); }
+.risk-legend li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: var(--space-2); align-items: baseline; }
+
+/* The permission matrix: groups of rows; each a check box (editor) or a granted
+   mark (read-only), the plain label, the id and the risk. High-risk rows carry
+   their reason and a warn edge, never colour alone. */
+.perm-matrix { display: flex; flex-direction: column; gap: var(--space-5); }
+.perm-group { min-width: 0; margin: 0; padding: 0; border: 0; }
+.perm-group__title { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2); padding: 0; color: var(--color-ink); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.perm-group__count { font-size: var(--text-xs); font-weight: var(--weight-regular); font-variant-numeric: tabular-nums; }
+.perm-list { display: flex; flex-direction: column; list-style: none; border-top: var(--border-width) solid var(--color-border); }
+.perm { border-bottom: var(--border-width) solid var(--color-border); }
+.perm--high { box-shadow: inset 2px 0 0 var(--color-warn); }
+.perm__row { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
+label.perm__row { cursor: pointer; }
+@media (hover: hover) { label.perm__row:hover { background: var(--color-surface-2); } }
+.perm__row input[type="checkbox"] { flex: none; width: 16px; height: 16px; margin-top: 2px; accent-color: var(--color-accent); }
+.perm__state { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--color-ink-3); }
+.perm--on .perm__state { color: var(--color-ok); }
+.perm--off .perm__label { color: var(--color-ink-3); }
+.perm__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.perm__label { color: var(--color-ink); font-size: var(--text-sm); }
+.perm__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
+.perm__id { color: var(--color-ink-3); font-size: var(--text-2xs); }
+.perm__why { color: var(--color-ink-2); font-size: var(--text-xs); max-width: 62ch; }
+.perm-matrix[aria-invalid="true"] .perm-list { border-top-color: var(--color-warn); }
+
+/* What a role can and cannot do, and the unsaved difference. */
+.role-summary { display: flex; flex-direction: column; gap: var(--space-4); }
+.role-summary__count { color: var(--color-ink); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.role-summary__high { display: flex; align-items: flex-start; gap: var(--space-2); color: var(--color-ink-2); font-size: var(--text-sm); }
+.role-summary__high .risk { margin-top: 3px; }
+.role-diff { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: var(--border-width) dashed var(--color-border-strong, var(--color-border)); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+.role-diff__title { color: var(--color-ink); font-weight: var(--weight-semibold); }
+.role-diff__list { display: flex; flex-direction: column; gap: var(--space-1); list-style: none; }
+.role-diff__list li { display: flex; gap: var(--space-2); }
+.role-diff__sign { flex: none; width: 1ch; font-family: var(--font-mono); font-weight: var(--weight-bold); }
+.role-diff__add .role-diff__sign { color: var(--color-ok); }
+.role-diff__remove { color: var(--color-ink-2); }
+
+/* Posture, accepted risk (round 6): a square with a bar, "Accepted risk". Known
+   and still present: a dashed edge, never the check of "looks right". */
+.pstatus--accepted .pstatus__mark, .pfig--accepted .pstatus__mark { border-radius: 3px; border: 1.5px solid var(--color-ink-2); color: var(--color-ink-2); }
+.pcheck--accepted { border-style: dashed; box-shadow: inset 3px 0 0 var(--color-border-strong, var(--color-ink-3)); }
+.pcheck__accepted { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-surface-2); font-size: var(--text-sm); }
+.pcheck__accepted .caps { margin-right: var(--space-1); }
+.pcheck__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.pcheck__why { margin-bottom: var(--space-3); font-size: var(--text-xs); }
+
+/* A notice from the organisation (the sign-in banner after sign-in): plain
+   text, dismissible, above the screen. */
+.notice-bar { display: flex; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: inset 2px 0 0 var(--color-accent); }
+.notice-bar > .icon { flex: none; margin-top: 2px; color: var(--color-ink-3); }
+.notice-bar__body { flex: 1; min-width: 0; }
+.notice-bar__title { color: var(--color-ink-3); font-size: var(--text-xs); }
+.notice-bar__text { max-width: 80ch; color: var(--color-ink); font-size: var(--text-sm); white-space: pre-line; overflow-wrap: anywhere; }
+@media (max-width: 719px) { .notice-bar { flex-wrap: wrap; } .notice-bar .btn { margin-left: calc(16px + var(--space-3)); } }
 
 /* Where an account comes from: filled square = configured (the file), ring with a
    dot = single sign-on (an outside provider), hollow diamond = managed here. */

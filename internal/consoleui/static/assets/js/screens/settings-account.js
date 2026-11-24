@@ -13,6 +13,8 @@ import {
 import { panel, kv, table, badge, chip, timeEl, copyable, banner, empty, toast, helpTip, failureState } from '../ui/components.js';
 import { confirmAction, keyReveal, formField, choices, errorSummary, wireForm, olderServerState } from '../ui/settings-kit.js';
 import { icon } from '../ui/icons.js';
+import { CATALOGUE, groupCatalogue, roleSummary, roleNameOf, isRoleId } from '../lib/perms.js';
+import { href } from '../lib/route.js';
 
 // "in 3 h" / "expired" for times ahead (sessions, keys).
 export function formatUntil(value, now = Date.now()) {
@@ -37,6 +39,8 @@ function profile(v) {
   const p = ctx.session?.principal || {};
   const who = me || { name: p.name, role: p.role, auth_method: p.auth_method, tenant: ctx.session?.tenant, tenants: ctx.session?.tenants || [] };
   const rt = roleText(who.role);
+  // A custom role (round 6) has no fixed text: its name from /me.
+  const roleLabel = me?.role_name || (rt.label !== 'Unknown role' ? rt.label : roleNameOf(who.role));
   const src = me ? sourceMeta(me.source) : null;
   const tenants = Array.isArray(who.tenants) ? who.tenants : [];
   v.hint = 'Read who you are signed in as and what your role allows. Your role and tenants are set by an admin, the config file or the identity provider.';
@@ -47,7 +51,7 @@ function profile(v) {
       ['Name', who.name || '—'],
       me ? ['Account id', copyable(me.id, { label: 'account id' })] : null,
       me ? ['Kind', kindLabel(me.kind)] : null,
-      ['Role', h('strong', null, rt.label)],
+      ['Role', h('span', { class: 'stack-tight' }, h('strong', null, roleLabel), isRoleId(who.role) && ctx.can?.('accounts.read') ? h('a', { href: href('settings', 'roles', who.role) }, 'Open the role') : null)],
       ['Tenants', tenants.length ? h('span', { class: 'chip-row' }, tenants.map((t) => chip(t, { mono: true }))) : '—'],
       ['Active tenant', who.tenant ? h('code', null, who.tenant) : '—'],
       ['Signed in with', authLabel(who.auth_method || 'token')],
@@ -57,7 +61,7 @@ function profile(v) {
       ctx.session?.expires_at ? ['This session expires', untilEl(ctx.session.expires_at)] : null,
     ]),
   });
-  const rolePanel = panel({
+  const rolePanel = Array.isArray(me?.permissions) ? permissionsPanel(me.permissions, roleLabel) : panel({
     title: `What the ${rt.label.toLowerCase()} role can do`,
     meta: rt.summary,
     body: h('div', { class: 'role-lists' },
@@ -69,6 +73,26 @@ function profile(v) {
     v.meMissing ? banner('info', 'This server does not provide account management yet', 'What is shown comes from your sign-in session. Update the server to see your account id, source and history, and to manage sessions and API keys.') : null,
     v.meError ? banner('warn', 'Your account details could not be loaded', `${describeError(v.meError).detail} What is shown comes from your sign-in session.`) : null,
     h('div', { class: ['grid', 'grid--2'] }, account, rolePanel));
+}
+
+// Your permissions in plain language, grouped as the catalogue groups them
+// (round 6, from /me.permissions). It explains; the server decides.
+function permissionsPanel(perms, roleLabel) {
+  const s = roleSummary(perms, CATALOGUE);
+  const groups = groupCatalogue(s.can);
+  return panel({
+    title: 'What your role allows',
+    meta: `${roleLabel}: ${s.can.length + s.unknown.length} of ${CATALOGUE.length} permissions`,
+    body: h('div', { class: 'stack' },
+      h('div', { class: 'perm-plain' }, groups.map((g) => h('div', { class: 'perm-plain__group' },
+        h('p', { class: 'caps' }, g.group),
+        h('ul', { class: ['role-list', 'role-list--can'] }, g.items.map((p) => h('li', null, icon('check', { size: 'sm' }), h('span', null, p.label))))))),
+      s.unknown.length ? h('p', { class: 'muted' }, 'Also: ', s.unknown.map((id, i) => [i ? ', ' : '', h('code', null, id)]), ' (permissions this console does not describe yet).') : null,
+      s.cannot.length ? h('details', { class: 'perm-plain__not' },
+        h('summary', null, `Not included (${s.cannot.length})`),
+        h('ul', { class: ['role-list', 'role-list--cannot'] }, s.cannot.map((p) => h('li', null, icon('close', { size: 'sm' }), h('span', null, p.label))))) : null,
+      h('p', { class: 'muted' }, 'The server checks every request against your role’s current permissions; this list explains them, it does not grant anything. A change to your role takes effect on your next request.')),
+  });
 }
 
 // ---- Preferences ----------------------------------------------------------------
@@ -146,11 +170,13 @@ export function sessionsTable(items, { onRevoke, showAccount = false, accountCel
       { label: 'Started', cell: (s) => timeEl(s.created_at, { relative: true }), sort: (s) => Date.parse(s.created_at) || null, sortFirst: 'desc' },
       { label: 'Last active', cell: (s) => timeEl(s.last_seen_at, { relative: true }), sort: (s) => Date.parse(s.last_seen_at) || null, sortFirst: 'desc' },
       { label: 'Expires', cell: (s) => h('span', { class: 'stack-tight' }, untilEl(s.expires_at), s.idle_expires_at ? h('span', { class: 'muted' }, 'idle ', untilEl(s.idle_expires_at)) : null) },
-      { label: 'Action', cell: (s) => (isSessionHandle(s.handle) ? h('button', {
+      // Without onRevoke (a principal that may not sign others out), the
+      // column says so instead of offering a button the server would refuse.
+      { label: 'Action', cell: (s) => (isSessionHandle(s.handle) && (onRevoke || s.current) ? h('button', {
         class: ['btn', 'btn--sm', s.current ? '' : 'btn--danger'], type: 'button',
         'aria-label': s.current ? 'Sign out of this browser' : `Revoke the session from ${s.client || 'an unknown client'} at ${s.remote || 'an unknown address'}`,
-        on: { click: (e) => onRevoke(s, e.currentTarget) },
-      }, s.current ? 'Sign out' : 'Revoke') : '—') },
+        on: { click: (e) => onRevoke?.(s, e.currentTarget) },
+      }, s.current ? 'Sign out' : 'Revoke') : h('span', { class: 'muted', title: 'Signing out other accounts needs the session management permission' }, '—')) },
     ].filter(Boolean),
     rows: items,
   });
@@ -234,7 +260,7 @@ export function keysTable(items, { onRevoke, caption = 'API keys' }) {
       { label: 'Created', cell: (k) => h('span', { class: 'stack-tight' }, timeEl(k.created_at, { relative: true }), k.created_by ? h('span', { class: 'muted' }, `by ${k.created_by}`) : null), sort: (k) => Date.parse(k.created_at) || null, sortFirst: 'desc' },
       { label: 'Expires', cell: (k) => (k.status === 'revoked' ? h('span', { class: 'stack-tight' }, h('span', null, 'revoked'), timeEl(k.revoked_at, { relative: true })) : untilEl(k.expires_at)), sort: (k) => Date.parse(k.expires_at) || null },
       { label: 'Last used', cell: (k) => (k.last_used_at ? timeEl(k.last_used_at, { relative: true }) : h('span', { class: 'muted' }, 'never')), sort: (k) => Date.parse(k.last_used_at) || null, sortFirst: 'desc' },
-      { label: 'Action', cell: (k) => (k.status === 'active' && isKeyId(k.id) ? h('button', {
+      { label: 'Action', cell: (k) => (k.status === 'active' && isKeyId(k.id) && onRevoke ? h('button', {
         class: ['btn', 'btn--sm', 'btn--danger'], type: 'button', 'aria-label': `Revoke key ${k.label}`, on: { click: () => onRevoke(k) },
       }, 'Revoke') : h('span', { class: 'muted' }, '—')) },
     ],

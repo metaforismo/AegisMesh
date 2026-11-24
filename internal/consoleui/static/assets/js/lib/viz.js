@@ -125,3 +125,41 @@ export const TOUR_KEY = 'aegismesh.tour';
 export function tourStepsFor(steps, isVisible) {
   return (Array.isArray(steps) ? steps : []).filter((s) => s && typeof s.target === 'string' && isVisible(s.target));
 }
+
+// Where the tour popover goes: never over the element it describes, and
+// as little as possible over the step's key content (`avoid`). Candidates:
+// below, above, right and left of the target, then docked to the bottom or
+// top of the viewport; each clamped inside the viewport with an 8px
+// margin. The first candidate with the least covered area wins (the target
+// weighs ten times the key content). Rects: { left, top, right, bottom }
+// in viewport pixels. Returns { left, top, side }.
+export function tourPlacement(target, box, viewport, avoid = [], gap = 10) {
+  const vw = viewport.width;
+  const vh = viewport.height;
+  const w = Math.min(box.width, vw - 16);
+  const hgt = Math.min(box.height, vh - 16);
+  const clampX = (x) => Math.max(8, Math.min(x, vw - w - 8));
+  const clampY = (y) => Math.max(8, Math.min(y, vh - hgt - 8));
+  const cands = [
+    ['below', target.left, target.bottom + gap],
+    ['above', target.left, target.top - hgt - gap],
+    ['right', target.right + gap, target.top],
+    ['left', target.left - w - gap, target.top],
+    ['dock-bottom', target.left, vh - hgt - 8],
+    ['dock-top', target.left, 8],
+  ];
+  const overlap = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  let best = null;
+  for (const [side, x0, y0] of cands) {
+    const left = clampX(x0);
+    const top = clampY(y0);
+    const r = { left, top, right: left + w, bottom: top + hgt };
+    // A candidate that had to move a long way to fit no longer sits beside
+    // its target; it is kept only as a fallback.
+    const moved = Math.abs(left - x0) > w / 2 || Math.abs(top - y0) > hgt / 2 ? 1 : 0;
+    const score = overlap(r, target) * 10 + avoid.reduce((n, a) => n + overlap(r, a), 0) + moved;
+    if (!best || score < best.score) best = { left: Math.round(left), top: Math.round(top), side, score };
+    if (score === 0) break;
+  }
+  return { left: best.left, top: best.top, side: best.side };
+}

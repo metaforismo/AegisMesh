@@ -1,3 +1,4 @@
+import { toCan } from '../static/assets/js/lib/perms.js';
 // Pure logic and rendering for the decoy and honeytoken catalogs, the
 // digest (lead sentences, figures, limits, Markdown export), the rule action
 // indicator, the server inter-arrival histogram and the Overview's empty
@@ -40,7 +41,7 @@ const DIGEST = {
 };
 
 function ctx(api, query = {}, role = 'analyst') {
-  return { role, can: (m) => roleAtLeast(role, m), route: { query, params: {} }, signal: undefined, navigate() {}, rerender() {}, api };
+  return { role, can: toCan(role), route: { query, params: {} }, signal: undefined, navigate() {}, rerender() {}, api };
 }
 const find = (root, pred) => root.querySelectorAll(pred);
 const cls = (el) => String(el.getAttribute('class') || '').split(' ');

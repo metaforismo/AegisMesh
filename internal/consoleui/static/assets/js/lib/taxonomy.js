@@ -67,6 +67,9 @@ export const AUDIT_ACTIONS = Object.freeze([
   // Round 5: accounts, keys, sessions, preferences, audit export.
   'account.create', 'account.update', 'key.create', 'key.revoke',
   'session.revoke', 'preferences.update', 'audit.export',
+  // Round 6: custom roles, console settings, accepted posture risk.
+  'role.create', 'role.update', 'role.delete', 'settings.update', 'settings.revert',
+  'posture.accept', 'posture.unaccept',
 ]);
 
 export function roleAtLeast(role, minimum) {

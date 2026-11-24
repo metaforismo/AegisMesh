@@ -222,6 +222,18 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     allSessions: (opts) => get('/admin/sessions', undefined, opts),
     revokeAnySession: (handle) => request('DELETE', `/admin/sessions/${seg(handle)}`),
     adminSettings: (opts) => get('/admin/settings', undefined, opts),
+    // Round 6: permissions, custom roles, editable settings, accepted risk.
+    permissions: (opts) => get('/permissions', undefined, opts),
+    roles: (opts) => get('/admin/roles', undefined, opts),
+    role: (id, opts) => get(`/admin/roles/${seg(id)}`, undefined, opts),
+    createRole: (body) => request('POST', '/admin/roles', { body }),
+    updateRole: (id, body) => request('PATCH', `/admin/roles/${seg(id)}`, { body }),
+    deleteRole: (id) => request('DELETE', `/admin/roles/${seg(id)}`),
+    updateSetting: (key, body) => request('PUT', `/admin/settings/${seg(key)}`, { body }),
+    revertSetting: (key) => request('DELETE', `/admin/settings/${seg(key)}`),
+    settingsHistory: (key, opts) => get('/admin/settings/history', key ? { key } : undefined, opts),
+    acceptPosture: (id, body) => request('POST', `/posture/${seg(id)}/accept`, { body }),
+    unacceptPosture: (id) => request('DELETE', `/posture/${seg(id)}/accept`),
     system: (opts) => get('/system', undefined, opts),
     // Audited download of the whole audit chain (or since a time).
     exportAudit: (format, since, opts) => get('/admin/audit/export', { format, since }, { ...opts, raw: true }),

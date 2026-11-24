@@ -65,7 +65,7 @@ export default {
     });
 
     let revoke = null;
-    if (ctx.can('admin') && !revoked) {
+    if (ctx.can('fleet.manage') && !revoked) {
       revoke = h('button', { class: ['btn', 'btn--danger'], type: 'button' }, 'Revoke node');
       revoke.addEventListener('click', async () => {
         const updated = await revokeDialog(ctx, n);

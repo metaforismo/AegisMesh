@@ -5,6 +5,7 @@
 import { CLASSIFICATIONS, SENSOR_KINDS, SEVERITIES, WINDOWS, INVESTIGATION_STATUSES, AUDIT_ACTIONS, severityRank } from './taxonomy.js';
 import { isNodeFilter, matchesNodeFilter } from './origin.js';
 import { isSectionId, isAccountId } from './settings.js';
+import { isRoleId } from './perms.js';
 
 const EVENT_ID = /^[0-9a-f]{32}$/;
 const OPAQUE_ID = /^[A-Za-z0-9_.-]{1,128}$/;
@@ -102,6 +103,8 @@ const ROUTES = [
   { name: 'settings', pattern: ['settings'] },
   { name: 'settings', pattern: ['settings', ':section'], valid: (p) => isSectionId(p.section) },
   { name: 'settings_account', pattern: ['settings', 'accounts', ':id'], valid: (p) => isAccountId(p.id) },
+  // A role by id (built-in names or role_<12 hex>), or `new` for the editor.
+  { name: 'settings_role', pattern: ['settings', 'roles', ':id'], valid: (p) => isRoleId(p.id) || p.id === 'new' },
   { name: 'login', pattern: ['login'] },
 ];
 

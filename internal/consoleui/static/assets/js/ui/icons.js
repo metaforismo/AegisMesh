@@ -54,6 +54,12 @@ const PATHS = {
   'rows-dense': 'M3 2.5h10M3 5.5h10M3 8h10M3 10.5h10M3 13.5h10',
   shield: 'M8 1.5l5.5 2.1v4.2c0 3.3-2.3 5.9-5.5 6.7-3.2-.8-5.5-3.4-5.5-6.7V3.6zM5.6 8l1.7 1.7 3.2-3.2',
   plus: 'M8 3v10M3 8h10',
+  // Lock: sign-in and session security.
+  lock: `${rrect(3.25, 7, 9.5, 7, 1.5)}M5.5 7V5a2.5 2.5 0 0 1 5 0v2M8 9.75v1.5`,
+  // Role: a badge with a check row (what a role permits).
+  role: `${rrect(2.75, 2.25, 10.5, 11.5, 1.75)}M5.25 5.75h5.5M5.25 8.25h5.5M5.25 10.75h3`,
+  // History: a clock with a return arrow (what changed before).
+  history: 'M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.25 2.75v2.5h2.5M8 5v3l2 1.25',
   clock: `${circle(8, 8, 6.25)}M8 4.5V8l2.25 1.5`,
   link: 'M6.6 9.4l2.8-2.8M7.2 4.6l1.1-1.1a2.75 2.75 0 0 1 3.9 3.9l-1.1 1.1M8.8 11.4l-1.1 1.1a2.75 2.75 0 0 1-3.9-3.9l1.1-1.1',
   'corner-down': 'M3 3v5.5a1.5 1.5 0 0 0 1.5 1.5H13M10 7l3 3-3 3',

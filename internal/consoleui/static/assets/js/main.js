@@ -14,7 +14,7 @@
 
 import { createApi, ApiError, screenFailure, describeError } from './lib/api.js';
 import { parseHash, viewKey } from './lib/route.js';
-import { roleAtLeast } from './lib/taxonomy.js';
+import { permissionsOf, toCan, ROUTE_PERMS, BUILTIN_PERMS } from './lib/perms.js';
 import { h, clear } from './lib/dom.js';
 import { createSwr, abortable } from './lib/swr.js';
 import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
@@ -37,7 +37,7 @@ const loadPalette = () => {
   return paletteModule;
 };
 const loadLogin = () => import('./screens/login.js');
-const toggleShortcuts = () => loadPalette().then((m) => m.toggleShortcuts(state.session?.principal?.role));
+const toggleShortcuts = () => loadPalette().then((m) => m.toggleShortcuts(state.can));
 
 applyRail();
 
@@ -45,6 +45,10 @@ const appRoot = document.getElementById('app');
 const state = {
   session: null,
   meta: null,
+  // Who is signed in (`/me`, null on an older server) and what they may do.
+  // Drawing the interface from it is a convenience: the server decides.
+  me: null,
+  can: () => false,
   shell: null,
   controller: null,
   cleanup: null,
@@ -91,6 +95,60 @@ async function syncPrefs() {
   if ((before.timezone !== after.timezone || before.default_window !== after.default_window) && state.current) render({ soft: true });
 }
 
+// What the signed-in principal may do: `/me.permissions` on a round-6
+// server, the built-in role's fixed set on an older one. When `/me` fails
+// for another reason and the role is not a built-in, nothing is hidden: the
+// server still refuses what the role does not allow, and every screen
+// handles that 403.
+async function loadAccess() {
+  const role = state.session?.principal?.role || '';
+  try {
+    state.me = await rawApi.me();
+    state.can = toCan(permissionsOf(state.me, state.session));
+  } catch (err) {
+    state.me = null;
+    if (err instanceof ApiError && err.status === 401) throw err;
+    state.can = isMissingEndpoint(err) || BUILTIN_PERMS[role] ? toCan(permissionsOf(null, state.session)) : () => true;
+  }
+}
+
+// The organisation name and sign-in banner come from /meta (round 6) and
+// can change from Settings; a change there refreshes them.
+async function refreshMeta() {
+  try {
+    state.meta = await rawApi.meta();
+  } catch {
+    return;
+  }
+  state.shell?.setOrganization(state.meta?.organization_name);
+}
+
+// The sign-in banner, once per console session after sign-in: remembered in
+// this tab's session storage under the session's expiry, which a tenant
+// switch keeps. Plain text, dismissible.
+const BANNER_KEY = 'aegismesh.banner-seen';
+function bannerSeenKey() {
+  return `${state.session?.principal?.name || ''}|${state.session?.expires_at || ''}`;
+}
+function maybeShowBanner() {
+  const text = typeof state.meta?.sign_in_banner === 'string' ? state.meta.sign_in_banner.trim() : '';
+  if (!text || !state.shell) return;
+  let seen = '';
+  try {
+    seen = globalThis.sessionStorage?.getItem(BANNER_KEY) || '';
+  } catch {
+    // Storage unavailable: show it; dismissing still hides it for this page.
+  }
+  if (seen === bannerSeenKey()) return;
+  state.shell.showNotice(text, () => {
+    try {
+      globalThis.sessionStorage?.setItem(BANNER_KEY, bannerSeenKey());
+    } catch {
+      // Not remembered beyond this page.
+    }
+  });
+}
+
 // ---- Cached API ---------------------------------------------------------------
 
 // Read-only GETs safe to cache and prefetch, with their positional arity
@@ -108,7 +166,8 @@ const CURSOR_ARG = { events: 1, source: 1, sessions: 2 }; // later pages are nev
 // with every write on the settings screens and must show the server's state.
 const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'switchTenant', 'audit', 'verifyAudit', 'enrollmentTokens',
   'exportIndicators', 'sessionReport', 'investigationReport', 'exportEvents',
-  'me', 'preferences', 'mySessions', 'myKeys', 'accounts', 'account', 'allSessions', 'adminSettings', 'system', 'exportAudit']);
+  'me', 'preferences', 'mySessions', 'myKeys', 'accounts', 'account', 'allSessions', 'adminSettings', 'system', 'exportAudit',
+  'permissions', 'roles', 'role', 'settingsHistory']);
 
 const nav = { back: false, used: new Set() };
 const swr = createSwr({
@@ -164,7 +223,7 @@ function prefetchRoute(hash) {
   if (!state.session) return;
   const route = parseHash(hash);
   const screen = SCREENS[route.name];
-  if (!screen || (screen.role && !roleAtLeast(state.session.principal?.role, screen.role))) return;
+  if (!screen || (ROUTE_PERMS[route.name] && !state.can(ROUTE_PERMS[route.name]))) return;
   screen.load().catch(() => {});
   try {
     screen.prefetch?.(prefetchApi, route);
@@ -268,6 +327,8 @@ function endSession(notice) {
   swr.invalidate();
   state.session = null;
   state.shell = null;
+  state.me = null;
+  state.can = () => false;
   state.notice = notice || '';
   prefs.reset();
   rawApi.forgetSession();
@@ -286,9 +347,14 @@ async function logout() {
   endSession('You signed out.');
 }
 
-function onLogin(session) {
+async function onLogin(session) {
   state.session = session;
   state.notice = '';
+  try {
+    await loadAccess();
+  } catch {
+    return; // 401: the session ended between sign-in and /me.
+  }
   const target = state.returnTo && parseHash(state.returnTo).name !== 'login' ? state.returnTo : '#/overview';
   state.returnTo = '';
   state.firstRender = true;
@@ -330,6 +396,12 @@ async function switchTenant(target) {
   swr.invalidate();
   state.session = session;
   state.shell = null;
+  try {
+    await loadAccess();
+  } catch {
+    switchingTenant = false;
+    return;
+  }
   state.firstRender = true; // a context change, not a navigation: no transition
   const { hash, reason } = routeAfterSwitch(parseHash(location.hash), location.hash);
   if (hash !== location.hash) history.replaceState(null, '', hash);
@@ -349,7 +421,7 @@ async function openPalette() {
   const { togglePalette } = await loadPalette();
   togglePalette({
     api,
-    role: state.session.principal?.role,
+    can: state.can,
     tenant: tenantInfo(state.session).active || 'default',
     navigate: (target) => { location.hash = target; },
     actions: [
@@ -359,10 +431,11 @@ async function openPalette() {
       { label: 'Preferences', icon: 'settings', hint: 'Time zone, default window, density, theme, motion', keywords: ['settings', 'timezone', 'utc', 'local', 'density', 'motion'], recentId: 'preferences', run: (p) => p.navigate('#/settings/preferences') },
       { label: 'Manage API keys', icon: 'key', hint: 'Create or revoke your keys', keywords: ['settings', 'token', 'api key', 'automation'], recentId: 'keys', run: (p) => p.navigate('#/settings/keys') },
       { label: 'Your sessions', icon: 'devices', hint: 'Where your account is signed in', keywords: ['settings', 'sign out', 'revoke', 'devices'], recentId: 'my-sessions', run: (p) => p.navigate('#/settings/sessions') },
-      ...(state.session.principal?.role === 'admin' ? [
-        { label: 'Manage accounts', icon: 'users', hint: 'Administration', keywords: ['settings', 'users', 'access', 'admin'], recentId: 'accounts', run: (p) => p.navigate('#/settings/accounts') },
-        { label: 'Export the audit trail', icon: 'audit', hint: 'Administration', keywords: ['settings', 'audit', 'download', 'csv', 'jsonl'], recentId: 'audit-export', run: (p) => p.navigate('#/settings/audit-export') },
-      ] : []),
+      { label: 'Manage accounts', icon: 'users', hint: 'Administration', perm: 'accounts.read', keywords: ['settings', 'users', 'access', 'admin'], recentId: 'accounts', run: (p) => p.navigate('#/settings/accounts') },
+      { label: 'Roles and permissions', icon: 'shield', hint: 'Administration', perm: 'accounts.read', keywords: ['settings', 'roles', 'permissions', 'access', 'admin'], recentId: 'roles', run: (p) => p.navigate('#/settings/roles') },
+      { label: 'Console settings', icon: 'settings', hint: 'Organisation name, sign-in banner, defaults', perm: 'settings.read', keywords: ['settings', 'organisation', 'organization', 'banner', 'branding'], recentId: 'console-settings', run: (p) => p.navigate('#/settings/console') },
+      { label: 'Settings change history', icon: 'audit', hint: 'Who changed which setting, and why', perm: 'settings.read', keywords: ['settings', 'history', 'changes'], recentId: 'settings-history', run: (p) => p.navigate('#/settings/history') },
+      { label: 'Export the audit trail', icon: 'audit', hint: 'Administration', perm: 'audit.export', keywords: ['settings', 'audit', 'download', 'csv', 'jsonl'], recentId: 'audit-export', run: (p) => p.navigate('#/settings/audit-export') },
       ...switchTargets(state.session).map((t) => ({
         label: `Switch tenant: ${t}`, icon: 'tenant', hint: `Act in tenant ${t}`, keywords: ['tenant', 'switch', t],
         run: () => switchTenant(t),
@@ -414,7 +487,7 @@ async function render({ soft = false } = {}) {
 
   if (!state.shell) {
     teardownScreen();
-    state.shell = createShell({ session: state.session, meta: state.meta, onLogout: logout, onSearch: openPalette, onSwitchTenant: switchTenant });
+    state.shell = createShell({ session: state.session, meta: state.meta, me: state.me, can: state.can, onLogout: logout, onSearch: openPalette, onSwitchTenant: switchTenant });
     clear(appRoot);
     appRoot.appendChild(state.shell.root);
     const prefetchFrom = (e) => {
@@ -424,11 +497,13 @@ async function render({ soft = false } = {}) {
     };
     state.shell.root.addEventListener('pointerover', prefetchFrom, { passive: true });
     state.shell.root.addEventListener('focusin', prefetchFrom);
+    maybeShowBanner();
   }
   const shell = state.shell;
   const role = state.session.principal?.role;
   let screen = SCREENS[route.name] || notFoundScreen;
-  if (screen.role && !roleAtLeast(role, screen.role)) screen = forbiddenScreen;
+  const needed = ROUTE_PERMS[route.name] || '';
+  if (needed && !state.can(needed)) screen = forbiddenScreen;
 
   // Same view, only an overlay parameter changed (e.g. the event drawer).
   const key = viewKey(route, screen.viewIgnore || []);
@@ -458,7 +533,13 @@ async function render({ soft = false } = {}) {
     route,
     session: state.session,
     role,
-    can: (minimum) => roleAtLeast(role, minimum),
+    roleName: state.me?.role_name || '',
+    me: state.me,
+    // can('investigations.write'): what the signed-in principal may do.
+    can: state.can,
+    needed,
+    meta: state.meta,
+    refreshMeta,
     signal: controller.signal,
     liveSlot: shell.liveSlot,
     navigate: (target) => { location.hash = target; },
@@ -579,7 +660,14 @@ async function boot() {
         : '';
     }
   }
-  if (state.session) syncPrefs();
+  if (state.session) {
+    try {
+      await loadAccess();
+    } catch {
+      // 401: the API client already ended the session.
+    }
+    syncPrefs();
+  }
   installPeek();
   document.addEventListener('keydown', () => { lastInput = { kind: 'keyboard', at: performance.now() }; }, true);
   document.addEventListener('pointerdown', () => { lastInput = { kind: 'pointer', at: performance.now() }; }, true);

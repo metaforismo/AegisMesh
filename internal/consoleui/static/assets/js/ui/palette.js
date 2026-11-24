@@ -9,7 +9,8 @@ import { h, clear } from '../lib/dom.js';
 import { href, isEventId, isOpaqueId } from '../lib/route.js';
 import { rankItems, highlightRuns } from '../lib/palette.js';
 import { moveIndex } from '../lib/keys.js';
-import { roleAtLeast, capitalize } from '../lib/taxonomy.js';
+import { capitalize } from '../lib/taxonomy.js';
+import { toCan, ROUTE_PERMS } from '../lib/perms.js';
 import { icon } from './icons.js';
 import { nodeFilterTargets } from '../lib/origin.js';
 import { NAV, isApple } from './shell.js';
@@ -32,11 +33,11 @@ const storage = () => {
 };
 const recentKey = (r) => (r ? `${r.kind}:${r.id}` : '');
 
-function screenItems(role) {
+function screenItems(can) {
   const out = [];
   for (const g of NAV) {
     for (const i of g.items) {
-      if (i.role && !roleAtLeast(role, i.role)) continue;
+      if (!can(ROUTE_PERMS[i.route])) continue;
       out.push({ group: 'Go to', label: i.label, icon: i.icon, hint: i.keys || g.group, weight: 60, run: (p) => p.navigate(i.href), keywords: [g.group], recent: { kind: 'screen', id: i.route } });
     }
   }
@@ -128,7 +129,7 @@ function guideItems() {
 
 let openPalette = null;
 
-// p: { api, role, navigate, actions: [{ label, icon, hint, run, role? }] }
+// p: { api, can, navigate, actions: [{ label, icon, hint, run, perm? }] }
 export function togglePalette(p) {
   if (openPalette) {
     openPalette.close();
@@ -136,8 +137,8 @@ export function togglePalette(p) {
   }
   const controller = new AbortController();
   const base = [
-    ...screenItems(p.role),
-    ...p.actions.filter((a) => !a.role || roleAtLeast(p.role, a.role)).map((a) => ({ group: 'Actions', weight: 40, recent: a.recentId ? { kind: 'action', id: a.recentId } : null, ...a })),
+    ...screenItems(toCan(p.can ?? p.role)),
+    ...p.actions.filter((a) => toCan(p.can ?? p.role)(a.perm)).map((a) => ({ group: 'Actions', weight: 40, recent: a.recentId ? { kind: 'action', id: a.recentId } : null, ...a })),
     ...guideItems(),
   ];
   let recents = loadRecents(storage(), p.tenant);
@@ -319,9 +320,11 @@ export function togglePalette(p) {
 
 // The "go to" rows come from NAV, so the sheet lists exactly the
 // g-sequences the router binds (main.js builds them from the same list).
-export function shortcutGroups(role) {
+// `who` is a permission predicate, a set, or a built-in role name.
+export function shortcutGroups(who) {
+  const can = toCan(who);
   const go = NAV.flatMap((g) => g.items)
-    .filter((i) => i.keys && (!i.role || roleAtLeast(role, i.role)))
+    .filter((i) => i.keys && can(ROUTE_PERMS[i.route]))
     .map((i) => [i.keys.split(' '), `Go to ${i.label}`]);
   return [
     { title: 'Anywhere', keys: [
@@ -361,7 +364,7 @@ export const SHORTCUTS = shortcutGroups('admin');
 
 let sheetOpen = null;
 
-export function toggleShortcuts(role = 'admin') {
+export function toggleShortcuts(who = 'admin') {
   if (sheetOpen) {
     sheetOpen.close();
     return;
@@ -370,7 +373,7 @@ export function toggleShortcuts(role = 'admin') {
   const close = h('button', { class: ['btn', 'btn--ghost', 'btn--icon', 'btn--sm'], type: 'button', 'aria-label': 'Close' }, icon('close'));
   const dialog = h('dialog', { class: ['dialog', 'dialog--wide'], 'aria-labelledby': 'keys-title' },
     h('div', { class: 'dialog__head' }, h('h2', { id: 'keys-title' }, 'Keyboard shortcuts'), close),
-    h('div', { class: ['dialog__body', 'keys'] }, shortcutGroups(role).map((s) => h('section', null,
+    h('div', { class: ['dialog__body', 'keys'] }, shortcutGroups(who).map((s) => h('section', null,
       h('h3', null, s.title),
       h('dl', null, s.keys.map(([combo, what]) => [
         h('dt', null, what),

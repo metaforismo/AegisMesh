@@ -10,6 +10,7 @@ import { h, mount } from '../lib/dom.js';
 import { normalizeWindow, normalizeEventFilters, normalizeStatus, normalizeSessionFilters } from '../lib/route.js';
 import { normalizeDigestWindow } from '../lib/catalogs.js';
 import { pageHead, panel, empty, link } from '../ui/components.js';
+import { missingText } from '../lib/perms.js';
 
 function lazy(title, loader, extra = {}) {
   let mod = null;
@@ -54,7 +55,7 @@ export const SCREENS = Object.freeze({
   investigation: lazy('Investigation', () => import('./investigation.js')),
   // No prefetch: reading the audit trail is itself an audited action, so it
   // is only ever requested when the operator actually opens the page.
-  audit: lazy('Audit trail', () => import('./audit.js'), { role: 'admin', skeleton: 'table' }),
+  audit: lazy('Audit trail', () => import('./audit.js'), { skeleton: 'table' }),
   fleet: lazy('Fleet', () => import('./fleet.js'), { skeleton: 'table' }),
   fleet_node: lazy('Fleet node', () => import('./fleet-node.js'), { skeleton: 'kv' }),
   // The guide's `t` (the term in focus) scrolls within the open screen.
@@ -97,6 +98,7 @@ export const SCREENS = Object.freeze({
   // prefetched.
   settings: lazy('Settings', () => import('./settings.js'), { skeleton: 'settings' }),
   settings_account: lazy('Account', () => import('./settings.js'), { skeleton: 'settings' }),
+  settings_role: lazy('Role', () => import('./settings.js'), { skeleton: 'settings' }),
   posture: lazy('Posture', () => import('./posture.js'), {
     skeleton: 'posture',
     prefetch: (api) => { api.posture(); },
@@ -117,6 +119,6 @@ export const forbiddenScreen = {
   render(root, ctx) {
     mount(root,
       pageHead({ title: 'Not permitted' }),
-      panel({ body: empty('Your role cannot open this page', `You are signed in as ${ctx.role || 'unknown'}. The audit trail requires the admin role.`, h('a', { href: '#/overview' }, 'Go to the overview'), { icon: 'shield' }) }));
+      panel({ body: empty('Your role cannot open this page', `You are signed in as ${ctx.roleName || ctx.role || 'unknown'}. ${missingText(ctx.needed)} Ask someone who manages roles if you need it; your profile lists what your role allows.`, h('a', { href: '#/settings/profile' }, 'See what your role allows'), { icon: 'shield' }) }));
   },
 };

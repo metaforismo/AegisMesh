@@ -6,6 +6,52 @@ import { formatCount, shortId } from '../lib/format.js';
 import { waveDelays } from '../lib/chart.js';
 import { pageHead, panel, table, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable, evidence, timeEl } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
+import { parseAuditDetail, formatSettingRaw, settingLabel, isSettingKey } from '../lib/settings.js';
+import { permissionLabel, isRoleId } from '../lib/perms.js';
+
+// Actions grouped for the filter, each with words beside its code.
+export const ACTION_GROUPS = [
+  ['Sign-in and sessions', { 'session.login': 'Signed in', 'session.login_failed': 'Sign-in failed', 'session.logout': 'Signed out', 'session.oidc_login': 'Signed in with single sign-on', 'session.oidc_denied': 'Single sign-on refused', 'session.tenant_switch': 'Switched tenant', 'session.revoke': 'Revoked a session' }],
+  ['Access', { 'account.create': 'Created an account', 'account.update': 'Changed an account', 'key.create': 'Created an API key', 'key.revoke': 'Revoked an API key', 'role.create': 'Created a role', 'role.update': 'Changed a role', 'role.delete': 'Deleted a role', 'authz.denied': 'Refused: not permitted' }],
+  ['Settings and posture', { 'settings.update': 'Changed a setting', 'settings.revert': 'Reverted a setting', 'posture.accept': 'Accepted a posture risk', 'posture.unaccept': 'Revoked a risk acceptance', 'preferences.update': 'Changed own preferences' }],
+  ['Investigations', { 'investigation.create': 'Opened an investigation', 'investigation.update': 'Changed an investigation', 'investigation.note': 'Added a note', 'investigation.attach': 'Attached evidence', 'investigation.detach': 'Detached evidence' }],
+  ['Evidence out', { 'event.read': 'Read an event', 'export.indicators': 'Exported indicators', 'export.events': 'Exported events', 'session.report': 'Downloaded a session report', 'investigation.report': 'Downloaded an investigation report' }],
+  ['Audit', { 'audit.read': 'Read the audit trail', 'audit.verify': 'Verified the chain', 'audit.export': 'Exported the audit trail' }],
+  ['Fleet', { 'fleet.token.create': 'Created an enrollment token', 'fleet.token.delete': 'Deleted an enrollment token', 'fleet.node.enroll': 'Enrolled a node', 'fleet.node.revoke': 'Revoked a node', 'fleet.node.rejected': 'Refused a node' }],
+];
+const ACTION_WORDS = Object.assign({}, ...ACTION_GROUPS.map(([, m]) => m));
+
+// A structured detail (round 6) as words: a setting's from → to and its
+// reason; a role's name and permissions; an acceptance's end and reason.
+// Anything else, or a detail that does not parse, is shown as written.
+export function structuredDetail(r) {
+  const d = parseAuditDetail(r.detail);
+  if (!d) return null;
+  if ((r.action === 'settings.update' || r.action === 'settings.revert') && ('from' in d || 'to' in d)) {
+    const item = { key: isSettingKey(r.target) ? r.target : '' };
+    return h('div', { class: 'audit-change' },
+      h('p', { class: 'change' },
+        item.key ? h('span', { class: 'change__key' }, `${settingLabel(item.key)}: `) : null,
+        h('span', { class: 'change__from' }, formatSettingRaw(item, d.from ?? '')),
+        h('span', { class: 'change__arrow', 'aria-hidden': 'true' }, ' → '),
+        h('span', { class: 'visually-hidden' }, ' to '),
+        h('span', { class: 'change__to' }, formatSettingRaw(item, d.to ?? ''))),
+      d.reason ? h('p', { class: 'change__reason' }, h('span', { class: 'caps' }, 'Reason'), ' ', d.reason) : null,
+      item.key ? h('a', { class: 'audit-change__link', href: href('settings', 'history', { key: item.key }) }, 'Change history') : null);
+  }
+  if (r.action?.startsWith('role.') && ('name' in d || 'permissions' in d)) {
+    const perms = typeof d.permissions === 'string' && d.permissions ? d.permissions.split(',') : [];
+    return h('div', { class: 'audit-change' },
+      d.name ? h('p', null, h('span', { class: 'caps' }, 'Role'), ' ', isRoleId(r.target) && r.action !== 'role.delete' ? h('a', { href: href('settings', 'roles', r.target) }, d.name) : d.name) : null,
+      perms.length ? h('p', { class: 'muted', title: perms.join(', ') }, `${perms.length} permission${perms.length === 1 ? '' : 's'}: `, perms.slice(0, 4).map((p) => permissionLabel(p).toLowerCase()).join('; '), perms.length > 4 ? `; and ${perms.length - 4} more` : '') : null);
+  }
+  if (r.action?.startsWith('posture.') && ('until' in d || 'reason' in d)) {
+    return h('div', { class: 'audit-change' },
+      d.until ? h('p', null, h('span', { class: 'caps' }, 'Until'), ' ', timeEl(d.until)) : null,
+      d.reason ? h('p', { class: 'change__reason' }, h('span', { class: 'caps' }, 'Reason'), ' ', d.reason) : null);
+  }
+  return null;
+}
 
 const PAGE = 100;
 const OUTCOME = { ok: 'ok', denied: 'warn', error: 'danger' };
@@ -58,7 +104,7 @@ function chainView(records) {
 function detailCell(r) {
   const issuer = typeof r.issuer === 'string' ? r.issuer : '';
   const subject = typeof r.subject === 'string' ? r.subject : '';
-  if (!issuer && !subject) return r.detail || '—';
+  if (!issuer && !subject) return structuredDetail(r) || r.detail || '—';
   return h('div', { class: 'audit-detail' },
     r.detail ? h('span', null, r.detail) : null,
     h('dl', { class: 'audit-claims' },
@@ -74,9 +120,20 @@ function chainLegend() {
     h('span', { class: 'is-beyond' }, h('i'), 'After the break'));
 }
 
+// The action filter, grouped, every action with its words.
+function actionSelect(value) {
+  const known = new Set(ACTION_GROUPS.flatMap(([, m]) => Object.keys(m)));
+  const rest = AUDIT_ACTIONS.filter((a) => !known.has(a));
+  return h('div', { class: 'field' },
+    h('label', { class: 'field__label', for: 'f-action' }, 'Action'),
+    h('select', { class: 'select', id: 'f-action', name: 'action' },
+      h('option', { value: '', selected: !value }, 'Any'),
+      ACTION_GROUPS.map(([group, m]) => h('optgroup', { label: group }, Object.entries(m).filter(([a]) => AUDIT_ACTIONS.includes(a)).map(([a, w]) => h('option', { value: a, selected: a === value }, `${w} (${a})`)))),
+      rest.length ? h('optgroup', { label: 'Other' }, rest.map((a) => h('option', { value: a, selected: a === value }, a))) : null));
+}
+
 export default {
   title: 'Audit trail',
-  role: 'admin',
   async render(root, ctx) {
     const filters = normalizeAuditFilters(ctx.route.query);
     const tenants = tenantInfo(ctx.session);
@@ -98,7 +155,7 @@ export default {
           { label: 'Seq', num: true, cell: (r) => String(r.seq) },
           { label: 'Time', className: 'nowrap', cell: (r) => timeEl(r.time, { relative: true }) },
           { label: 'Actor', cell: (r) => h('span', null, r.actor || '—', ' ', h('span', { class: 'chip' }, labelFor(r.role || '—'))) },
-          { label: 'Action', cell: (r) => h('code', null, r.action) },
+          { label: 'Action', cell: (r) => h('span', { class: 'stack-tight' }, h('code', null, r.action), ACTION_WORDS[r.action] ? h('span', { class: 'muted' }, ACTION_WORDS[r.action]) : null) },
           { label: 'Target', cell: (r) => (r.target ? h('code', null, r.target) : '—') },
           { label: 'Outcome', cell: (r) => badge(OUTCOME[r.outcome] || 'neutral', labelFor(r.outcome || 'unknown')) },
           { label: 'Remote', cell: (r) => h('code', null, r.remote || '—') },
@@ -148,7 +205,7 @@ export default {
     });
 
     const form = h('form', { class: 'filters filters--compact' },
-      selectField({ label: 'Action', name: 'action', value: filters.action || '', options: [['', 'Any'], ...AUDIT_ACTIONS.map((a) => [a, a])] }),
+      actionSelect(filters.action || ''),
       inputField({ label: 'Actor', name: 'actor', value: filters.actor || '', mono: true, maxlength: 64 }),
       h('div', { class: ['btn-row', 'filters__actions'] }, h('button', { class: ['btn', 'btn--primary'], type: 'submit' }, 'Apply'), h('a', { class: 'btn', href: '#/audit' }, 'Clear')));
     form.addEventListener('submit', (e) => {
@@ -159,7 +216,7 @@ export default {
     mount(root,
       pageHead({
         title: 'Audit trail',
-        subtitle: `Append-only, hash-chained record of console sign-ins, tenant switches, investigation changes and fleet administration. Reading it is itself audited.${tenants.show ? ` Each tenant keeps its own chain; this is the chain of tenant ${tenants.active}.` : ''}`,
+        subtitle: `Append-only, hash-chained record of console sign-ins, tenant switches, account, role and setting changes, investigation changes and fleet administration. Reading it is itself audited.${tenants.show ? ` Each tenant keeps its own chain; this is the chain of tenant ${tenants.active}.` : ''}`,
         hint: 'Verify the chain, then filter by action or actor to see who did what.',
       }),
       panel({ title: 'Chain integrity', actions: verifyBtn, body: verifySlot }),

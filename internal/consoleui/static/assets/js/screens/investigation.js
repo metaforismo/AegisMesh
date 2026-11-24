@@ -17,7 +17,7 @@ export default {
     const id = ctx.route.params.id;
     const inv = await ctx.api.investigation(id, { signal: ctx.signal });
     ctx.setTitle?.(inv?.title || '');
-    const canWrite = ctx.can('analyst');
+    const canWrite = ctx.can('investigations.write');
     const events = Array.isArray(inv.events) ? inv.events : [];
     const indexed = new Set(events.map((e) => e.id));
     let eventIds = [...(inv.event_ids || [])];
