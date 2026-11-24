@@ -124,7 +124,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
   // Like the server: a configured operator reads "disabled" while token
   // sign-in is off; only managed accounts are editable.
   const publicAccount = (a, sessionsMap) => ({
-    id: a.id, name: a.name, kind: a.kind, source: a.source, role: a.role, tenants: [...a.tenants],
+    id: a.id, name: a.name, kind: a.kind, source: a.source, role: a.role, ...(round6 ? { role_name: R.nameOf(a.role) } : {}), tenants: [...a.tenants],
     status: a.source === 'config' && !tokenLogin ? 'disabled' : a.status,
     created_at: a.created_at, created_by: a.created_by, updated_at: a.updated_at ?? null, last_seen_at: a.last_seen_at,
     editable: a.source === 'managed',
@@ -195,7 +195,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
       if (round6 && EDITABLE[key]) return overlay.item(key);
       const base = { key, label, value, kind, source, editable: false, note };
       if (round6 && key === 'posture.accepted') return { ...base, editable: true, effective: String(ctx.acceptedCount ?? 0), file_value: '', overridden: false, constraints: { max_days: 180 }, applies: 'live' };
-      return round6 ? { ...base, effective: String(value), file_value: source === 'runtime' ? '' : String(value), overridden: false, constraints: {}, applies: 'restart' } : base;
+      return round6 ? { ...base, effective: String(value), file_value: source === 'runtime' ? '' : String(value), overridden: false, constraints: {}, applies: source === 'runtime' ? 'none' : 'restart' } : base;
     };
     const file = 'Change in the config file and restart.';
     const body = {
@@ -466,6 +466,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
           { id: 'sensors', status: 'degraded', detail: '5 of 6 running; ssh-decoy failed to bind' },
           { id: 'fleet', status: c.flags.fleetHub ? 'ok' : 'off', detail: c.flags.fleetHub ? 'Hub with 4 nodes' : 'Not enabled' },
           { id: 'oidc', status: c.flags.oidc ? 'ok' : 'off', detail: c.flags.oidc ? 'Discovery cached 12 min ago' : 'Not configured' },
+          ...(round6 ? [{ id: 'settings', status: overlay.editing ? 'ok' : 'off', detail: overlay.editing ? 'Console editing on; overrides stored in the state directory' : 'Console editing off (console.settings_editing: off)' }] : []),
         ],
         licenses_url: '',
       });
@@ -541,13 +542,16 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
   async function handleRound6(c, me) {
     const { req, res, url, p, m, sessions: sessionsMap, send, fail, readBody, audit, who, remote } = c;
     const err = (status, code, message, reason) => send(res, status, { error: { code, message, ...(reason ? { reason } : {}) } });
+    // Like the server: nobody edits a role beyond their own permissions.
+    const mine = new Set(permsOfAccount(me));
+    const exceeds = (list) => (list || []).some((p) => !mine.has(p));
     const nameTaken = (name, except) => [...R.roles.values()].some((r) => r.id !== except && r.name.toLowerCase() === name.trim().toLowerCase());
 
     if (p === '/admin/roles') {
       if (m === 'GET') {
         const order = (r) => (r.builtin ? ['viewer', 'analyst', 'admin'].indexOf(r.id) : 10);
         const items = [...R.roles.values()].sort((a, b) => (order(a) - order(b)) || a.name.localeCompare(b.name)).map((r) => publicRole(r, sessionsMap));
-        send(res, 200, { items, limits: { max_roles: MAX_ROLES } });
+        send(res, 200, { items, limits: { max_roles: MAX_ROLES, max_name_runes: 40, max_description_runes: 200 } });
         return true;
       }
       if (m === 'POST') {
@@ -555,6 +559,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
         try { b = await readBody(req, ['name', 'description', 'permissions']); } catch (e) { fail(res, 'invalid_argument', e.message); return true; }
         const bad = checkRoleBody(b);
         if (bad) { err(bad.status, bad.code, bad.message, bad.reason); return true; }
+        if (exceeds(b.permissions)) { err(403, 'exceeds_own_permissions', 'the role would grant permissions your own role lacks'); return true; }
         if (nameTaken(b.name)) { err(409, 'conflict', 'a role with this name already exists'); return true; }
         if ([...R.roles.values()].filter((x) => !x.builtin).length >= MAX_ROLES) { err(409, 'conflict', `at most ${MAX_ROLES} custom roles`); return true; }
         const now = iso(Date.now());
@@ -580,6 +585,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
         try { b = await readBody(req, ['name', 'description', 'permissions']); } catch (e) { fail(res, 'invalid_argument', e.message); return true; }
         const bad = checkRoleBody(b, { partial: true });
         if (bad) { err(bad.status, bad.code, bad.message, bad.reason); return true; }
+        if (exceeds([...(b.permissions || []), ...r.permissions])) { err(403, 'exceeds_own_permissions', 'the role touches permissions your own role lacks'); return true; }
         if (b.name !== undefined && nameTaken(b.name, r.id)) { err(409, 'conflict', 'a role with this name already exists'); return true; }
         if (b.permissions !== undefined && wouldLeaveNoAdmin(principals(sessionsMap), R.permsOf, { roleId: r.id, permissions: b.permissions })) {
           err(409, 'last_admin', 'this change would leave no active principal able to manage access'); return true;
@@ -617,7 +623,7 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
       for (const k of url.searchParams.keys()) if (k !== 'key') { fail(res, 'invalid_argument', `unknown parameter "${k}"`); return true; }
       const key = url.searchParams.get('key') || '';
       if (key && !/^[a-z][a-z0-9_.]{1,80}$/.test(key)) { fail(res, 'invalid_argument', 'malformed key'); return true; }
-      send(res, 200, { items: overlay.history(key) });
+      send(res, 200, { items: overlay.history(key), limits: { max_items: 500 } });
       return true;
     }
     const sm = p.match(/^\/admin\/settings\/([^/]+)$/);
@@ -625,9 +631,11 @@ export function createAccounts({ tenants, localTenant, configured, tokenLogin = 
       let key;
       try { key = decodeURIComponent(sm[1]); } catch { key = ''; }
       const known = settingsBody(c.flags).sections.some((sec) => sec.items.some((x) => x.key === key));
-      if (!known) { fail(res, 'not_found', 'no such setting'); return true; }
+      // Like the server: editing off first, then anything outside the
+      // allowlist (unknown keys too) is not editable.
       if (!overlay.editing) { err(409, 'editing_disabled', 'console settings editing is off (console.settings_editing: off)'); return true; }
-      if (!EDITABLE[key]) { err(409, 'not_editable', 'this setting is file-driven; change the config file and restart'); return true; }
+      if (!known) { err(409, 'not_editable', 'not a console-editable setting'); return true; }
+      if (!EDITABLE[key] || key === 'posture.accepted') { err(409, 'not_editable', 'this setting is file-driven; change the config file and restart'); return true; }
       let b;
       try { b = await readBody(req, m === 'PUT' ? ['value', 'reason'] : ['reason']); } catch (e) { fail(res, 'invalid_argument', e.message); return true; }
       const reason = typeof b.reason === 'string' ? b.reason.trim() : '';

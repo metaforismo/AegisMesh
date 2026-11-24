@@ -59,7 +59,7 @@ test('built-ins: the agreed sets; /me carries sorted permissions and role_name',
     assert.equal('permissions' in w.body.principal, false);
     const me = (await call(on.base, w, 'GET', '/me')).json;
     assert.deepEqual(me.permissions, BUILTIN[role]);
-    assert.equal(me.role_name, role[0].toUpperCase() + role.slice(1));
+    assert.equal(me.role_name, role, 'built-in roles are named by their id');
   }
   const v = await login(on.base, 'dev-viewer');
   assert.deepEqual((await call(on.base, v, 'GET', '/me')).json.capabilities, { manage_own_keys: true, administer: false }, 'viewers hold keys.self');
@@ -69,7 +69,7 @@ test('built-ins: the agreed sets; /me carries sorted permissions and role_name',
 test('roles: list shape, live assignment counts, seeded custom roles', async () => {
   const a = await login(on.base, 'dev-admin');
   const r = (await call(on.base, a, 'GET', '/admin/roles')).json;
-  assert.deepEqual(r.limits, { max_roles: 32 });
+  assert.deepEqual(r.limits, { max_roles: 32, max_name_runes: 40, max_description_runes: 200 });
   assert.deepEqual(r.items.slice(0, 3).map((x) => x.id), ['viewer', 'analyst', 'admin']);
   for (const x of r.items) {
     assert.deepEqual(Object.keys(x).sort(), ROLE_KEYS);
@@ -101,7 +101,8 @@ test('roles: create, rename, change, delete, and every refusal', async () => {
   assert.equal(dup.json.error.code, 'conflict', 'names are unique, case-insensitively');
   const req = await call(on.base, a, 'POST', '/admin/roles', { name: 'Settings only', permissions: ['evidence.read', 'settings.manage'] });
   assert.equal(req.status, 400);
-  assert.match(req.json.error.message, /require accounts\.manage/);
+  assert.match(req.json.error.message, /requires accounts\.manage and settings\.read/);
+  assert.equal((await call(on.base, a, 'POST', '/admin/roles', { name: 'Sessions only', permissions: ['evidence.read', 'sessions.manage'] })).status, 400, 'sessions.manage needs accounts.read');
   assert.equal((await call(on.base, a, 'POST', '/admin/roles', { name: 'x', permissions: ['evidence.read', 'root.everything'] })).status, 400);
   assert.equal((await call(on.base, a, 'POST', '/admin/roles', { name: 'x', permissions: [] })).status, 400);
   assert.equal((await call(on.base, a, 'POST', '/admin/roles', { name: 'y'.repeat(41), permissions: ['evidence.read'] })).status, 400);
@@ -136,7 +137,7 @@ test('last admin: no change may leave zero active principals holding roles.manag
   assert.equal(wouldLeaveNoAdmin(one, permsOf, { principalId: 'b', active: false }), true);
   assert.equal(wouldLeaveNoAdmin(one, permsOf, { roleId: 'role_aaaaaaaaaaaa', permissions: ['accounts.manage', 'evidence.read'] }), true);
   assert.equal(wouldLeaveNoAdmin(one, permsOf, { roleId: 'role_aaaaaaaaaaaa', permissions: ['accounts.manage', 'roles.manage'] }), false);
-  assert.equal(checkRoleBody({ name: 'ok', permissions: ['roles.manage', 'accounts.manage'] }), null);
+  assert.equal(checkRoleBody({ name: 'ok', permissions: ['roles.manage', 'accounts.manage', 'accounts.read'] }), null);
 });
 
 test('a custom role decides each request, and an edit applies on the next one', async () => {
@@ -171,6 +172,13 @@ test('a custom role decides each request, and an edit applies on the next one', 
   assert.equal((await call(on.base, svc, 'POST', '/admin/accounts', { name: 'x', kind: 'person', role: 'viewer', tenants: ['default'] })).status, 403);
   assert.equal((await call(on.base, svc, 'PUT', '/admin/settings/console.default_window', { value: '7d', reason: 'x' })).status, 403);
   assert.equal((await call(on.base, svc, 'GET', '/me')).json.capabilities.administer, true);
+  // A role manager cannot grant what its own role lacks.
+  const mgr = (await call(on.base, a, 'POST', '/admin/roles', { name: `Role keeper ${Date.now()}`, permissions: ['evidence.read', 'accounts.read', 'accounts.manage', 'roles.manage'] })).json;
+  await call(on.base, a, 'PATCH', `/admin/accounts/${acc.id}`, { role: mgr.id });
+  const over = await call(on.base, svc, 'POST', '/admin/roles', { name: `Fleet ${Date.now()}`, permissions: ['evidence.read', 'fleet.read', 'fleet.manage'] });
+  assert.equal(over.status, 403);
+  assert.equal(over.json.error.code, 'exceeds_own_permissions');
+  assert.equal((await call(on.base, svc, 'POST', '/admin/roles', { name: `Readers ${Date.now()}`, permissions: ['evidence.read'] })).status, 201, 'within its own permissions');
 });
 
 test('settings: editable items carry effective, file value, constraints; PUT, validation, revert, history, audit, meta', async () => {
@@ -182,7 +190,8 @@ test('settings: editable items carry effective, file value, constraints; PUT, va
   for (const it of items) for (const k of ['editable', 'effective', 'file_value', 'overridden', 'constraints', 'applies']) assert.ok(k in it, `${it.key} has ${k}`);
   const ttl = items.find((x) => x.key === 'console.session_ttl_seconds');
   assert.deepEqual([ttl.editable, ttl.overridden, ttl.effective, ttl.file_value, ttl.value], [true, true, '43200', '28800', '12h']);
-  assert.deepEqual(ttl.constraints, { min: 900, max: 86400, unit: 's' });
+  assert.deepEqual(ttl.constraints, { min: 900, max: 86400, unit: 's', reason_max_len: 200 });
+  assert.equal(ttl.source, 'console', 'an override reports source console');
   assert.equal(items.find((x) => x.key === 'console.listen').editable, false);
   assert.deepEqual(body.sections.find((s) => s.id === 'console').items.map((x) => x.key), ['console.organization_name', 'console.sign_in_banner', 'console.default_window', 'posture.accepted']);
 
@@ -196,7 +205,8 @@ test('settings: editable items carry effective, file value, constraints; PUT, va
   assert.equal((await put('console.key_default_days', 400)).status, 400, 'at most the longest lifetime');
   assert.equal((await put('console.organization_name', 'x'.repeat(81))).status, 400);
   assert.equal((await put('console.listen', '0.0.0.0:80')).json.error.code, 'not_editable');
-  assert.equal((await put('console.nope', 'x')).status, 404);
+  assert.equal((await put('console.nope', 'x')).json.error.code, 'not_editable', 'anything outside the allowlist');
+  assert.equal((await put('posture.accepted', 'x')).json.error.code, 'not_editable', 'accepted risk is changed on Posture');
   assert.equal((await call(on.base, a, 'PUT', '/admin/settings/console.default_window', { value: '7d', reason: 'x', extra: 1 })).status, 400, 'strict fields');
 
   const set = await put('console.key_max_days', '120', 'Shorter keys for the audit year.');
@@ -252,7 +262,7 @@ test('posture: accepted risk is its own status and count, with limits and revoca
   assert.deepEqual(p.summary, { attention: count('attention'), accepted: count('accepted'), ok: count('ok'), info: count('info') });
   assert.ok(p.summary.accepted >= 1 && p.summary.attention >= 1);
   const seeded = p.checks.find((x) => x.status === 'accepted');
-  assert.deepEqual(Object.keys(seeded.accepted).sort(), ['by', 'reason', 'until']);
+  assert.deepEqual(Object.keys(seeded.accepted).sort(), ['by', 'by_name', 'reason', 'until']);
   assert.ok(p.checks.filter((x) => x.status !== 'accepted').every((x) => x.accepted === null));
   const target = p.checks.find((x) => x.status === 'attention');
   const post = (id, body, who = a) => call(on.base, who, 'POST', `/posture/${id}/accept`, body);
@@ -268,7 +278,9 @@ test('posture: accepted risk is its own status and count, with limits and revoca
   const acc = await post(target.id, { reason: 'Compensating control: the lure is behind the VPN.', until: inDays(90) });
   assert.equal(acc.status, 200);
   assert.equal(acc.json.status, 'accepted');
-  assert.equal(acc.json.accepted.by, 'ada');
+  assert.equal(acc.json.accepted.by_name, 'ada');
+  const ph = (await call(on.base, a, 'GET', '/admin/settings/history?key=posture.accepted')).json.items;
+  assert.match(ph[0].to, new RegExp(`^${target.id}: accepted until `), 'acceptances are in the settings history');
   const after1 = (await call(on.base, a, 'GET', '/posture')).json;
   assert.equal(after1.summary.accepted, p.summary.accepted + 1);
   const rev = await call(on.base, a, 'DELETE', `/posture/${target.id}/accept`);

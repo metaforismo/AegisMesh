@@ -41,11 +41,12 @@ export const BUILTIN = Object.freeze({
   admin: Object.freeze([...PERMISSION_IDS].sort()),
 });
 const BUILTIN_META = {
-  viewer: { name: 'Viewer', description: 'Reads everything the decoys observed. Changes nothing.' },
-  analyst: { name: 'Analyst', description: 'Everything a viewer can, plus recording judgement and taking evidence out.' },
-  admin: { name: 'Admin', description: 'Everything, including access management, settings and the audit trail.' },
+  viewer: { name: 'viewer', description: 'Reads everything the decoys observed. Changes nothing.' },
+  analyst: { name: 'analyst', description: 'Everything a viewer can, plus recording judgement and taking evidence out.' },
+  admin: { name: 'admin', description: 'Everything, including access management, settings and the audit trail.' },
 };
 export const MAX_ROLES = 32;
+export const PERMISSION_DEPS = Object.freeze({ 'roles.manage': ['accounts.manage'], 'settings.manage': ['accounts.manage', 'settings.read'], 'accounts.manage': ['accounts.read'], 'sessions.manage': ['accounts.read'] });
 const ROLE_ID = /^(viewer|analyst|admin|role_[0-9a-f]{12})$/;
 export const isRoleId = (v) => typeof v === 'string' && ROLE_ID.test(v);
 
@@ -82,8 +83,11 @@ export function checkRoleBody(b, { partial = false } = {}) {
     const unknown = b.permissions.filter((p) => !PERMISSION_IDS.includes(p));
     if (unknown.length) return bad(`unknown permission ${JSON.stringify(String(unknown[0])).slice(0, 60)}`);
     if (new Set(b.permissions).size !== b.permissions.length) return bad('permissions must not repeat');
-    if ((b.permissions.includes('roles.manage') || b.permissions.includes('settings.manage')) && !b.permissions.includes('accounts.manage')) {
-      return bad('roles.manage and settings.manage require accounts.manage');
+    // Like the server: a permission that changes access or settings needs
+    // the ones that let its holder see what they change.
+    for (const [p, needs] of Object.entries(PERMISSION_DEPS)) {
+      const miss = needs.filter((n) => !b.permissions.includes(n));
+      if (b.permissions.includes(p) && miss.length) return bad(`${p} requires ${miss.join(' and ')}`);
     }
   }
   return null;
@@ -96,7 +100,7 @@ export const SEED_ROLE_IDS = Object.freeze({ ticket: 'role_7c1e5a90b3d4', audito
 export function createRoles({ startedAt = Date.now(), round6 = true } = {}) {
   const roles = new Map();
   for (const id of ['viewer', 'analyst', 'admin']) {
-    roles.set(id, { id, ...BUILTIN_META[id], builtin: true, permissions: [...BUILTIN[id]], created_at: null, created_by: 'built in', updated_at: null });
+    roles.set(id, { id, ...BUILTIN_META[id], builtin: true, permissions: [...BUILTIN[id]], created_at: null, created_by: 'builtin', updated_at: null });
   }
   const day = 86400e3;
   if (round6) {
@@ -164,9 +168,9 @@ export function createSettingsOverlay({ editing = true, round6 = true, startedAt
     const d = EDITABLE[key];
     const eff = effective(key);
     return {
-      key, label: d.label, value: d.show(eff), kind: d.kind, source: 'config',
+      key, label: d.label, value: d.show(eff), kind: d.kind === 'enum' ? 'text' : d.kind, source: values.has(key) ? 'console' : 'config',
       note: d.note, editable: on, effective: String(eff), file_value: String(d.file), overridden: values.has(key),
-      constraints: { ...d.constraints }, applies: 'live',
+      constraints: { ...d.constraints, ...(d.numeric || d.constraints.enum ? {} : { multiline: key === 'console.sign_in_banner' }), reason_max_len: 200 }, applies: 'live',
     };
   }
 
@@ -225,6 +229,8 @@ export function createSettingsOverlay({ editing = true, round6 = true, startedAt
     revert,
     history: (key) => history.filter((e) => !key || e.key === key),
     lastSeq: () => seq,
+    // Posture acceptances are recorded in the same history (key posture.accepted).
+    record: (e) => push({ ...e, at: iso(Date.now()) }),
     meta: () => ({ organization_name: String(effective('console.organization_name') || ''), sign_in_banner: String(effective('console.sign_in_banner') || '') }),
     keyLimits: () => ({ max_key_days: Number(effective('console.key_max_days')), default_key_days: Number(effective('console.key_default_days')) }),
     defaultWindow: () => String(effective('console.default_window')),
@@ -241,7 +247,7 @@ export function createAcceptance({ startedAt = Date.now(), round6 = true } = {})
   const accepted = new Map(); // check id → { by, reason, until }
   if (round6) {
     accepted.set('POS-004', {
-      by: 'ada',
+      by: 'cfg:ada', by_name: 'ada',
       reason: 'Credentials for the AI-service decoys ship with the December rollout; until then a replayed key cannot happen there.',
       until: iso(startedAt + 60 * 86400e3),
     });
@@ -279,7 +285,7 @@ export function createAcceptance({ startedAt = Date.now(), round6 = true } = {})
   return {
     decorate,
     validate,
-    accept: (id, by, v) => accepted.set(id, { by, reason: v.reason, until: v.until }),
+    accept: (id, by, v, byName = by) => accepted.set(id, { by, by_name: byName, reason: v.reason, until: v.until }),
     revoke: (id) => accepted.delete(id),
     count: () => [...accepted.keys()].filter((id) => live(id)).length,
   };

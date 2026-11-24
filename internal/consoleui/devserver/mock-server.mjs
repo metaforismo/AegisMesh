@@ -1091,10 +1091,11 @@ async function api(req, res, url) {
       if (check.status !== 'attention') return send(res, 409, { error: { code: 'conflict', message: 'only checks that need attention can be accepted' } });
       const v = acceptance.validate(b);
       if (v.error) return fail(res, 'invalid_argument', v.error);
-      acceptance.accept(id, who.name, v);
+      acceptance.accept(id, s.account_id || who.name, v, who.name);
+      accounts.overlay.record({ key: 'posture.accepted', from: `${id}: not accepted`, to: `${id}: accepted until ${v.until}`, reason: v.reason, action: 'update', actor_id: s.account_id || '', actor_name: who.name });
       audit(who.name, who.role, 'posture.accept', id, 'ok', remote, `until=${v.until} reason=${JSON.stringify(v.reason)}`);
     } else {
-      acceptance.revoke(id);
+      if (acceptance.revoke(id)) accounts.overlay.record({ key: 'posture.accepted', from: `${id}: accepted`, to: `${id}: not accepted`, reason: 'Acceptance revoked.', action: 'revert', actor_id: s.account_id || '', actor_name: who.name });
       audit(who.name, who.role, 'posture.unaccept', id, 'ok', remote);
     }
     return send(res, 200, postureBody(T, events).checks.find((c) => c.id === id));
