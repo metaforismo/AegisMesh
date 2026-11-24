@@ -176,6 +176,8 @@ func TestRoleRulesBuiltinInUseAndLastAdmin(t *testing.T) {
 		body: `{"name":"Shadow","permissions":["roles.manage"]}`}), 400, "invalid_argument")
 	requireCode(t, h.request(t, apiRequest{method: "POST", path: "/api/v1/admin/roles", token: "synthetic-admin",
 		body: `{"name":"viewer","permissions":[]}`}), 409, "conflict")
+	requireCode(t, h.request(t, apiRequest{method: "POST", path: "/api/v1/admin/roles", token: "synthetic-admin",
+		body: `{"name":"Root","permissions":["root"]}`}), 400, "invalid_argument")
 
 	owner := createRole(t, h, "synthetic-admin", `{"name":"Owner","permissions":`+mustJSON(permission.Builtin("admin"))+`}`)
 	account, _ := principalWithRole(t, h, "Owner One", "person", owner.ID)

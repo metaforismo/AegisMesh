@@ -147,10 +147,10 @@ func (s *Server) roleFacts() ([]string, []string, int) {
 			admins++
 			continue
 		}
-		granted := s.grants(auth.Principal{Role: account.Role})
 		if permission.IsBuiltin(account.Role) {
 			continue
 		}
+		granted := s.grants(auth.Principal{Role: account.Role})
 		if slices.ContainsFunc(granted.perms, permission.HighRisk) {
 			grants = append(grants, account.Name+" ("+granted.name+")")
 		}

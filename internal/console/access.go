@@ -44,9 +44,11 @@ func (s *Server) grants(principal auth.Principal) access {
 // role holding accounts.manage, roles.manage or sessions.manage can never be
 // used to reach a permission it does not already hold, nor act on a principal
 // that holds more than the caller.
+//
+// Ids outside the catalogue are left to validation (400), not reported here.
 func exceeds(caller access, perms []string) bool {
 	for _, perm := range perms {
-		if !caller.has(perm) {
+		if permission.Valid(perm) && !caller.has(perm) {
 			return true
 		}
 	}
