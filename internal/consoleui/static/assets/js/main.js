@@ -296,6 +296,8 @@ function swapView(main, next, { animate, dir, fade }) {
   document.documentElement.dataset.navDir = dir === 'back' ? 'back' : 'forward';
   if (animate && hasPrev && typeof document.startViewTransition === 'function') {
     const vt = document.startViewTransition(doSwap);
+    // A skipped transition rejects ready; the swap itself still runs, so the rejection is expected.
+    vt.ready.catch(() => {});
     activeTransition = vt;
     vt.finished.catch(() => {}).finally(() => { if (activeTransition === vt) activeTransition = null; });
     return vt.updateCallbackDone.catch(() => {});
