@@ -1,7 +1,8 @@
 // Application frame: navigation, top bar, theme switch.
 
 import { h, mount } from '../lib/dom.js';
-import { roleAtLeast, capitalize } from '../lib/taxonomy.js';
+import { capitalize } from '../lib/taxonomy.js';
+import { toCan, ROUTE_PERMS, principalRoleName } from '../lib/perms.js';
 import { tenantInfo } from '../lib/tenant.js';
 import { authMethodLabel } from '../lib/auth.js';
 import { formatDateTime, setTimeZone, zoneName } from '../lib/format.js';
@@ -13,6 +14,8 @@ export { brandMark };
 
 // Navigation is data: a screen appears here and in the palette by adding an
 // item (and a route in lib/route.js plus a descriptor in screens/index.js).
+// A screen whose permission (lib/perms.js ROUTE_PERMS) the principal lacks
+// is left out of the sidebar, the palette and the shortcut sheet.
 // Screens for new API endpoints slot into the group they belong to; nothing
 // is listed before it exists.
 export const NAV = [
@@ -39,8 +42,8 @@ export const NAV = [
     { route: 'posture', label: 'Posture', href: '#/posture', icon: 'posture', keys: 'g p' },
     { route: 'node', label: 'Node', href: '#/node', icon: 'node' },
     { route: 'fleet', label: 'Fleet', href: '#/fleet', also: ['fleet_node'], icon: 'fleet', tag: 'Experimental' },
-    { route: 'audit', label: 'Audit trail', href: '#/audit', role: 'admin', icon: 'audit', keys: 'g a' },
-    { route: 'settings', label: 'Settings', href: '#/settings', also: ['settings_account'], icon: 'settings', keys: 'g ,' },
+    { route: 'audit', label: 'Audit trail', href: '#/audit', icon: 'audit', keys: 'g a' },
+    { route: 'settings', label: 'Settings', href: '#/settings', also: ['settings_account', 'settings_role'], icon: 'settings', keys: 'g ,' },
   ] },
   { group: 'Help', items: [
     { route: 'guide', label: 'Guide', href: '#/guide', icon: 'guide', keys: 'g h' },
@@ -302,15 +305,16 @@ function tenantControl(session, onSwitchTenant) {
 
 // The principal's button and its account menu: identity, how the session
 // signed in, the active tenant, when it expires, and sign out.
-function accountControl(session, meta, onLogout) {
+function accountControl(session, meta, onLogout, me) {
   const p = session?.principal || {};
-  const role = p.role || 'unknown';
+  // A custom role's id is not a name: /me.role_name (round 6) says it.
+  const role = p.role ? principalRoleName(p.role, me?.role_name) : 'Unknown role';
   const info = tenantInfo(session);
   const name = p.name || 'unknown';
-  const button = h('button', { class: ['btn', 'btn--ghost', 'top-user'], type: 'button', popovertarget: 'account-menu', 'aria-label': `Account: ${name}, ${capitalize(role)}` },
+  const button = h('button', { class: ['btn', 'btn--ghost', 'top-user'], type: 'button', popovertarget: 'account-menu', 'aria-label': `Account: ${name}, ${role}` },
     h('span', { class: 'top-user__avatar', 'aria-hidden': 'true' }, String(name).slice(0, 1).toUpperCase()),
     h('span', { class: 'top-user__name', 'aria-hidden': 'true' }, name),
-    h('span', { class: 'chip', 'aria-hidden': 'true' }, capitalize(role)));
+    h('span', { class: 'chip', 'aria-hidden': 'true' }, role));
   const signOut = h('button', { class: ['btn', 'btn--block', 'menu__action'], type: 'button' }, icon('sign-out'), 'Sign out');
   const go = (href, ico, label) => h('li', null, h('a', { class: 'menu__item', href }, h('span', { class: 'menu__check', 'aria-hidden': 'true' }, icon(ico, { size: 'sm' })), h('span', { class: 'menu__label' }, label)));
   signOut.addEventListener('click', () => { hideMenu(menu); onLogout?.(); });
@@ -324,7 +328,7 @@ function accountControl(session, meta, onLogout) {
       h('span', { class: 'top-user__avatar', 'aria-hidden': 'true' }, String(name).slice(0, 1).toUpperCase()),
       h('div', null,
         h('p', { class: 'menu__name', id: 'account-menu-title' }, name),
-        h('p', { class: 'menu__sub' }, capitalize(role)))),
+        h('p', { class: 'menu__sub' }, role))),
     h('dl', { class: 'menu__kv' }, rows.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
     h('ul', { class: ['menu__list', 'menu__links'] },
       go('#/settings/profile', 'user', 'Your profile'),
@@ -347,17 +351,24 @@ function zoneLine() {
 
 // ---- Shell -----------------------------------------------------------------
 
-export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant }) {
+// The organisation name (round 6, /meta): plain text, capped, shown in the
+// top bar and above the brand in the sidebar on phones.
+export function organizationText(v) {
+  const s = typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '').trim() : '';
+  return Array.from(s).slice(0, 80).join('');
+}
+
+export function createShell({ session, meta, me = null, can = null, onLogout, onSearch, onSwitchTenant }) {
   // A rebuilt shell (sign-in, tenant switch) replaces the old controls.
   themeListeners.clear();
   densityListeners.clear();
   zoneListeners.clear();
-  const role = session?.principal?.role;
+  const allowed = toCan(can ?? session?.principal?.role);
   const links = new Map();
   const indicators = [];
 
   const groups = NAV.map((g) => {
-    const items = g.items.filter((i) => !i.role || roleAtLeast(role, i.role));
+    const items = g.items.filter((i) => allowed(ROUTE_PERMS[i.route]));
     if (!items.length) return null;
     const indicator = h('span', { class: 'nav-indicator', 'aria-hidden': 'true' });
     const list = h('ul', { class: 'nav-list' }, indicator, items.map((i) => {
@@ -373,8 +384,20 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     return h('div', { class: 'nav-group' }, h('p', { class: 'nav-group__label' }, g.group), list);
   });
 
+  const orgTop = h('span', { class: 'top-org', title: 'Organisation' });
+  const orgNav = h('p', { class: 'nav-org' });
+  const setOrganization = (v) => {
+    const text = organizationText(v);
+    orgTop.textContent = text;
+    orgNav.textContent = text;
+    orgTop.hidden = !text;
+    orgNav.hidden = !text;
+  };
+  setOrganization(meta?.organization_name);
+
   const nav = h('nav', { class: 'shell__nav', id: 'primary-nav', 'aria-label': 'Primary' },
     h('a', { class: 'brand', href: '#/overview', 'aria-label': 'AegisMesh, go to the overview' }, brandMark(), h('span', { class: 'brand__word' }, 'AegisMesh')),
+    orgNav,
     groups,
     h('div', { class: 'nav-foot' },
       railToggle(),
@@ -412,13 +435,14 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
   const liveSlot = h('div', { class: 'top-live', 'aria-live': 'polite' });
   const top = h('header', { class: 'shell__top' },
     toggle,
+    orgTop,
     search,
     h('div', { class: 'top-spacer' }),
     liveSlot,
     densityControl(),
     themeControl(),
     tenantControl(session, onSwitchTenant),
-    accountControl(session, meta, onLogout));
+    accountControl(session, meta, onLogout, me));
 
   const main = h('main', { class: 'shell__main', id: 'main' });
   const root = h('div', { class: 'shell' },
@@ -430,9 +454,30 @@ export function createShell({ session, meta, onLogout, onSearch, onSwitchTenant 
     main.querySelector('#page-title')?.focus();
   });
 
+  // The sign-in banner after sign-in: one dismissible notice above the
+  // screen, plain text (a Text node), never a modal.
+  let notice = null;
+  const showNotice = (text, onDismiss) => {
+    notice?.remove();
+    const close = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, 'Dismiss');
+    notice = h('section', { class: 'notice-bar', 'aria-label': 'Notice from your organisation' },
+      icon('info', { size: 'sm' }),
+      h('div', { class: 'notice-bar__body' },
+        h('p', { class: 'notice-bar__title' }, 'Notice from your organisation'),
+        h('p', { class: 'notice-bar__text' }, String(text))),
+      close);
+    close.addEventListener('click', () => {
+      notice?.remove();
+      notice = null;
+      onDismiss?.();
+      main.querySelector('#page-title')?.focus({ preventScroll: true });
+    });
+    main.prepend(notice);
+  };
+
   let placed = false;
   return {
-    root, main, liveSlot, nav,
+    root, main, liveSlot, nav, setOrganization, showNotice,
     setActive(routeName) {
       // A route change (palette, g-sequence, back) closes the top-bar menus.
       for (const m of root.querySelectorAll('.menu')) hideMenu(m);

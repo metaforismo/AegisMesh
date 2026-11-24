@@ -153,3 +153,18 @@ test('sign-in card shows the mapped message for an error code, never other text'
   assert.match(generic.alerts[0].textContent, /Single sign-on did not complete/);
   assert.equal(renderLogin(meta(true, true)).alerts.length, 0);
 });
+
+test('sign-in card: organisation name and banner from /meta, as plain text only', () => {
+  const evil = 'Authorised use only.\n<img src=x onerror=alert(1)> <b>bold</b>';
+  const r = renderLogin({ ...meta(true, false), organization_name: 'Example SOC‮', sign_in_banner: evil });
+  assert.match(r.text, /Example SOC/);
+  assert.doesNotMatch(r.text, /‮/, 'direction overrides are stripped from the name');
+  // The banner text is one Text node: markup stays characters.
+  const texts = [];
+  const walk = (n) => { for (const c of n.childNodes) { if (c.nodeType === 3) texts.push(c.data); else walk(c); } };
+  walk(r.root);
+  assert.ok(texts.includes(evil), 'the whole banner is a single Text node, unparsed');
+  assert.equal(r.root.querySelectorAll((n) => n.tagName === 'img' || n.tagName === 'b').length, 0);
+  const none = renderLogin(meta(true, false));
+  assert.equal(none.root.querySelectorAll((n) => (n.getAttribute('class') || '').includes('login__banner')).length, 0, 'no banner block when none is set');
+});

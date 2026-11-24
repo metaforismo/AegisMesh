@@ -16,7 +16,9 @@ const start = (args) => new Promise((resolve, reject) => {
 let on;
 let off;
 let failing;
-before(async () => { [on, off, failing] = await Promise.all([start([]), start(['--round5', 'off']), start(['--fail-prefs'])]); });
+// Round 6 changes /me, the settings body and the built-in permissions;
+// webtest/mockroles.test.mjs covers it. These checks pin the round-5 shapes.
+before(async () => { [on, off, failing] = await Promise.all([start(['--round6', 'off']), start(['--round5', 'off']), start(['--fail-prefs', '--round6', 'off'])]); });
 after(() => { on?.proc.kill(); off?.proc.kill(); failing?.proc.kill(); });
 
 async function login(base, token) {

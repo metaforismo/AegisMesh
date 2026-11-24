@@ -1,3 +1,4 @@
+import { toCan } from '../static/assets/js/lib/perms.js';
 // Round 4: campaigns, actor profiles and the posture review. Pure wording
 // and layout, then the three screens and the session additions rendered
 // into the fake DOM with hostile strings, missing fields and older servers.
@@ -26,7 +27,7 @@ const hasClass = (c) => (el) => cls(el).includes(c);
 
 function ctx(api, { query = {}, params = {}, role = 'viewer' } = {}) {
   const titles = [];
-  return { role, can: (m) => roleAtLeast(role, m), route: { query, params }, signal: undefined, navigate() {}, rerender() {}, api, setTitle: (t) => titles.push(t), titles };
+  return { role, can: toCan(role), route: { query, params }, signal: undefined, navigate() {}, rerender() {}, api, setTitle: (t) => titles.push(t), titles };
 }
 
 const ACTOR = {
@@ -65,7 +66,7 @@ const DETAIL = {
 };
 const POSTURE = {
   generated_at: '2026-11-22T12:00:00Z',
-  summary: { attention: 2, ok: 1, info: 1 },
+  summary: { attention: 2, accepted: 0, ok: 1, info: 1 },
   checks: [
     { id: 'POS-001', area: 'exposure', status: 'ok', title: 'Loopback', detail: 'All loopback.', recommendation: '', doc: 'docs/configuration.md#sensors' },
     { id: 'POS-003', area: 'deception', status: 'attention', title: 'No honeytokens configured', detail: 'None planted.', recommendation: 'Mint one.', doc: 'docs/ai-threat-detection.md#honeytokens' },
@@ -161,8 +162,8 @@ test('posture: grouping, attention first, counts, doc links only for docs paths'
   const g = I.postureGroups(POSTURE.checks);
   assert.deepEqual(g.groups.map((x) => x.id), ['exposure', 'deception', 'evidence', 'other']);
   assert.deepEqual(g.attention.map((c) => c.id), ['POS-003', 'POS-099']);
-  assert.deepEqual(I.postureCounts(POSTURE), { attention: 2, ok: 1, info: 1 });
-  assert.deepEqual(I.postureCounts({ checks: POSTURE.checks }), { attention: 2, ok: 1, info: 1 });
+  assert.deepEqual(I.postureCounts(POSTURE), { attention: 2, accepted: 0, ok: 1, info: 1 });
+  assert.deepEqual(I.postureCounts({ checks: POSTURE.checks }), { attention: 2, accepted: 0, ok: 1, info: 1 });
   assert.equal(I.docHref('docs/ai-threat-detection.md#honeytokens'), 'https://github.com/metaforismo/AegisMesh/blob/master/docs/ai-threat-detection.md#honeytokens');
   for (const bad of ['https://evil.test/x', '../../etc/passwd.md', 'docs/../x.md', 'docs/a.md#<x>', 'docs/a.txt']) assert.equal(I.docHref(bad), '', bad);
   assert.equal(isSafeHref(I.docHref('docs/cli.md#doctor')), true);

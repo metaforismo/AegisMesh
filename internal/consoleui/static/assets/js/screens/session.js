@@ -337,7 +337,7 @@ export default {
     // ---- Actions ---------------------------------------------------------------
     const localIds = [...new Set(timeline.filter((e) => e.node_id === 'local' && isEventId(e.event_id)).map((e) => e.event_id))].slice(0, 200);
     let investigate = null;
-    if (ctx.can('analyst') && localIds.length) {
+    if (ctx.can('investigations.write') && localIds.length) {
       investigate = h('button', { class: ['btn', 'btn--primary'], type: 'button' }, icon('investigations', { size: 'sm' }), 'New investigation with these events');
       investigate.addEventListener('click', async () => {
         const inv = await newInvestigationDialog(ctx, { eventIds: localIds });

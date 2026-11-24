@@ -15,7 +15,7 @@ export default {
     const invs = Array.isArray(res.investigations) ? res.investigations : [];
 
     let create = null;
-    if (ctx.can('analyst')) {
+    if (ctx.can('investigations.write')) {
       create = h('button', { class: ['btn', 'btn--primary'], type: 'button' }, 'New investigation');
       create.addEventListener('click', async () => {
         const inv = await newInvestigationDialog(ctx);
@@ -42,7 +42,7 @@ export default {
         body: invs.length ? table({
           caption: 'Investigations',
           columns: [
-            { label: 'Title', className: 'col-summary', sort: (i) => i.title, cell: (i) => (isOpaqueId(i.id) ? link(href('investigations', i.id), i.title || '(untitled)') : i.title) },
+            { label: 'Title', className: 'col-summary', lead: true, sort: (i) => i.title, cell: (i) => (isOpaqueId(i.id) ? link(href('investigations', i.id), i.title || '(untitled)') : i.title) },
             { label: 'Status', sort: (i) => INVESTIGATION_STATUSES.indexOf(i.status), cell: (i) => statusBadge(i.status) },
             { label: 'Priority', sort: (i) => PRIORITIES.indexOf(i.priority), sortFirst: 'desc', cell: (i) => priorityChip(i.priority) },
             { label: 'Evidence', num: true, sort: (i) => (i.event_ids || []).length, cell: (i) => formatCount((i.event_ids || []).length) },
@@ -51,7 +51,7 @@ export default {
           ],
           rows: invs,
         }) : empty(status ? `No ${status} investigations` : 'No investigations yet',
-          ctx.can('analyst') ? 'Start one here, or from any event with “Add to investigation”.' : 'Analysts and admins can open investigations.'),
+          ctx.can('investigations.write') ? 'Start one here, or from any event with “Add to investigation”.' : 'Opening one needs the permission to change investigations, which your role does not include.'),
       }));
   },
 };

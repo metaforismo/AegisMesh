@@ -164,7 +164,7 @@ function nodesTable(nodes, { accepting = false } = {}) {
     caption: 'Fleet nodes',
     columns: [
       { label: 'Status', sort: (n) => fleetStatusMeta(n.status).label, cell: (n) => fleetStatusBadge(n.status) },
-      { label: 'Name', className: 'nowrap', sort: (n) => n.name, cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
+      { label: 'Name', className: 'nowrap', lead: true, sort: (n) => n.name, cell: (n) => (isNodeId(n.id) ? link(href('fleet', 'nodes', n.id), h('code', null, n.name || '(unnamed)')) : h('code', null, n.name || '(unnamed)')) },
       { label: 'Node id', className: 'nowrap', cell: (n) => h('code', { class: 'hash', title: n.id }, shortId(n.id, 12)) },
       { label: 'Version', className: 'nowrap', cell: (n) => h('code', null, n.version?.version || '—') },
       { label: 'Last seen', className: 'nowrap', sort: (n) => timeValue(n.last_seen_at), sortFirst: 'desc', cell: (n) => seenCell(n.last_seen_at, 'never (no heartbeat)') },
@@ -314,7 +314,7 @@ export default {
     if (hubOn) {
       const [nodesRes, tokensRes] = await Promise.all([
         ctx.api.fleetNodes(status, { signal: ctx.signal }).catch((err) => ({ error: err })),
-        ctx.can('admin') ? ctx.api.enrollmentTokens({ signal: ctx.signal }).catch((err) => ({ error: err })) : null,
+        ctx.can('fleet.manage') ? ctx.api.enrollmentTokens({ signal: ctx.signal }).catch((err) => ({ error: err })) : null,
       ]);
       const filter = segmented({
         label: 'Node status', value: status,
@@ -330,7 +330,7 @@ export default {
           meta: 'Liveness is computed by the hub: stale after three missed heartbeats, offline after ten. Revoked is permanent.',
           actions: filter, flush: true,
           body: nodes.length ? nodesTable(nodes, { accepting: f?.hub?.accept_evidence === true }) : empty(status ? `No ${status} nodes` : 'No nodes enrolled yet',
-            ctx.can('admin') ? 'Create an enrollment token below and give it to the operator of the node you want to add.' : 'An admin creates enrollment tokens for new nodes.'),
+            ctx.can('fleet.manage') ? 'Create an enrollment token below and give it to the operator of the node you want to add.' : 'Someone with the fleet management permission creates enrollment tokens for new nodes.'),
         });
       }
       if (tokensRes) {

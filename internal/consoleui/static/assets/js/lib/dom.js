@@ -13,7 +13,7 @@ const ALLOWED_ATTRS = new Set([
   'maxlength', 'minlength', 'min', 'max', 'step', 'rows', 'cols', 'colspan',
   'scope', 'datetime', 'disabled', 'checked', 'selected', 'readonly',
   'required', 'hidden', 'open', 'multiple', 'inputmode', 'enterkeyhint',
-  'method', 'novalidate', 'aria-hidden', 'popover', 'popovertarget',
+  'method', 'novalidate', 'aria-hidden', 'popover', 'popovertarget', 'label',
   // SVG geometry and presentation attributes used by the charts.
   'viewBox', 'width', 'height', 'x', 'y', 'x1', 'x2', 'y1', 'y2', 'rx', 'ry',
   'cx', 'cy', 'r', 'd', 'points', 'transform', 'text-anchor',

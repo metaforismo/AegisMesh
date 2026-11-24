@@ -12,6 +12,7 @@ import { h } from '../lib/dom.js';
 import { describeError } from '../lib/api.js';
 import { formatDateTime, formatRelative } from '../lib/format.js';
 import { typedMatches, refusalMessage, settingSourceMeta } from '../lib/settings.js';
+import { missingText } from '../lib/perms.js';
 import { banner, copyable, timeEl, empty, link } from './components.js';
 import { icon } from './icons.js';
 
@@ -27,19 +28,22 @@ export const OLDER_SERVER = Object.freeze({
 
 // What a section shows when the server is older than the console (404 on
 // the round-5 paths). Retrying cannot help, so there is no retry button.
-export function olderServerState() {
+export function olderServerState({ title = OLDER_SERVER.title, detail = OLDER_SERVER.detail, actions = null } = {}) {
   return h('div', { class: 'state', role: 'status' },
     h('span', { class: 'state__icon', 'aria-hidden': 'true' }, icon('info')),
-    h('p', { class: 'state__title' }, OLDER_SERVER.title),
-    h('p', null, OLDER_SERVER.detail),
-    h('div', { class: ['btn-row', 'state__actions'] }, h('a', { class: 'btn', href: '#/settings/preferences' }, 'Open preferences'), h('a', { class: 'btn', href: '#/guide?t=account' }, 'Read about accounts')));
+    h('p', { class: 'state__title' }, title),
+    h('p', null, detail),
+    h('div', { class: ['btn-row', 'state__actions'] }, actions || [h('a', { class: 'btn', href: '#/settings/preferences' }, 'Open preferences'), h('a', { class: 'btn', href: '#/guide?t=account' }, 'Read about accounts')]));
 }
 
 // What a section shows when the role (or the server's 403) refuses it.
-export function notPermittedState(role, what = 'this page') {
+// `needs` names the missing permission (round 6), when known.
+export function notPermittedState(role, what = 'this page', needs = '') {
   return empty('Your account cannot open this page',
-    `You are signed in as ${role || 'unknown'}. Administration needs the admin role in the local tenant. Ask an admin if you need ${what}.`,
-    link('#/settings/profile', 'Go to your profile'), { icon: 'shield' });
+    needs
+      ? `You are signed in as ${role || 'unknown'}. ${missingText(needs)} Administration also works only in the local tenant. Ask someone who manages roles if you need ${what}.`
+      : `You are signed in as ${role || 'unknown'}. Administration needs the admin role in the local tenant. Ask an admin if you need ${what}.`,
+    link('#/settings/profile', 'See what your role allows'), { icon: 'shield' });
 }
 
 // ---- Confirmation ----------------------------------------------------------
@@ -51,10 +55,10 @@ export function notPermittedState(role, what = 'this page') {
 // a refusal stays in the dialog. Resolves to onConfirm's value, or null when
 // cancelled. Focus starts on the typed field, else on Cancel, and returns to
 // the control that opened the dialog when it closes.
-export function confirmAction({ title, consequence, targetLabel, target, typed = '', confirmLabel = 'Confirm', danger = true, onConfirm, refusal = {} }) {
+export function confirmAction({ title, consequence, details = null, targetLabel, target, typed = '', confirmLabel = 'Confirm', danger = true, onConfirm, refusal = {}, refuse = null }) {
   return new Promise((resolve) => {
     const titleId = uid('confirm-title');
-    const errorBox = h('p', { class: 'field__error', role: 'alert' });
+    const errorBox = h('div', { class: 'field__error', role: 'alert' });
     const submit = h('button', { class: ['btn', danger ? 'btn--danger' : 'btn--primary'], type: 'submit' }, confirmLabel);
     const cancel = h('button', { class: 'btn', type: 'button' }, 'Cancel');
     let input = null;
@@ -76,6 +80,7 @@ export function confirmAction({ title, consequence, targetLabel, target, typed =
       h('div', { class: 'dialog__body' },
         h('p', { class: 'confirm__consequence', id: `${titleId}-c` }, consequence),
         target ? h('dl', { class: 'confirm__target' }, h('dt', null, targetLabel || 'Target'), h('dd', null, h('code', null, target))) : null,
+        details,
         typedField,
         errorBox),
       h('div', { class: 'dialog__foot' }, cancel, submit));
@@ -99,7 +104,10 @@ export function confirmAction({ title, consequence, targetLabel, target, typed =
         dialog.close();
       } catch (err) {
         busy = false;
-        errorBox.textContent = refusalMessage(err, refusal);
+        // `refuse(err)` may return a node (links to who holds a role) or ''.
+        const custom = refuse?.(err);
+        if (custom && typeof custom === 'object') errorBox.replaceChildren(custom);
+        else errorBox.textContent = custom || refusalMessage(err, refusal);
         cancel.disabled = false;
         submit.disabled = Boolean(input && !typedMatches(input.value, typed));
         submit.removeAttribute('aria-busy');
@@ -170,14 +178,16 @@ export function keyReveal(minted, { onDone, owner = '' } = {}) {
 
 // A labelled control with a hint and an inline error. `control` is an input
 // or select built by the caller (its id is set here).
-export function formField({ label, control, hint, optional = false }) {
+// `wrap(control)` may place the control in a row with its companions (a
+// unit, a readout); the label still points at the control itself.
+export function formField({ label, control, hint, optional = false, wrap = null }) {
   const id = control.getAttribute('id') || uid('f');
   control.setAttribute('id', id);
   const error = h('p', { class: 'field__error', id: `${id}-error` });
   control.setAttribute('aria-describedby', [hint ? `${id}-hint` : '', `${id}-error`].filter(Boolean).join(' '));
   const el = h('div', { class: 'field' },
     h('label', { class: 'field__label', for: id }, label, optional ? h('span', { class: 'field__optional' }, ' (optional)') : null),
-    control,
+    wrap ? wrap(control) : control,
     hint ? h('span', { class: 'field__hint', id: `${id}-hint` }, hint) : null,
     error);
   return {
@@ -209,7 +219,7 @@ export function choices({ legend, name, options, value, onChange, hint, compact 
     error);
   return {
     el,
-    value: () => inputs.find((i) => i.checked)?.value ?? '',
+    value: () => { const i = inputs.find((x) => x.checked); return i ? (i.value ?? i.getAttribute('value') ?? '') : ''; },
     set(v) { for (const i of inputs) i.checked = i.value === v; },
     setError(msg) { error.textContent = msg || ''; },
     disable(on) { for (const i of inputs) i.disabled = on; },

@@ -1,3 +1,4 @@
+import { toCan } from '../static/assets/js/lib/perms.js';
 // Renders the Fleet screen into the fake DOM with a stubbed API, to check
 // role gating and the hub-disabled / roles-off states without a browser.
 import { test } from 'node:test';
@@ -21,7 +22,7 @@ function ctx(role, fleetRes, { nodes = { nodes: [NODE] }, tokens = { tokens: [{ 
   const reply = (v) => (v instanceof Error ? Promise.reject(v) : Promise.resolve(v));
   return {
     calls,
-    role, can: (m) => roleAtLeast(role, m), route: { query: {}, params: {} }, signal: undefined,
+    role, can: toCan(role), route: { query: {}, params: {} }, signal: undefined,
     navigate() {}, rerender() {},
     api: {
       fleet: () => { calls.push('fleet'); return reply(fleetRes); },

@@ -190,7 +190,7 @@ export function fitTable(wrap) {
   return wrap;
 }
 
-// columns: [{ label, num?, className?, cell(row) → Node|string,
+// columns: [{ label, num?, className?, lead? (heads the phone card), cell(row) → Node|string,
 //             sort?(row) → number|string|null, sortFirst?: 'asc'|'desc' }]
 // A column with `sort` gets a header button (aria-sort, keyboard operable)
 // that reorders the rows already in the browser; see lib/tablesort.js for
@@ -204,7 +204,7 @@ export function table({ columns, rows, caption, stack = true, rowClass, sort = n
     const col = state && columns.find((c) => c.label === state.key && typeof c.sort === 'function');
     const ordered = col ? sortRows(rows, col.sort, state.dir) : rows;
     mount(tbody, ordered.map((row) => h('tr', { class: rowClass ? rowClass(row) : null },
-      columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || ''], 'data-label': c.label }, c.cell(row))))));
+      columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || '', c.lead ? 'cell-lead' : ''], 'data-label': c.label }, c.cell(row))))));
   };
   const syncs = [];
   const heads = columns.map((c) => {

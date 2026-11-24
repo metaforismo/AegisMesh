@@ -1,3 +1,4 @@
+import { toCan, permissionsOf } from '../static/assets/js/lib/perms.js';
 // Renders the Settings screen into the fake DOM with a stubbed API: role
 // gating, the older-server states, server refusals, and the preferences
 // rows following the store.
@@ -26,7 +27,7 @@ function ctx(hash, { me, api = {}, role } = {}) {
   const store = createPrefsStore({ load: async () => PREF_DEFAULTS, save: async (p) => p, apply() {}, storage: null });
   return {
     calls,
-    route: parseHash(hash), role: r, signal: undefined, prefs: store,
+    route: parseHash(hash), role: r, signal: undefined, prefs: store, can: toCan(permissionsOf(me, { principal: { role: r } })),
     session: { principal: { name: me?.name || 'vera', role: r, auth_method: 'token' }, tenant: 'default', tenants: ['default'], expires_at: '2026-11-23T21:00:00Z' },
     setTitle() {}, navigate() {}, rerender() {}, signedOut() {},
     api: {
@@ -38,6 +39,9 @@ function ctx(hash, { me, api = {}, role } = {}) {
       adminSettings: wrap('adminSettings', api.adminSettings ?? { sections: [] }),
       system: wrap('system', api.system ?? { components: [] }),
       account: wrap('account', api.account ?? missing()),
+      roles: wrap('roles', api.roles ?? missing()),
+      permissions: wrap('permissions', api.permissions ?? missing()),
+      settingsHistory: wrap('settingsHistory', api.settingsHistory ?? missing()),
     },
   };
 }

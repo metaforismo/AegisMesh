@@ -17,7 +17,7 @@ export default {
     const id = ctx.route.params.id;
     const inv = await ctx.api.investigation(id, { signal: ctx.signal });
     ctx.setTitle?.(inv?.title || '');
-    const canWrite = ctx.can('analyst');
+    const canWrite = ctx.can('investigations.write');
     const events = Array.isArray(inv.events) ? inv.events : [];
     const indexed = new Set(events.map((e) => e.id));
     let eventIds = [...(inv.event_ids || [])];
@@ -59,6 +59,7 @@ export default {
     const setPriority = optimisticField('priority', prioritySlot, priorityChip, 'Priority');
 
     let controls = null;
+    let renameBtn = null;
     if (canWrite) {
       const rename = h('button', { class: 'btn', type: 'button' }, 'Rename');
       rename.addEventListener('click', async () => {
@@ -90,7 +91,9 @@ export default {
       const priorityField = selectField({ label: 'Priority', name: 'priority', value: state.priority, options: PRIORITIES.map((p) => [p, labelFor(p)]) });
       statusField.querySelector('select').addEventListener('change', (e) => setStatus(e.target.value, e.target));
       priorityField.querySelector('select').addEventListener('change', (e) => setPriority(e.target.value, e.target));
-      controls = h('div', { class: 'inv-controls' }, statusField, priorityField, rename);
+      // Rename acts on the title, so it sits in the panel head, not among the fields.
+      renameBtn = rename;
+      controls = h('div', { class: 'inv-controls' }, statusField, priorityField);
     }
 
     // ---- Evidence ------------------------------------------------------------
@@ -179,7 +182,7 @@ export default {
         subtitle: h('span', { class: 'btn-row' }, statusSlot, prioritySlot,
           h('span', { class: 'muted' }, `Opened by ${inv.created_by || 'unknown'} · ${formatDateTime(inv.created_at)}`)),
       }),
-      canWrite ? panel({ title: 'Case settings', meta: 'Changes apply immediately. There is no edit lock: if two analysts edit at once, the last write wins.', body: controls }) : null,
+      canWrite ? panel({ title: 'Case settings', meta: 'Changes apply immediately. There is no edit lock: if two analysts edit at once, the last write wins.', actions: renameBtn, body: controls }) : null,
       panel({
         title: evidenceTitle, flush: true,
         meta: 'Attached events still present in the index, newest first',

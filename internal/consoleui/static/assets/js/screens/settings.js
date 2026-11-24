@@ -14,6 +14,7 @@ import { ACCOUNT_SECTIONS, isAdminSection, sectionMeta, visibleSections } from '
 import { pageHead } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { olderServerState, notPermittedState } from '../ui/settings-kit.js';
+import { SECTION_PERMS, principalRoleName } from '../lib/perms.js';
 
 function navList(title, items, current, { index }) {
   return h('div', { class: 'settings-nav__group' },
@@ -32,7 +33,8 @@ export default {
   async render(root, ctx) {
     const route = ctx.route;
     const accountId = route.name === 'settings_account' ? route.params.id : '';
-    const requested = accountId ? 'accounts' : (route.params.section || '');
+    const roleId = route.name === 'settings_role' ? route.params.id : '';
+    const requested = accountId ? 'accounts' : roleId ? 'roles' : (route.params.section || '');
     const index = !requested;
     const shown = requested || 'profile';
     const role = ctx.session?.principal?.role || '';
@@ -48,15 +50,20 @@ export default {
       if (isMissingEndpoint(err)) meMissing = true;
       else meError = err;
     }
-    const vis = visibleSections(me);
+    // Pages appear by permission (round 6) or, on an older server, by the
+    // built-in role's fixed set; both come from ctx.can.
+    // A server without /me (older than accounts) offers no administration.
+    const vis = meMissing ? visibleSections(null) : visibleSections(me, ctx.can);
     const meta = sectionMeta(shown);
     const cleanups = [];
-    const view = { ctx, me, meMissing, meError, role, accountId, cleanups, index };
+    const roleName = principalRoleName(role, me?.role_name);
+    const view = { ctx, me, meMissing, meError, role, roleName, accountId, roleId, cleanups, index };
 
     let body;
     if (isAdminSection(shown)) {
+      const needs = SECTION_PERMS[shown] || '';
       if (meMissing) body = olderServerState();
-      else if (!me?.capabilities?.administer) body = notPermittedState(role, `${meta.label.toLowerCase()}`);
+      else if (needs && !ctx.can(needs)) body = notPermittedState(roleName, `${meta.label.toLowerCase()}`, needs);
       else body = await (await import('./settings-admin.js')).default.render(shown, view);
     } else {
       body = await (await import('./settings-account.js')).default.render(shown, view);
@@ -77,7 +84,7 @@ export default {
       ? pageHead({ title: 'Settings', subtitle: vis.admin.length ? 'Your account, and the server’s access and configuration.' : 'Your account: profile, preferences, sessions and API keys.', hint: 'Choose a section. Changes to your preferences apply at once.' })
       : pageHead({
         title: detailName || meta.label,
-        crumbs: [['Settings', '#/settings'], [group, null], detailName ? [meta.label, '#/settings/accounts'] : null, [detailName || meta.label]],
+        crumbs: [['Settings', '#/settings'], [group, null], detailName ? [meta.label, `#/settings/${shown}`] : null, [detailName || meta.label]],
         subtitle: view.subtitle || meta.hint,
         hint: view.hint || null,
       });

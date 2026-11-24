@@ -27,6 +27,8 @@ reference. `site/design-system.html` shows every component rendered.
 | `internal/consoleui/static/assets/js/lib/{auth,tenant}.js` | Sign-in option selection and OIDC error codes; tenant visibility, switch targets and where a switch lands; unit-tested in `webtest/` |
 | `internal/consoleui/static/assets/js/lib/{prefs,settings}.js`, `ui/settings-kit.js`, `screens/settings{,-account,-admin}.js` | Round 5: the preferences store (server, browser copy, optimistic with rollback), the settings registry, role and source wording, validation and refusal messages; the confirmation dialog, one-time key reveal, form helpers and read-only settings renderer; the Settings screen. Tested in `webtest/settings.test.mjs` and `webtest/settingsscreen.test.mjs` |
 | `internal/consoleui/devserver/mock-accounts.mjs` | The mock's twin of contract r5 (accounts, preferences, sessions, API keys, administration, effective settings, audit export, system); `--round5 off` answers like an older server, `--fail-prefs` refuses preference saves. Tested in `webtest/mockaccounts.test.mjs` |
+| `internal/consoleui/static/assets/js/lib/perms.js`, `ui/settings-edit.js`, `screens/settings-roles.js` | Round 6: the permission catalogue fallback, built-in sets, what a principal may do (`permissionsOf`, `toCan`), which screen and settings page needs which permission, the role editor's rules (names, dependencies, diff sentence, summary); edit in place for console settings, the editing-off explanation and the change history; the Roles list and role page. Tested in `webtest/access.test.mjs` and `webtest/accessscreens.test.mjs` |
+| `internal/consoleui/devserver/mock-roles.mjs` | The mock's twin of contract r6 (permissions, roles, the settings overlay and its history, accepted posture risk); `--round6 off` answers like a round-5 server, `--settings-editing off` like a server with console editing off. Tested in `webtest/mockroles.test.mjs` |
 | `site/assets/brand/` | The mark and the horizontal lockup as standalone SVG: colour, dark-ground and one-colour variants; see "Brand" below |
 
 There is no build step, no npm dependency and no third-party code. The console
@@ -295,6 +297,17 @@ other preferences, saved event views and palette recents; see "Console security 
 | `.quiet-line` | One quiet line on the Overview | Posture attention count as a link, never a banner or alarm |
 | `.camp-strip` | Session's campaign | On the session story, links to the campaign with its label and basis |
 | `.stage-row` | Stage tags in a row | More air than a chip row; each tag carries its own mark |
+| `.risk` (`--high`, `--elevated`, `--low`, `--unknown`, `--compact`, `__mark`, `__word`), `.risk-legend` | Permission risk | Filled triangle "High risk", half-filled square "Elevated", hollow dot "Low"; the word always printed (visually hidden only beside a count). High risk = can grant access or change behaviour |
+| `.perm-matrix`, `.perm-group`, `.perm` (`--high`, `--on`, `--off`, `__row`, `__label`, `__id`, `__why`, `__state`) | Permission matrix | Grouped as the server's catalogue; check boxes in the editor, a granted mark or a dash read-only (no disabled form); high-risk rows carry their reason and a warn edge |
+| `.role-summary`, `.role-diff` (`__add`, `__remove`, `__sign`), `.role-layout`, `.roles-risk`, `.holders` | Role page | Live "can and cannot" beside the matrix (sticky from 1200px); the unsaved difference first, with a dashed edge, then the same lists |
+| `.setting` (`__tag`, `__override`, `__actions`, `__history`, `__status`, `__editor`), `.setting-edit` (`__duration`, `__words`, `__count`, `__applies`) | Edit in place | The row keeps its read-only layout; Change opens the editor under it; the status line says the server's answer after a save |
+| `.src-chip--console` | Console override | Hollow square under a 1px accent line, "Console"; the row says which file value it overrides |
+| `.editing-off` | Console editing off | One calm panel: why it is off and the two config lines that turn it on; values stay read-only rows, never disabled inputs |
+| `.change` (`__from`, `__arrow`, `__to`, `__reason`, `__key`), `.audit-change` | A change | Old value struck through in muted ink, arrow, new value semibold; "to" for screen readers; the reason as text |
+| `.pstatus--accepted`, `.pfig--accepted`, `.pcheck--accepted`, `.pcheck__accepted` | Accepted posture risk | Square with a bar, "Accepted risk"; dashed card edge; who, why, until and "Still present"; never the check of "looks right" |
+| `.notice-bar` | Organisation notice | The sign-in banner after sign-in, once per console session: plain text, dismissible, above the screen |
+| `.top-org`, `.nav-org`, `.login__org`, `.login__banner` | Organisation name and banner | Plain text from `/meta`; name in the top bar from 720px, in the phone drawer below; banner on the sign-in card with line breaks kept |
+| `.cell-lead` (column option `lead`) | Phone card head | Below 720px the row's identity (a source, a title, a name) heads its stacked card, unlabelled and a step larger |
 | `.top-tenant`, `--static` | Active tenant in the top bar | A button that opens the tenant menu with several tenants; a static label with one tenant not named `default`; absent otherwise |
 
 ## Console security rules
@@ -365,14 +378,19 @@ Sign-in, Overview, Events (with live mode), Event detail, Sources, Source
 detail, Sessions, Session detail, Campaigns, Campaign detail, Digest,
 Investigations, Investigation detail, Techniques, Recommendations, Decoys,
 Honeytokens, Sensors, Rules, Posture, Node, Fleet and Fleet node
-(experimental), Audit trail (admin only), and the Guide. The sidebar groups
+(experimental), Audit trail (`audit.read`), and the Guide. The sidebar groups
 them as Observe (Overview, Digest, Events, Sources), Understand (Sessions,
 Campaigns, Techniques, Investigations, Recommendations), Deception (Decoys,
 Honeytokens, Sensors, Rules), Operate (Posture, Node, Fleet, Audit trail) and
 Help.
-Analyst-only actions (create, rename, change status or priority, attach and
-detach evidence, add notes) are hidden for viewers; the server enforces the
-same rules.
+Since round 6 every screen, settings page and action follows a permission
+(`lib/perms.js`), not a role rank: a screen whose permission the principal
+lacks is left out of the sidebar, the palette and the shortcut sheet, and
+opening it says which permission is missing; actions are hidden, or said
+once where they would be ("Accepting a risk needs …"). Investigation
+writes need `investigations.write`; downloads `reports.download` or
+`evidence.export`; fleet enrollment and revocation `fleet.manage`. The
+server enforces the same rules and every 403 is answered in place.
 
 ### Understanding aids (2026-11-22)
 
@@ -1150,10 +1168,113 @@ knows `account.create`, `account.update`, `key.create`, `key.revoke`,
 viewers and OIDC identities cannot manage their own keys (to exercise the
 403 state), and `X-AegisMesh-Audit-Records` on the export.
 
-**Not done.** Nothing in `/admin/settings` is editable (the contract says so
-for this round). `last_admin` cannot be produced by the mock while a
+**Not done (round 5).** Nothing in `/admin/settings` was editable then;
+round 6 below adds the allowlisted console settings. `last_admin` cannot be produced by the mock while a
 configured admin exists, so it is covered by a unit test only. Password
 sign-in does not exist and is not planned.
+
+### Roles, permissions, editable settings and accepted risk (round 6, 2026-11-24)
+
+Built against contract r6 while the backend landed in parallel; the mock
+follows the backend's answers (refusal codes, sources, audit detail
+format). Every page has an older-server state (`--round6 off`) and an
+editing-off state (`--settings-editing off`).
+
+**Permissions drive the interface.** After sign-in the console reads
+`/me` once: `permissions` on a round-6 server, else the built-in role's
+fixed set (viewer, analyst, admin grant exactly what they granted before).
+If `/me` fails for another reason and the role is not a built-in, nothing
+is hidden and the server's 403s speak. Built-in roles are named by id on
+the server ("viewer"); the console says them as words.
+
+**Roles** (Administration, `#/settings/roles`, `#/settings/roles/<id>`,
+`#/settings/roles/new[?from=<id>]`). The list: every role with kind (Built
+in, Custom), permission count with a high-risk mark, who holds it by
+source (one per line), last change; under it a risk summary (custom roles
+of the limit, how many hold high-risk permissions, how many nobody holds)
+and the risk legend. A role page: the permission matrix grouped as the
+server's catalogue (`GET /permissions`, the built-in copy when absent),
+each row its plain label, id and risk; high-risk rows carry their reason.
+Beside it (sticky from 1200px) "What this role can and cannot do" redraws
+as boxes change, and the unsaved difference leads it. The server's
+dependency rules (roles.manage needs accounts.manage; settings.manage
+needs accounts.manage and settings.read; accounts.manage and
+sessions.manage need accounts.read) are said in one sentence with one
+button that adds what is missing. Saving opens the confirmation dialog with
+the sentence "Adds 2, removes 1; affects 3 accounts — takes effect on their
+next request." and the lists. Built-ins are read-only (a granted mark or a
+dash, no disabled form) with "Duplicate as custom role". Delete is typed;
+an `in_use` refusal lists who holds the role, with links, and the page
+shows the holders anyway. `exceeds_own_permissions` is said in words.
+Account forms pick built-in or custom roles (optgroups) with the role's
+summary and permission count; Profile lists your permissions grouped, with
+"Not included" folded.
+
+**Editable settings.** Where `/admin/settings` marks an item editable,
+the row keeps its layout and gains: the Editable tag, the value in words
+(the same words as the file value and the history: "12 hours", not "12h"),
+"Overrides the config file value 8 hours." with the Console source mark,
+the constraints as one help sentence, when it applies, Change, Revert to
+file value, and a link to its history. Change opens the editor in place:
+the new value (seconds as a number and a unit with the value in words;
+days as a number; a choice as words; text with a character count), a
+required reason (the server's `reason_max_len`), what the change affects.
+Validation is inline from `constraints`; the save is not optimistic: the
+row shows the server's answer ("Saved: 12 hours → 10 hours. Applies at
+once.") and a toast. Revert asks first, naming both values. Without
+`settings.manage` the page says once, in its banner, who may change the
+rows marked Editable. When editing is off, one calm panel says why (the
+file stays the one source of truth) and the two config lines that turn it
+on; nothing on the page looks disabled. `posture.accepted` links to
+Posture. The organisation name and banner refresh the top bar after a save.
+
+**Change history** (`#/settings/history[?key=…]`): when, setting (label
+and key), old → new in words, Changed or Reverted, who, reason; a filter
+by setting; a link to the audit trail filtered to setting changes. The
+server keeps a bounded history; the audit trail keeps every record.
+
+**Organisation name and sign-in banner** (from `/meta`): the name in the
+top bar (in the drawer on phones) and on the sign-in card; the banner on
+the sign-in card and once per console session after sign-in as a
+dismissible notice above the screen (remembered in this tab under the
+session's expiry, which a tenant switch keeps). Both are Text nodes; the
+banner keeps line breaks and nothing else is interpreted. Reports and
+print headers do not carry the name yet.
+
+**Posture, accepted risk.** Attention items offer "Accept risk…" to
+`settings.manage` (the reason why not to everyone else): a reason and an
+end date, 30, 90 or 180 days or a date (UTC, at most 180 days). Accepted
+items move to their own panel, "Accepted risk · N", each with who, why,
+until (and how long that is) and "Still present: accepting records a
+decision, it does not fix anything", with Revoke acceptance. The summary
+counts accepted risk separately and the Overview's quiet line says "1
+accepted as a known risk". Nothing presents accepted risk as fixed.
+
+**Audit.** The action filter is grouped (sign-in, access, settings and
+posture, investigations, evidence out, audit, fleet), each action with
+words beside its code, and knows role.*, settings.*, posture.*. A setting
+change reads "Session lifetime: 12 hours → 10 hours" with the reason and a
+link to the history (parsed from the server's `from="…" to="…" seq=N
+reason="…"`); a role change names the role and its permissions; an
+acceptance its end and reason. A detail that does not parse is shown as
+written. Records (with the filters on them) come first; the chain check
+follows.
+
+**The tour.** Its popover is placed by `tourPlacement` (`lib/viz.js`):
+never over the element it describes nor over the step's key content (the
+brief and its counts), scrolling the page up when that makes room below.
+
+### Verification: roles, settings and accepted risk (2026-11-24, Node 25, Go toolchain, Chromium in the Claude browser pane, mocks on ports 9191, 9192 `--round6 off`, 9193 `--settings-editing off`)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (342 tests: adds `access.test.mjs` for permissions, role rules, settings parsing and history, audit details, accepted risk and the tour placement; `accessscreens.test.mjs` for the roles list, built-in and custom role pages, the dependency fix, settings edit, refusal, revert, editing off, history, posture accept; `mockroles.test.mjs`; the banner as one Text node on the sign-in card) | PASS (one earlier run hit "mock did not start" under load; the re-run passed) |
+| `go build ./...`, `go test ./internal/consoleui/...` | PASS |
+| Driven in the browser as admin: edit a custom role (dependency warning, fix, diff dialog, save), change and validate session lifetime, change the organisation name (top bar follows), history, accept and revoke risk, audit details | PASS |
+| Seen: Roles, a role page, Security and access, Console, Change history, Posture, Audit, sign-in (admin, dark 1440); Console as a custom-role auditor (light 1440); Profile and Posture as viewer (light 375, dark 1440); role editor and banner editor (admin, light 375); editing off (dark 1440); round 6 off (scripted: roles, console, history, posture) | PASS after fixes (cramped roles table, invisible high-risk fill, repeated permission reasons, "12h" beside "8 hours") |
+| Tour at 1440 and 375: popover overlaps neither the brief nor the counts on steps 1 and 2 | PASS (scripted) |
+| Scripted at 375px on 22 routes (the 15 reviewed screens and the new ones): one h1, no horizontal page scroll, no text under 11px | PASS after fixes |
+| Firefox, Safari, screen readers, the real Go server with the r6 backend, a real phone | NOT RUN: only Chromium and the mock |
 
 ## Brand
 
@@ -1283,6 +1404,9 @@ paint. The burst figure comes from `GET /__mock/burst?n=200` on the mock.
 # first owns the local sensors, rules and node, the others hold only evidence
 # forwarded by their own, differently named fleet; dev-admin and dev-analyst
 # belong to every tenant, dev-viewer to the first only
+# add --round6 off to answer like a round-5 server (no permissions, roles,
+# editable settings, history or accepted risk); --settings-editing off for a
+# round-6 server with console editing off (default on in the mock)
 # add --round5 off to answer like a server without accounts and settings
 # (404 on /me, /admin/*, /system), --fail-prefs to refuse preference saves
 make ui-dev

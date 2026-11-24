@@ -165,6 +165,6 @@ export function campaignScoreView(c, { sessionHref }) {
 export function statusChip(status) {
   const m = statusMeta(status?.key ?? status);
   return h('span', { class: ['pstatus', `pstatus--${m.mark}`] },
-    h('span', { class: 'pstatus__mark', 'aria-hidden': 'true' }, m.mark === 'ok' ? icon('check', { size: 'xs' }) : m.mark === 'attention' ? '!' : 'i'),
+    h('span', { class: 'pstatus__mark', 'aria-hidden': 'true' }, m.mark === 'ok' ? icon('check', { size: 'xs' }) : m.mark === 'attention' ? '!' : m.mark === 'accepted' ? '–' : 'i'),
     m.label);
 }

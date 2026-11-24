@@ -134,7 +134,7 @@ export function createFleet({ mode = 'hub', now = () => Date.now(), listen = '12
     }
 
     const adminRoute = p.startsWith('/fleet/enrollment-tokens') || /\/revoke$/.test(p);
-    if (adminRoute && !need('admin', p.includes('token') ? 'fleet.token' : 'fleet.node.revoke')) return true;
+    if (adminRoute && !need('fleet.manage', p.includes('token') ? 'fleet.token' : 'fleet.node.revoke')) return true;
 
     // Contract: hub-disabled answers 503 after auth/CSRF, for every node/token route.
     const hubRoute = p === '/fleet/nodes' || p.startsWith('/fleet/nodes/') || p.startsWith('/fleet/enrollment-tokens');

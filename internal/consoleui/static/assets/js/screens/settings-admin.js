@@ -22,12 +22,16 @@ import {
 } from '../ui/settings-kit.js';
 import { sessionsTable, revokeSessionFlow, keysTable, revokeKeyFlow, createKeyForm } from './settings-account.js';
 import { icon } from '../ui/icons.js';
+import { editableSection, editingOffNotice, settingsAreRound6, historyView } from '../ui/settings-edit.js';
+import { rolesPage, roleEditor, loadRoles } from './settings-roles.js';
+import { roleNameOf, roleDisplayName, permCountLine, SECTION_PERMS, isRoleId, permissionLabel } from '../lib/perms.js';
+import { normalizeHistory, isSettingKey, SETTING_LABELS, EDITABLE_KEYS } from '../lib/settings.js';
 
 // A failure inside a section: an older server, a refusal, or a retryable
 // outage. Never a blank panel.
-function sectionFailure(v, err, retry) {
-  if (isMissingEndpoint(err)) return olderServerState();
-  if (err instanceof ApiError && err.status === 403) return notPermittedState(v.role, 'administration');
+function sectionFailure(v, err, retry, older) {
+  if (isMissingEndpoint(err)) return olderServerState(older);
+  if (err instanceof ApiError && err.status === 403) return notPermittedState(v.roleName || v.role, 'this page', SECTION_PERMS[v.section] || '');
   return failureState({ ...describeError(err), retry: true, actions: [] }, retry);
 }
 
@@ -57,15 +61,15 @@ const tenantOptions = (v) => {
 
 const SOURCE_FILTERS = [['all', 'All'], ['config', 'Configured'], ['oidc', 'Single sign-on'], ['managed', 'Managed']];
 
-function accountsTable(items) {
+function accountsTable(items, roles = []) {
   return table({
     caption: 'Accounts',
     columns: [
-      { label: 'Name', className: 'col-summary', cell: (a) => h('span', { class: 'stack-tight' },
+      { label: 'Name', className: 'col-summary', lead: true, cell: (a) => h('span', { class: 'stack-tight' },
         isAccountId(a.id) ? h('a', { class: 'account-name', href: href('settings', 'accounts', a.id) }, String(a.name || a.id)) : String(a.name || '—'),
         h('span', { class: 'muted' }, kindLabel(a.kind))), sort: (a) => String(a.name || '').toLowerCase() },
       { label: 'Source', cell: (a) => sourceBadge(a.source), sort: (a) => a.source },
-      { label: 'Role', cell: (a) => roleText(a.role).label, sort: (a) => ROLES.indexOf(a.role), sortFirst: 'desc' },
+      { label: 'Role', cell: (a) => roleNameOf(a.role, roles), sort: (a) => (ROLES.includes(a.role) ? ROLES.indexOf(a.role) : 3), sortFirst: 'desc' },
       { label: 'Tenants', cell: (a) => h('span', { class: 'chip-row' }, (a.tenants || []).map((t) => chip(t, { mono: true }))) },
       { label: 'Status', cell: (a) => { const m = accountStatusMeta(a.status); return badge(m.badge, m.label); }, sort: (a) => a.status },
       { label: 'Last seen', cell: (a) => (a.last_seen_at ? timeEl(a.last_seen_at, { relative: true }) : h('span', { class: 'muted' }, 'never')), sort: (a) => Date.parse(a.last_seen_at) || null, sortFirst: 'desc' },
@@ -77,17 +81,32 @@ function accountsTable(items) {
 }
 
 // The create-account dialog. Resolves to the created account or null.
-function createAccountDialog(v) {
+// The role picker: built-in and custom roles, each with what it permits.
+// `roles` comes from /admin/roles (or the built-ins on an older server).
+function rolePicker(roles, value) {
+  const list = roles.length ? roles : ROLES.map((r) => ({ id: r, name: roleText(r).label, builtin: true, description: roleText(r).summary }));
+  const sel = h('select', { class: 'select', name: 'role' },
+    h('optgroup', { label: 'Built-in roles' }, list.filter((r) => r.builtin).map((r) => h('option', { value: r.id, selected: r.id === value }, roleDisplayName(r)))),
+    list.some((r) => !r.builtin) ? h('optgroup', { label: 'Custom roles' }, list.filter((r) => !r.builtin).map((r) => h('option', { value: r.id, selected: r.id === value }, roleDisplayName(r)))) : null);
+  if (value && !list.some((r) => r.id === value)) sel.append(h('option', { value, selected: true }, roleNameOf(value, list)));
+  const hint = h('span', { class: ['field__hint', 'role-pick'] });
+  const paint = () => {
+    const r = list.find((x) => x.id === sel.value);
+    const text = r ? (r.builtin ? roleText(r.id).summary : String(r.description || 'A custom role.')) : 'A role this console does not know.';
+    hint.replaceChildren(h('span', null, text), Array.isArray(r?.permissions) ? h('span', { class: 'role-pick__count' }, ` ${permCountLine(r.permissions)}. `) : ' ', isRoleId(sel.value) && r ? h('a', { href: href('settings', 'roles', sel.value) }, 'What it permits') : null);
+  };
+  sel.addEventListener('change', paint);
+  paint();
+  return { sel, hint };
+}
+
+function createAccountDialog(v, roles = []) {
   return new Promise((resolve) => {
     const summary = errorSummary();
     const name = formField({ label: 'Name', control: h('input', { class: 'input', type: 'text', name: 'name', maxlength: 64, autocomplete: 'off', spellcheck: 'false' }), hint: 'A person (morgan@soc.example) or what a service does (siem-pull). Shown in the audit trail.' });
     const kind = choices({ legend: 'Kind', name: 'kind', value: 'person', options: [['person', 'Person'], ['service', 'Service']], hint: 'Both sign in with API keys. Service marks automation, such as a SIEM pulling events.' });
-    const roleHint = h('span', { class: 'field__hint' });
-    const roleSel = h('select', { class: 'select', name: 'role' }, ROLES.map((r) => h('option', { value: r, selected: r === 'viewer' }, roleText(r).label)));
+    const { sel: roleSel, hint: roleHint } = rolePicker(roles, 'viewer');
     const role = formField({ label: 'Role', control: roleSel });
-    const paintRole = () => { roleHint.textContent = roleText(roleSel.value).summary; };
-    roleSel.addEventListener('change', paintRole);
-    paintRole();
     const tOpts = tenantOptions(v);
     const tenants = checkSet({ legend: 'Tenants', name: 'tenants', options: tOpts, values: tOpts.length === 1 ? [tOpts[0][0]] : [], hint: 'The tenants this account may act in.' });
     const submit = h('button', { class: ['btn', 'btn--primary'], type: 'submit' }, 'Create account');
@@ -126,15 +145,17 @@ async function accounts(v) {
   v.hint = 'Open an account to change its role, tenants or status, or to manage its keys and sessions. Configured and single sign-on accounts are read-only here.';
   const holder = h('div');
   let filter = 'all';
+  let roleList = [];
   const load = async () => {
-    const r = await attempt(v, () => ctx.api.accounts({ signal: ctx.signal }));
+    const [r, rl] = await Promise.all([attempt(v, () => ctx.api.accounts({ signal: ctx.signal })), loadRoles(ctx)]);
     if (r.error) { mount(holder, panel({ body: sectionFailure(v, r.error, load) })); return; }
+    roleList = rl.items || [];
     const items = Array.isArray(r.value?.items) ? r.value.items : [];
     const limits = r.value?.limits || {};
     const count = (s) => items.filter((a) => s === 'all' || a.source === s).length;
-    const create = h('button', { class: ['btn', 'btn--primary'], type: 'button' }, icon('plus', { size: 'sm' }), 'Create account');
-    create.addEventListener('click', async () => {
-      const made = await createAccountDialog(v);
+    const create = ctx.can('accounts.manage') ? h('button', { class: ['btn', 'btn--primary'], type: 'button' }, icon('plus', { size: 'sm' }), 'Create account') : null;
+    create?.addEventListener('click', async () => {
+      const made = await createAccountDialog(v, roleList);
       if (!made) return;
       toast('ok', `Account created: ${made.name}. Create an API key so it can sign in.`);
       if (isAccountId(made.id)) ctx.navigate(href('settings', 'accounts', made.id, { created: '1' }));
@@ -153,7 +174,7 @@ async function accounts(v) {
               options: SOURCE_FILTERS.map(([k, label]) => [k, `${label} ${count(k)}`]),
               onChange: (k) => { filter = k; paint(); },
             })),
-            shown.length ? accountsTable(shown) : empty('No accounts from this source', filter === 'oidc' ? 'Single sign-on identities appear after their first sign-in.' : 'Create a managed account for a person or a service.')),
+            shown.length ? accountsTable(shown, roleList) : empty('No accounts from this source', filter === 'oidc' ? 'Single sign-on identities appear after their first sign-in.' : 'Create a managed account for a person or a service.')),
         }),
         h('div', { class: ['grid', 'grid--3', 'source-notes'] }, ['config', 'oidc', 'managed'].map((s) => h('div', { class: 'source-note' },
           sourceBadge(s), h('p', null, sourceMeta(s).why))))));
@@ -173,11 +194,13 @@ async function accountDetail(v) {
   const revealSlot = h('div');
   let reveal = null;
   v.cleanups.push(() => reveal?.destroy());
-  const [first, listed] = await Promise.all([
+  const [first, listed, rl] = await Promise.all([
     attempt(v, () => ctx.api.account(accountId, { signal: ctx.signal })),
     // Only for the server's key limits (max_key_days, default_key_days).
     attempt(v, () => ctx.api.accounts({ signal: ctx.signal })),
+    loadRoles(ctx),
   ]);
+  const roleList = rl.items || [];
   const limits = listed.value?.limits || {};
   if (first.error) {
     if (first.error instanceof ApiError && first.error.status === 404) {
@@ -193,7 +216,8 @@ async function accountDetail(v) {
     const src = sourceMeta(a.source);
     // The server's `editable` wins when present (false for configured and
     // single sign-on accounts).
-    const managed = accountEditable(a);
+    // Changing it also needs accounts.manage (the server decides).
+    const managed = accountEditable(a) && ctx.can('accounts.manage');
     const isSelf = v.me?.id === a.id;
     const keyItems = Array.isArray(a.keys) ? a.keys : [];
     const sessionItems = Array.isArray(a.sessions) ? a.sessions : [];
@@ -208,9 +232,7 @@ async function accountDetail(v) {
     if (managed) {
       const summary = errorSummary();
       const name = formField({ label: 'Name', control: h('input', { class: 'input', type: 'text', name: 'name', maxlength: 64, autocomplete: 'off', spellcheck: 'false', prop: { value: a.name || '' } }) });
-      const roleSel = h('select', { class: 'select', name: 'role' }, ROLES.map((r) => h('option', { value: r, selected: r === a.role }, roleText(r).label)));
-      const roleHint = h('span', { class: 'field__hint' }, roleText(a.role).summary);
-      roleSel.addEventListener('change', () => { roleHint.textContent = roleText(roleSel.value).summary; });
+      const { sel: roleSel, hint: roleHint } = rolePicker(roleList, a.role);
       const role = formField({ label: 'Role', control: roleSel });
       const tOpts = tenantOptions(v);
       const extra = (a.tenants || []).filter((t) => !tOpts.some(([x]) => x === t)).map((t) => [t, `${t} (not one of yours)`]);
@@ -244,9 +266,11 @@ async function accountDetail(v) {
       access = panel({
         title: 'Access', primary: true, meta: 'Read-only here',
         body: h('div', { class: 'stack' },
-          banner('info', `${src.long}: changed outside the console`, src.why),
+          accountEditable(a)
+            ? banner('info', 'Read-only for you', `Changing accounts needs “${permissionLabel('accounts.manage')}”, which your role does not include.`)
+            : banner('info', `${src.long}: changed outside the console`, src.why),
           kv([
-            ['Role', roleText(a.role).label],
+            ['Role', isRoleId(a.role) ? h('a', { href: href('settings', 'roles', a.role) }, roleNameOf(a.role, roleList)) : roleNameOf(a.role, roleList)],
             ['Tenants', h('span', { class: 'chip-row' }, (a.tenants || []).map((t) => chip(t, { mono: true })))],
           ])),
       });
@@ -309,14 +333,14 @@ async function accountDetail(v) {
         !managed ? h('p', { class: ['panel-inset', 'muted'] }, a.source === 'config' ? 'A configured operator creates its own keys in its Settings. You can revoke them here.' : 'Single sign-on identities do not use API keys on this server.') : null,
         keyItems.length ? keysTable(keyItems, {
           caption: `API keys of ${a.name}`,
-          onRevoke: (k) => revokeKeyFlow(k, { revoke: (id) => ctx.api.revokeAccountKey(a.id, id), after: reload, owner: a.name }),
+          onRevoke: !ctx.can('accounts.manage') ? null : (k) => revokeKeyFlow(k, { revoke: (id) => ctx.api.revokeAccountKey(a.id, id), after: reload, owner: a.name }),
         }) : empty('No keys', managed ? 'This account cannot sign in until it has a key.' : 'This account has no API keys.', null, { icon: 'key' })),
     });
 
     const sessionPanel = panel({
       title: 'Sessions', flush: true, meta: plural(sessionItems.length, 'signed-in session'),
       body: sessionItems.length ? sessionsTable(sessionItems, {
-        onRevoke: (s) => revokeSessionFlow(ctx, s, { revoke: (handle) => ctx.api.revokeAnySession(handle), after: reload, who: a.name }),
+        onRevoke: !ctx.can('sessions.manage') ? null : (s) => revokeSessionFlow(ctx, s, { revoke: (handle) => ctx.api.revokeAnySession(handle), after: reload, who: a.name }),
       }) : empty('No sessions', 'This account is not signed in anywhere right now.', null, { icon: 'devices' }),
     });
 
@@ -353,7 +377,7 @@ async function activeSessions(v) {
         accountCell: (s) => (isAccountId(s.account_id)
           ? h('a', { href: href('settings', 'accounts', s.account_id) }, String(s.account_name || s.account_id))
           : String(s.account_name || 'unknown')),
-        onRevoke: (s) => revokeSessionFlow(ctx, s, { revoke: (handle) => ctx.api.revokeAnySession(handle), after: load, who: s.account_name || 'that account' }),
+        onRevoke: !ctx.can('sessions.manage') ? null : (s) => revokeSessionFlow(ctx, s, { revoke: (handle) => ctx.api.revokeAnySession(handle), after: load, who: s.account_name || 'that account' }),
       }) : empty('No sessions', 'Nobody is signed in, which only happens right after a restart.'),
     }));
   };
@@ -370,17 +394,70 @@ async function configPage(v, page) {
   v.hint = 'Read the values in effect, where each comes from and how to change it.';
   const r = await attempt(v, () => ctx.api.adminSettings({ signal: ctx.signal }));
   if (r.error) return panel({ body: sectionFailure(v, r.error, () => ctx.rerender()) });
-  const { byId } = groupSettings(r.value);
+  const body = r.value || {};
+  const { byId } = groupSettings(body);
   const sections = (page.settings || []).map((id) => byId.get(id)).filter(Boolean);
-  const generated = r.value?.generated_at;
+  const generated = body.generated_at;
+  const round6 = settingsAreRound6(body);
+  const canManage = ctx.can('settings.manage');
+  const hasAllowlisted = sections.some((sec) => (sec.items || []).some((it) => EDITABLE_KEYS.includes(it.key) && it.key !== 'posture.accepted'));
+  const editingOff = round6 && body.editing === 'off';
+  const anyEditable = round6 && sections.some((sec) => (sec.items || []).some((it) => it.editable && it.key !== 'posture.accepted'));
+  if (anyEditable && canManage) v.hint = 'Change a value marked Editable: give a reason, save, and read the server’s answer. Everything else comes from the config file.';
+  // Organisation name and banner live in /meta too: refresh the top bar.
+  const onChanged = (item) => { if (['console.organization_name', 'console.sign_in_banner'].includes(item.key)) ctx.refreshMeta?.(); };
+  const note = typeof body.note === 'string' && body.note ? `${sentence(body.note)} Copy a key to find it in the file.` : FILE_NOTE;
+  let lead;
+  if (!round6) lead = banner('info', 'File-driven settings', note);
+  else if (editingOff && hasAllowlisted) lead = editingOffNotice();
+  else if (editingOff) lead = banner('info', 'File-driven settings', note);
+  else if (hasAllowlisted && !canManage) lead = banner('info', 'Some values can be changed in the console', `They are marked Editable for people with “${permissionLabel('settings.manage')}”, which your role does not include. The rest come from the config file.`);
+  else if (hasAllowlisted) lead = banner('info', 'Some values can be changed here', 'Values marked Editable can be changed with a reason; the console stores the change and the config file is never written. Everything else comes from the config file: change it there and restart.');
+  else lead = banner('info', 'File-driven settings', note);
   return h('div', { class: 'stack-lg' },
-    banner('info', 'File-driven settings', typeof r.value?.note === 'string' && r.value.note ? `${sentence(r.value.note)} Copy a key to find it in the file.` : FILE_NOTE),
+    lead,
     page.id === 'sso' ? ssoGuide(byId.get('sso')) : null,
-    sections.length ? sections.map((s, i) => panel({
-      title: String(s.title || s.id), primary: i === 0,
+    page.id === 'console' && !sections.length ? olderServerState({ title: 'This server does not provide console settings yet', detail: 'The organisation name, sign-in banner and default window arrive with a newer AegisMesh server. Until then, the console shows no organisation name and no banner.', actions: [] }) : null,
+    sections.length ? sections.map((sec, i) => panel({
+      title: String(sec.title || sec.id), primary: i === 0,
       meta: generated ? h('span', null, 'Effective values, read ', timeEl(generated, { relative: true })) : 'Effective values',
-      body: settingsSection(s),
-    })) : panel({ body: empty('This server does not report these settings', 'It may be older than the console, or the section is not enabled. Check the config file directly.', null, { icon: 'info' }) }));
+      body: round6 ? editableSection(sec, ctx, { body, canManage, history: ctx.can('settings.read'), onChanged }) : settingsSection(sec),
+    })) : page.id === 'console' ? null : panel({ body: empty('This server does not report these settings', 'It may be older than the console, or the section is not enabled. Check the config file directly.', null, { icon: 'info' }) }));
+}
+
+// ---- Change history -------------------------------------------------------------------
+
+async function historyPage(v) {
+  const { ctx } = v;
+  v.hint = 'Read who changed which console setting, from what to what, and why. Filter by setting; each setting links here.';
+  const keyFilter = isSettingKey(ctx.route.query?.key) ? ctx.route.query.key : '';
+  const [hist, set] = await Promise.all([
+    attempt(v, () => ctx.api.settingsHistory('', { signal: ctx.signal })),
+    attempt(v, () => ctx.api.adminSettings({ signal: ctx.signal })),
+  ]);
+  if (hist.error) {
+    return panel({ body: sectionFailure(v, hist.error, () => ctx.rerender(), { title: 'This server does not record setting changes yet', detail: 'Settings on this server come only from the config file, so there is no change history in the console. Your configuration repository’s history is the record.', actions: [h('a', { class: 'btn', href: '#/settings/security' }, 'Read the effective settings')] }) });
+  }
+  const entries = normalizeHistory(hist.value);
+  const labels = { ...SETTING_LABELS };
+  const constraints = {};
+  for (const sec of Array.isArray(set.value?.sections) ? set.value.sections : []) {
+    for (const it of sec.items || []) {
+      if (EDITABLE_KEYS.includes(it.key)) { labels[it.key] = String(it.label || labels[it.key] || it.key); constraints[it.key] = it.constraints; }
+    }
+  }
+  const holder = h('div');
+  const paint = (k) => {
+    const view = historyView({ entries, keyFilter: k, labels, constraints, onFilter: (next) => ctx.navigate(href('settings', 'history', next ? { key: next } : {})) });
+    mount(holder, panel({
+      title: 'Change history', primary: true, flush: true,
+      meta: `${plural(view.count, 'change')}${k ? '' : ', newest first'}. The server keeps a bounded history; the audit trail keeps every record.`,
+      actions: ctx.can('audit.read') ? h('a', { class: 'btn', href: href('audit', { action: 'settings.update' }) }, 'In the audit trail') : null,
+      body: h('div', null, h('div', { class: ['panel-toolbar', 'history-filter'] }, view.filter), view.body),
+    }));
+  };
+  paint(keyFilter);
+  return holder;
 }
 
 function ssoGuide(section) {
@@ -482,6 +559,8 @@ async function system(v) {
 
 const RENDER = {
   accounts: (v) => (v.accountId ? accountDetail(v) : accounts(v)),
+  roles: (v) => (v.roleId ? roleEditor(v) : rolesPage(v)),
+  history: historyPage,
   'active-sessions': activeSessions,
   'audit-export': auditExport,
   system,
@@ -491,6 +570,7 @@ export default {
   async render(id, v) {
     const page = ADMIN_SECTIONS.find((s) => s.id === id);
     if (!page) return notPermittedState(v.role);
+    v.section = id;
     if (RENDER[id]) return RENDER[id](v);
     return configPage(v, page);
   },

@@ -3,6 +3,7 @@ import { ApiError, describeError } from '../lib/api.js';
 import { banner } from '../ui/components.js';
 import { icon, brandMark } from '../ui/icons.js';
 import { signInOptions, loginErrorMessage, OIDC_LOGIN_PATH } from '../lib/auth.js';
+import { organizationText } from '../ui/shell.js';
 
 // A fixed constellation (not data): nodes and the links of a small mesh,
 // drawn faintly behind the sign-in card.
@@ -127,11 +128,20 @@ export default {
       errorBlock = h('div', { role: 'alert', class: 'login__error' }, banner('warn', m.title, m.detail));
     }
 
+    // Round 6: the organisation's name and its sign-in banner, from /meta.
+    // Both are configuration text, shown as Text nodes (never markup), the
+    // banner with its line breaks kept and nothing else interpreted.
+    const org = organizationText(meta?.organization_name);
+    const bannerText = typeof meta?.sign_in_banner === 'string' ? meta.sign_in_banner.trim().slice(0, 2000) : '';
     mount(root, h('main', { class: 'login', id: 'main' },
       mesh(),
       h('div', { class: 'login__card' },
         h('div', { class: 'brand' }, brandMark(), h('span', { class: 'brand__word' }, 'AegisMesh')),
+        org ? h('p', { class: 'login__org' }, org) : null,
         h('h1', { id: 'page-title', tabindex: '-1' }, 'Operator console'),
+        bannerText ? h('section', { class: 'login__banner', 'aria-label': 'Notice from your organisation' },
+          h('p', { class: 'login__banner-title' }, icon('info', { size: 'sm' }), 'Before you sign in'),
+          h('p', { class: 'login__banner-text' }, bannerText)) : null,
         h('p', { class: 'login__lede' }, 'Decoys record what attackers try. This console reads it back to you: observations, never verdicts.'),
         notice ? banner('info', null, notice) : null,
         errorBlock,

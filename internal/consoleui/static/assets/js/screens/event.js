@@ -77,7 +77,7 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
 
     // Investigations annotate bare event ids, which resolve to local
     // observations only; a forwarded copy cannot be attached.
-    const attach = ctx.can('analyst') && !forwarded ? h('button', { class: 'btn', type: 'button' }, 'Add to investigation') : null;
+    const attach = ctx.can('investigations.write') && !forwarded ? h('button', { class: 'btn', type: 'button' }, 'Add to investigation') : null;
     attach?.addEventListener('click', async () => {
       try {
         const inv = await attachDialog(ctx, id);
@@ -126,7 +126,7 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
             : invs.length
             ? h('ul', { class: 'plain-list' }, invs.map((i) => h('li', { class: 'btn-row' },
               isOpaqueId(i.id) ? link(href('investigations', i.id), i.title) : i.title, statusBadge(i.status))))
-            : empty('Not in any investigation', ctx.can('analyst') ? 'Use “Add to investigation” to collect it as evidence.' : 'An analyst can attach it to an investigation.'),
+            : empty('Not in any investigation', ctx.can('investigations.write') ? 'Use “Add to investigation” to collect it as evidence.' : 'Someone who may change investigations can attach it to one.'),
         })),
       narrowPanel(s),
       panel({

@@ -1,3 +1,4 @@
+import { toCan } from '../static/assets/js/lib/perms.js';
 // Event detail for local and forwarded evidence, rendered into the fake DOM
 // with a stubbed API: origin, hub-side integrity wording, and that a
 // forwarded copy cannot be attached to a (local-only) investigation.
@@ -17,7 +18,7 @@ const detail = (extra = {}) => ({ summary, envelope: {}, integrity: { verified: 
 function ctx(d, { accepting = true } = {}) {
   const calls = [];
   return {
-    calls, role: 'analyst', can: (m) => roleAtLeast('analyst', m), route: { query: {}, params: {} }, signal: undefined, rerender() {},
+    calls, role: 'analyst', can: toCan('analyst'), route: { query: {}, params: {} }, signal: undefined, rerender() {},
     api: {
       event: (id, node) => { calls.push([id, node]); return Promise.resolve(d); },
       fleet: () => Promise.resolve({ hub: { enabled: true, listen: '', tls: false, accept_evidence: accepting }, agent: {} }),

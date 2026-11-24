@@ -234,6 +234,10 @@ export const AREAS = Object.freeze([
 
 export const STATUSES = Object.freeze({
   attention: { label: 'Needs attention', mark: 'attention', rank: 0 },
+  // Round 6: an attention item someone accepted, with a reason and an end
+  // date. Still present, never "fixed": it returns to attention when the
+  // acceptance expires or is revoked.
+  accepted: { label: 'Accepted risk', mark: 'accepted', rank: 0.5 },
   info: { label: 'For your information', mark: 'info', rank: 1 },
   ok: { label: 'Looks right', mark: 'ok', rank: 2 },
 });
@@ -257,7 +261,45 @@ export function normalizeCheck(c) {
     detail: typeof o.detail === 'string' ? o.detail : '',
     recommendation: typeof o.recommendation === 'string' ? o.recommendation : '',
     doc: typeof o.doc === 'string' ? o.doc : '',
+    // undefined: the server predates accepted risk; null: not accepted.
+    accepted: normalizeAcceptance(o.accepted),
+    acceptable: 'accepted' in o,
   };
+}
+
+function normalizeAcceptance(a) {
+  if (a === null) return null;
+  if (!a || typeof a !== 'object') return undefined;
+  const until = typeof a.until === 'string' && !Number.isNaN(Date.parse(a.until)) ? a.until : '';
+  return { by: typeof a.by === 'string' ? a.by : '', byName: typeof a.by_name === 'string' ? a.by_name : '', reason: typeof a.reason === 'string' ? a.reason : '', until };
+}
+
+// Accept-risk end dates: presets in days and the contract's limit.
+export const ACCEPT_PRESETS = Object.freeze([30, 90, 180]);
+export const ACCEPT_MAX_DAYS = 180;
+// The end of an acceptance `days` from now, at the end of that UTC day,
+// clamped to the limit; RFC 3339 UTC without fractions.
+export function acceptUntil(days, now = Date.now()) {
+  const d = Math.max(1, Math.min(ACCEPT_MAX_DAYS, Math.floor(Number(days) || 0)));
+  const t = Math.min(now + d * 86400e3, now + ACCEPT_MAX_DAYS * 86400e3 - 60e3);
+  return new Date(t).toISOString().replace(/\.\d+Z$/, 'Z');
+}
+// A date input (YYYY-MM-DD, read as UTC 23:59:59) → RFC 3339, or '' with
+// the reason it is refused.
+export function acceptUntilFromDate(value, now = Date.now()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return { error: 'Choose an end date.' };
+  const t = Date.parse(`${value}T23:59:59Z`);
+  if (Number.isNaN(t)) return { error: 'Choose a valid date.' };
+  if (t <= now) return { error: 'Choose a date after today.' };
+  if (t > now + ACCEPT_MAX_DAYS * 86400e3) return { error: `Choose a date at most ${ACCEPT_MAX_DAYS} days ahead. Review the risk again then.` };
+  return { until: new Date(t).toISOString().replace(/\.\d+Z$/, 'Z') };
+}
+export function validateAcceptReason(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return 'Say why the risk is acceptable for now. The reason is recorded in the audit trail.';
+  if (Array.from(s).length > 200) return 'Keep the reason to 200 characters or fewer.';
+  if (/[\u0000-\u001f\u007f]/.test(s)) return 'Use printable characters only.';
+  return '';
 }
 
 // Checks grouped by area in the fixed order (an unknown area last), each
@@ -268,22 +310,23 @@ export function postureGroups(checks) {
   const groups = [...AREAS, { id: 'other', label: 'Other', text: 'Checks the console does not group.' }]
     .map((a) => {
       const items = list.filter((c) => c.area === a.id).sort(byRank);
-      return { ...a, items, attention: items.filter((c) => c.status.key === 'attention').length };
+      return { ...a, items, attention: items.filter((c) => c.status.key === 'attention').length, accepted: items.filter((c) => c.status.key === 'accepted').length };
     })
     .filter((g) => g.items.length);
-  return { groups, attention: list.filter((c) => c.status.key === 'attention'), total: list.length };
+  return { groups, attention: list.filter((c) => c.status.key === 'attention'), accepted: list.filter((c) => c.status.key === 'accepted'), total: list.length };
 }
 
 export function postureCounts(res) {
   const s = res?.summary;
   const checks = arr(res?.checks).map(normalizeCheck);
   const count = (k) => num(s?.[k]) ?? checks.filter((c) => c.status.key === k).length;
-  return { attention: count('attention'), ok: count('ok'), info: count('info') };
+  return { attention: count('attention'), accepted: count('accepted'), ok: count('ok'), info: count('info') };
 }
 
 // The Overview's one quiet line.
 export function postureLine(counts) {
   if (!counts) return '';
-  if (!counts.attention) return `Configuration review: nothing needs attention (${plural(counts.ok, 'check')} ${counts.ok === 1 ? 'looks' : 'look'} right).`;
-  return `Configuration review: ${plural(counts.attention, 'item')} ${counts.attention === 1 ? 'needs' : 'need'} attention.`;
+  const acc = counts.accepted ? `; ${counts.accepted} accepted as a known risk` : '';
+  if (!counts.attention) return `Configuration review: nothing needs attention${acc} (${plural(counts.ok, 'check')} ${counts.ok === 1 ? 'looks' : 'look'} right).`;
+  return `Configuration review: ${plural(counts.attention, 'item')} ${counts.attention === 1 ? 'needs' : 'need'} attention${acc}.`;
 }

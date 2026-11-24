@@ -7,7 +7,7 @@
 //
 //   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
 //     [--accept-evidence on|off] [--burst N] [--auth token|oidc|both] [--tenants a,b]
-//     [--round4 on|off] [--round5 on|off] [--fail-prefs]
+//     [--round4 on|off] [--round5 on|off] [--fail-prefs] [--round6 on|off] [--settings-editing on|off]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
@@ -29,6 +29,7 @@ import { snapshot, sessionsOf, publicSession, sessionDetail, coverageOf, indicat
 import { ruleRecord, decoyCatalog, tokenCatalog, decoysView, honeytokensView, interArrival, digestOf, renderEvents, EXPORT_FORMATS, EXPORT_NAMES, EXPORT_TYPES, CATALOG_WINDOWS, DIGEST_WINDOWS } from './mock-catalogs.mjs';
 import { campaignsOf, campaignDetail, publicCampaign, actorOf, postureOf } from './mock-insight.mjs';
 import { createAccounts, clientFamily } from './mock-accounts.mjs';
+import { BUILTIN, createAcceptance } from './mock-roles.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
@@ -74,6 +75,19 @@ const ROUND4 = (argRound4 > 0 ? process.argv[argRound4 + 1] : (process.env.AEGIS
 const argRound5 = process.argv.indexOf('--round5');
 const ROUND5 = (argRound5 > 0 ? process.argv[argRound5 + 1] : (process.env.AEGISMESH_MOCK_ROUND5 || 'on')) !== 'off';
 const FAIL_PREFS = process.argv.includes('--fail-prefs');
+
+// Round-6 endpoints (permissions, custom roles, editable console settings,
+// accepted posture risk; contract r6). `off` (implied by --round5 off)
+// behaves like a round-5 server: 404 on the new routes, no new fields, and
+// only the built-in roles. --settings-editing on|off mirrors
+// console.settings_editing ("console" or the default "off" on a real
+// server; the mock defaults to on so every editing state can be reviewed).
+const argRound6 = process.argv.indexOf('--round6');
+const ROUND6 = ROUND5 && (argRound6 > 0 ? process.argv[argRound6 + 1] : (process.env.AEGISMESH_MOCK_ROUND6 || 'on')) !== 'off';
+const argEditing = process.argv.indexOf('--settings-editing');
+const EDIT_ARG = argEditing > 0 ? process.argv[argEditing + 1] : (process.env.AEGISMESH_MOCK_SETTINGS_EDITING || 'on');
+if (!['on', 'off'].includes(EDIT_ARG)) throw new Error('--settings-editing must be on or off');
+const SETTINGS_EDITING = EDIT_ARG === 'on';
 
 const argTenants = process.argv.indexOf('--tenants');
 const TENANTS = (argTenants > 0 ? process.argv[argTenants + 1] : (process.env.AEGISMESH_MOCK_TENANTS || 'default')).split(',').map((t) => t.trim()).filter(Boolean);
@@ -445,7 +459,29 @@ const IDENTITIES = new Map([
 ]);
 
 const sessions = new Map(); // sid → { name, role, auth_method, tenant, tenants, csrf_token, expires_at, account_id, created_at, last_seen_at, remote, client }
-const accounts = createAccounts({ tenants: TENANTS, localTenant: LOCAL_TENANT, configured: TOKENS, tokenLogin: TOKEN_AUTH });
+const accounts = createAccounts({ tenants: TENANTS, localTenant: LOCAL_TENANT, configured: TOKENS, tokenLogin: TOKEN_AUTH, round6: ROUND6, settingsEditing: SETTINGS_EDITING });
+const acceptance = createAcceptance({ round6: ROUND6 });
+
+// The posture review of a tenant; with round 6, a check derived from the
+// console settings overlay and accepted risk.
+function postureBody(T, events, { raw = false } = {}) {
+  const sensorsList = T.local ? [...SENSORS, ...AI_SENSORS] : [];
+  const tokens = T.local ? tokenCatalog(decoyCatalog(sensorsList)) : [];
+  const body = postureOf({ sensors: sensorsList, honeytokens: tokens, rules: CATALOG_RULES.length, index: snapshot(events).bounds.index, principals: TOKENS.size, oidc: OIDC_AUTH });
+  if (!ROUND6) return body;
+  const ttl = accounts.overlay.sessionTtl();
+  const long = ttl > 28800;
+  body.checks.push({
+    id: 'POS-015', area: 'access', status: long ? 'attention' : 'ok',
+    title: long ? `Console sessions last ${Math.round(ttl / 3600)} hours` : 'Console sessions end within 8 hours',
+    detail: `console.session_ttl_seconds is ${ttl}${long ? ', longer than the 8 hours the hardening guide suggests. A stolen session cookie stays useful that long.' : '.'}`,
+    recommendation: long ? 'Keep sessions at 8 hours or less, or revert the console override in Settings, Security and access.' : '',
+    doc: 'docs/configuration.md#console',
+  });
+  body.summary = { attention: 0, ok: 0, info: 0 };
+  for (const c of body.checks) body.summary[c.status]++;
+  return raw ? body : acceptance.decorate(body);
+}
 
 const sessionView = (s) => ({
   principal: { name: s.name, role: s.role, auth_method: s.auth_method, tenant: s.tenant, tenants: s.tenants },
@@ -523,8 +559,6 @@ function cookieSession(req) {
   return { id: m[1], ...s };
 }
 
-const ROLES = ['viewer', 'analyst', 'admin'];
-const atLeast = (role, min) => ROLES.indexOf(role) >= ROLES.indexOf(min);
 
 function paginate(list, url, max = 200) {
   const limitRaw = url.searchParams.get('limit');
@@ -714,6 +748,7 @@ async function api(req, res, url) {
     return send(res, 200, {
       product: 'AegisMesh', api_version: 'v1', version: '0.3.0-dev (mock)',
       auth: { token: TOKEN_AUTH, oidc: { enabled: OIDC_AUTH, display_name: OIDC_DISPLAY_NAME } },
+      ...(ROUND6 ? accounts.overlay.meta() : {}),
     });
   }
 
@@ -754,10 +789,14 @@ async function api(req, res, url) {
     if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return fail(res, 'forbidden', 'origin mismatch');
   }
   const audit = (...args) => record(T, ...args);
-  const need = (role, action, target = '') => {
-    if (atLeast(who.role, role)) return true;
+  // Permission checks (contract r6). The principal's permissions come from
+  // its account's current role, so a role change applies on the next
+  // request; an older server's session falls back to its built-in role.
+  const perms = ROUND5 ? accounts.permissionsOf(s) : [...(BUILTIN[s.role] || [])];
+  const need = (perm, action, target = '') => {
+    if (perms.includes(perm)) return true;
     audit(who.name, who.role, 'authz.denied', target, 'denied', remote, action);
-    fail(res, 'forbidden', `requires ${role}`);
+    fail(res, 'forbidden', `requires ${perm}`);
     return false;
   };
 
@@ -766,6 +805,7 @@ async function api(req, res, url) {
     req, res, url, p, m, s, sessions, send, fail, readBody, audit, who, remote, endStreams, T,
     headers: securityHeaders,
     flags: { failPrefs: FAIL_PREFS, oidc: OIDC_AUTH, tokenAuth: TOKEN_AUTH, fleetHub: FLEET_MODE === 'hub' || FLEET_MODE === 'both', acceptEvidence: localTenant.fleet.accepting },
+    acceptedCount: () => acceptance.count(),
   })) return;
 
   if (p === '/session') {
@@ -794,6 +834,22 @@ async function api(req, res, url) {
     const next = { ...rest, tenant: b.tenant, csrf_token: randomBytes(24).toString('base64url') };
     sessions.set(sid, next);
     return send(res, 200, sessionView(next), { 'Set-Cookie': sessionCookie(sid) });
+  }
+
+  if (ROUND6 && m === 'GET' && p === '/permissions') return send(res, 200, accounts.permissions);
+
+  // The baseline permission of every other route (writes add their own
+  // check below): analysis views, investigations and the fleet have their
+  // own read permission; everything else reads evidence.
+  {
+    const base = /^\/(posture|digest|coverage|recommendations)(\/|$)/.test(p) && m === 'GET' ? 'analysis.read'
+      : /^\/posture\/[^/]+\/accept$/.test(p) ? 'settings.manage'
+        : p.startsWith('/investigations') && m === 'GET' && !/\/report$/.test(p) ? 'investigations.read'
+          : p.startsWith('/investigations') ? null
+            : p === '/fleet' || p.startsWith('/fleet/') ? (m === 'GET' && !p.startsWith('/fleet/enrollment-tokens') ? 'fleet.read' : null)
+              : p.startsWith('/audit') || p.startsWith('/export/') || /\/report$/.test(p) ? null
+                : 'evidence.read';
+    if (base && !need(base, p.replace(/^\//, '').replace(/\//g, '.'))) return;
   }
 
   if (m === 'GET' && p === '/overview') {
@@ -981,7 +1037,7 @@ async function api(req, res, url) {
   const reportMatch = p.match(/^\/sessions\/([^/]+)\/report$/);
   if (m === 'GET' && reportMatch) {
     if (!strictQuery([])) return;
-    if (!need('analyst', 'session.report', decodeURIComponent(reportMatch[1]))) return;
+    if (!need('reports.download', 'session.report', decodeURIComponent(reportMatch[1]))) return;
     const found = findSession(decodeURIComponent(reportMatch[1]));
     if (!found) return;
     audit(who.name, who.role, 'session.report', found.session.id, 'ok', remote);
@@ -1018,7 +1074,31 @@ async function api(req, res, url) {
     if (!strictQuery([])) return;
     const sensorsList = T.local ? [...SENSORS, ...AI_SENSORS] : [];
     const tokens = T.local ? tokenCatalog(decoyCatalog(sensorsList)) : [];
-    return send(res, 200, postureOf({ sensors: sensorsList, honeytokens: tokens, rules: CATALOG_RULES.length, index: snapshot(events).bounds.index, principals: TOKENS.size, oidc: OIDC_AUTH }));
+    return send(res, 200, postureBody(T, events));
+  }
+  const acceptMatch = p.match(/^\/posture\/([^/]+)\/accept$/);
+  if (ROUND6 && acceptMatch && (m === 'POST' || m === 'DELETE')) {
+    if (!T.local) { audit(who.name, who.role, 'authz.denied', '', 'denied', remote, 'posture.accept'); return fail(res, 'forbidden', 'requires settings.manage in the local tenant'); }
+    let id;
+    try { id = decodeURIComponent(acceptMatch[1]); } catch { id = ''; }
+    const raw = postureBody(T, events, { raw: true });
+    const check = raw.checks.find((c) => c.id === id);
+    if (!check) return fail(res, 'not_found', 'no such posture check');
+    if (!accounts.overlay.editing) return send(res, 409, { error: { code: 'editing_disabled', message: 'console settings editing is off (console.settings_editing: off)' } });
+    if (m === 'POST') {
+      let b;
+      try { b = await readBody(req, ['reason', 'until']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
+      if (check.status !== 'attention') return send(res, 409, { error: { code: 'conflict', message: 'only checks that need attention can be accepted' } });
+      const v = acceptance.validate(b);
+      if (v.error) return fail(res, 'invalid_argument', v.error);
+      acceptance.accept(id, s.account_id || who.name, v, who.name);
+      accounts.overlay.record({ key: 'posture.accepted', from: `${id}: not accepted`, to: `${id}: accepted until ${v.until}`, reason: v.reason, action: 'update', actor_id: s.account_id || '', actor_name: who.name });
+      audit(who.name, who.role, 'posture.accept', id, 'ok', remote, `until=${v.until} reason=${JSON.stringify(v.reason)}`);
+    } else {
+      if (acceptance.revoke(id)) accounts.overlay.record({ key: 'posture.accepted', from: `${id}: accepted`, to: `${id}: not accepted`, reason: 'Acceptance revoked.', action: 'revert', actor_id: s.account_id || '', actor_name: who.name });
+      audit(who.name, who.role, 'posture.unaccept', id, 'ok', remote);
+    }
+    return send(res, 200, postureBody(T, events).checks.find((c) => c.id === id));
   }
 
   if (m === 'GET' && p === '/coverage') {
@@ -1072,7 +1152,7 @@ async function api(req, res, url) {
     if (!EXPORT_FORMATS.includes(format)) return fail(res, 'invalid_argument', 'format must be cef, syslog-rfc5424, otlp-json or ecs');
     const scopes = ['session', 'source', 'investigation', 'window'].filter((k) => url.searchParams.has(k));
     if (scopes.length !== 1 || !url.searchParams.get(scopes[0])) return fail(res, 'invalid_argument', 'exactly one scope is required');
-    if (!need('analyst', 'export.events', scopes[0] === 'source' ? '' : url.searchParams.get(scopes[0]))) return;
+    if (!need('evidence.export', 'export.events', scopes[0] === 'source' ? '' : url.searchParams.get(scopes[0]))) return;
     const sn = snap();
     const v = url.searchParams.get(scopes[0]);
     let scoped;
@@ -1104,7 +1184,7 @@ async function api(req, res, url) {
     if (!['stix', 'csv', 'txt'].includes(format)) return fail(res, 'invalid_argument', 'format must be stix, csv or txt');
     const scopes = ['session', 'source', 'investigation', 'window'].filter((k) => url.searchParams.has(k));
     if (scopes.length !== 1 || !url.searchParams.get(scopes[0])) return fail(res, 'invalid_argument', 'exactly one scope is required');
-    if (!need('analyst', 'export.indicators', scopes[0] === 'source' ? '' : url.searchParams.get(scopes[0]))) return;
+    if (!need('evidence.export', 'export.indicators', scopes[0] === 'source' ? '' : url.searchParams.get(scopes[0]))) return;
     const sn = snap();
     const v = url.searchParams.get(scopes[0]);
     let scoped;
@@ -1137,7 +1217,7 @@ async function api(req, res, url) {
   if (m === 'GET' && invReport) {
     if (!strictQuery([])) return;
     const id = decodeURIComponent(invReport[1]);
-    if (!need('analyst', 'investigation.report', id)) return;
+    if (!need('reports.download', 'investigation.report', id)) return;
     const inv = T.investigations.get(id);
     if (!inv) return fail(res, 'not_found', 'investigation not found');
     const resolved = inv.event_ids.map((x) => T.localById(x)).filter(Boolean);
@@ -1187,7 +1267,7 @@ async function api(req, res, url) {
     return send(res, 200, { investigations: list.map((i) => invView(T, i, false)) });
   }
   if (p === '/investigations' && m === 'POST') {
-    if (!need('analyst', 'investigation.create')) return;
+    if (!need('investigations.write', 'investigation.create')) return;
     let b;
     try { b = await readBody(req, ['title', 'priority', 'event_ids']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
     if (typeof b.title !== 'string' || !b.title.trim() || b.title.length > 200) return fail(res, 'invalid_argument', 'title is required (≤200 chars)');
@@ -1204,7 +1284,7 @@ async function api(req, res, url) {
     const touch = () => { inv.updated_at = new Date().toISOString().replace(/\.\d+Z$/, 'Z'); };
     if (!mm[2] && m === 'GET') return send(res, 200, invView(T, inv, true));
     if (!mm[2] && m === 'PATCH') {
-      if (!need('analyst', 'investigation.update', inv.id)) return;
+      if (!need('investigations.write', 'investigation.update', inv.id)) return;
       let b;
       try { b = await readBody(req, ['title', 'status', 'priority']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
       if (b.status && !['open', 'monitoring', 'closed'].includes(b.status)) return fail(res, 'invalid_argument', 'bad status');
@@ -1215,7 +1295,7 @@ async function api(req, res, url) {
       return send(res, 200, invView(T, inv, true));
     }
     if (mm[2] === '/notes' && m === 'POST') {
-      if (!need('analyst', 'investigation.note', inv.id)) return;
+      if (!need('investigations.write', 'investigation.note', inv.id)) return;
       let b;
       try { b = await readBody(req, ['text']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
       if (typeof b.text !== 'string' || !b.text.trim() || [...b.text].length > 4000) return fail(res, 'invalid_argument', 'text is required (≤4000 chars)');
@@ -1226,7 +1306,7 @@ async function api(req, res, url) {
     }
     if (mm[3] && (m === 'PUT' || m === 'DELETE')) {
       const action = m === 'PUT' ? 'investigation.attach' : 'investigation.detach';
-      if (!need('analyst', action, inv.id)) return;
+      if (!need('investigations.write', action, inv.id)) return;
       if (m === 'PUT') {
         if (!T.localById(mm[3])) return fail(res, 'not_found', 'event not in index');
         if (!inv.event_ids.includes(mm[3])) {
@@ -1243,7 +1323,7 @@ async function api(req, res, url) {
   }
 
   if (m === 'GET' && p === '/audit') {
-    if (!need('admin', 'audit.read')) return;
+    if (!need('audit.read', 'audit.read')) return;
     const action = url.searchParams.get('action') || '';
     const actor = url.searchParams.get('actor') || '';
     audit(who.name, who.role, 'audit.read', '', 'ok', remote);
@@ -1253,7 +1333,7 @@ async function api(req, res, url) {
     return send(res, 200, { records: pg.page, next_cursor: pg.next });
   }
   if (m === 'GET' && p === '/audit/verify') {
-    if (!need('admin', 'audit.verify')) return;
+    if (!need('audit.read', 'audit.verify')) return;
     audit(who.name, who.role, 'audit.verify', '', 'ok', remote);
     let prev = '0'.repeat(64);
     for (const r of T.audit) {
@@ -1486,5 +1566,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${localTenant.fleet.accepting ? 'on' : 'off'}; auth: ${AUTH_MODE}; tenants: ${TENANTS.join(',')}; round4: ${ROUND4 ? 'on' : 'off'}; round5: ${ROUND5 ? 'on' : 'off'})`);
+  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${localTenant.fleet.accepting ? 'on' : 'off'}; auth: ${AUTH_MODE}; tenants: ${TENANTS.join(',')}; round4: ${ROUND4 ? 'on' : 'off'}; round5: ${ROUND5 ? 'on' : 'off'}; round6: ${ROUND6 ? 'on' : 'off'}; settings editing: ${ROUND6 && SETTINGS_EDITING ? 'on' : 'off'})`);
 });
