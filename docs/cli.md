@@ -408,8 +408,8 @@ show realistic scale; the data is generated, not observed.
 
 Counts are fixed per profile: gaps and offsets are whole milliseconds relative
 to the start time, so the same events and signals result whatever the start
-time (tested for `small`, checked for `large`). The command prints a `Seeded:` line with these counts before the
-console URL. Actor shapes, drawn from a fixed seeded random stream:
+time (tested for `small`, checked for `large`). The command prints a `Seeded:`
+line with these counts before the console URL. Actor shapes, drawn from a fixed seeded random stream:
 sub-second HTTP/TCP/SSH scanners with scanner User-Agents; SSH and HTTP
 credential stuffing with many distinct synthetic passwords; AI-agent-like
 clients that enumerate the AI decoys, follow the MCP canary
@@ -427,16 +427,19 @@ Generated input passes through the live policy gates, detection engine,
 honeytoken scrubbing and `redact` helpers before serialization; synthetic
 passwords and the planted token values never reach evidence (tested).
 Correlation is enabled for a seeded run, and its signals come from the real
-correlation engine fed with the generated sequence in time order. Output is
+correlation engine fed with the generated sequence in time order. The live
+scenario then also produces a few live, unmarked correlation signals. Output is
 byte-identical for the same profile, start time and demo configuration. The
 history ends at least two minutes before start, so live demo traffic is newest.
 Nothing is written outside the demo's temporary directory, which is removed
 on exit together with the seeded history.
 
 The index keeps its unchanged 64 MiB accounting bound, so with `large` it
-retains the newest ~13,400 of the 57,464 stored envelopes (about the last two
-days); older seeded history stays only in the temporary store. The `large` profile takes a few seconds to
-generate and backfill (see `docs/performance/2026-11-26`).
+retains the newest 13,362 of the 57,464 stored envelopes (about the last two
+days); older seeded history stays only in the temporary store. The `large`
+profile takes a few seconds to generate and backfill (see
+`docs/performance/2026-11-26`). The 20-second live-scenario bound starts after
+seeding; Ctrl-C during seeding stops it and removes the temporary directory.
 
 For scripts, send `Authorization: Bearer <token>` to `/api/v1/*`. Browsers exchange
 `{"token":"…"}` at `POST /api/v1/session`; retain the HttpOnly SameSite=Strict
