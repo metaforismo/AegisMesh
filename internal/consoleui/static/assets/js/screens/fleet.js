@@ -21,11 +21,19 @@ import {
 } from '../lib/fleet.js';
 import {
   pageHead, panel, kv, badge, table, segmented, empty, banner, glyph, link, toast, openDialog, selectField,
-  inputField, timeEl, labelFor, errorState,
+  inputField, timeEl, labelFor, errorState, caveat,
 } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 
-export const FLEET_SUBTITLE = 'Experimental inventory of nodes enrolled with a fleet hub. Everything shown about a node is self-reported by its agent in signed heartbeats; it is not attestation. The hub cannot start, stop or configure nodes. Evidence forwarding is a separate opt-in experiment: best effort, with loss counted, and each node’s own store stays authoritative.';
+export const FLEET_SUBTITLE = 'Nodes enrolled with this fleet hub, as their agents report them.';
+
+// The limits, folded on phones: what "self-reported" means and what the
+// hub cannot do.
+export function fleetCaveat() {
+  return caveat({ id: 'fleet-self-reported', title: 'Self-reported, not attestation.', summary: 'The hub records what each node says; it cannot start, stop or configure nodes.' },
+    'Everything shown about a node comes from its agent in signed heartbeats. A signature proves which enrolled node sent it, not that what it says is true.',
+    'Evidence forwarding is a separate opt-in experiment: best effort, with loss counted, and each node’s own store stays authoritative.');
+}
 
 export function fleetStatusBadge(status) {
   const m = fleetStatusMeta(status);
@@ -305,7 +313,7 @@ export default {
     const head = pageHead({ title: 'Fleet', eyebrow: h('span', { class: 'chip' }, 'Experimental'), subtitle: FLEET_SUBTITLE, hint: 'Read each node’s self-reported state and forwarding; admins manage enrollment tokens and revocation.' });
 
     if (!hubOn && !agentOn) {
-      mount(root, head, teachingState());
+      mount(root, head, fleetCaveat(), teachingState());
       return;
     }
 
@@ -343,7 +351,7 @@ export default {
         'The node inventory lives on the hub this agent reports to. Open that hub’s console to see it.');
     }
 
-    mount(root, head, rolePanel(f), inventory, tokensBlock);
+    mount(root, head, fleetCaveat(), rolePanel(f), inventory, tokensBlock);
   },
 };
 

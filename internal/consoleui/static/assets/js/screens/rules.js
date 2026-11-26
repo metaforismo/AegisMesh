@@ -1,7 +1,7 @@
 import { h, clear, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
 import { severityRank } from '../lib/taxonomy.js';
-import { pageHead, panel, table, sevChip, badge, segmented, empty, link, labelFor, helpTip, banner, actionChip, SIGNAL_NO_SEVERITY } from '../ui/components.js';
+import { pageHead, panel, table, sevChip, badge, segmented, empty, link, labelFor, helpTip, caveat, actionChip, SIGNAL_NO_SEVERITY } from '../ui/components.js';
 import { ruleActionMeta } from '../lib/catalogs.js';
 import { frameworkChips } from '../ui/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
@@ -48,7 +48,7 @@ export default {
         hint: 'Read what each rule observes and what to check next, then open the events that cite it.',
         actions: segmented({ label: 'Rule family', options: FAMILIES, value: family, onChange: (f) => ctx.navigate(href('rules', { family: f })) }),
       }),
-      hasFrameworks ? banner('info', 'Framework references are editorial',
+      hasFrameworks ? caveat({ id: 'rules-frameworks', title: 'Framework references are editorial.', summary: 'They say what a rule relates to, not coverage or compliance.' },
         h('p', null, 'Each rule lists the MITRE ATT&CK, MITRE ATLAS and OWASP LLM 2025 entries it relates to. These are "relates to" references from the catalog, not coverage, completeness or compliance claims. ', h('a', { href: href('techniques') }, 'Open the technique matrix'), '.'),
         hasAction
           ? h('p', null, '“Observe only” rules never select a response action; every correlation rule and the AI and MCP observation rules are observe-only. “Can select an action” means that, under the configured severity mapping, a match may tag, throttle, isolate or refuse the decoy’s own connection; nothing outside the decoy is touched. Each event shows the action actually recorded.')

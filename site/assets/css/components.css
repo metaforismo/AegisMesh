@@ -929,6 +929,49 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .banner--danger { border-color: color-mix(in srgb, var(--color-danger) 32%, transparent); background: var(--color-danger-soft); }
 .banner--danger > .icon { color: var(--color-danger); }
 
+/* A caveat: a banner that folds (native <details>). The summary row keeps
+   the icon, the title and one sentence that carries the claim; "Details"
+   opens the full text. Never animates; the chevron flips without motion. */
+.caveat { display: block; padding: 0; }
+.caveat__summary {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  list-style: none;
+  border-radius: inherit;
+}
+.caveat__summary::-webkit-details-marker { display: none; }
+.caveat__summary > .icon { margin-top: 2px; flex: none; }
+.banner--info.caveat .caveat__summary > .icon { color: var(--color-info); }
+.banner--warn.caveat .caveat__summary > .icon { color: var(--color-warn); }
+.caveat__head { display: flex; flex-wrap: wrap; column-gap: var(--space-2); flex: 1; min-width: 0; }
+.caveat__line { color: var(--color-ink-2); }
+.caveat__more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  min-height: 24px;
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+}
+.caveat__hide, .caveat[open] .caveat__show { display: none; }
+.caveat[open] .caveat__hide { display: inline; }
+.caveat[open] .caveat__more .icon { transform: rotate(180deg); }
+.caveat__body { padding: 0 var(--space-4) var(--space-3) calc(var(--space-4) + var(--icon-md) + var(--space-3)); display: grid; gap: var(--space-2); }
+.caveat__body p { max-width: 80ch; }
+.caveat__summary:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: 2px; }
+@media (max-width: 719.98px) {
+  .caveat__body { padding-left: var(--space-4); }
+}
+@media print {
+  .caveat__more { display: none; }
+  /* A folded caveat prints whole (browsers with ::details-content). */
+  .caveat::details-content { content-visibility: visible; display: block; }
+}
+
 /* Dry-run proposals carry a dashed edge: "not executed" made visible, in the
    same dashed vocabulary as unloaded time and techniques not observed. */
 .banner--proposal {

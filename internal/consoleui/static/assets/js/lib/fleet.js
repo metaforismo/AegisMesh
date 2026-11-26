@@ -89,17 +89,17 @@ export function normalizeExpiry(value) {
   return parseTime(value) ? value : '';
 }
 
-// "in 45m", "in 3h 10m", "expired".
+// "in 45 min", "in 3 h 10 min", "expired": the same units as formatRelative.
 export function formatExpiresIn(value, now = Date.now()) {
   const d = parseTime(normalizeExpiry(value));
   if (!d) return 'unknown expiry';
   const s = Math.floor((d.getTime() - now) / 1000);
   if (s <= 0) return 'expired';
-  if (s < 60) return `in ${s}s`;
+  if (s < 60) return `in ${s} s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `in ${m}m`;
+  if (m < 60) return `in ${m} min`;
   const h = Math.floor(m / 60);
-  return m % 60 ? `in ${h}h ${m % 60}m` : `in ${h}h`;
+  return m % 60 ? `in ${h} h ${m % 60} min` : `in ${h} h`;
 }
 
 // ---- Evidence forwarding (experimental) -----------------------------------

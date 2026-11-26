@@ -7,7 +7,7 @@
 
 import { h, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
-import { postureGroups, postureCounts, docHref, plural, isMissingEndpoint, ACCEPT_PRESETS, ACCEPT_MAX_DAYS, acceptUntil, acceptUntilFromDate, validateAcceptReason } from '../lib/insight.js';
+import { postureGroups, postureCounts, docHref, plural, isMissingEndpoint, ACCEPT_PRESETS, ACCEPT_MAX_DAYS, acceptUntil, acceptUntilFromDate, validateAcceptReason, acceptPlan, acceptBlockedText, canRevokeAcceptance } from '../lib/insight.js';
 import { formatDateTime } from '../lib/format.js';
 import { permissionLabel } from '../lib/perms.js';
 import { confirmAction, formField, choices, errorSummary, wireForm } from '../ui/settings-kit.js';
@@ -135,11 +135,17 @@ export default {
     // Accepted risk (round 6): offered where the server reports `accepted`
     // on its checks and the role may change settings.
     const supports = (res?.checks || []).some((c) => c && 'accepted' in c);
-    const canAccept = supports && ctx.can('settings.manage');
-    const denied = supports && !ctx.can('settings.manage')
-      ? h('p', { class: ['muted', 'pcheck__why'] }, `Accepting a risk needs “${permissionLabel('settings.manage')}”, which your role does not include.`) : null;
+    const permitted = ctx.can('settings.manage');
+    // Where the server says whether each check can be accepted
+    // (`acceptable`), the button follows it; otherwise the permission.
+    const plan = acceptPlan(attention, { permitted });
+    const why = (code) => acceptBlockedText(code, permissionLabel('settings.manage'));
+    const denied = plan.once ? h('p', { class: ['muted', 'pcheck__why'] }, why(plan.once)) : null;
     const acceptBtn = (c) => {
-      if (!canAccept) return null;
+      if (!plan.offer(c)) {
+        const code = plan.perCheck(c);
+        return code ? h('p', { class: ['muted', 'pcheck__why'] }, why(code)) : null;
+      }
       const b = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, 'Accept risk…');
       b.addEventListener('click', async () => {
         if (await acceptDialog(ctx, c)) {
@@ -150,7 +156,7 @@ export default {
       return b;
     };
     const revokeBtn = (c) => {
-      if (!canAccept) return null;
+      if (!canRevokeAcceptance(c, supports && permitted)) return null;
       const b = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, 'Revoke acceptance');
       b.addEventListener('click', async () => {
         const done = await confirmAction({

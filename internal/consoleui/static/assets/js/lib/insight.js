@@ -263,7 +263,53 @@ export function normalizeCheck(c) {
     doc: typeof o.doc === 'string' ? o.doc : '',
     // undefined: the server predates accepted risk; null: not accepted.
     accepted: normalizeAcceptance(o.accepted),
-    acceptable: 'accepted' in o,
+    // The server's word when it gives one (`acceptable`, with a fixed
+    // reason code when false); an older round-6 server: offered wherever it
+    // reports `accepted`.
+    acceptable: typeof o.acceptable === 'boolean' ? o.acceptable : 'accepted' in o,
+    acceptableReason: typeof o.acceptable === 'boolean' && !o.acceptable && Object.hasOwn(ACCEPT_BLOCKED, o.acceptable_reason) ? o.acceptable_reason : '',
+    serverDecides: typeof o.acceptable === 'boolean',
+  };
+}
+
+// Why the server says a check cannot be accepted (fixed codes). Codes
+// mapped to `null` need no sentence: the check is not in Needs attention.
+export const ACCEPT_BLOCKED = Object.freeze({
+  permission_denied: (perm) => `Accepting a risk needs “${perm}”, which your role does not include.`,
+  editing_disabled: () => 'Accepting a risk is off on this server: console settings editing is off, so the configuration file stays the only record.',
+  overlay_unavailable: () => 'The server cannot record an acceptance right now: its settings store is unavailable. Try again later.',
+  unknown: () => 'The server says this check cannot be accepted now.',
+  already_accepted: null,
+  not_attention: null,
+});
+
+export function acceptBlockedText(code, permLabel = 'Change console settings and accept posture risk') {
+  const f = Object.hasOwn(ACCEPT_BLOCKED, code) ? ACCEPT_BLOCKED[code] : ACCEPT_BLOCKED.unknown;
+  return typeof f === 'function' ? f(permLabel) : '';
+}
+
+// Whether revoking an acceptance is possible: an accepted check whose only
+// blocker is that it is already accepted (an older server: when permitted).
+export function canRevokeAcceptance(c, permitted) {
+  if (!c?.serverDecides) return Boolean(permitted);
+  return c.acceptable === true || c.acceptableReason === 'already_accepted';
+}
+
+// Accept actions over the checks needing attention: whether to offer the
+// button per check, and the reason code to say instead: once when every
+// check shares it, per check otherwise.
+export function acceptPlan(attention, { permitted }) {
+  const list = Array.isArray(attention) ? attention : [];
+  const offer = (c) => (c.serverDecides ? c.acceptable === true : Boolean(permitted && c.acceptable));
+  const codeOf = (c) => (c.serverDecides ? c.acceptableReason || 'unknown' : 'permission_denied');
+  // An older server that does not support acceptance at all says nothing.
+  const blocked = list.filter((c) => !offer(c) && (c.serverDecides || c.acceptable));
+  const codes = [...new Set(blocked.map(codeOf))];
+  const once = blocked.length > 0 && blocked.length === list.length && codes.length === 1 ? codes[0] : '';
+  return {
+    offer,
+    once,
+    perCheck: (c) => (once || !blocked.includes(c) ? '' : codeOf(c)),
   };
 }
 

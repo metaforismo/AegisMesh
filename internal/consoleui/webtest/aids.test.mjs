@@ -46,7 +46,7 @@ test('relative time carries the absolute UTC time for hover and assistive tech',
   const now = Date.parse('2026-11-22T12:00:00Z');
   const el = timeEl('2026-11-22T11:00:00Z', { relative: true, now });
   assert.equal(el.getAttribute('title'), '2026-11-22 11:00:00 UTC');
-  assert.equal(el.textContent, '1h ago (2026-11-22 11:00:00 UTC)');
+  assert.equal(el.textContent, '1 h ago (2026-11-22 11:00:00 UTC)');
   assert.match(cls(el), /reltime/);
 });
 

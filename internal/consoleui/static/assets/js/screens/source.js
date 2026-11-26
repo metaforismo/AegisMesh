@@ -2,12 +2,11 @@ import { h, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
 import { formatCount, formatDateTime } from '../lib/format.js';
 import { binTimes } from '../lib/chart.js';
-import { pageHead, panel, kv, sevChip, evidence, chip, timeEl, empty, pager, link } from '../ui/components.js';
+import { pageHead, panel, kv, sevChip, evidence, chip, chipList, timeEl, empty, pager, actionLink } from '../ui/components.js';
 import { activityTrace } from '../ui/charts.js';
 import { cadence, describeCadence, formatGap, MIN_GAPS } from '../lib/cadence.js';
 import { glossaryEntry } from '../lib/glossary.js';
 import { helpTip } from '../ui/components.js';
-import { icon } from '../ui/icons.js';
 import { eventKey } from '../lib/origin.js';
 import { eventTable, originContext } from './shared.js';
 import { serverGapBins } from '../lib/catalogs.js';
@@ -132,7 +131,7 @@ export default {
         hint: 'Read when and how regularly this source arrived, then open its sessions or its events.',
         title: evidence(key),
         subtitle: 'Everything observed from this source. The value is attacker-influenced: it is what the sensor recorded, not a verified identity.',
-        actions: [h('a', { class: 'btn', href: href('sessions', { source: key, window: '7d' }) }, icon('story', { size: 'sm' }), 'Sessions from this source'), link(href('events', { source: key }), 'Filter events by this source')],
+        actions: [actionLink(href('sessions', { source: key, window: '7d' }), 'Sessions from this source', 'story'), actionLink(href('events', { source: key }), 'Events from this source', 'events')],
       }),
       panel({
         title: 'Summary',
@@ -143,7 +142,7 @@ export default {
           ['Max severity', sevChip(s.max_severity)],
           ['First seen', timeEl(s.first_seen)],
           ['Last seen', timeEl(s.last_seen)],
-          ['Sensors', h('span', { class: 'chip-row' }, (s.sensors || []).map((x) => chip(x, { mono: true })))],
+          ['Sensors', chipList(s.sensors, { max: 12 })],
           ['Sensor kinds', h('span', { class: 'chip-row' }, (s.kinds || []).map((x) => chip(x)))],
         ]),
       }),

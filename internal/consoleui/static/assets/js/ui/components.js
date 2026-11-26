@@ -45,6 +45,19 @@ export function chip(label, { mono = false } = {}) {
   return h('span', { class: ['chip', mono ? 'chip--mono' : ''] }, label);
 }
 
+// A row of id chips that stays one line in a table: the first `max`, then
+// "+N" whose title (and visually hidden text) names the rest. A scanner
+// that touched 48 sensors no longer draws 48 chips per row.
+export function chipList(items, { max = 3, mono = true, empty = '—' } = {}) {
+  const list = Array.isArray(items) ? items.filter((x) => typeof x === 'string' && x) : [];
+  if (!list.length) return h('span', { class: 'muted' }, empty);
+  const n = Math.max(1, Math.floor(Number(max)) || 3);
+  const rest = list.slice(n);
+  return h('span', { class: 'chip-row' },
+    list.slice(0, n).map((x) => chip(x, { mono })),
+    rest.length ? h('span', { class: 'chip', title: rest.join(', ') }, `+${rest.length}`, h('span', { class: 'visually-hidden' }, ` more: ${rest.join(', ')}`)) : null);
+}
+
 // Attacker-controlled text. `max` truncates for dense tables; the full value
 // stays available as the title tooltip and to assistive tech.
 export function evidence(value, { block = false, max = 0 } = {}) {
@@ -69,6 +82,13 @@ export function timeEl(value, { relative = false, now } = {}) {
 
 export function link(href, ...children) {
   return h('a', { href }, ...children);
+}
+
+// A page-head action that navigates: drawn as an outlined button with its
+// icon, like every other page-head action, so a head never mixes a pill
+// with a bare text link.
+export function actionLink(href, label, iconName) {
+  return h('a', { class: 'btn', href }, iconName ? icon(iconName, { size: 'sm' }) : null, label);
 }
 
 // ---- Layout ----------------------------------------------------------------
@@ -333,6 +353,77 @@ export function banner(kind, title, ...body) {
   return h('div', { class: ['banner', `banner--${kind}`], role: kind === 'danger' ? 'alert' : null },
     BANNER_ICON[kind] ? icon(BANNER_ICON[kind]) : null,
     h('div', null, title ? h('p', { class: 'banner__title' }, title) : null, ...body.map((b) => (typeof b === 'string' ? h('p', null, b) : b))));
+}
+
+// ---- Caveat (a folding banner) ----------------------------------------------
+
+// A long limit statement ("not a coverage claim") that a screen opens with.
+// The one-sentence summary is always visible and carries the claim; the
+// full text is one tap away in a native <details>. Folded by default on
+// phones (under 720px), open from there up; the operator's own choice per
+// caveat is remembered in this browser (`aegismesh.caveats`: closed ids,
+// validated on read). Never animates.
+export const CAVEAT_KEY = 'aegismesh.caveats';
+const CAVEAT_ID = /^[a-z][a-z0-9-]{0,31}$/;
+
+export function readCaveats(raw) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(typeof raw === 'string' ? raw : 'null');
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(parsed).slice(0, 32)) {
+    if (CAVEAT_ID.test(k) && (v === 'open' || v === 'closed')) out[k] = v;
+  }
+  return out;
+}
+
+// Whether a caveat starts open: the remembered choice, else open on wide
+// screens and folded on phones.
+export function caveatOpen(id, stored, narrow) {
+  const v = stored?.[id];
+  if (v === 'open') return true;
+  if (v === 'closed') return false;
+  return !narrow;
+}
+
+const caveatStore = () => {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+};
+
+export function caveat({ id, kind = 'info', title, summary }, ...body) {
+  if (!CAVEAT_ID.test(id)) throw new Error(`caveat id: ${id}`);
+  let stored = {};
+  try {
+    stored = readCaveats(caveatStore()?.getItem(CAVEAT_KEY));
+  } catch {
+    // Storage unavailable: the default applies.
+  }
+  const narrow = typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(max-width: 719.98px)').matches;
+  const el = h('details', { class: ['banner', `banner--${kind}`, 'caveat'], open: caveatOpen(id, stored, narrow), 'data-caveat': id },
+    h('summary', { class: 'caveat__summary' },
+      BANNER_ICON[kind] ? icon(BANNER_ICON[kind]) : null,
+      h('span', { class: 'caveat__head' }, h('span', { class: 'banner__title' }, title), summary ? h('span', { class: 'caveat__line' }, summary) : null),
+      h('span', { class: 'caveat__more', 'aria-hidden': 'true' }, h('span', { class: 'caveat__show' }, 'Details'), h('span', { class: 'caveat__hide' }, 'Hide'), icon('chevron-down', { size: 'xs' }))),
+    h('div', { class: 'caveat__body' }, ...body.map((b) => (typeof b === 'string' ? h('p', null, b) : b))));
+  el.addEventListener('toggle', () => {
+    try {
+      const store = caveatStore();
+      const now = readCaveats(store?.getItem(CAVEAT_KEY));
+      now[id] = el.open ? 'open' : 'closed';
+      store?.setItem(CAVEAT_KEY, JSON.stringify(now));
+    } catch {
+      // Not remembered beyond this page.
+    }
+  });
+  return el;
 }
 
 // ---- Integrity seal ----------------------------------------------------------

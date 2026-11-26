@@ -1132,8 +1132,27 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 /* ---- Print ----------------------------------------------------------------------------- */
 /* The digest (and any screen) prints as a document: no frame, no controls,
    no lattice, ink on paper in the light palette. */
+/* The print header: organisation, product (and tenant), when and by whom it
+   was printed. Never on screen. */
+.print-head { display: none; }
+
 @media print {
   :root { color-scheme: light; }
+  .print-head {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 16px;
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #bbb;
+    color: #000;
+    font-size: 11px;
+  }
+  .print-head__org { font-weight: 600; font-size: 13px; }
+  .print-head__product { display: inline-flex; align-items: center; gap: 4px; }
+  .print-head__product svg { width: 12px; height: 12px; }
+  .print-head__when { margin-left: auto; color: #333; }
   html, body { background: #fff !important; }
   .shell__nav, .shell__top, .nav-scrim, .skip-link, .route-progress, .toast-region, .page-head__actions, .page-head__hint, .help-tip, .tip-pop, .tour, .peek, .live-pill { display: none !important; }
   .shell { display: block !important; }

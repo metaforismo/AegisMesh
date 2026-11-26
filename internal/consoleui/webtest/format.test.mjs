@@ -14,8 +14,21 @@ test('times render in UTC', () => {
 test('relative time and durations', () => {
   const now = Date.parse('2026-11-14T10:00:00Z');
   assert.equal(f.formatRelative('2026-11-14T09:59:55Z', now), 'just now');
-  assert.equal(f.formatRelative('2026-11-14T09:58:00Z', now), '2m ago');
-  assert.equal(f.formatRelative('2026-11-12T10:00:00Z', now), '2d ago');
+  assert.equal(f.formatRelative('2026-11-14T09:59:15Z', now), '45 s ago');
+  assert.equal(f.formatRelative('2026-11-14T09:58:00Z', now), '2 min ago');
+  assert.equal(f.formatRelative('2026-11-14T09:49:48Z', now), '10 min ago');
+  assert.equal(f.formatRelative('2026-11-14T07:30:00Z', now), '2 h ago');
+  // Same calendar day stays in hours; the day before reads "yesterday".
+  assert.equal(f.formatRelative('2026-11-14T00:10:00Z', Date.parse('2026-11-14T23:00:00Z')), '22 h ago');
+  assert.equal(f.formatRelative('2026-11-13T14:03:00Z', now), 'yesterday 14:03');
+  // Under 12 hours stays in hours even across midnight.
+  assert.equal(f.formatRelative('2026-11-13T23:00:00Z', Date.parse('2026-11-14T01:00:00Z')), '2 h ago');
+  assert.equal(f.formatRelative('2026-11-12T10:00:00Z', now), '2 days ago');
+  assert.equal(f.formatRelative('2026-11-08T10:00:00Z', now), '6 days ago');
+  // From RELATIVE_DAYS on, the date (the year only when it differs).
+  assert.equal(f.formatRelative('2026-11-07T09:05:00Z', now), 'Nov 7 09:05');
+  assert.equal(f.formatRelative('2025-12-30T23:59:00Z', now), '2025-12-30 23:59');
+  assert.equal(f.formatRelative('2026-11-14T10:01:00Z', now), 'in the future');
   assert.equal(f.formatRelative('', now), 'never');
   // One duration style everywhere: seconds go through formatDurationMs.
   assert.equal(f.formatDuration(90061), '25 h');

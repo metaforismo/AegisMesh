@@ -53,9 +53,9 @@ test('expiry accepts RFC 3339 and legacy Unix seconds', () => {
   assert.equal(normalizeExpiry(1794736800), '2026-11-15T10:00:00Z');
   assert.equal(normalizeExpiry('soon'), '');
   const now = Date.parse('2026-11-15T09:00:00Z');
-  assert.equal(formatExpiresIn('2026-11-15T09:45:00Z', now), 'in 45m');
-  assert.equal(formatExpiresIn('2026-11-15T12:10:00Z', now), 'in 3h 10m');
-  assert.equal(formatExpiresIn('2026-11-15T10:00:00Z', now), 'in 1h');
+  assert.equal(formatExpiresIn('2026-11-15T09:45:00Z', now), 'in 45 min');
+  assert.equal(formatExpiresIn('2026-11-15T12:10:00Z', now), 'in 3 h 10 min');
+  assert.equal(formatExpiresIn('2026-11-15T10:00:00Z', now), 'in 1 h');
   assert.equal(formatExpiresIn('2026-11-15T09:00:00Z', now), 'expired');
   assert.equal(formatExpiresIn('', now), 'unknown expiry');
 });

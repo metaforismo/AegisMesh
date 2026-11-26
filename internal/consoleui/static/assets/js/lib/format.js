@@ -69,18 +69,38 @@ export function formatBucketLabel(value, window) {
   return `${pad(f.h)}:${pad(f.mi)}`;
 }
 
+// After this many calendar days a relative time gives way to the date.
+export const RELATIVE_DAYS = 7;
+
+// Whole calendar days between two instants in the chosen zone.
+function calendarDays(d, now) {
+  const a = fields(d);
+  const b = fields(new Date(now));
+  return Math.round((Date.UTC(b.y, b.mo, b.da) - Date.UTC(a.y, a.mo, a.da)) / 86400e3);
+}
+
+// One humanised relative time everywhere: "just now", "45 s ago",
+// "10 min ago", "2 h ago", "yesterday 14:03", "3 days ago", then the date
+// ("Nov 14 09:03", with the year when it is not this year's). Calendar
+// words follow the chosen zone; the absolute time (with its zone) is always
+// one hover away (`timeEl`).
 export function formatRelative(value, now = Date.now()) {
   const d = parseTime(value);
   if (!d) return 'never';
   const s = Math.round((now - d.getTime()) / 1000);
   if (s < -5) return 'in the future';
   if (s < 10) return 'just now';
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) return `${s} s ago`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `${m} min ago`;
   const h = Math.floor(m / 60);
-  if (h < 48) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  const days = calendarDays(d, now);
+  if (h < 12 || days === 0) return `${h} h ago`;
+  const f = fields(d);
+  if (days === 1) return `yesterday ${pad(f.h)}:${pad(f.mi)}`;
+  if (days < RELATIVE_DAYS) return `${days} days ago`;
+  const sameYear = fields(new Date(now)).y === f.y;
+  return `${sameYear ? `${MONTHS[f.mo]} ${f.da}` : `${f.y}-${pad(f.mo + 1)}-${pad(f.da)}`} ${pad(f.h)}:${pad(f.mi)}`;
 }
 
 // One duration style everywhere (session spans, gaps, uptime, lifetimes):

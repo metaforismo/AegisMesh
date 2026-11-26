@@ -8,6 +8,7 @@
 //   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
 //     [--accept-evidence on|off] [--burst N] [--auth token|oidc|both] [--tenants a,b]
 //     [--round4 on|off] [--round5 on|off] [--fail-prefs] [--round6 on|off] [--settings-editing on|off]
+//     [--posture-acceptable on|off] [--scale normal|large]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
@@ -460,11 +461,15 @@ const IDENTITIES = new Map([
 
 const sessions = new Map(); // sid → { name, role, auth_method, tenant, tenants, csrf_token, expires_at, account_id, created_at, last_seen_at, remote, client }
 const accounts = createAccounts({ tenants: TENANTS, localTenant: LOCAL_TENANT, configured: TOKENS, tokenLogin: TOKEN_AUTH, round6: ROUND6, settingsEditing: SETTINGS_EDITING });
-const acceptance = createAcceptance({ round6: ROUND6 });
+// --posture-acceptable off answers like a round-6 server without the r7
+// `acceptable` / `acceptable_reason` fields on posture checks.
+const argAcceptable = process.argv.indexOf('--posture-acceptable');
+const ACCEPTABLE_FIELD = (argAcceptable > 0 ? process.argv[argAcceptable + 1] : 'on') !== 'off';
+const acceptance = createAcceptance({ round6: ROUND6, acceptableField: ACCEPTABLE_FIELD });
 
 // The posture review of a tenant; with round 6, a check derived from the
 // console settings overlay and accepted risk.
-function postureBody(T, events, { raw = false } = {}) {
+function postureBody(T, events, { raw = false, caller } = {}) {
   const sensorsList = T.local ? [...SENSORS, ...AI_SENSORS] : [];
   const tokens = T.local ? tokenCatalog(decoyCatalog(sensorsList)) : [];
   const body = postureOf({ sensors: sensorsList, honeytokens: tokens, rules: CATALOG_RULES.length, index: snapshot(events).bounds.index, principals: TOKENS.size, oidc: OIDC_AUTH });
@@ -480,7 +485,7 @@ function postureBody(T, events, { raw = false } = {}) {
   });
   body.summary = { attention: 0, ok: 0, info: 0 };
   for (const c of body.checks) body.summary[c.status]++;
-  return raw ? body : acceptance.decorate(body);
+  return raw ? body : acceptance.decorate(body, caller);
 }
 
 const sessionView = (s) => ({
@@ -1074,7 +1079,7 @@ async function api(req, res, url) {
     if (!strictQuery([])) return;
     const sensorsList = T.local ? [...SENSORS, ...AI_SENSORS] : [];
     const tokens = T.local ? tokenCatalog(decoyCatalog(sensorsList)) : [];
-    return send(res, 200, postureBody(T, events));
+    return send(res, 200, postureBody(T, events, { caller: { canManage: perms.includes('settings.manage') && T.local, editing: accounts.overlay.editing } }));
   }
   const acceptMatch = p.match(/^\/posture\/([^/]+)\/accept$/);
   if (ROUND6 && acceptMatch && (m === 'POST' || m === 'DELETE')) {
@@ -1098,7 +1103,7 @@ async function api(req, res, url) {
       if (acceptance.revoke(id)) accounts.overlay.record({ key: 'posture.accepted', from: `${id}: accepted`, to: `${id}: not accepted`, reason: 'Acceptance revoked.', action: 'revert', actor_id: s.account_id || '', actor_name: who.name });
       audit(who.name, who.role, 'posture.unaccept', id, 'ok', remote);
     }
-    return send(res, 200, postureBody(T, events).checks.find((c) => c.id === id));
+    return send(res, 200, postureBody(T, events, { caller: { canManage: true, editing: accounts.overlay.editing } }).checks.find((c) => c.id === id));
   }
 
   if (m === 'GET' && p === '/coverage') {
