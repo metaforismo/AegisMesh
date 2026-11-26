@@ -11,6 +11,7 @@
 
 import { isSeverity, severityLabel } from './taxonomy.js';
 import { formatCount } from './format.js';
+import { DIGEST_WINDOWS, normalizeDigestWindow } from './route.js';
 
 const isCount = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0;
 const count = (v) => (isCount(v) ? formatCount(v) : '—');
@@ -203,8 +204,9 @@ export const isEventFormat = (f) => EVENT_FORMATS.some((x) => x.format === f);
 
 // ---- Digest ------------------------------------------------------------------------
 
-export const DIGEST_WINDOWS = Object.freeze(['24h', '7d']);
-export const normalizeDigestWindow = (w) => (DIGEST_WINDOWS.includes(w) ? w : '24h');
+// Defined with the other route vocabularies, so the router does not pull
+// this module into the first screen; re-exported for the digest.
+export { DIGEST_WINDOWS, normalizeDigestWindow };
 const WINDOW_TEXT = { '24h': 'the last 24 hours', '7d': 'the last 7 days' };
 const PREV_TEXT = { '24h': 'the 24 hours before', '7d': 'the 7 days before' };
 

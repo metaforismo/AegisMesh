@@ -7,8 +7,7 @@
 // embed test checks each one resolves.
 
 import { h, mount } from '../lib/dom.js';
-import { normalizeWindow, normalizeEventFilters, normalizeStatus, normalizeSessionFilters } from '../lib/route.js';
-import { normalizeDigestWindow } from '../lib/catalogs.js';
+import { normalizeWindow, normalizeEventFilters, normalizeStatus, normalizeSessionFilters, normalizeDigestWindow } from '../lib/route.js';
 import { pageHead, panel, empty, link } from '../ui/components.js';
 import { missingText } from '../lib/perms.js';
 

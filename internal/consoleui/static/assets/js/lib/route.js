@@ -155,6 +155,10 @@ export function setDefaultWindow(value) {
   return defaultWindow;
 }
 
+// The digest's windows (lib/catalogs.js re-exports them).
+export const DIGEST_WINDOWS = Object.freeze(['24h', '7d']);
+export const normalizeDigestWindow = (w) => (DIGEST_WINDOWS.includes(w) ? w : '24h');
+
 export function normalizeWindow(value) {
   return WINDOWS.includes(value) ? value : defaultWindow;
 }
