@@ -134,6 +134,7 @@ type Server struct {
 	slots           chan struct{}
 	streams         chan struct{}
 	key             [32]byte
+	memo            analysisMemo
 }
 
 // New validates dependencies and opens the dedicated console listener without starting it.

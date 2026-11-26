@@ -65,3 +65,20 @@ func FuzzMarkdownNeutralizer(f *testing.F) {
 		}
 	})
 }
+
+func TestReportOrganizationIsOptionalInertText(t *testing.T) {
+	input := Input{Tenant: "default", Scope: "Session x", Bounds: evidenceindex.Snapshot{Limit: evidenceindex.AnalysisLimit}}
+	without, err := Render(input)
+	if err != nil || bytes.Contains(without, []byte("Organization:")) {
+		t.Fatalf("unset organization rendered: %v", err)
+	}
+	input.Organization = "Example <b>SOC</b> ```"
+	with, err := Render(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := MarkdownText("Organization: Example <b>SOC</b> ```")
+	if !bytes.Contains(with, []byte(MarkdownText("Tenant: default")+want)) || bytes.Contains(with, []byte("<b>")) {
+		t.Fatalf("organization not rendered as quoted text after the tenant:\n%s", with)
+	}
+}

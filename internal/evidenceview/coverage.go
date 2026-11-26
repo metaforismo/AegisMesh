@@ -25,6 +25,21 @@ type Framework struct {
 
 // Coverage counts an event once per technique, even if several rules map there.
 func Coverage(events []evidenceindex.Summary, from, to time.Time) []Framework {
+	// Each in-window event's time and mappings are derived once, not once per
+	// framework; per-technique last-seen times are kept parsed.
+	type observed struct {
+		at       time.Time
+		time     string
+		mappings []rulecatalog.FrameworkMapping
+	}
+	window := make([]observed, 0, len(events))
+	for _, e := range events {
+		at := Time(e)
+		if at.Before(from) || at.After(to) || len(e.RuleIDs) == 0 {
+			continue
+		}
+		window = append(window, observed{at: at, time: e.Time, mappings: Mappings(e.RuleIDs)})
+	}
 	out := []Framework{}
 	for _, name := range []string{"mitre-attack", "mitre-atlas", "owasp-llm-2025"} {
 		techniques := map[string]*Technique{}
@@ -41,19 +56,17 @@ func Coverage(events []evidenceindex.Summary, from, to time.Time) []Framework {
 				technique.RuleIDs = append(technique.RuleIDs, rule.ID)
 			}
 		}
-		for _, e := range events {
-			if Time(e).Before(from) || Time(e).After(to) {
-				continue
-			}
-			for _, mapping := range Mappings(e.RuleIDs) {
+		lastSeen := map[string]time.Time{}
+		for _, e := range window {
+			for _, mapping := range e.mappings {
 				if mapping.Framework != name {
 					continue
 				}
 				technique := techniques[mapping.ID]
 				technique.ObservedEventCount++
-				last, _ := time.Parse(time.RFC3339Nano, technique.LastSeen)
-				if Time(e).After(last) || technique.LastSeen == "" {
-					technique.LastSeen = e.Time
+				if last, seen := lastSeen[mapping.ID]; !seen || e.at.After(last) {
+					technique.LastSeen = e.time
+					lastSeen[mapping.ID] = e.at
 				}
 			}
 		}

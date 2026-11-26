@@ -1,0 +1,43 @@
+profile=large go=go1.27.4 GOMAXPROCS=8 GOOS/GOARCH=darwin/arm64
+seed: 50000 events + 7464 signals, 1075 sources; generate+append 2.941s
+backfill (storage read + validate + verify + index add, as runtime buildConsole): 57464 envelopes in 697ms; retained 13362 (history truncated)
+index heap: 26.6 MiB live heap after GC for 13362 retained entries (2085 B/entry; includes index structures)
+analysis sample: sessions(7d page)=50 campaigns=28
+
+| Endpoint | n | p50 | p95 | max | B/op | allocs/op | response bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| overview 1h | 300 | 0.125 ms | 0.134 ms | 0.862 ms | 121970 | 390 | 45175 |
+| overview 24h | 300 | 2.056 ms | 2.788 ms | 4.412 ms | 922415 | 7028 | 38688 |
+| overview 7d | 300 | 3.038 ms | 4.341 ms | 5.498 ms | 1371507 | 11247 | 43372 |
+| events limit=50 | 300 | 0.033 ms | 0.038 ms | 0.072 ms | 40715 | 84 | 16050 |
+| events page 2 (cursor) | 300 | 0.037 ms | 0.043 ms | 0.095 ms | 45105 | 106 | 16545 |
+| events classification=canary_invocation | 300 | 0.056 ms | 0.061 ms | 0.166 ms | 44123 | 112 | 17087 |
+| events sensor=demo-ssh | 300 | 0.110 ms | 0.124 ms | 0.507 ms | 42555 | 64 | 17007 |
+| events q=env | 300 | 0.777 ms | 1.110 ms | 2.587 ms | 41334 | 78 | 16074 |
+| event detail | 190 | 20.993 ms | 23.001 ms | 38.261 ms | 31163496 | 86708 | 1329 |
+| sessions 24h | 175 | 23.148 ms | 25.330 ms | 37.284 ms | 47520486 | 70583 | 164635 |
+| sessions 7d | 172 | 23.224 ms | 28.786 ms | 40.271 ms | 47460115 | 70582 | 164632 |
+| session detail | 245 | 15.983 ms | 17.348 ms | 61.207 ms | 30424860 | 70314 | 8005 |
+| campaigns | 233 | 17.179 ms | 18.005 ms | 26.048 ms | 31474207 | 73645 | 31417 |
+| campaign detail | 226 | 17.246 ms | 21.104 ms | 35.392 ms | 32690650 | 74009 | 218289 |
+| coverage 7d | 300 | 10.368 ms | 11.534 ms | 14.959 ms | 15492423 | 105705 | 3801 |
+| posture | 300 | 1.853 ms | 3.904 ms | 4.315 ms | 10291218 | 4201 | 7165 |
+| digest 24h | 71 | 56.407 ms | 59.378 ms | 62.752 ms | 79223787 | 585657 | 2312 |
+| digest 7d | 71 | 56.318 ms | 57.977 ms | 107.720 ms | 79160252 | 585684 | 3314 |
+| sources 24h | 300 | 0.537 ms | 0.608 ms | 3.239 ms | 443737 | 2425 | 14162 |
+| decoys 24h | 300 | 4.217 ms | 5.672 ms | 6.249 ms | 20418151 | 4183 | 1082 |
+| honeytokens 24h | 300 | 4.103 ms | 5.504 ms | 6.959 ms | 20430627 | 4200 | 2295 |
+| recommendations | 109 | 35.772 ms | 38.214 ms | 87.191 ms | 40287283 | 498411 | 26216 |
+| settings | 300 | 0.032 ms | 0.036 ms | 0.091 ms | 40080 | 315 | 11865 |
+| system | 300 | 0.004 ms | 0.005 ms | 0.024 ms | 9372 | 48 | 686 |
+| me | 300 | 0.004 ms | 0.004 ms | 0.019 ms | 9039 | 41 | 610 |
+| sessions 24h, append before each | 175 | 23.054 ms | 24.446 ms | 24.957 ms | 47024916 | 70253 | 163997 |
+| campaigns, append before each | 235 | 17.072 ms | 17.661 ms | 18.887 ms | 31333024 | 72743 | 30859 |
+| overview 24h, append before each | 300 | 2.159 ms | 2.827 ms | 4.202 ms | 921927 | 7030 | 38635 |
+| posture, append before each | 300 | 1.690 ms | 4.084 ms | 4.339 ms | 10274620 | 3749 | 7163 |
+
+| SSE subscribers | events | delivery p50 | delivery p95 | max | append p50 | append p95 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 200 | 0.068 ms | 0.132 ms | 1.362 ms | 0.049 ms | 0.088 ms |
+| 4 | 200 | 0.091 ms | 0.160 ms | 0.298 ms | 0.060 ms | 0.120 ms |
+| 16 | 200 | 0.105 ms | 0.218 ms | 0.475 ms | 0.062 ms | 0.101 ms |

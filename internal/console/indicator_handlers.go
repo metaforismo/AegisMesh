@@ -85,7 +85,8 @@ func attachment(w http.ResponseWriter, body []byte, contentType, name string) {
 
 func (s *Server) exportScope(w http.ResponseWriter, r *http.Request) (evidenceindex.Snapshot, []evidenceindex.Summary, bool) {
 	values := r.URL.Query()
-	snapshot := s.index.Analysis()
+	analysis := s.analysis()
+	snapshot := analysis.snapshot
 	events := []evidenceindex.Summary{}
 	switch {
 	case values.Get("session") != "":
@@ -94,7 +95,7 @@ func (s *Server) exportScope(w http.ResponseWriter, r *http.Request) (evidencein
 			return evidenceindex.Snapshot{}, nil, false
 		}
 		found := false
-		for _, session := range evidenceview.Sessions(s.tenantID, snapshot.Events) {
+		for _, session := range analysis.Sessions() {
 			if session.ID == values.Get("session") {
 				events, found = session.Events, true
 				break

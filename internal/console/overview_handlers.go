@@ -3,8 +3,6 @@ package console
 import (
 	"net/http"
 	"time"
-
-	"github.com/metaforismo/aegismesh/internal/recommend"
 )
 
 func (s *Server) overview(w http.ResponseWriter, r *http.Request, _ caller) {
@@ -45,7 +43,7 @@ func (s *Server) recommendations(w http.ResponseWriter, r *http.Request, _ calle
 		return
 	}
 
-	report, err := recommend.Generate(s.index.Envelopes(recommend.MaxEvidence), recommend.Options{Limit: count})
+	report, err := s.recommendationReport(count)
 	if err != nil {
 		fail(w, 503, "unavailable", "indexed evidence cannot produce a verified recommendation report")
 		return
