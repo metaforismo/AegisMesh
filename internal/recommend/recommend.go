@@ -390,6 +390,9 @@ type correlationObservation struct {
 	SourceKey      string   `json:"source_key"`
 	SourceEventIDs []string `json:"source_event_ids"`
 	Truncated      bool     `json:"truncated"`
+	// Synthetic is the seeded-demo marker (internal/demoseed); it is accepted
+	// as a strict boolean and has no effect on recommendations.
+	Synthetic bool `json:"synthetic,omitempty"`
 }
 
 func parseDetection(fields map[string]json.RawMessage) ([]string, error) {

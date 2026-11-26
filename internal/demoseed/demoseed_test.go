@@ -14,6 +14,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
 	"github.com/metaforismo/aegismesh/internal/observe"
+	"github.com/metaforismo/aegismesh/internal/recommend"
 )
 
 var anchor = time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
@@ -115,6 +116,11 @@ func TestSmallProfileShape(t *testing.T) {
 	}
 	if classes[event.ClassificationCanaryHit] == 0 || classes[event.ClassificationInteraction] == 0 {
 		t.Fatalf("classes %v", classes)
+	}
+
+	// Recommendations strictly re-validate every stored observation shape.
+	if _, err := recommend.Generate(envelopes[:min(len(envelopes), recommend.MaxEvidence)], recommend.Options{Limit: 20}); err != nil {
+		t.Fatalf("seeded evidence rejected by recommendations: %v", err)
 	}
 
 	index, err := evidenceindex.New(50000, observe.NewRegistry())
