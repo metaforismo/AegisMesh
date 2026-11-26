@@ -240,6 +240,9 @@ func TestPerfSeededConsole(t *testing.T) {
 		row := measure(t, endpoint.name, func() (int, []byte) { return get(endpoint.path) }, nil)
 		report.add("| %s | %d | %s | %s | %s | %d | %d | %d |", row.name, row.n, ms(row.p50), ms(row.p95), ms(row.max), row.bytesPerOp, row.allocsPerOp, row.respBytes)
 	}
+	served := heapInUse()
+	report.add("live heap after serving every endpoint once warm: %.1f MiB above the pre-index baseline (index %.1f MiB + server state and any memoised analysis %.1f MiB)",
+		float64(served-before)/(1<<20), float64(after-before)/(1<<20), (float64(served)-float64(after))/(1<<20))
 	// Cold analysis: one append between requests invalidates any per-generation reuse.
 	extra := 0
 	appendOne := func() {

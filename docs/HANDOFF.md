@@ -200,6 +200,7 @@ authorization and threat models.
 make lint test            # gofmt + vet (+ golangci-lint if installed) and race tests
 make ui-test              # console UI and site tests (Node.js >= 20, no npm install)
 make bench                # opt-in synthetic backend benchmarks; not a CI gate
+make perf                 # seeded console latency/alloc/SSE harness (PERF_PROFILE=large|small); not a CI gate
 make fuzz-seed            # bounded real fuzz targets
 make vuln                 # pinned govulncheck
 make sbom sbom-check      # CycloneDX generation and validation
