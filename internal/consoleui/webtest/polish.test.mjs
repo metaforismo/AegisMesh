@@ -127,3 +127,22 @@ test('mock posture: acceptable with the backend precedence', () => {
   const older = createAcceptance({ acceptableField: false }).decorate(body, { canManage: true, editing: true });
   assert.ok(older.checks.every((c) => !('acceptable' in c)));
 });
+
+test('identical recommendations read as one card with a count and all evidence', async () => {
+  const { groupRecommendations } = await import('../static/assets/js/screens/recommendations.js');
+  const base = { classification: 'canary_invocation', sensor_id: 'ssh-decoy', sensor_kind: 'ssh', summary: 'A canary invocation was observed.', operator_review: 'Confirm.', next_steps: ['Open the evidence.'], false_positive_notes: [], rule_ids: [], conflicts: [] };
+  const recs = [
+    { ...base, evidence: [{ event_id: 'a'.repeat(32) }], source_resolution: { resolved: 1, unresolved: 0 } },
+    { ...base, sensor_id: 'web', sensor_kind: 'http', evidence: [{ event_id: 'b'.repeat(32) }] },
+    { ...base, evidence: [{ event_id: 'c'.repeat(32) }] },
+    null,
+  ];
+  const g = groupRecommendations(recs);
+  assert.equal(g.length, 2);
+  assert.equal(g[0].sensor_id, 'ssh-decoy', 'first appearance keeps its place');
+  assert.equal(g[0].count, 2);
+  assert.deepEqual(g[0].evidence.map((e) => e.event_id[0]), ['a', 'c']);
+  assert.equal(g[0].source_resolution, null, 'a per-proposal figure is not summed into a group');
+  assert.equal(g[1].count, 1);
+  assert.deepEqual(groupRecommendations(undefined), []);
+});

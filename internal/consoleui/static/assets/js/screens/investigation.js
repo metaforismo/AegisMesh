@@ -4,6 +4,7 @@ import { formatDateTime, formatCount } from '../lib/format.js';
 import { pageHead, panel, kv, selectField, inputField, empty, toast, openDialog, timeEl, labelFor, banner, copyable } from '../ui/components.js';
 import { eventTable, statusBadge, priorityChip } from './shared.js';
 import { downloadActions } from '../ui/downloads.js';
+import { icon } from '../ui/icons.js';
 
 const NOTE_MAX = 4000;
 const MAX_EVIDENCE = 200;
@@ -115,7 +116,9 @@ export default {
       }
     };
     const detachBtn = (eid) => {
-      const b = h('button', { class: ['btn', 'btn--sm', 'btn--danger'], type: 'button', 'aria-label': `Detach event ${eid}` }, 'Detach');
+      // Neutral, not danger red: detaching is undone by attaching again, and
+      // a column of red buttons would be the loudest thing on the page.
+      const b = h('button', { class: ['btn', 'btn--sm'], type: 'button', 'aria-label': `Detach event ${eid}` }, 'Detach');
       b.addEventListener('click', () => detach(eid, b.closest('tr, li')));
       return b;
     };
@@ -174,9 +177,18 @@ export default {
       });
     }
 
+    // The case's next step after reading it is usually a report: a head
+    // action moves focus to the downloads (no scroll animation).
+    const downloadsPanel = panel({ title: 'Downloads', meta: 'Report with notes and attached events; indicators from the attached local events', body: downloadActions(ctx, { scope: { investigation: inv.id }, report: () => ctx.api.investigationReport(inv.id), what: 'this investigation' }) });
+    const toDownloads = h('button', { class: 'btn', type: 'button' }, icon('download', { size: 'sm' }), 'Report and exports');
+    toDownloads.addEventListener('click', () => {
+      downloadsPanel.scrollIntoView({ block: 'start' });
+      downloadsPanel.querySelector('button, a[href]')?.focus({ preventScroll: true });
+    });
     mount(root,
       pageHead({
         crumbs: [['Investigations', '#/investigations'], ['Investigation', null]],
+        actions: [toDownloads],
         hint: 'Change status or priority, add notes, attach or detach evidence, and download a report.',
         title: titleText,
         subtitle: h('span', { class: 'btn-row' }, statusSlot, prioritySlot,
@@ -198,7 +210,7 @@ export default {
         title: notesTitle, meta: 'Oldest first',
         body: [noteList, notesEmpty, noteForm],
       }),
-      panel({ title: 'Downloads', meta: 'Report with notes and attached events; indicators from the attached local events', body: downloadActions(ctx, { scope: { investigation: inv.id }, report: () => ctx.api.investigationReport(inv.id), what: 'this investigation' }) }),
+      downloadsPanel,
       panel({ title: 'Record', body: kv([['Investigation id', copyable(inv.id, { label: 'investigation id' })], ['Last updated', updated]]) }));
   },
 };

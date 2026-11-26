@@ -37,7 +37,7 @@ export default {
             { label: 'Canary invocations', num: true, sort: (s) => s.canary_invocations, cell: (s) => formatCount(s.canary_invocations) },
             { label: 'Signals', num: true, sort: (s) => s.signals, cell: (s) => formatCount(s.signals) },
             { label: 'Max severity', sort: (s) => severityRank(s.max_severity), sortFirst: 'desc', cell: (s) => sevChip(s.max_severity) },
-            { label: 'Sensors', className: 'col-chips', cell: (s) => chipList(s.sensors, { max: 3 }) },
+            { label: 'Sensors', className: 'col-chips', cell: (s) => chipList(s.sensors, { max: 2 }) },
             { label: 'First seen', className: 'nowrap', sort: (s) => timeValue(s.first_seen), sortFirst: 'desc', cell: (s) => timeEl(s.first_seen, { relative: true }) },
             { label: 'Last seen', className: 'nowrap', sort: (s) => timeValue(s.last_seen), sortFirst: 'desc', cell: (s) => timeEl(s.last_seen, { relative: true }) },
           ],
