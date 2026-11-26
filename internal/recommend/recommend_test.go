@@ -408,3 +408,26 @@ func TestMaximumHoneytokenFindingsRemainReadable(t *testing.T) {
 		t.Fatalf("maximum valid token configuration rejected: %v", err)
 	}
 }
+
+func TestGenerateAcceptsSeededSyntheticCorrelationMarker(t *testing.T) {
+	source := testEnvelope(t, 40, event.ClassificationInteraction, findingObservation("PI-001"))
+	plain := correlationObservationJSON("COR-001", source.ID)
+	marked := strings.TrimSuffix(plain, "}") + `,"synthetic":true}`
+	want, err := Generate([]event.Envelope{testEnvelope(t, 41, event.ClassificationCorrelationSignal, plain), source}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Generate([]event.Envelope{testEnvelope(t, 41, event.ClassificationCorrelationSignal, marked), source}, Options{})
+	if err != nil {
+		t.Fatalf("synthetic marker rejected: %v", err)
+	}
+	if len(got.Recommendations) != len(want.Recommendations) || len(got.Recommendations) != 2 {
+		t.Fatalf("marker changed recommendations: %+v vs %+v", got.Recommendations, want.Recommendations)
+	}
+	for _, bad := range []string{`,"synthetic":"true"}`, `,"synthetic":1}`, `,"synthetic":true,"synthetic":false}`} {
+		e := testEnvelope(t, 42, event.ClassificationCorrelationSignal, strings.TrimSuffix(plain, "}")+bad)
+		if _, err := Generate([]event.Envelope{e, source}, Options{}); err == nil {
+			t.Fatalf("malformed marker accepted: %s", bad)
+		}
+	}
+}

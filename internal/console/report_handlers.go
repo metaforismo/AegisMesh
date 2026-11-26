@@ -3,6 +3,7 @@ package console
 import (
 	"net/http"
 
+	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/evidencereport"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
 	"github.com/metaforismo/aegismesh/internal/recommend"
@@ -31,7 +32,7 @@ func (s *Server) investigationReport(w http.ResponseWriter, r *http.Request, cre
 		s.caseError(w, err)
 		return
 	}
-	snapshot := s.index.Analysis()
+	snapshot := s.index.SharedAnalysis()
 	s.writeReport(w, r, credentials, evidencereport.Input{
 		Tenant: s.tenantID, Scope: "Investigation " + investigation.ID,
 		Bounds: snapshot, Events: investigationEvents(snapshot.Events, investigation.EventIDs),
@@ -40,6 +41,7 @@ func (s *Server) investigationReport(w http.ResponseWriter, r *http.Request, cre
 }
 
 func (s *Server) writeReport(w http.ResponseWriter, r *http.Request, credentials caller, input evidencereport.Input, action, id string) {
+	input.Organization = s.live.value(settings.OrganizationName)
 	ids := []string{}
 	for _, e := range evidenceview.Chronological(input.Events) {
 		if e.Node != nil || len(ids) >= recommend.MaxEvidence {

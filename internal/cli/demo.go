@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/metaforismo/aegismesh/internal/demo"
+	"github.com/metaforismo/aegismesh/internal/demoseed"
 )
 
 type demoCmd struct {
@@ -21,7 +22,7 @@ func newDemoCmd(env *Env) *demoCmd {
 }
 
 func (c *demoCmd) Name() string  { return "demo" }
-func (c *demoCmd) Usage() string { return "demo [--json] [--console]" }
+func (c *demoCmd) Usage() string { return "demo [--json] [--console [--seed small|large]]" }
 func (c *demoCmd) Help() string {
 	return `Run a self-contained, synthetic AegisMesh scenario on loopback.
 
@@ -36,6 +37,14 @@ console until interrupted and prints a fresh admin token once. The embedded
 operator UI is served at the printed URL alongside the console API. Cannot
 combine with --json.
 
+With --console --seed small|large, first writes clearly synthetic historical
+evidence into the same private temporary store: about 2,000 (small) or 50,000
+(large) observations over the previous seven days from documentation-range
+sources (TEST-NET and 2001:db8::/32), plus the correlation signals they
+trigger. Every seeded observation is marked "synthetic": true, passes the same
+redaction, and is removed with the rest of the temporary state. Correlation is
+enabled for the seeded run. Output is deterministic for a given start time.
+
 It accepts no config, API key, path, port or destination. It uses no cloud
 service or external egress and never performs enforcement.`
 }
@@ -45,11 +54,23 @@ func (c *demoCmd) Run(ctx context.Context, args []string) error {
 	fs := newFlagSet(c.Name())
 	fs.Var(&jsonOut, "json", "emit machine-readable JSON output")
 	fs.Var(&consoleFlag, "console", "keep synthetic evidence behind a loopback console until interrupted")
+	var seedFlag strictValueFlag
+	fs.Var(&seedFlag, "seed", "with --console: seed synthetic history (small|large)")
 	if err := fs.Parse(args); err != nil {
 		return Usagef("%v", err)
 	}
 	if fs.NArg() > 0 {
 		return Usagef("unexpected argument %q (demo takes flags only)", fs.Arg(0))
+	}
+
+	profile := seedFlag.String()
+	if len(seedFlag.values) > 0 {
+		if !consoleFlag.Value() {
+			return Usagef("--seed requires --console")
+		}
+		if _, err := demoseed.Lookup(profile); err != nil {
+			return Usagef("--seed: %v", err)
+		}
 	}
 
 	runCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
@@ -58,8 +79,14 @@ func (c *demoCmd) Run(ctx context.Context, args []string) error {
 		if jsonOut.Value() {
 			return Usagef("--console and --json cannot be combined")
 		}
-		_, err := demo.RunConsole(runCtx, func(addr, token string) error {
-			_, e := fmt.Fprintf(c.env.Out, "Console: http://%s\nOperator: demo-admin (admin)\nToken (save now): %s\nSynthetic evidence only. Press Ctrl-C to stop and remove temporary state.\n", addr, token)
+		_, err := demo.RunConsoleSeeded(runCtx, profile, func(info demo.ConsoleInfo) error {
+			if info.Seeded.Events > 0 {
+				if _, e := fmt.Fprintf(c.env.Out, "Seeded: %d synthetic observations and %d correlation signals from %d documentation-range sources (profile %s)\n",
+					info.Seeded.Events, info.Seeded.Signals, info.Seeded.Sources, info.Seeded.Profile); e != nil {
+					return e
+				}
+			}
+			_, e := fmt.Fprintf(c.env.Out, "Console: http://%s\nOperator: demo-admin (admin)\nToken (save now): %s\nSynthetic evidence only. Press Ctrl-C to stop and remove temporary state.\n", info.Addr, info.Token)
 			return e
 		})
 		return err

@@ -39,8 +39,8 @@ func ListCampaigns(set evidenceview.CampaignSet, bounds evidenceindex.Snapshot, 
 }
 
 func (s *Server) campaignSet() (evidenceview.CampaignSet, evidenceindex.Snapshot) {
-	snapshot := s.index.Analysis()
-	return evidenceview.Campaigns(s.tenantID, evidenceview.Sessions(s.tenantID, snapshot.Events)), snapshot
+	analysis := s.analysis()
+	return analysis.Campaigns(), analysis.snapshot
 }
 
 func (s *Server) campaigns(w http.ResponseWriter, r *http.Request, _ caller) {

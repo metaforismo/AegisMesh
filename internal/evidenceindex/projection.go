@@ -53,6 +53,9 @@ type Summary struct {
 	RuleIDs []string `json:"rule_ids"`
 	// Action is a recognized stored detection action; it triggers no enforcement.
 	Action string `json:"action"`
+	// Synthetic is true only for seeded demo history, whose observation carries
+	// a top-level "synthetic": true written by the generator. Omitted otherwise.
+	Synthetic bool `json:"synthetic,omitempty"`
 }
 
 // Finding contains catalog-authored detection metadata, never attacker-authored explanations.
@@ -182,6 +185,7 @@ func Project(envelope event.Envelope) (Summary, []Finding, []string) {
 	}
 
 	observation := object(envelope.Observation)
+	summary.Synthetic = string(observation["synthetic"]) == "true"
 	summary.Source = sourceText(observation, "remote_host")
 	summary.Summary = observationSummary(summary.Sensor.Kind, envelope.Classification, observation)
 	if summary.Sensor.Kind == "http" && envelope.Classification != event.ClassificationCorrelationSignal {

@@ -88,7 +88,7 @@ _aegismesh_completions() {
       COMPREPLY=( $(compgen -W "--dir --force --json" -- "$cur"); true ) ;;
     console) COMPREPLY=( $(compgen -W "token hash" -- "$cur") ) ;;
     accounts) COMPREPLY=( $(compgen -W "list disable enable key revoke --state-dir --local-tenant --json" -- "$cur") ) ;;
-    demo) COMPREPLY=( $(compgen -W "--json --console" -- "$cur") ) ;;
+    demo) COMPREPLY=( $(compgen -W "--json --console --seed" -- "$cur") ) ;;
     version) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
     completion) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ) ;;
   esac
@@ -142,7 +142,7 @@ _aegismesh() {
           '--require-sealed[reject open segments]' ;;
         console) _values 'operation' token hash ;;
         accounts) _arguments '1:operation:(list disable enable key)' '--state-dir[console state directory]:directory:_directories' '--local-tenant[local tenant slug]:tenant:' '--json[emit JSON output]' ;;
-        demo) _arguments '--json[emit JSON output]' '--console[keep operator console open]' ;;
+        demo) _arguments '--json[emit JSON output]' '--console[keep operator console open]' '--seed[seed synthetic history]:profile:(small large)' ;;
         migrate) _values 'target' beelzebub ;;
         completion) _values 'shell' bash zsh fish ;;
       esac ;;
@@ -180,6 +180,7 @@ complete -c aegismesh -n '__fish_seen_subcommand_from accounts' -l state-dir -r 
 complete -c aegismesh -n '__fish_seen_subcommand_from accounts' -l local-tenant -r -d 'local tenant slug'
 complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l console -d 'keep operator console open'
 complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l json -d 'JSON output'
+complete -c aegismesh -n '__fish_seen_subcommand_from demo' -l seed -r -a 'small large' -d 'seed synthetic history'
 complete -c aegismesh -l config -r -d 'config file'
 complete -c aegismesh -l data-dir -r -d 'evidence directory'
 complete -c aegismesh -n '__fish_seen_subcommand_from inspect' -l identity -r -d 'native age/X25519 identity file'

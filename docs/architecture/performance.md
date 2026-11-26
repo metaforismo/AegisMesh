@@ -128,3 +128,38 @@ load; its raw output is retained and excluded, and the full retry passed.
 These are local synthetic measurements, not statistical significance, p99,
 capacity or deployment proof. Concurrent ingestion/reads, IO controls, public
 socket/TLS behavior and stronger load isolation remain unmeasured.
+
+## Seeded console pass — 2026-11-26
+
+`make perf` seeds the `large` demo profile (`aegismesh demo --console --seed`,
+50,000 synthetic observations plus 7,464 correlation signals over seven days),
+backfills it through the runtime path, and measures every console GET the UI
+issues, the same analysis endpoints with an append before each request, and SSE
+fan-out. Method, data profile, full before/after tables, ranges and limits are
+in [performance/2026-11-26](../performance/2026-11-26/README.md).
+
+Design change: **analysis is derived once per index generation and tenant view.**
+The index advances a generation on every append, eviction, history or
+name-resolver change. `SharedAnalysis` builds the newest-first 8,192-summary
+sample once per generation, with summary slices clipped so a caller's append
+cannot reach shared storage. `Analysis` still returns an independent copy. Each
+tenant view memoises, for its newest generation only, sessions, campaigns, the
+event→session map, the cursor digest's SHA-256 prefix state, the
+recommendation report and the digest's recommendation count. Nothing is merged
+across tenants or generations. A snapshot taken with a live fleet node-name
+resolver has generation zero and is never memoised, because names can change
+without an index change. Results are byte-identical to the per-request
+computation (equivalence tests on seeded data). Timestamp parsing decodes the
+canonical projection format directly. The memo costs about 9.1 MiB of live heap
+for one tenant view on this profile (single measurement). It is bounded to one
+generation per view and is replaced, not accumulated.
+
+Median p50 between appends, three alternating runs on one machine: sessions
+23.1 → 0.33 ms, campaigns 17.2 → 0.06 ms, digest 56.5 → 2.9 ms,
+recommendations 35.9 → 0.03 ms, event detail 21.0 → 4.0 ms, coverage 10.4 →
+2.0 ms. Allocation per sessions request fell 47.5 MB → 0.83 MB. With an append
+before every request, sessions (~21 ms) and campaigns (~16 ms) cost about what
+they did before. The memo removes repeated work between appends; it does not
+make the derivation itself cheap. Overview, events and SSE were unchanged. Backfill of 57,464
+envelopes took ~0.7 s; the 64 MiB bound retains 13,362 of them (26.6 MiB live
+heap). These are local synthetic measurements, not capacity.

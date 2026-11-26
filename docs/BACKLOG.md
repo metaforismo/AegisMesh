@@ -498,3 +498,17 @@ history completeness, and saturation/p99/paired IO controls. The previously
 listed unimplemented multi-step MCP/file-format scope is superseded only by
 this local slice, not by a production or release claim. UI/mock work stays in
 the frontend workstream; no UI files were changed.
+
+## Seeded demo history and analysis memo — 2026-11-26, local branch
+
+Implemented on `feat/perf-demo-data` (not pushed): `demo --console --seed
+small|large`, `make perf`, per-generation analysis memoisation, posture
+`acceptable`/`acceptable_reason`, and `organization_name` in reports and the
+digest. Evidence: [performance/2026-11-26](performance/2026-11-26/README.md).
+
+Follow-ups (TODO): after an append, `Sessions`/`Campaigns` over the 8,192 sample
+still cost ~21 ms / ~39 MB and ~16 ms per first request. An incremental session
+derivation would address that; memoisation does not. Event detail keeps ~4 ms
+that was not profiled (synced audit append likely). Overview 24h/7d (~2–3 ms)
+was not changed. Fleet tenants with a live node-name resolver are not memoised.
+Not measured: concurrent readers/writers, multiple tenants, p99, sockets/TLS.

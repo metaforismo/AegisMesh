@@ -88,11 +88,79 @@ func loopbackURL(raw string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func (s *Server) posture(w http.ResponseWriter, r *http.Request, _ caller) {
+// Reasons a posture check cannot currently be accepted in the console.
+const (
+	acceptPermissionDenied   = "permission_denied"
+	acceptEditingDisabled    = "editing_disabled"
+	acceptOverlayUnavailable = "overlay_unavailable"
+	acceptAlreadyAccepted    = "already_accepted"
+	acceptNotAttention       = "not_attention"
+)
+
+// PostureCheck is a posture check plus whether this caller can accept its risk now.
+type PostureCheck struct {
+	posture.Check
+	// Acceptable is true when POST /api/v1/posture/{id}/accept by this caller
+	// would be admitted now (a valid reason and expiry still required).
+	Acceptable bool `json:"acceptable"`
+	// AcceptableReason is "" when Acceptable, otherwise one fixed code:
+	// permission_denied, editing_disabled, overlay_unavailable,
+	// already_accepted or not_attention, checked in that order.
+	AcceptableReason string `json:"acceptable_reason"`
+}
+
+// PostureResponse is the GET /api/v1/posture body: posture.Report with
+// per-check acceptability, fields in the same order.
+type PostureResponse struct {
+	GeneratedAt string          `json:"generated_at"`
+	Scope       string          `json:"scope"`
+	Summary     posture.Summary `json:"summary"`
+	Checks      []PostureCheck  `json:"checks"`
+	Disclaimer  string          `json:"disclaimer"`
+	Acceptances string          `json:"acceptances"`
+}
+
+func (s *Server) posture(w http.ResponseWriter, r *http.Request, credentials caller) {
 	if _, ok := query(w, r); !ok {
 		return
 	}
-	boundedJSON(w, s.postureReport())
+	boundedJSON(w, s.postureResponse(s.postureReport(), credentials.session.Principal))
+}
+
+// postureResponse adds acceptability with the same gates acceptPosture applies:
+// permission, editing, overlay, then the local view's unaccepted status, since
+// acceptances are instance-wide and checked against the local configuration.
+func (s *Server) postureResponse(report posture.Report, principal auth.Principal) PostureResponse {
+	out := PostureResponse{
+		GeneratedAt: report.GeneratedAt, Scope: report.Scope, Summary: report.Summary,
+		Checks: make([]PostureCheck, 0, len(report.Checks)), Disclaimer: report.Disclaimer, Acceptances: report.Acceptances,
+	}
+	gate := ""
+	switch {
+	case !s.grants(principal).has(permission.SettingsManage):
+		gate = acceptPermissionDenied
+	case !s.editing():
+		gate = acceptEditingDisabled
+	case s.overlay.Problem() != "":
+		gate = acceptOverlayUnavailable
+	}
+	raw := map[string]string{}
+	if gate == "" {
+		for _, check := range s.views[s.cfg.LocalTenant].rawPosture().Checks {
+			raw[check.ID] = check.Status
+		}
+	}
+	for _, check := range report.Checks {
+		reason := gate
+		if reason == "" && check.Status == posture.StatusAccepted {
+			reason = acceptAlreadyAccepted
+		}
+		if reason == "" && raw[check.ID] != posture.StatusAttention {
+			reason = acceptNotAttention
+		}
+		out.Checks = append(out.Checks, PostureCheck{Check: check, Acceptable: reason == "", AcceptableReason: reason})
+	}
+	return out
 }
 
 // postureReport evaluates this view's posture with live account, role and
@@ -111,7 +179,7 @@ func (s *Server) rawPosture() posture.Report {
 		copied.OverlayIgnored, copied.OverlayProblem = s.live.ignoredAtStartup(), s.overlay.Problem()
 		facts = &copied
 	}
-	return posture.Evaluate(facts, posture.FromSnapshot(s.index.Analysis()), time.Now())
+	return posture.Evaluate(facts, posture.FromSnapshot(s.index.SharedAnalysis()), time.Now())
 }
 
 // acceptances returns the unexpired acceptances that apply; none while editing is off.

@@ -41,6 +41,12 @@ bench: ## run synthetic backend benchmarks sequentially (100ms; not a CI gate)
 		go test -run '^$$' -bench . -benchmem -benchtime=$(BENCH_TIME) -count=$(BENCH_COUNT) ./internal/$$pkg; \
 	done
 
+PERF_PROFILE ?= large
+
+.PHONY: perf
+perf: ## seeded console latency/alloc/backfill/SSE harness (PERF_PROFILE=large|small; not a CI gate)
+	AEGISMESH_PERF_PROFILE=$(PERF_PROFILE) go test -tags perf -run '^TestPerfSeededConsole$$' -count=1 -v -timeout 30m ./internal/console
+
 .PHONY: ui-test
 ui-test: ## run console UI tests (Node.js >= 20, no npm install)
 	node --test 'internal/consoleui/webtest/*.test.mjs'

@@ -48,8 +48,9 @@ func (s *Server) attackerSessions(w http.ResponseWriter, r *http.Request, _ call
 	if window == "" {
 		window = "24h"
 	}
-	snapshot := s.index.Analysis()
-	digest := analysisDigest(snapshot, source, strconv.FormatInt(int64(duration), 10))
+	analysis := s.analysis()
+	snapshot := analysis.snapshot
+	digest := analysis.digest(source, strconv.FormatInt(int64(duration), 10))
 	cursor := sessionCursor{Scope: "attacker_sessions", Digest: digest, AsOf: time.Now().UTC().Format(time.RFC3339Nano)}
 	if value := values.Get("cursor"); value != "" {
 		raw, valid := s.unsign(value)
@@ -65,7 +66,7 @@ func (s *Server) attackerSessions(w http.ResponseWriter, r *http.Request, _ call
 	}
 
 	matched := []evidenceview.Session{}
-	for _, session := range evidenceview.Sessions(s.tenantID, snapshot.Events) {
+	for _, session := range analysis.Sessions() {
 		last, _ := time.Parse(time.RFC3339Nano, session.LastSeen)
 		first, _ := time.Parse(time.RFC3339Nano, session.FirstSeen)
 		if !last.Before(asOf.Add(-duration)) && !first.After(asOf) && (source == "" || session.Source == source) {
@@ -96,14 +97,14 @@ func (s *Server) findAttackerSession(w http.ResponseWriter, id string) (evidence
 		invalid(w)
 		return evidenceview.Session{}, evidenceindex.Snapshot{}, false
 	}
-	snapshot := s.index.Analysis()
-	for _, session := range evidenceview.Sessions(s.tenantID, snapshot.Events) {
+	analysis := s.analysis()
+	for _, session := range analysis.Sessions() {
 		if session.ID == id {
-			return session, snapshot, true
+			return session, analysis.snapshot, true
 		}
 	}
 	fail(w, 404, "not_found", "session is no longer indexed")
-	return evidenceview.Session{}, snapshot, false
+	return evidenceview.Session{}, analysis.snapshot, false
 }
 
 func (s *Server) attackerSession(w http.ResponseWriter, r *http.Request, _ caller) {
@@ -131,7 +132,7 @@ func (s *Server) coverage(w http.ResponseWriter, r *http.Request, _ caller) {
 		return
 	}
 	now := time.Now().UTC()
-	snapshot := s.index.Analysis()
+	snapshot := s.index.SharedAnalysis()
 	boundedJSON(w, map[string]any{
 		"frameworks": evidenceview.Coverage(snapshot.Events, now.Add(-duration), now),
 		"bounds":     snapshot, "since": now.Add(-duration).Format(time.RFC3339Nano),
