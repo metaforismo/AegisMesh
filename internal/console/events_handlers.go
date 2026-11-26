@@ -94,15 +94,7 @@ func (s *Server) eventDetail(w http.ResponseWriter, r *http.Request, credentials
 		"integrity":      integrity,
 		"investigations": cases,
 	}
-	detail["session_id"] = ""
-	for _, session := range evidenceview.Sessions(s.tenantID, s.index.Analysis().Events) {
-		for _, e := range session.Events {
-			if evidenceview.EventKey(e) == evidenceview.EventKey(summary) {
-				detail["session_id"] = session.ID
-				break
-			}
-		}
-	}
+	detail["session_id"] = s.analysis().sessionOf(evidenceview.EventKey(summary))
 	if summary.Node != nil {
 		detail["node"] = summary.Node
 	}

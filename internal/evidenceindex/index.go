@@ -45,6 +45,11 @@ type Index struct {
 	streams         map[chan *StreamEvent]struct{}
 	subscribers     map[chan Summary]struct{}
 	size            observe.Gauge
+	// generation advances on every retained-state change (append, eviction,
+	// history, name resolver); analysis memoises the newest-first sample for
+	// one generation. Both are guarded by mu.
+	generation uint64
+	analysis   *Snapshot
 }
 
 // Stats reports current index capacity, occupancy, and historical coverage.
@@ -110,7 +115,24 @@ func (index *Index) Add(envelope event.Envelope) {
 
 // SetNodeNames installs the trusted read-time registry name resolver before serving.
 func (index *Index) SetNodeNames(resolve func(string) string) {
+	index.mu.Lock()
+	defer index.mu.Unlock()
 	index.nodeName = resolve
+	index.changed()
+}
+
+// changed invalidates generation-scoped memoisation; callers hold mu for writing.
+func (index *Index) changed() {
+	index.generation++
+	index.analysis = nil
+}
+
+// Generation identifies the current retained state. Equal values mean no
+// append, eviction or history change happened in between.
+func (index *Index) Generation() uint64 {
+	index.mu.RLock()
+	defer index.mu.RUnlock()
+	return index.generation
 }
 
 // AddForwarded indexes a successfully appended envelope with authenticated origin metadata.
@@ -187,6 +209,7 @@ func (index *Index) add(envelope event.Envelope, node string) {
 
 	index.ordinals[item.ordinal] = index.ids[key]
 	index.selectEntry(item)
+	index.changed()
 
 	index.bytes += item.bytes
 	for index.items.Len() > index.capacity || index.bytes > MaxBytes {
@@ -231,6 +254,7 @@ func (index *Index) SetHistory(history string) {
 	defer index.mu.Unlock()
 
 	index.history = history
+	index.changed()
 }
 
 // Stats returns current occupancy and historical coverage without exposing index storage.
@@ -411,6 +435,13 @@ func (index *Index) Summaries() []Summary {
 
 // Envelopes is bounded to the recommendation engine's evidence budget.
 func (index *Index) Envelopes(max int) []event.Envelope {
+	envelopes, _ := index.EnvelopesAt(max)
+	return envelopes
+}
+
+// EnvelopesAt is Envelopes plus the generation it was read at, under one lock.
+// Forwarded envelopes are excluded, so live node names never affect it.
+func (index *Index) EnvelopesAt(max int) ([]event.Envelope, uint64) {
 	index.mu.RLock()
 	defer index.mu.RUnlock()
 
@@ -422,7 +453,7 @@ func (index *Index) Envelopes(max int) []event.Envelope {
 		}
 	}
 
-	return envelopes
+	return envelopes, index.generation
 }
 
 // Subscribe registers a bounded live feed; a slow subscriber is closed rather than blocking append.

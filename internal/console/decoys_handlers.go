@@ -136,11 +136,36 @@ func (s *Server) catalogWindow(w http.ResponseWriter, r *http.Request) (evidence
 		return evidenceindex.Snapshot{}, nil, false
 	}
 	now := time.Now().UTC()
-	snapshot := s.index.Analysis()
+	snapshot := s.index.SharedAnalysis()
+	// The sample is newest-first, so the window is normally one contiguous run
+	// that can be returned as a read-only subslice; any other layout is copied.
+	inWindow := func(e evidenceindex.Summary) bool {
+		t := evidenceview.Time(e)
+		return !t.Before(now.Add(-duration)) && t.Before(now)
+	}
+	first, last, contiguous := -1, -1, true
+	for i, e := range snapshot.Events {
+		if !inWindow(e) {
+			continue
+		}
+		if last >= 0 && last != i-1 {
+			contiguous = false
+			break
+		}
+		if first < 0 {
+			first = i
+		}
+		last = i
+	}
+	if first < 0 {
+		return snapshot, []evidenceindex.Summary{}, true
+	}
+	if contiguous {
+		return snapshot, snapshot.Events[first : last+1 : last+1], true
+	}
 	events := []evidenceindex.Summary{}
 	for _, e := range snapshot.Events {
-		t := evidenceview.Time(e)
-		if !t.Before(now.Add(-duration)) && t.Before(now) {
+		if inWindow(e) {
 			events = append(events, e)
 		}
 	}

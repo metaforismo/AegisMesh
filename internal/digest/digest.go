@@ -24,6 +24,9 @@ type Input struct {
 	Recommendations        int
 	RecommendationExcluded int
 	RecommendationMissing  int
+	// Sessions optionally supplies evidenceview.Sessions(Tenant, Bounds.Events)
+	// already derived from the same snapshot; nil derives them here.
+	Sessions []evidenceview.Session
 }
 
 // Report is a comparison of adjacent half-open windows, not incident attribution.
@@ -121,7 +124,11 @@ func Build(in Input) (Report, error) {
 			out.NewSources++
 		}
 	}
-	for _, s := range evidenceview.Sessions(in.Tenant, in.Bounds.Events) {
+	sessions := in.Sessions
+	if sessions == nil {
+		sessions = evidenceview.Sessions(in.Tenant, in.Bounds.Events)
+	}
+	for _, s := range sessions {
 		if s.Automation.Assessment != "consistent_with_automation" {
 			continue
 		}

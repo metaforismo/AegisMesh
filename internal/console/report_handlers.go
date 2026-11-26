@@ -31,7 +31,7 @@ func (s *Server) investigationReport(w http.ResponseWriter, r *http.Request, cre
 		s.caseError(w, err)
 		return
 	}
-	snapshot := s.index.Analysis()
+	snapshot := s.index.SharedAnalysis()
 	s.writeReport(w, r, credentials, evidencereport.Input{
 		Tenant: s.tenantID, Scope: "Investigation " + investigation.ID,
 		Bounds: snapshot, Events: investigationEvents(snapshot.Events, investigation.EventIDs),

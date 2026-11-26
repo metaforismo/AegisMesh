@@ -104,10 +104,52 @@ type Detail struct {
 	TimelineTruncated bool            `json:"timeline_truncated"`
 }
 
-// Time parses the index's canonical UTC timestamp.
+// Time parses the index's canonical UTC timestamp. The projection always
+// writes "2006-01-02T15:04:05.000000000Z"; that exact shape is decoded
+// directly, and anything else (including out-of-range fields) takes the
+// time.Parse path, whose result, or zero time on error, is returned unchanged.
 func Time(e evidenceindex.Summary) time.Time {
+	if t, ok := canonicalTime(e.Time); ok {
+		return t
+	}
 	t, _ := time.Parse(time.RFC3339Nano, e.Time)
 	return t
+}
+
+// canonicalTime decodes the fixed-width projection format exactly as
+// time.Parse(time.RFC3339Nano, value) would for valid input.
+func canonicalTime(value string) (time.Time, bool) {
+	if len(value) != 30 || value[4] != '-' || value[7] != '-' || value[10] != 'T' ||
+		value[13] != ':' || value[16] != ':' || value[19] != '.' || value[29] != 'Z' {
+		return time.Time{}, false
+	}
+	number := func(from, to int) (int, bool) {
+		n := 0
+		for i := from; i < to; i++ {
+			c := value[i]
+			if c < '0' || c > '9' {
+				return 0, false
+			}
+			n = n*10 + int(c-'0')
+		}
+		return n, true
+	}
+	year, ok1 := number(0, 4)
+	month, ok2 := number(5, 7)
+	day, ok3 := number(8, 10)
+	hour, ok4 := number(11, 13)
+	minute, ok5 := number(14, 16)
+	second, ok6 := number(17, 19)
+	nanos, ok7 := number(20, 29)
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 || !ok7 ||
+		month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59 {
+		return time.Time{}, false
+	}
+	t := time.Date(year, time.Month(month), day, hour, minute, second, nanos, time.UTC)
+	if t.Day() != day { // day beyond the month's length
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // EventKey distinguishes equal IDs arriving from different authenticated origins.
