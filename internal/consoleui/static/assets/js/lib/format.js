@@ -168,6 +168,18 @@ export function formatBytes(value) {
   return i === 0 ? `${n} B` : `${n.toFixed(n >= 100 ? 0 : 1)} ${units[i]}`;
 }
 
+// The relative part of a change: "+12%", "−40%", and from ten times the
+// previous count on "2,517×" (a "+251,659%" reads as noise, not a number).
+export function formatChangeRatio(current, previous) {
+  const cur = Number(current) || 0;
+  const prev = Number(previous) || 0;
+  if (prev <= 0) return '';
+  const diff = cur - prev;
+  if (cur / prev >= 10) return `${formatCount(Math.round(cur / prev))}×`;
+  const pct = Math.round((Math.abs(diff) / prev) * 100);
+  return `${diff >= 0 ? '+' : '−'}${pct}%`;
+}
+
 // Change versus the previous window. Direction is descriptive only; the UI
 // never colors more observations as "worse".
 export function formatDelta(current, previous) {
@@ -176,12 +188,11 @@ export function formatDelta(current, previous) {
   const diff = cur - prev;
   if (prev === 0 && cur === 0) return { direction: 'flat', text: 'no change', detail: 'none in either window' };
   if (prev === 0) return { direction: 'up', text: `+${formatCount(diff)}`, detail: 'none in previous window' };
-  const pct = Math.round((diff / prev) * 100);
   if (diff === 0) return { direction: 'flat', text: 'no change', detail: 'vs previous window' };
   const sign = diff > 0 ? '+' : '−';
   return {
     direction: diff > 0 ? 'up' : 'down',
-    text: `${sign}${formatCount(Math.abs(diff))} (${sign}${Math.abs(pct)}%)`,
+    text: `${sign}${formatCount(Math.abs(diff))} (${formatChangeRatio(cur, prev)})`,
     detail: 'vs previous window',
   };
 }

@@ -62,6 +62,12 @@ test('numbers and bytes', () => {
 test('deltas are descriptive', () => {
   assert.deepEqual(f.formatDelta(0, 0).direction, 'flat');
   assert.equal(f.formatDelta(5, 0).text, '+5');
+  // From ten times the previous count, a multiple instead of a huge percentage.
+  assert.equal(f.formatDelta(55387, 22).text, '+55,365 (2,518×)');
+  assert.equal(f.formatDelta(90, 10).text, '+80 (+800%)');
+  assert.equal(f.formatDelta(5, 10).text, '−5 (−50%)');
+  assert.equal(f.formatChangeRatio(100, 10), '10×');
+  assert.equal(f.formatChangeRatio(1, 0), '');
   assert.equal(f.formatDelta(50, 100).text, '−50 (−50%)');
 });
 

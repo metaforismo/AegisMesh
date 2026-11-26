@@ -14,7 +14,7 @@
 // where route is { name, params?, query } for lib/route.js href(), or null.
 
 import { isSeverity, severityLabel, SEVERITIES } from './taxonomy.js';
-import { formatCount } from './format.js';
+import { formatCount, formatChangeRatio } from './format.js';
 
 const WINDOW_TEXT = { '1h': 'the last hour', '24h': 'the last 24 hours', '7d': 'the last 7 days' };
 const WINDOW_MS = { '1h': 3600e3, '24h': 86400e3, '7d': 7 * 86400e3 };
@@ -48,8 +48,7 @@ function volume(ov, window, since) {
     else if (diff === 0) segs.push(t(', the same as the window before.'));
     else if (prev === 0) segs.push(t(', none in the window before.'));
     else {
-      const pct = Math.round((Math.abs(diff) / prev) * 100);
-      segs.push(t(', '), num(Math.abs(diff)), t(` ${diff > 0 ? 'more' : 'fewer'} than the window before (${diff > 0 ? '+' : '−'}${pct}%).`));
+      segs.push(t(', '), num(Math.abs(diff)), t(` ${diff > 0 ? 'more' : 'fewer'} than the window before (${formatChangeRatio(cur, prev)}).`));
     }
   } else {
     segs.push(t('. The previous window was not reported.'));

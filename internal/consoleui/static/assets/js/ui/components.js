@@ -3,7 +3,7 @@
 
 import { h, svg, mount } from '../lib/dom.js';
 import { classificationMeta, isSeverity, severityLabel, capitalize } from '../lib/taxonomy.js';
-import { formatDateTime, formatRelative, truncate } from '../lib/format.js';
+import { formatDateTime, formatRelative, truncate, formatCount as formatCountInt } from '../lib/format.js';
 import { describeError } from '../lib/api.js';
 import { sparkPath } from '../lib/chart.js';
 import { sparkMarks } from '../lib/viz.js';
@@ -216,15 +216,26 @@ export function fitTable(wrap) {
 // that reorders the rows already in the browser; see lib/tablesort.js for
 // which tables may sort. `sort` ({ key: label, dir }) is the initial order;
 // without it rows keep the server's order until a header is chosen.
-export function table({ columns, rows, caption, stack = true, rowClass, sort = null, scroll = false }) {
+export function table(opts) {
+  return growingTable(opts).el;
+}
+
+// The same table, able to grow: `append(rows)` adds a loaded page at the
+// end without rebuilding the rows already drawn (a "Load more" on a long
+// list stays as cheap as its first page). A sorted table repaints, since
+// a new row may belong anywhere.
+export function growingTable({ columns, rows: initial, caption, stack = true, rowClass, sort = null, scroll = false }) {
+  const rows = [...initial];
   let state = sort;
   const tbody = h('tbody');
   const status = h('span', { class: 'visually-hidden', role: 'status' });
+  const rowEl = (row) => h('tr', { class: rowClass ? rowClass(row) : null },
+    columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || '', c.lead ? 'cell-lead' : ''], 'data-label': c.label }, c.cell(row))));
+  const sortedBy = () => state && columns.find((c) => c.label === state.key && typeof c.sort === 'function');
   const paint = () => {
-    const col = state && columns.find((c) => c.label === state.key && typeof c.sort === 'function');
+    const col = sortedBy();
     const ordered = col ? sortRows(rows, col.sort, state.dir) : rows;
-    mount(tbody, ordered.map((row) => h('tr', { class: rowClass ? rowClass(row) : null },
-      columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || '', c.lead ? 'cell-lead' : ''], 'data-label': c.label }, c.cell(row))))));
+    mount(tbody, ordered.map(rowEl));
   };
   const syncs = [];
   const heads = columns.map((c) => {
@@ -256,7 +267,19 @@ export function table({ columns, rows, caption, stack = true, rowClass, sort = n
       h('thead', null, h('tr', null, heads)),
       tbody),
     status);
-  return scroll ? wrap : fitTable(wrap);
+  const append = (more) => {
+    const list = Array.isArray(more) ? more : [];
+    if (!list.length) return;
+    rows.push(...list);
+    if (sortedBy()) {
+      paint();
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const row of list) frag.appendChild(rowEl(row));
+    tbody.appendChild(frag);
+  };
+  return { el: scroll ? wrap : fitTable(wrap), append, get size() { return rows.length; } };
 }
 
 // ---- States ----------------------------------------------------------------
@@ -484,7 +507,17 @@ export function inputField({ label, name, value = '', type = 'text', placeholder
     hint ? h('span', { class: 'field__hint', id: `${fid}-hint` }, hint) : null);
 }
 
-export function pager({ hasMore, onMore, shown, total }) {
+// A long list stops offering pages at LIST_CAP rows drawn and says how to
+// reach the rest (narrow the filters, export): a page that keeps growing
+// gets slower to scroll, search and print for everyone.
+export const LIST_CAP = 2000;
+
+export function pager({ hasMore, onMore, shown, total, cap = LIST_CAP, capText = '' }) {
+  if (hasMore && cap && shown >= cap) {
+    return h('div', { class: 'pager' },
+      h('span', { class: 'muted' }, total !== undefined ? `Showing ${formatCountInt(shown)} of ${formatCountInt(total)}` : `Showing ${formatCountInt(shown)}`),
+      h('span', { class: 'muted pager__cap' }, capText || `The list stops at ${formatCountInt(cap)} rows. Narrow the filters to reach older ones.`));
+  }
   const btn = h('button', { class: 'btn', type: 'button' }, 'Load more');
   btn.addEventListener('click', async () => {
     btn.disabled = true;
@@ -497,7 +530,7 @@ export function pager({ hasMore, onMore, shown, total }) {
     }
   });
   return h('div', { class: 'pager' },
-    h('span', { class: 'muted' }, total !== undefined ? `Showing ${shown} of ${total}` : `Showing ${shown}`),
+    h('span', { class: 'muted' }, total !== undefined ? `Showing ${formatCountInt(shown)} of ${formatCountInt(total)}` : `Showing ${formatCountInt(shown)}`),
     hasMore ? btn : h('span', { class: 'muted' }, shown ? 'End of list' : ''));
 }
 

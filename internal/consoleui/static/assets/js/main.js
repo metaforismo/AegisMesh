@@ -517,6 +517,11 @@ async function render({ soft = false } = {}) {
   }
 
   const dir = soft ? 'none' : direction(location.hash);
+  // User Timing: one measure per screen render ("screen:events"), from the
+  // route change to the swapped-in view, visible in the browser's
+  // performance tools. Nothing is collected or sent.
+  const markStart = `screen-start:${route.name}`;
+  performance.mark?.(markStart);
   teardownScreen();
   shell.setActive(route.name);
   clear(shell.liveSlot);
@@ -588,6 +593,12 @@ async function render({ soft = false } = {}) {
     // An in-place refresh must not replay entrance animations.
     if (soft) view.classList.add('view--static');
     await swapView(main, view, { animate, dir, fade: skeletonShown && !reducedMotion() });
+    try {
+      performance.measure?.(`screen:${route.name}`, markStart);
+      performance.clearMarks?.(markStart);
+    } catch {
+      // User Timing unavailable: nothing to record.
+    }
     window.scrollTo(0, keepY);
     result.mounted?.();
     if (!soft && !state.firstRender) main.querySelector('#page-title')?.focus({ preventScroll: true });

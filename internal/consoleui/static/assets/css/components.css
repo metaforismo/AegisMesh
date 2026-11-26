@@ -2643,6 +2643,12 @@ a.segleg__row:focus-visible { outline-offset: 0; }
 .score__cell--absent .score__mark { width: 8px; height: 8px; margin-top: calc(1.25rem - 4px); border: 1.5px solid var(--color-ink-3); background: var(--color-surface); }
 .score__cell--unknown .score__mark { border: 1.5px dotted var(--color-ink-3); background: var(--color-surface); }
 .score__t { display: block; margin-top: 3px; color: var(--color-ink-2); font-size: var(--text-2xs); font-variant-numeric: tabular-nums slashed-zero; white-space: nowrap; }
+/* A folded score: what is drawn, in words, and one "Show all" per axis. */
+.score-more { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); }
+.score-more[hidden] { display: none; }
+.score-more__note { font-size: var(--text-xs); }
+@media print { .score-more .btn-row { display: none; } }
+
 .score-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin-bottom: var(--space-3); color: var(--color-ink-2); font-size: var(--text-xs); }
 .score-legend__item { display: inline-flex; align-items: center; gap: var(--space-2); }
 .score-legend__mark { position: relative; display: inline-grid; place-items: center; width: 22px; height: 12px; }

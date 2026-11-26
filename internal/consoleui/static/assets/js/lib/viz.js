@@ -163,3 +163,13 @@ export function tourPlacement(target, box, viewport, avoid = [], gap = 10) {
   }
   return { left: best.left, top: best.top, side: best.side };
 }
+
+// A long ranked list for a small chart: the first `n` rows as they are and
+// the rest summed into one row, so 48 sensors read as the 8 busiest plus
+// "40 other sensors". Rows keep the server's order (busiest first).
+export function topWithRest(rows, n = 8, value = (r) => Number(r?.events) || 0) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length <= n + 1) return { top: list, rest: null };
+  const others = list.slice(n);
+  return { top: list.slice(0, n), rest: { count: others.length, events: others.reduce((a, r) => a + value(r), 0) } };
+}
