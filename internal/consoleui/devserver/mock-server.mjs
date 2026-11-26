@@ -31,6 +31,7 @@ import { ruleRecord, decoyCatalog, tokenCatalog, decoysView, honeytokensView, in
 import { campaignsOf, campaignDetail, publicCampaign, actorOf, postureOf } from './mock-insight.mjs';
 import { createAccounts, clientFamily } from './mock-accounts.mjs';
 import { BUILTIN, createAcceptance } from './mock-roles.mjs';
+import { SCALES, LARGE, sourcePool, extraSensors, pickSource, campaignRuns, auditBackfill } from './mock-scale.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
@@ -100,6 +101,14 @@ const LOCAL_TENANT = TENANTS[0];
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
 const SESSION_TTL = 3600;
+
+// --scale large: ~50k events, hundreds of sources, dozens of sensors, many
+// campaigns and thousands of audit records (mock-scale.mjs). The default,
+// normal, keeps the original small data set byte for byte.
+const argScale = process.argv.indexOf('--scale');
+const SCALE = argScale > 0 ? process.argv[argScale + 1] : (process.env.AEGISMESH_MOCK_SCALE || 'normal');
+if (!SCALES.includes(SCALE)) throw new Error(`--scale must be one of ${SCALES.join(', ')}`);
+const LARGE_SCALE = SCALE === 'large';
 
 // ---- Deterministic synthetic data ------------------------------------------
 
@@ -322,7 +331,7 @@ function makeEvent(t, overrides = {}) {
   const ev = {
     id: hex(32), time: new Date(t).toISOString().replace('.000Z', 'Z'), seq: ++seq,
     sensor: { id: sensor.id, kind: sensor.kind, listen: sensor.listen },
-    classification, source: overrides.source ?? pick(SOURCES),
+    classification, source: overrides.source ?? (LARGE_POOL ? pickSource(LARGE_POOL, rand) : pick(SOURCES)),
     summary: overrides.summary || pick(SUMMARIES[sensor.kind]),
     severity: overrides.severity ?? severity,
     rule_ids: overrides.rule_ids || rules.map((x) => x.id),
@@ -333,6 +342,31 @@ function makeEvent(t, overrides = {}) {
 }
 
 const keyOf = (id, origin) => `${id}|${origin}`;
+
+// Large scale only: extra sensors and a source pool, drawn from the seeded
+// generator; `--scale normal` never reaches this, so its data is unchanged.
+let LARGE_POOL = null;
+if (LARGE_SCALE) {
+  SENSORS.push(...extraSensors(LARGE.extraSensors));
+  LARGE_POOL = sourcePool(LARGE.sources, rand);
+}
+
+// Campaign runs as events (large scale only).
+function largeCampaignEvents() {
+  const out = [];
+  const byKind = (kind) => SENSORS.filter((x) => x.kind === kind);
+  for (const r of campaignRuns({ now, rand, pool: LARGE_POOL })) {
+    let t = r.start;
+    const sensors = byKind(r.steps[0][0]);
+    const sensor = sensors[r.campaign % sensors.length];
+    r.steps.forEach(([, summary], i) => {
+      t += r.gap + Math.floor(rand() * r.gap * 0.3);
+      out.push(makeEvent(t, { sensor, source: r.source, summary, rule_ids: i === 1 ? ['SCAN-004'] : [], severity: i === 1 ? 'low' : '' }));
+    });
+  }
+  return out;
+}
+
 const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
 // ---- Tenants ------------------------------------------------------------------
@@ -352,13 +386,13 @@ function buildTenant(name, local) {
   });
   const events = t.events;
   if (local) {
-    for (let i = 0; i < 1400; i++) {
+    for (let i = 0; i < (LARGE_SCALE ? LARGE.events : 1400); i++) {
       const age = Math.floor(rand() ** 1.6 * 7 * 24 * 3600 * 1000);
       events.push(makeEvent(now - age));
     }
     events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
     // A handful of correlation signals citing earlier interactions.
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < (LARGE_SCALE ? 600 : 18); i++) {
       const base = events[20 + i * 37];
       const rule = pick(CORRELATION_RULES);
       const sig = makeEvent(Date.parse(base.time) + 2000, {
@@ -370,6 +404,7 @@ function buildTenant(name, local) {
       events.push(sig);
     }
     events.push(...storyEvents());
+    if (LARGE_SCALE) events.push(...largeCampaignEvents());
   }
   // Forwarded copies. Forwarding is live, so they cover only the time since
   // this (synthetic) hub started: the last 20 hours. One copy deliberately
@@ -401,6 +436,8 @@ function buildTenant(name, local) {
     a.notes.push({ id: hex(8), time: a.created_at, author: 'ana', text: 'Read_file attempts against ../../etc/passwd, then a canary hit.\nNo outbound activity observed.' });
     newInv(t, 'Scanner noise baseline', 'low', t.localEvents().slice(100, 103).map((e) => e.id), 'ada', 'monitoring');
     newInv(t, 'Closed: SSH credential spray', 'medium', [], 'ana', 'closed');
+    // Large scale: a month of audit history before anyone signs in.
+    if (LARGE_SCALE) for (const r of auditBackfill({ now, rand })) record(t, r.actor, r.role, r.action, r.target, r.outcome, r.remote, r.detail, {}, r.time);
   } else {
     // Investigations annotate local observations only; this tenant has none,
     // so its cases hold notes but no attached evidence.
@@ -420,8 +457,8 @@ function newInv(t, title, priority, eventIds, by, status = 'open') {
 
 // Audit records chain per tenant. OIDC records add `issuer` and `subject`
 // (both external claims); other records omit them.
-function record(t, actor, role, action, target, outcome, remote, detail = '', extra = {}) {
-  const rec = { seq: t.audit.length + 1, time: stamp(), actor, role, action, target, outcome, remote, detail, ...extra, prev_hash: t.prevHash };
+function record(t, actor, role, action, target, outcome, remote, detail = '', extra = {}, time = stamp()) {
+  const rec = { seq: t.audit.length + 1, time, actor, role, action, target, outcome, remote, detail, ...extra, prev_hash: t.prevHash };
   rec.hash = createHash('sha256').update(JSON.stringify(rec)).digest('hex');
   t.prevHash = rec.hash;
   t.audit.push(rec);
