@@ -16,7 +16,9 @@ import (
 
 // Input supplies a stable observation snapshot and independently computed local counts.
 type Input struct {
-	Tenant                 string
+	Tenant string
+	// Organization is the optional console.organization_name setting.
+	Organization           string
 	Window                 string
 	AsOf                   time.Time
 	Bounds                 evidenceindex.Snapshot
@@ -31,6 +33,8 @@ type Input struct {
 
 // Report is a comparison of adjacent half-open windows, not incident attribution.
 type Report struct {
+	// OrganizationName is the console's organization setting, omitted when unset.
+	OrganizationName      string                         `json:"organization_name,omitempty"`
 	Window                string                         `json:"window"`
 	AsOf                  string                         `json:"as_of"`
 	Totals                evidenceindex.Totals           `json:"totals"`
@@ -81,6 +85,7 @@ func Build(in Input) (Report, error) {
 		return Report{}, err
 	}
 	out := Report{
+		OrganizationName:      in.Organization,
 		Window:                in.Window,
 		AsOf:                  in.AsOf.UTC().Format(time.RFC3339Nano),
 		TopRules:              []evidenceindex.RuleCount{},
@@ -234,6 +239,9 @@ func Render(report Report, format string) ([]byte, error) {
 	}
 	var out strings.Builder
 	out.WriteString("# AegisMesh periodic observation digest\n\n")
+	if report.OrganizationName != "" {
+		out.WriteString(evidencereport.MarkdownText("Organization: " + report.OrganizationName))
+	}
 	sections := []struct {
 		name  string
 		value any

@@ -540,8 +540,8 @@ field or dependency is introduced. UI and dev mock support are separate work.
 | `/api/v1/sessions/{id}` | viewer | No query; `Session` fields plus `{timeline:[TimelineEvent],phases:[Phase],timeline_truncated,bounds}` |
 | `/api/v1/coverage` | viewer | `window` as above; `{frameworks:[{framework,techniques:[{id,name,rule_ids,observed_event_count,last_seen}]}],since,until,interpretation,bounds}` |
 | `/api/v1/export/indicators` | analyst | Exactly one of `session=<id>`, `source=<key>`, `investigation=<id>`, `window=<window>`; required `format=stix\|csv\|txt`; attachment |
-| `/api/v1/sessions/{id}/report` | analyst | No query; deterministic `text/markdown` attachment |
-| `/api/v1/investigations/{id}/report` | analyst | No query; deterministic `text/markdown` attachment, including attached notes |
+| `/api/v1/sessions/{id}/report` | analyst | No query; deterministic `text/markdown` attachment; when `console.organization_name` is set, the Scope section adds an `Organization: …` line after the tenant, quoted and fenced like all report text |
+| `/api/v1/investigations/{id}/report` | analyst | No query; deterministic `text/markdown` attachment, including attached notes; same optional `Organization: …` line |
 
 `bounds` is `{index:{events,capacity,oldest,history},scanned_events,scan_limit:8192,
 scan_truncated}`. One locked snapshot samples the newest 8192 entries before
@@ -738,7 +738,7 @@ None adds an egress destination or sensor/configuration mutation.
 | Method and path | Minimum role | Result |
 | --- | --- | --- |
 | `GET /api/v1/export/events?format=...&window=24h` | analyst | Bounded audited attachment, formats `cef`, `syslog-rfc5424`, `otlp-json`, `ecs` |
-| `GET /api/v1/digest?window=24h` | viewer | Digest JSON, windows `24h`, `7d`, default `24h` |
+| `GET /api/v1/digest?window=24h` | viewer | Digest JSON, windows `24h`, `7d`, default `24h`; `organization_name` first when `console.organization_name` is set (omitted otherwise) |
 | `GET /api/v1/decoys?window=24h` | viewer | `{decoys:[Decoy],bounds:Bounds}`; windows `1h`, `24h`, `7d`, default `24h` |
 | `GET /api/v1/honeytokens?window=24h` | viewer | `{honeytokens:[Honeytoken],bounds:Bounds}`; same windows/default |
 
@@ -880,6 +880,10 @@ tenant's open investigation store, so the console API returns a number (and
 `limits.investigations_available: true`). The CLI returns `null` with
 `investigations_available: false` when `--investigations-dir` does not exist,
 because an absent store is unknown, not zero. Clients must still accept null.
+`organization_name` is likewise console-only: `aegismesh digest` reads no
+console settings, so its JSON omits the field and its Markdown has no
+`Organization:` line. When present, Markdown renders it quoted and fenced like
+every other digest value.
 
 ## Round 4: campaigns, actor profile and posture (ADR-0024)
 
@@ -895,12 +899,24 @@ model or enforcement is added. Rules and limits:
 |---|---|
 | `/api/v1/campaigns` | `{items:[Campaign],scanned_sessions,truncated,session_limit:4096,campaign_limit:100,total_campaigns,generated_at,bounds}` |
 | `/api/v1/campaigns/{id}` | Campaign plus `{steps,steps_truncated,sessions,sessions_truncated,caveats,generated_at,bounds}`; malformed ID (not `cmp_` + 12 lowercase hex) 400; unknown, foreign-tenant or no longer sampled 404 |
-| `/api/v1/posture` | `{generated_at,scope,summary:{attention,ok,info},checks:[Check],disclaimer}` |
+| `/api/v1/posture` | `{generated_at,scope,summary:{attention,ok,info},checks:[Check],disclaimer}`; every console check also carries `acceptable` and `acceptable_reason` (below) |
 
 `truncated` is true when more than 4096 sessions existed or more than 100
 campaigns matched (`total_campaigns` gives the full count). Campaigns sort by
 `last_seen` descending, then ID. Arrays are never null; `automation_counts`
 always has the four actor assessment keys.
+
+Each `/api/v1/posture` check has `"acceptable": true|false` and
+`"acceptable_reason"`, always present. The reason is `""` when acceptable;
+otherwise the first that applies of `permission_denied` (caller lacks
+`settings.manage`), `editing_disabled` (`console.settings_editing` is off; a
+POST returns 409), `overlay_unavailable` (settings overlay problem; POST 503),
+`already_accepted` (the check is currently accepted; `DELETE` removes it, and a
+POST would replace the acceptance) and `not_attention` (the local view's
+unaccepted status is not `attention`; POST 409). Acceptance is instance-wide,
+so the status test uses the local tenant's configuration and evidence, as the
+POST does. `true` means the request would be admitted now; a valid reason and
+expiry are still required. The CLI's `aegismesh posture` output is unchanged.
 
 ```jsonc
 // Campaign (list item). Fields beyond the round-4 contract: fingerprint_steps,

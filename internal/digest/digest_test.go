@@ -12,6 +12,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
+	"github.com/metaforismo/aegismesh/internal/evidencereport"
 )
 
 func digestFixture() Input {
@@ -129,5 +130,30 @@ func TestDigestEmptyAndMarkdownNeutralisation(t *testing.T) {
 	}
 	if _, err := Render(report, "html"); err == nil {
 		t.Fatal("unsupported output")
+	}
+}
+
+func TestDigestOrganizationName(t *testing.T) {
+	in := digestFixture()
+	report, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := Render(report, "json"); strings.Contains(string(raw), "organization_name") {
+		t.Fatal("unset organization serialized")
+	}
+	in.Organization = "Example <SOC>"
+	report, err = Build(in)
+	if err != nil || report.OrganizationName != "Example <SOC>" {
+		t.Fatal(report.OrganizationName, err)
+	}
+	body, _ := Render(report, "md")
+	header := "# AegisMesh periodic observation digest\n\n" + evidencereport.MarkdownText("Organization: Example <SOC>") + "## Window"
+	if !strings.HasPrefix(string(body), header) || strings.Contains(string(body), "<SOC>") {
+		t.Fatalf("digest header:\n%s", body)
+	}
+	raw, _ := Render(report, "json")
+	if !strings.Contains(string(raw), `"organization_name": "Example \u003cSOC\u003e"`) {
+		t.Fatalf("json: %s", raw)
 	}
 }

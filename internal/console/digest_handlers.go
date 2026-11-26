@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/digest"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
 	"github.com/metaforismo/aegismesh/internal/recommend"
@@ -57,6 +58,7 @@ func (s *Server) digest(w http.ResponseWriter, r *http.Request, _ caller) {
 	}
 	report, err := digest.Build(digest.Input{
 		Tenant:                 s.tenantID,
+		Organization:           s.live.value(settings.OrganizationName),
 		Window:                 window,
 		AsOf:                   now,
 		Bounds:                 snapshot,

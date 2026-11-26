@@ -467,7 +467,7 @@ required reason; everything else answers 409 `not_editable`:
 | `console.key_max_days` | 1..365, not below the effective default | new keys |
 | `console.key_default_days` | 1..effective `key_max_days` | new keys |
 | `console.sign_in_banner` | ≤ 500 printable characters, newlines allowed | immediately (`/api/v1/meta`) |
-| `console.organization_name` | ≤ 80 printable characters | immediately (`/api/v1/meta`) |
+| `console.organization_name` | ≤ 80 printable characters | immediately (`/api/v1/meta`, `/api/v1/digest`, session/investigation reports) |
 | `console.default_window` | `1h`, `24h`, `7d` | principals without saved preferences |
 | `posture.accepted` | accepted posture risks, ≤ 180 days each | immediately |
 

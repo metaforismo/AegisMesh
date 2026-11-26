@@ -3,6 +3,7 @@ package console
 import (
 	"net/http"
 
+	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/evidencereport"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
 	"github.com/metaforismo/aegismesh/internal/recommend"
@@ -40,6 +41,7 @@ func (s *Server) investigationReport(w http.ResponseWriter, r *http.Request, cre
 }
 
 func (s *Server) writeReport(w http.ResponseWriter, r *http.Request, credentials caller, input evidencereport.Input, action, id string) {
+	input.Organization = s.live.value(settings.OrganizationName)
 	ids := []string{}
 	for _, e := range evidenceview.Chronological(input.Events) {
 		if e.Node != nil || len(ids) >= recommend.MaxEvidence {

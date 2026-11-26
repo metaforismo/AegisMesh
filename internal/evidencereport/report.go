@@ -20,7 +20,10 @@ import (
 
 // Input separates scope annotations from immutable evidence projections.
 type Input struct {
-	Tenant                 string
+	Tenant string
+	// Organization is the optional console.organization_name setting; it is
+	// rendered as inert quoted text in the scope section when non-empty.
+	Organization           string
 	Scope                  string
 	Bounds                 evidenceindex.Snapshot
 	Events                 []evidenceindex.Summary
@@ -53,6 +56,9 @@ func Render(input Input) ([]byte, error) {
 	out.WriteString("# AegisMesh observation report\n\nObservations are not incidents. This report makes no attribution or compromise verdict.\n\n## Scope\n")
 	out.WriteString(MarkdownText(input.Scope))
 	out.WriteString(MarkdownText("Tenant: " + input.Tenant))
+	if input.Organization != "" {
+		out.WriteString(MarkdownText("Organization: " + input.Organization))
+	}
 	events := evidenceview.Chronological(input.Events)
 	if len(events) > 0 {
 		out.WriteString(MarkdownText("Selected interval: " + events[0].Time + " to " + events[len(events)-1].Time))
