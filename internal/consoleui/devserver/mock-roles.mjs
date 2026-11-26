@@ -243,7 +243,7 @@ export function createSettingsOverlay({ editing = true, round6 = true, startedAt
 export const MAX_ACCEPT_DAYS = 180;
 const RFC3339_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
-export function createAcceptance({ startedAt = Date.now(), round6 = true } = {}) {
+export function createAcceptance({ startedAt = Date.now(), round6 = true, acceptableField = true } = {}) {
   const accepted = new Map(); // check id → { by, reason, until }
   if (round6) {
     accepted.set('POS-004', {
@@ -258,13 +258,27 @@ export function createAcceptance({ startedAt = Date.now(), round6 = true } = {})
     return a || null;
   };
 
-  // Decorate a posture body: accepted attention items report "accepted".
-  function decorate(body) {
+  // Whether the caller could accept this check now, with the backend's
+  // fixed reason codes and precedence (contract r7): permission_denied >
+  // editing_disabled > overlay_unavailable > already_accepted > not_attention.
+  function acceptability(c, { canManage = true, editing = true, overlay = true } = {}) {
+    const reason = !canManage ? 'permission_denied'
+      : !editing ? 'editing_disabled'
+        : !overlay ? 'overlay_unavailable'
+          : c.status === 'accepted' ? 'already_accepted'
+            : c.status !== 'attention' ? 'not_attention' : '';
+    return { acceptable: reason === '', acceptable_reason: reason };
+  }
+
+  // Decorate a posture body: accepted attention items report "accepted";
+  // with the r7 field, every check says whether the caller may accept it.
+  function decorate(body, caller) {
     if (!round6) return body;
     const checks = body.checks.map((c) => {
       const a = c.status === 'attention' ? live(c.id) : null;
       if (c.status !== 'attention' && accepted.has(c.id)) accepted.delete(c.id);
-      return a ? { ...c, status: 'accepted', accepted: { ...a } } : { ...c, accepted: null };
+      const out = a ? { ...c, status: 'accepted', accepted: { ...a } } : { ...c, accepted: null };
+      return acceptableField ? { ...out, ...acceptability(out, caller) } : out;
     });
     const summary = { attention: 0, accepted: 0, ok: 0, info: 0 };
     for (const c of checks) summary[c.status]++;
@@ -284,6 +298,7 @@ export function createAcceptance({ startedAt = Date.now(), round6 = true } = {})
 
   return {
     decorate,
+    acceptability,
     validate,
     accept: (id, by, v, byName = by) => accepted.set(id, { by, by_name: byName, reason: v.reason, until: v.until }),
     revoke: (id) => accepted.delete(id),

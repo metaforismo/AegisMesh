@@ -10,7 +10,7 @@ import { href, normalizeWindow, normalizeFramework, TECHNIQUE_FRAMEWORKS } from 
 import { formatCount } from '../lib/format.js';
 import { frameworkLabel, boundsNote } from '../lib/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
-import { pageHead, panel, segmented, timeEl, helpTip, banner, empty } from '../ui/components.js';
+import { pageHead, panel, segmented, timeEl, helpTip, caveat, empty } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 
 const WINDOWS = [['1h', '1h'], ['24h', '24h'], ['7d', '7d']];
@@ -78,7 +78,7 @@ export default {
         hint: 'Switch frameworks with the tabs, then open an observed cell to see the events that cited it.',
         actions: segmented({ label: 'Time window', options: WINDOWS, value: window, onChange: (w) => ctx.navigate(href('techniques', { window: w, f: active })) }),
       }),
-      banner('info', 'Not a coverage claim',
+      caveat({ id: 'techniques-coverage', title: 'Not a coverage claim.', summary: 'Observed means a related rule fired; not observed does not mean absent.' },
         h('p', null, typeof res.interpretation === 'string' && res.interpretation ? res.interpretation : 'Editorial rule relations and retained observations.'),
         h('p', null, 'An unobserved technique means no rule related to it fired in this window, not that the technique was absent or is detectable. An observed one means a related rule fired, not that the technique was used or succeeded.')),
       h('p', { class: 'page-note' }, icon('info', { size: 'sm' }), h('span', null, boundsNote(res.bounds))),

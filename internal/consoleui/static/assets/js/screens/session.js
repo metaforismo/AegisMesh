@@ -19,7 +19,7 @@ import {
   assessmentOf, evidenceMeta, storyItems, stageSummary, formatDurationMs, regularityText, boundsNote, unfoldSentence, stageMeta,
 } from '../lib/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
-import { pageHead, panel, kv, sevChip, evidence, chip, empty, banner, helpTip, toast, errorState, link, glyph, copyable } from '../ui/components.js';
+import { pageHead, panel, kv, sevChip, evidence, chip, chipList, empty, banner, helpTip, toast, errorState, actionLink, glyph, copyable } from '../ui/components.js';
 import { assessmentChip, frameworkChips, stageTag, kindChips } from '../ui/story.js';
 import { downloadActions } from '../ui/downloads.js';
 import { icon } from '../ui/icons.js';
@@ -358,7 +358,7 @@ export default {
         hint: 'Read the story in order, open any event in the side panel (j/k to step), then download or start an investigation.',
         title: h('span', { class: 'session-title' }, evidence(d.source)),
         subtitle: `${formatDateTime(d.first_seen)} to ${formatDateTime(d.last_seen)} · ${formatDurationMs(d.duration_ms)} · ${formatCount(total)} event${total === 1 ? '' : 's'}. The source key is what the sensors recorded, not a verified identity.`,
-        actions: [investigate, link(href('sources', d.source), 'Source profile'), link(href('events', { source: d.source }), 'All events from this source')],
+        actions: [investigate, actionLink(href('sources', d.source), 'Source profile', 'sources'), actionLink(href('events', { source: d.source }), 'Events from this source', 'events')],
       }),
       h('section', { class: ['story-hero', `story-hero--${a.glyph}`], 'aria-label': 'Session at a glance' },
         profile
@@ -398,7 +398,7 @@ export default {
             title: 'Details',
             body: kv([
               ['Session id', copyable(d.id, { label: 'session id' })],
-              ['Sensors', h('span', { class: 'chip-row' }, (d.sensors || []).map((x) => chip(x, { mono: true })), d.sensors_truncated ? chip('more not listed') : null)],
+              ['Sensors', h('span', { class: 'chip-row' }, chipList(d.sensors, { max: 12 }), d.sensors_truncated ? chip('more not listed') : null)],
               ['Classes', h('span', { class: 'chip-row' }, Object.entries(d.classification_counts || {}).map(([k, v]) => chip(`${k.replace(/_/g, ' ')} ${v}`)))],
               ['Bounds', h('span', { class: 'kv-note' }, boundsNote(d.bounds))],
               ['Session id stability', h('span', { class: 'kv-note' }, 'Derived from the first retained event; it can change when that event ages out or the process restarts.')],

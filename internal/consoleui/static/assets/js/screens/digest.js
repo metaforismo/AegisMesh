@@ -13,6 +13,7 @@ import { normalizeDigestWindow, digestLead, digestFigures, groupTechniques, dige
 import { glossaryEntry } from '../lib/glossary.js';
 import { pageHead, segmented, sevChip, empty, helpTip, toast, panel, SIGNAL_NO_SEVERITY } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
+import { organizationText } from '../ui/shell.js';
 
 const WINDOWS = [['24h', '24h'], ['7d', '7d']];
 const TITLE = { '24h': 'The last 24 hours', '7d': 'The last 7 days' };
@@ -77,6 +78,9 @@ export default {
     const w = normalizeDigestWindow(ctx.route.query.window);
     const d = await ctx.api.digest(w, { signal: ctx.signal });
     const asOf = formatDateTime(d?.as_of);
+    // Whose briefing this is: the server's digest field (newer servers),
+    // else the name from /meta. Plain text, as in the top bar.
+    const org = organizationText(d?.organization_name || ctx.meta?.organization_name);
     const end = Date.parse(d?.as_of);
     const since = Number.isFinite(end) ? new Date(end - WINDOW_MS[w]).toISOString().replace(/\.\d+Z$/, 'Z') : '';
     const rules = Array.isArray(d?.top_rules) ? d.top_rules.filter((r) => typeof r?.rule_id === 'string' && r.rule_id) : [];
@@ -91,7 +95,7 @@ export default {
     let copyTimer = null;
     copyBtn.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText(digestMarkdown(d, { asOfText: asOf }));
+        await navigator.clipboard.writeText(digestMarkdown(d, { asOfText: asOf, organization: org }));
         copyBtn.classList.add('is-copied');
         copyLabel.textContent = 'Copied';
         toast('ok', 'Digest copied as Markdown. Server strings are fenced as code.');
@@ -100,7 +104,7 @@ export default {
       } catch {
         // Clipboard refused (permissions, an unfocused page): show the same
         // Markdown in a read-only field, selected, to copy by hand.
-        showMarkdown(digestMarkdown(d, { asOfText: asOf }));
+        showMarkdown(digestMarkdown(d, { asOfText: asOf, organization: org }));
       }
     });
     const printBtn = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, icon('print', { size: 'sm' }), 'Print');
@@ -116,7 +120,7 @@ export default {
       }),
       h('article', { class: 'digest', 'aria-labelledby': 'digest-title' },
         h('header', { class: 'digest__mast' },
-          h('p', { class: 'digest__kicker' }, h('span', { class: 'brief__dot', 'aria-hidden': 'true' }), 'AegisMesh digest'),
+          h('p', { class: 'digest__kicker' }, h('span', { class: 'brief__dot', 'aria-hidden': 'true' }), org ? `${org} · AegisMesh digest` : 'AegisMesh digest'),
           h('h2', { class: 'digest__title', id: 'digest-title' }, TITLE[w]),
           h('p', { class: 'digest__asof' }, `As of ${asOf} · observations, not incidents`)),
         leadNode(lead.length ? lead : [[{ t: 'text', v: 'The server reported no figures for this window.' }]]),

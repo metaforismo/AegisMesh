@@ -9,7 +9,7 @@ import { href, normalizeSessionFilters } from '../lib/route.js';
 import { formatCount } from '../lib/format.js';
 import { boundsNote, formatDurationMs } from '../lib/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
-import { pageHead, panel, segmented, sevChip, evidence, table, timeEl, empty, pager, helpTip, filterChip, inputField } from '../ui/components.js';
+import { pageHead, panel, segmented, sevChip, evidence, growingTable, timeEl, empty, pager, helpTip, filterChip, inputField } from '../ui/components.js';
 import { assessmentChip, cadenceStrip, kindChips } from '../ui/story.js';
 import { ruleChips } from './shared.js';
 import { icon } from '../ui/icons.js';
@@ -63,23 +63,28 @@ export default {
     const total = Number(res.total_matched) || rows.length;
     const tableSlot = h('div');
     const pagerSlot = h('div');
-    const paint = () => {
-      mount(tableSlot, rows.length
-        ? scrolling(table({ caption: 'Attacker sessions', columns: columns(rows.some((r) => r?.actor && typeof r.actor === 'object')), rows, rowClass: (s) => (s.automation?.assessment === 'consistent_with_automation' ? 'row--noted' : null) }))
-        : empty(f.source ? 'No session from this source in the window' : 'No sessions in this window',
-          'A session needs at least one event with a source key. Try a wider window; sessions are built from the newest indexed events only.',
-          h('a', { class: 'btn', href: href('sessions', { window: '7d', source: f.source || '' }) }, 'Last 7 days'), { icon: 'story', art: true }));
+    // A "Load more" appends its page; the rows already drawn stay.
+    const grid = rows.length ? growingTable({ caption: 'Attacker sessions', columns: columns(rows.some((r) => r?.actor && typeof r.actor === 'object')), rows, rowClass: (s) => (s.automation?.assessment === 'consistent_with_automation' ? 'row--noted' : null) }) : null;
+    mount(tableSlot, grid
+      ? scrolling(grid.el)
+      : empty(f.source ? 'No session from this source in the window' : 'No sessions in this window',
+        'A session needs at least one event with a source key. Try a wider window; sessions are built from the newest indexed events only.',
+        h('a', { class: 'btn', href: href('sessions', { window: '7d', source: f.source || '' }) }, 'Last 7 days'), { icon: 'story', art: true }));
+    const paintPager = () => {
       mount(pagerSlot, pager({
         shown: rows.length, total, hasMore: Boolean(cursor),
+        capText: 'The list stops here. Pick a shorter window or filter by source to reach the rest.',
         onMore: async () => {
           const next = await ctx.api.sessions(f.window, f.source || '', cursor, PAGE, { signal: ctx.signal });
-          rows.push(...(next.sessions || []));
+          const more = next.sessions || [];
+          rows.push(...more);
+          grid?.append(more);
           cursor = next.next_cursor || '';
-          paint();
+          paintPager();
         },
       }));
     };
-    paint();
+    paintPager();
 
     // Row click opens the story, like the events list.
     tableSlot.addEventListener('click', (e) => {

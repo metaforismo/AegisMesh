@@ -11,26 +11,38 @@
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/components.css">
   <link rel="stylesheet" href="assets/css/app.css">
-  <!-- The entry graph and the default screen (Overview), fetched in parallel
-       instead of as an import waterfall. Other screens load on first visit. -->
+  <!-- The whole static module graph of the entry and the default screen
+       (Overview), fetched in parallel instead of discovered level by level;
+       webtest/preload.test.mjs keeps this list equal to that graph. Other
+       screens load on first visit. -->
   <link rel="modulepreload" href="assets/js/main.js">
   <link rel="modulepreload" href="assets/js/lib/api.js">
   <link rel="modulepreload" href="assets/js/lib/route.js">
   <link rel="modulepreload" href="assets/js/lib/taxonomy.js">
+  <link rel="modulepreload" href="assets/js/lib/origin.js">
+  <link rel="modulepreload" href="assets/js/lib/settings.js">
+  <link rel="modulepreload" href="assets/js/lib/perms.js">
   <link rel="modulepreload" href="assets/js/lib/dom.js">
   <link rel="modulepreload" href="assets/js/lib/swr.js">
   <link rel="modulepreload" href="assets/js/lib/keys.js">
-  <link rel="modulepreload" href="assets/js/lib/format.js">
-  <link rel="modulepreload" href="assets/js/lib/chart.js">
   <link rel="modulepreload" href="assets/js/ui/shell.js">
+  <link rel="modulepreload" href="assets/js/lib/tenant.js">
+  <link rel="modulepreload" href="assets/js/lib/auth.js">
+  <link rel="modulepreload" href="assets/js/lib/format.js">
   <link rel="modulepreload" href="assets/js/ui/icons.js">
+  <link rel="modulepreload" href="assets/js/lib/viz.js">
+  <link rel="modulepreload" href="assets/js/lib/prefs.js">
+  <link rel="modulepreload" href="assets/js/lib/insight.js">
   <link rel="modulepreload" href="assets/js/ui/components.js">
+  <link rel="modulepreload" href="assets/js/lib/chart.js">
   <link rel="modulepreload" href="assets/js/lib/tablesort.js">
+  <link rel="modulepreload" href="assets/js/screens/shared.js">
   <link rel="modulepreload" href="assets/js/ui/skeletons.js">
   <link rel="modulepreload" href="assets/js/screens/index.js">
   <link rel="modulepreload" href="assets/js/screens/overview.js">
-  <link rel="modulepreload" href="assets/js/screens/shared.js">
   <link rel="modulepreload" href="assets/js/ui/charts.js">
+  <link rel="modulepreload" href="assets/js/lib/brief.js">
+  <link rel="modulepreload" href="assets/js/lib/glossary.js">
   <script type="module" src="assets/js/main.js"></script>
 </head>
 <body>

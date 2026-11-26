@@ -353,6 +353,10 @@ function zoneLine() {
 
 // The organisation name (round 6, /meta): plain text, capped, shown in the
 // top bar and above the brand in the sidebar on phones.
+// The current shell's print-time stamp; one listener for the page.
+let printWhenOf = null;
+globalThis.addEventListener?.('beforeprint', () => printWhenOf?.());
+
 export function organizationText(v) {
   const s = typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '').trim() : '';
   return Array.from(s).slice(0, 80).join('');
@@ -386,13 +390,28 @@ export function createShell({ session, meta, me = null, can = null, onLogout, on
 
   const orgTop = h('span', { class: 'top-org', title: 'Organisation' });
   const orgNav = h('p', { class: 'nav-org' });
+  // Every printed page (Digest, a session story, a campaign, any screen)
+  // opens with who it belongs to and when it was printed. Hidden on screen.
+  const printOrg = h('span', { class: 'print-head__org' });
+  const printWhen = h('span', { class: 'print-head__when' });
+  const tenantName = tenantInfo(session).show ? tenantInfo(session).active : '';
+  const printHead = h('div', { class: 'print-head', 'aria-hidden': 'true' },
+    printOrg,
+    h('span', { class: 'print-head__product' }, brandMark(), 'AegisMesh', tenantName ? ` · tenant ${tenantName}` : ''),
+    printWhen);
   const setOrganization = (v) => {
     const text = organizationText(v);
     orgTop.textContent = text;
     orgNav.textContent = text;
+    printOrg.textContent = text;
     orgTop.hidden = !text;
     orgNav.hidden = !text;
+    printOrg.hidden = !text;
   };
+  printWhenOf = () => {
+    printWhen.textContent = `Printed ${formatDateTime(new Date().toISOString())}${session?.principal?.name ? ` by ${session.principal.name}` : ''}`;
+  };
+  printWhenOf();
   setOrganization(meta?.organization_name);
 
   const nav = h('nav', { class: 'shell__nav', id: 'primary-nav', 'aria-label': 'Primary' },
@@ -447,7 +466,7 @@ export function createShell({ session, meta, me = null, can = null, onLogout, on
   const main = h('main', { class: 'shell__main', id: 'main' });
   const root = h('div', { class: 'shell' },
     h('a', { class: 'skip-link', href: '#/skip' }, 'Skip to content'),
-    nav, scrim, top, main);
+    printHead, nav, scrim, top, main);
   // The skip link is a hash URL (CSP-friendly) intercepted here.
   root.firstChild.addEventListener('click', (e) => {
     e.preventDefault();

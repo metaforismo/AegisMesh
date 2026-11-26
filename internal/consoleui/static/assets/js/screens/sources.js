@@ -3,7 +3,7 @@ import { href, normalizeWindow } from '../lib/route.js';
 import { formatCount } from '../lib/format.js';
 import { severityRank } from '../lib/taxonomy.js';
 import { timeValue } from '../lib/tablesort.js';
-import { pageHead, panel, segmented, table, sevChip, evidence, link, chip, timeEl, empty, selectField } from '../ui/components.js';
+import { pageHead, panel, segmented, table, sevChip, evidence, link, chipList, timeEl, empty, selectField } from '../ui/components.js';
 
 const LIMITS = ['50', '200'];
 
@@ -37,7 +37,7 @@ export default {
             { label: 'Canary invocations', num: true, sort: (s) => s.canary_invocations, cell: (s) => formatCount(s.canary_invocations) },
             { label: 'Signals', num: true, sort: (s) => s.signals, cell: (s) => formatCount(s.signals) },
             { label: 'Max severity', sort: (s) => severityRank(s.max_severity), sortFirst: 'desc', cell: (s) => sevChip(s.max_severity) },
-            { label: 'Sensors', className: 'col-chips', cell: (s) => h('span', { class: 'chip-row' }, (s.sensors || []).map((x) => chip(x, { mono: true }))) },
+            { label: 'Sensors', className: 'col-chips', cell: (s) => chipList(s.sensors, { max: 2 }) },
             { label: 'First seen', className: 'nowrap', sort: (s) => timeValue(s.first_seen), sortFirst: 'desc', cell: (s) => timeEl(s.first_seen, { relative: true }) },
             { label: 'Last seen', className: 'nowrap', sort: (s) => timeValue(s.last_seen), sortFirst: 'desc', cell: (s) => timeEl(s.last_seen, { relative: true }) },
           ],

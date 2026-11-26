@@ -239,6 +239,7 @@ export default {
         ? h('div', { class: 'pager' }, h('span', { class: 'muted' }, `Showing the newest ${formatCount(view.size)}. ${formatCount(trimmed)} older rows were removed from view to keep the page fast; reload to page through them.`))
         : pager({
           shown: view.size, total, hasMore: Boolean(cursor),
+          capText: 'The list stops here. Add a filter or a time range to reach older events.',
           onMore: async () => {
             const next = await ctx.api.events(filters, cursor, PAGE, { signal: ctx.signal });
             const fresh = (next.events || []).filter((ev) => !seen.has(eventKey(ev)));

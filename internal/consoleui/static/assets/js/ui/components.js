@@ -3,7 +3,7 @@
 
 import { h, svg, mount } from '../lib/dom.js';
 import { classificationMeta, isSeverity, severityLabel, capitalize } from '../lib/taxonomy.js';
-import { formatDateTime, formatRelative, truncate } from '../lib/format.js';
+import { formatDateTime, formatRelative, truncate, formatCount as formatCountInt } from '../lib/format.js';
 import { describeError } from '../lib/api.js';
 import { sparkPath } from '../lib/chart.js';
 import { sparkMarks } from '../lib/viz.js';
@@ -45,6 +45,19 @@ export function chip(label, { mono = false } = {}) {
   return h('span', { class: ['chip', mono ? 'chip--mono' : ''] }, label);
 }
 
+// A row of id chips that stays one line in a table: the first `max`, then
+// "+N" whose title (and visually hidden text) names the rest. A scanner
+// that touched 48 sensors no longer draws 48 chips per row.
+export function chipList(items, { max = 3, mono = true, empty = '—' } = {}) {
+  const list = Array.isArray(items) ? items.filter((x) => typeof x === 'string' && x) : [];
+  if (!list.length) return h('span', { class: 'muted' }, empty);
+  const n = Math.max(1, Math.floor(Number(max)) || 3);
+  const rest = list.slice(n);
+  return h('span', { class: 'chip-row' },
+    list.slice(0, n).map((x) => chip(x, { mono })),
+    rest.length ? h('span', { class: 'chip', title: rest.join(', ') }, `+${rest.length}`, h('span', { class: 'visually-hidden' }, ` more: ${rest.join(', ')}`)) : null);
+}
+
 // Attacker-controlled text. `max` truncates for dense tables; the full value
 // stays available as the title tooltip and to assistive tech.
 export function evidence(value, { block = false, max = 0 } = {}) {
@@ -69,6 +82,13 @@ export function timeEl(value, { relative = false, now } = {}) {
 
 export function link(href, ...children) {
   return h('a', { href }, ...children);
+}
+
+// A page-head action that navigates: drawn as an outlined button with its
+// icon, like every other page-head action, so a head never mixes a pill
+// with a bare text link.
+export function actionLink(href, label, iconName) {
+  return h('a', { class: 'btn', href }, iconName ? icon(iconName, { size: 'sm' }) : null, label);
 }
 
 // ---- Layout ----------------------------------------------------------------
@@ -196,15 +216,26 @@ export function fitTable(wrap) {
 // that reorders the rows already in the browser; see lib/tablesort.js for
 // which tables may sort. `sort` ({ key: label, dir }) is the initial order;
 // without it rows keep the server's order until a header is chosen.
-export function table({ columns, rows, caption, stack = true, rowClass, sort = null, scroll = false }) {
+export function table(opts) {
+  return growingTable(opts).el;
+}
+
+// The same table, able to grow: `append(rows)` adds a loaded page at the
+// end without rebuilding the rows already drawn (a "Load more" on a long
+// list stays as cheap as its first page). A sorted table repaints, since
+// a new row may belong anywhere.
+export function growingTable({ columns, rows: initial, caption, stack = true, rowClass, sort = null, scroll = false }) {
+  const rows = [...initial];
   let state = sort;
   const tbody = h('tbody');
   const status = h('span', { class: 'visually-hidden', role: 'status' });
+  const rowEl = (row) => h('tr', { class: rowClass ? rowClass(row) : null },
+    columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || '', c.lead ? 'cell-lead' : ''], 'data-label': c.label }, c.cell(row))));
+  const sortedBy = () => state && columns.find((c) => c.label === state.key && typeof c.sort === 'function');
   const paint = () => {
-    const col = state && columns.find((c) => c.label === state.key && typeof c.sort === 'function');
+    const col = sortedBy();
     const ordered = col ? sortRows(rows, col.sort, state.dir) : rows;
-    mount(tbody, ordered.map((row) => h('tr', { class: rowClass ? rowClass(row) : null },
-      columns.map((c) => h('td', { class: [c.num ? 'num' : '', c.className || '', c.lead ? 'cell-lead' : ''], 'data-label': c.label }, c.cell(row))))));
+    mount(tbody, ordered.map(rowEl));
   };
   const syncs = [];
   const heads = columns.map((c) => {
@@ -236,7 +267,19 @@ export function table({ columns, rows, caption, stack = true, rowClass, sort = n
       h('thead', null, h('tr', null, heads)),
       tbody),
     status);
-  return scroll ? wrap : fitTable(wrap);
+  const append = (more) => {
+    const list = Array.isArray(more) ? more : [];
+    if (!list.length) return;
+    rows.push(...list);
+    if (sortedBy()) {
+      paint();
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const row of list) frag.appendChild(rowEl(row));
+    tbody.appendChild(frag);
+  };
+  return { el: scroll ? wrap : fitTable(wrap), append, get size() { return rows.length; } };
 }
 
 // ---- States ----------------------------------------------------------------
@@ -335,6 +378,77 @@ export function banner(kind, title, ...body) {
     h('div', null, title ? h('p', { class: 'banner__title' }, title) : null, ...body.map((b) => (typeof b === 'string' ? h('p', null, b) : b))));
 }
 
+// ---- Caveat (a folding banner) ----------------------------------------------
+
+// A long limit statement ("not a coverage claim") that a screen opens with.
+// The one-sentence summary is always visible and carries the claim; the
+// full text is one tap away in a native <details>. Folded by default on
+// phones (under 720px), open from there up; the operator's own choice per
+// caveat is remembered in this browser (`aegismesh.caveats`: closed ids,
+// validated on read). Never animates.
+export const CAVEAT_KEY = 'aegismesh.caveats';
+const CAVEAT_ID = /^[a-z][a-z0-9-]{0,31}$/;
+
+export function readCaveats(raw) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(typeof raw === 'string' ? raw : 'null');
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(parsed).slice(0, 32)) {
+    if (CAVEAT_ID.test(k) && (v === 'open' || v === 'closed')) out[k] = v;
+  }
+  return out;
+}
+
+// Whether a caveat starts open: the remembered choice, else open on wide
+// screens and folded on phones.
+export function caveatOpen(id, stored, narrow) {
+  const v = stored?.[id];
+  if (v === 'open') return true;
+  if (v === 'closed') return false;
+  return !narrow;
+}
+
+const caveatStore = () => {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+};
+
+export function caveat({ id, kind = 'info', title, summary }, ...body) {
+  if (!CAVEAT_ID.test(id)) throw new Error(`caveat id: ${id}`);
+  let stored = {};
+  try {
+    stored = readCaveats(caveatStore()?.getItem(CAVEAT_KEY));
+  } catch {
+    // Storage unavailable: the default applies.
+  }
+  const narrow = typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(max-width: 719.98px)').matches;
+  const el = h('details', { class: ['banner', `banner--${kind}`, 'caveat'], open: caveatOpen(id, stored, narrow), 'data-caveat': id },
+    h('summary', { class: 'caveat__summary' },
+      BANNER_ICON[kind] ? icon(BANNER_ICON[kind]) : null,
+      h('span', { class: 'caveat__head' }, h('span', { class: 'banner__title' }, title), summary ? h('span', { class: 'caveat__line' }, summary) : null),
+      h('span', { class: 'caveat__more', 'aria-hidden': 'true' }, h('span', { class: 'caveat__show' }, 'Details'), h('span', { class: 'caveat__hide' }, 'Hide'), icon('chevron-down', { size: 'xs' }))),
+    h('div', { class: 'caveat__body' }, ...body.map((b) => (typeof b === 'string' ? h('p', null, b) : b))));
+  el.addEventListener('toggle', () => {
+    try {
+      const store = caveatStore();
+      const now = readCaveats(store?.getItem(CAVEAT_KEY));
+      now[id] = el.open ? 'open' : 'closed';
+      store?.setItem(CAVEAT_KEY, JSON.stringify(now));
+    } catch {
+      // Not remembered beyond this page.
+    }
+  });
+  return el;
+}
+
 // ---- Integrity seal ----------------------------------------------------------
 
 export function seal(ok, label) {
@@ -393,7 +507,17 @@ export function inputField({ label, name, value = '', type = 'text', placeholder
     hint ? h('span', { class: 'field__hint', id: `${fid}-hint` }, hint) : null);
 }
 
-export function pager({ hasMore, onMore, shown, total }) {
+// A long list stops offering pages at LIST_CAP rows drawn and says how to
+// reach the rest (narrow the filters, export): a page that keeps growing
+// gets slower to scroll, search and print for everyone.
+export const LIST_CAP = 2000;
+
+export function pager({ hasMore, onMore, shown, total, cap = LIST_CAP, capText = '' }) {
+  if (hasMore && cap && shown >= cap) {
+    return h('div', { class: 'pager' },
+      h('span', { class: 'muted' }, total !== undefined ? `Showing ${formatCountInt(shown)} of ${formatCountInt(total)}` : `Showing ${formatCountInt(shown)}`),
+      h('span', { class: 'muted pager__cap' }, capText || `The list stops at ${formatCountInt(cap)} rows. Narrow the filters to reach older ones.`));
+  }
   const btn = h('button', { class: 'btn', type: 'button' }, 'Load more');
   btn.addEventListener('click', async () => {
     btn.disabled = true;
@@ -406,7 +530,7 @@ export function pager({ hasMore, onMore, shown, total }) {
     }
   });
   return h('div', { class: 'pager' },
-    h('span', { class: 'muted' }, total !== undefined ? `Showing ${shown} of ${total}` : `Showing ${shown}`),
+    h('span', { class: 'muted' }, total !== undefined ? `Showing ${formatCountInt(shown)} of ${formatCountInt(total)}` : `Showing ${formatCountInt(shown)}`),
     hasMore ? btn : h('span', { class: 'muted' }, shown ? 'End of list' : ''));
 }
 

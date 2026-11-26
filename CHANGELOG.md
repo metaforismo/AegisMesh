@@ -8,6 +8,19 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console, round 7: folding caveats (Techniques, Rules, Fleet), one
+  humanised relative time ("10 min ago", "yesterday 14:03", then the date),
+  organisation on every print and on the digest, posture acceptance
+  following the server's `acceptable`/`acceptable_reason`, "Synthetic" on
+  seeded events, grouped identical recommendations, "Report and exports"
+  on an investigation. Scale: paged lists append instead of redrawing and
+  stop at 2,000 rows, a campaign score folds beyond 14 lanes or steps,
+  Overview sums sensors beyond the busiest eight, "+N" sensor chips, large
+  changes as multiples. The first screen's module graph is preloaded in
+  full; `screen:<route>` User Timing measures.
+- Dev mock: `--scale large` (~50k events, 640 sources, 47 sensors, 36
+  playbooks, 6,000 audit records), `--posture-acceptable off`.
+
 - Console: permission-driven navigation and actions (from `/me.permissions`).
   Roles in Administration: built-in and custom roles, holders, risk summary;
   a role page with the permission matrix, live can/cannot summary, the

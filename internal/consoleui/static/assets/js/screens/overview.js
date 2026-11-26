@@ -1,5 +1,5 @@
 import { h, mount, svg } from '../lib/dom.js';
-import { meshLayout, lastBucketActive } from '../lib/viz.js';
+import { meshLayout, lastBucketActive, topWithRest } from '../lib/viz.js';
 import { href, normalizeWindow } from '../lib/route.js';
 import { CLASSIFICATIONS, classificationMeta } from '../lib/taxonomy.js';
 import { formatCount, formatDelta, zoneName } from '../lib/format.js';
@@ -75,6 +75,7 @@ function briefPanel(ov, window, windowText, kind, sessions) {
 // full list.
 const RULES_SHOWN = 5;
 const SIGNALS_SHOWN = 7;
+const SENSORS_SHOWN = 8;
 
 const WINDOW_LABELS = [['1h', 'Last hour'], ['24h', 'Last 24 hours'], ['7d', 'Last 7 days']];
 const WINDOW_MS = { '1h': 3600e3, '24h': 86400e3, '7d': 7 * 86400e3 };
@@ -290,11 +291,19 @@ export default {
         panel({
           title: 'Events by sensor', flush: false,
           meta: sensorsMeta(sensors),
-          body: sensors.length ? barList(sensors.map((s) => ({
-            label: h('span', { class: 'btn-row' }, h('code', null, s.sensor_id), h('span', { class: 'chip' }, s.kind)),
-            value: s.events, valueText: formatCount(s.events), href: href('events', { sensor: s.sensor_id }),
-            aside: sensorTrace(s, knownFrom),
-          }))) : empty('No sensor events', 'No sensor stored an event in this window.'),
+          // Many sensors: the busiest eight, then the rest summed as one row
+          // on the same scale, so the panel stays as tall as the mesh.
+          body: sensors.length ? (() => {
+            const { top, rest } = topWithRest(sensors, SENSORS_SHOWN);
+            return barList([
+              ...top.map((s) => ({
+                label: h('span', { class: 'btn-row' }, h('code', null, s.sensor_id), h('span', { class: 'chip' }, s.kind)),
+                value: s.events, valueText: formatCount(s.events), href: href('events', { sensor: s.sensor_id }),
+                aside: sensorTrace(s, knownFrom),
+              })),
+              ...(rest ? [{ label: `${formatCount(rest.count)} other sensors`, value: rest.events, valueText: formatCount(rest.events), href: href('sensors') }] : []),
+            ]);
+          })() : empty('No sensor events', 'No sensor stored an event in this window.'),
         }),
         meshPanel(sensors, windowText)),
       h('p', { class: 'page-note' }, icon('info', { size: 'sm' }),

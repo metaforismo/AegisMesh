@@ -4,7 +4,7 @@ import { AUDIT_ACTIONS } from '../lib/taxonomy.js';
 import { tenantInfo } from '../lib/tenant.js';
 import { formatCount, shortId } from '../lib/format.js';
 import { waveDelays } from '../lib/chart.js';
-import { pageHead, panel, table, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable, evidence, timeEl } from '../ui/components.js';
+import { pageHead, panel, growingTable, badge, seal, selectField, inputField, empty, pager, banner, labelFor, copyable, evidence, timeEl } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { parseAuditDetail, formatSettingRaw, settingLabel, isSettingKey } from '../lib/settings.js';
 import { permissionLabel, isRoleId, roleNameOf } from '../lib/perms.js';
@@ -146,36 +146,41 @@ export default {
     const resultSlot = h('div', { class: 'stack', role: 'status' }, h('p', { class: 'muted' }, 'Recompute the hash chain over the whole audit file. The drawing shows the newest records on this page.'));
     const verifySlot = h('div', { class: 'stack' }, chain.count ? [chain.el, chainLegend()] : null, resultSlot);
 
-    const paint = () => {
-      mount(tableSlot, rows.length ? table({
-        caption: 'Audit records',
-        // Nine columns do not fit a 1440px column; scroll inside the panel.
-        scroll: true,
-        columns: [
-          { label: 'Seq', num: true, cell: (r) => String(r.seq) },
-          { label: 'Time', className: 'nowrap', cell: (r) => timeEl(r.time, { relative: true }) },
-          // A custom role's id says nothing to a reader: "Custom role", id in the title.
-          { label: 'Actor', cell: (r) => h('span', null, r.actor || '—', ' ', r.role ? h('span', { class: 'chip', title: isRoleId(r.role) ? r.role : null }, roleNameOf(r.role)) : null) },
-          { label: 'Action', cell: (r) => h('span', { class: 'stack-tight' }, h('code', null, r.action), ACTION_WORDS[r.action] ? h('span', { class: 'muted' }, ACTION_WORDS[r.action]) : null) },
-          { label: 'Target', cell: (r) => (r.target ? h('code', null, r.target) : '—') },
-          { label: 'Outcome', cell: (r) => badge(OUTCOME[r.outcome] || 'neutral', labelFor(r.outcome || 'unknown')) },
-          { label: 'Remote', cell: (r) => h('code', null, r.remote || '—') },
-          { label: 'Detail', className: 'col-summary', cell: detailCell },
-          { label: 'Hash', cell: (r) => h('span', { class: 'hash' }, copyable(r.hash, { label: 'record hash', display: shortId(r.hash, 12) })) },
-        ],
-        rows,
-      }) : empty('No audit records', Object.keys(filters).length ? 'Nothing matches these filters.' : 'Nothing has been recorded yet.'));
+    const grid = rows.length ? growingTable({
+      caption: 'Audit records',
+      // Nine columns do not fit a 1440px column; scroll inside the panel.
+      scroll: true,
+      columns: [
+        { label: 'Seq', num: true, cell: (r) => String(r.seq) },
+        { label: 'Time', className: 'nowrap', cell: (r) => timeEl(r.time, { relative: true }) },
+        // A custom role's id says nothing to a reader: "Custom role", id in the title.
+        { label: 'Actor', cell: (r) => h('span', null, r.actor || '—', ' ', r.role ? h('span', { class: 'chip', title: isRoleId(r.role) ? r.role : null }, roleNameOf(r.role)) : null) },
+        { label: 'Action', cell: (r) => h('span', { class: 'stack-tight' }, h('code', null, r.action), ACTION_WORDS[r.action] ? h('span', { class: 'muted' }, ACTION_WORDS[r.action]) : null) },
+        { label: 'Target', cell: (r) => (r.target ? h('code', null, r.target) : '—') },
+        { label: 'Outcome', cell: (r) => badge(OUTCOME[r.outcome] || 'neutral', labelFor(r.outcome || 'unknown')) },
+        { label: 'Remote', cell: (r) => h('code', null, r.remote || '—') },
+        { label: 'Detail', className: 'col-summary', cell: detailCell },
+        { label: 'Hash', cell: (r) => h('span', { class: 'hash' }, copyable(r.hash, { label: 'record hash', display: shortId(r.hash, 12) })) },
+      ],
+      rows,
+    }) : null;
+    mount(tableSlot, grid ? grid.el : empty('No audit records', Object.keys(filters).length ? 'Nothing matches these filters.' : 'Nothing has been recorded yet.'));
+    // "Load more" appends its page; the records already drawn stay.
+    const paintPager = () => {
       mount(pagerSlot, pager({
         shown: rows.length, hasMore: Boolean(cursor),
+        capText: ctx.can('audit.export') ? 'The list stops here. Filter by action or actor, or export the whole trail from Settings.' : 'The list stops here. Filter by action or actor to reach older records.',
         onMore: async () => {
           const next = await ctx.api.audit(filters, cursor, PAGE, { signal: ctx.signal });
-          rows.push(...(next.records || []));
+          const more = next.records || [];
+          rows.push(...more);
+          grid?.append(more);
           cursor = next.next_cursor || '';
-          paint();
+          paintPager();
         },
       }));
     };
-    paint();
+    paintPager();
 
     const verifyBtn = h('button', { class: 'btn', type: 'button' }, icon('shield'), 'Verify chain');
     verifyBtn.addEventListener('click', async () => {

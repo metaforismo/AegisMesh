@@ -232,3 +232,11 @@ test('posture screen: header disclaims a guarantee, attention first, filter, old
   await posture.render(old, ctx({ posture: async () => { throw new ApiError(404, 'not_found'); } }));
   assert.match(text(old), /does not provide a posture review yet/);
 });
+
+test('campaignScore divides by the campaign session count when the listed sessions are capped', () => {
+  const sessions = Array.from({ length: 50 }, (_, i) => ({ id: `s${i}` }));
+  const score = I.campaignScore({ steps: [{ index: 0, sessions: 70 }, { index: 1, sessions: 40 }], sessions, sessionCount: 70 });
+  assert.equal(score.total, 70);
+  assert.equal(score.lanes[0].cells[0].state, 'performed');
+  assert.equal(score.lanes[0].cells[1].state, 'unknown');
+});

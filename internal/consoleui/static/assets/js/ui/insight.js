@@ -2,7 +2,7 @@
 // come from lib/insight.js; every API string stays a Text node, and source
 // keys and step shapes keep the evidence treatment.
 
-import { h, svg } from '../lib/dom.js';
+import { h, svg, mount } from '../lib/dom.js';
 import { href } from '../lib/route.js';
 import { formatCount } from '../lib/format.js';
 import { formatDurationMs } from '../lib/story.js';
@@ -131,33 +131,76 @@ function offsetText(ms) {
 // is a solid mark on the lane with its offset from the session's start; a
 // step not taken is an empty ring; without per-session marks from the
 // server, a step only some sessions took is a dotted "?".
-export function campaignScoreView(c, { sessionHref }) {
+// Beyond these, the score folds: the first lanes and steps are drawn and
+// one "Show all" per axis draws the rest (no motion; the counts are said).
+export const SCORE_LANES = 12;
+export const SCORE_STEPS = 12;
+
+export function campaignScoreView(c, { sessionHref, lanes: laneCap = SCORE_LANES, steps: stepCap = SCORE_STEPS } = {}) {
   const score = campaignScore(c);
   if (!score.steps.length || !score.lanes.length) return null;
-  const head = h('tr', null,
-    h('th', { scope: 'col', class: 'score__corner' }, h('span', { class: 'caps' }, 'Source'), h('span', { class: 'caps score__corner-steps' }, 'Step →')),
-    score.steps.map((st, i) => h('th', { scope: 'col', class: ['score__step', score.shared[i] ? 'is-shared' : ''] },
-      h('span', { class: 'score__num' }, String(i + 1)),
-      stageTag(st.stage),
-      h('span', { class: 'score__shape' }, evidence(st.shape, { max: 26 })),
-      h('span', { class: 'score__share' }, st.sessions === null ? '—' : `${formatCount(st.sessions)} of ${formatCount(score.total)}`))));
-  const rows = score.lanes.map((lane) => {
-    const s = lane.session;
-    const id = typeof s.id === 'string' && /^[0-9a-f]{32}$/.test(s.id) ? s.id : '';
-    return h('tr', { class: 'score__lane' },
-      h('th', { scope: 'row', class: 'score__who' },
-        id ? h('a', { href: sessionHref(id), class: 'score__src' }, evidence(s.source, { max: 22 })) : evidence(s.source, { max: 22 }),
-        h('span', { class: 'score__when' }, timeEl(s.first_seen, { relative: true }), ' · ', plural(lane.performed, 'step'))),
-      lane.cells.map((cell, i) => h('td', { class: ['score__cell', `score__cell--${cell.state}`, score.shared[i] ? 'is-shared' : ''] },
-        h('span', { class: 'score__mark', 'aria-hidden': 'true' }),
-        h('span', { class: 'score__t', 'aria-hidden': 'true' }, cell.state === 'performed' ? offsetText(cell.offset) : ''),
-        h('span', { class: 'visually-hidden' }, cell.state === 'performed' ? `Performed${cell.offset !== null ? ` at ${offsetText(cell.offset)}` : ''}` : cell.state === 'absent' ? 'Not performed' : 'Not reported per session'))));
-  });
-  return h('div', { class: 'score-wrap' },
-    h('table', { class: 'score' },
-      h('caption', { class: 'visually-hidden' }, 'Campaign score: one row per session, one column per shared step'),
+  let allLanes = score.lanes.length <= laneCap + 2;
+  let allSteps = score.steps.length <= stepCap + 2;
+  const wrap = h('div', { class: 'score-wrap' });
+  const foot = h('div', { class: 'score-more' });
+  const root = h('div', { class: 'score-block' }, wrap, foot);
+  let laneLinks = [];
+  const draw = () => {
+    laneLinks = [];
+    const nSteps = allSteps ? score.steps.length : stepCap;
+    const lanes = allLanes ? score.lanes : score.lanes.slice(0, laneCap);
+    const steps = score.steps.slice(0, nSteps);
+    const head = h('tr', null,
+      h('th', { scope: 'col', class: 'score__corner' }, h('span', { class: 'caps' }, 'Source'), h('span', { class: 'caps score__corner-steps' }, 'Step →')),
+      steps.map((st, i) => h('th', { scope: 'col', class: ['score__step', score.shared[i] ? 'is-shared' : ''] },
+        h('span', { class: 'score__num' }, String(i + 1)),
+        stageTag(st.stage),
+        h('span', { class: 'score__shape' }, evidence(st.shape, { max: 26 })),
+        h('span', { class: 'score__share' }, st.sessions === null ? '—' : `${formatCount(st.sessions)} of ${formatCount(score.total)}`))));
+    const rows = lanes.map((lane) => {
+      const s = lane.session;
+      const id = typeof s.id === 'string' && /^[0-9a-f]{32}$/.test(s.id) ? s.id : '';
+      const who = id ? h('a', { href: sessionHref(id), class: 'score__src' }, evidence(s.source, { max: 22 })) : evidence(s.source, { max: 22 });
+      laneLinks.push(id ? who : null);
+      return h('tr', { class: 'score__lane' },
+        h('th', { scope: 'row', class: 'score__who' },
+          who,
+          h('span', { class: 'score__when' }, timeEl(s.first_seen, { relative: true }), ' · ', plural(lane.performed, 'step'))),
+        lane.cells.slice(0, nSteps).map((cell, i) => h('td', { class: ['score__cell', `score__cell--${cell.state}`, score.shared[i] ? 'is-shared' : ''] },
+          h('span', { class: 'score__mark', 'aria-hidden': 'true' }),
+          h('span', { class: 'score__t', 'aria-hidden': 'true' }, cell.state === 'performed' ? offsetText(cell.offset) : ''),
+          h('span', { class: 'visually-hidden' }, cell.state === 'performed' ? `Performed${cell.offset !== null ? ` at ${offsetText(cell.offset)}` : ''}` : cell.state === 'absent' ? 'Not performed' : 'Not reported per session'))));
+    });
+    mount(wrap, h('table', { class: 'score' },
+      h('caption', { class: 'visually-hidden' }, `Campaign score: one row per session, one column per shared step. ${scoreShownText(lanes.length, score.lanes.length, nSteps, score.steps.length)}`),
       h('thead', null, head),
       h('tbody', null, rows)));
+    const buttons = [];
+    if (!allLanes) {
+      const b = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, `Show all ${formatCount(score.lanes.length)} sessions`);
+      // Focus moves to the first lane that was hidden, so reading continues.
+      b.addEventListener('click', () => { allLanes = true; draw(); laneLinks[laneCap]?.focus?.(); });
+      buttons.push(b);
+    }
+    if (!allSteps) {
+      const b = h('button', { class: ['btn', 'btn--sm'], type: 'button' }, `Show all ${formatCount(score.steps.length)} steps`);
+      b.addEventListener('click', () => { allSteps = true; draw(); laneLinks[0]?.focus?.(); });
+      buttons.push(b);
+    }
+    const note = allLanes && allSteps ? '' : scoreShownText(lanes.length, score.lanes.length, nSteps, score.steps.length);
+    mount(foot, note ? [h('p', { class: 'muted score-more__note' }, note), h('div', { class: 'btn-row' }, buttons)] : null);
+    foot.hidden = !note;
+  };
+  draw();
+  return root;
+}
+
+// "Showing 12 of 32 sessions and 12 of 20 steps." (only the folded axes)
+export function scoreShownText(lanes, laneTotal, steps, stepTotal) {
+  const parts = [];
+  if (lanes < laneTotal) parts.push(`${formatCount(lanes)} of ${formatCount(laneTotal)} sessions`);
+  if (steps < stepTotal) parts.push(`${formatCount(steps)} of ${formatCount(stepTotal)} steps`);
+  return parts.length ? `Showing ${parts.join(' and ')}.` : '';
 }
 
 // ---- Posture ---------------------------------------------------------------------------

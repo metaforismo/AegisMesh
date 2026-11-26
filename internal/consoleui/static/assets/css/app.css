@@ -224,7 +224,9 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 @media (max-width: 52rem) {
   .top-search { min-width: 0; }
   .top-search__label, .top-search__kbd { display: none; }
-  .top-search { width: 2rem; padding: 0; justify-content: center; }
+  /* Square, then round: a touch target taller than 2rem stays a circle,
+     not an oval. */
+  .top-search { width: auto; aspect-ratio: 1; padding: 0; justify-content: center; border-color: transparent; background: transparent; }
   .top-user__name { display: none; }
 }
 
@@ -271,6 +273,12 @@ html:has(.drawer[open], .palette[open]) { overflow: hidden; }
 .rec__head { display: flex; flex-direction: column; gap: var(--space-2); }
 .rec__kicker { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .rec__title { font-size: var(--text-md); }
+/* Seeded demo data: a dashed chip ("made, not observed", like a proposal). */
+.chip--synthetic { border-style: dashed; border-color: var(--color-border-strong); background: transparent; }
+.summary-line { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; max-width: 100%; }
+.summary-line > .chip { flex: none; } color: var(--color-ink-2); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.rec__more { margin-top: var(--space-2); }
+.rec__more > summary { cursor: pointer; color: var(--color-accent); font-size: var(--text-sm); min-height: 24px; }
 .rec h3 { margin-bottom: var(--space-1); color: var(--color-ink-2); font-size: var(--text-xs); font-weight: var(--weight-medium); }
 .evidence-link { font-size: var(--text-xs); overflow-wrap: anywhere; }
 
@@ -1132,8 +1140,27 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 /* ---- Print ----------------------------------------------------------------------------- */
 /* The digest (and any screen) prints as a document: no frame, no controls,
    no lattice, ink on paper in the light palette. */
+/* The print header: organisation, product (and tenant), when and by whom it
+   was printed. Never on screen. */
+.print-head { display: none; }
+
 @media print {
   :root { color-scheme: light; }
+  .print-head {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 16px;
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #bbb;
+    color: #000;
+    font-size: 11px;
+  }
+  .print-head__org { font-weight: 600; font-size: 13px; }
+  .print-head__product { display: inline-flex; align-items: center; gap: 4px; }
+  .print-head__product svg { width: 12px; height: 12px; }
+  .print-head__when { margin-left: auto; color: #333; }
   html, body { background: #fff !important; }
   .shell__nav, .shell__top, .nav-scrim, .skip-link, .route-progress, .toast-region, .page-head__actions, .page-head__hint, .help-tip, .tip-pop, .tour, .peek, .live-pill { display: none !important; }
   .shell { display: block !important; }
