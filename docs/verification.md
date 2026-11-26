@@ -2004,3 +2004,13 @@ acceptance validation, expiry and audit; POS-021 for a service account with a
 high-risk custom role; and the offline `posture` command reading acceptances
 read-only or saying it could not. Store tests cover the v1 fixture migration
 with backup, refusal of a newer schema, role validation and quotas.
+
+## 2026-11-26 — console round 7: scale, folding caveats, dark review (UI only)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (362 tests) | **PASS** |
+| `go build ./...`, `go test ./internal/consoleui/...` (non-race) | **PASS** |
+| Go race suite | **NOT RUN**: UI-only change; the brief excluded it on this machine |
+| In-app Chromium against the mock (normal, `--scale large`, editing off, older posture server): screens, themes and widths, performance method and numbers | Recorded in `docs/design-system.md`, "Round 7" |
+| The real server with the round-7 backend (`acceptable`, `organization_name` on the digest, `synthetic`) | **NOT RUN**: built against the backend agent's stated contract and the mock's twin of it |

@@ -29,6 +29,7 @@ reference. `site/design-system.html` shows every component rendered.
 | `internal/consoleui/devserver/mock-accounts.mjs` | The mock's twin of contract r5 (accounts, preferences, sessions, API keys, administration, effective settings, audit export, system); `--round5 off` answers like an older server, `--fail-prefs` refuses preference saves. Tested in `webtest/mockaccounts.test.mjs` |
 | `internal/consoleui/static/assets/js/lib/perms.js`, `ui/settings-edit.js`, `screens/settings-roles.js` | Round 6: the permission catalogue fallback, built-in sets, what a principal may do (`permissionsOf`, `toCan`), which screen and settings page needs which permission, the role editor's rules (names, dependencies, diff sentence, summary); edit in place for console settings, the editing-off explanation and the change history; the Roles list and role page. Tested in `webtest/access.test.mjs` and `webtest/accessscreens.test.mjs` |
 | `internal/consoleui/devserver/mock-roles.mjs` | The mock's twin of contract r6 (permissions, roles, the settings overlay and its history, accepted posture risk); `--round6 off` answers like a round-5 server, `--settings-editing off` like a server with console editing off. Tested in `webtest/mockroles.test.mjs` |
+| `internal/consoleui/devserver/mock-scale.mjs` | Round 7: `--scale large` generators (documentation-range source pool, extra sensors, campaign runs, audit backfill) for real volume; tested in `webtest/scale.test.mjs` |
 | `site/assets/brand/` | The mark and the horizontal lockup as standalone SVG: colour, dark-ground and one-colour variants; see "Brand" below |
 
 There is no build step, no npm dependency and no third-party code. The console
@@ -170,7 +171,8 @@ Rules:
   many times a day), j/k row and event stepping, navigation driven from the
   keyboard (g-sequences, the palette, Enter on a link), filters, filter
   chips and saved views, help tips, the situation brief and the chart
-  readout, paging, numbers changing, an in-place refresh (it never replays
+  readout, paging, "Show all" on a folded campaign score, folding caveats,
+  numbers changing, an in-place refresh (it never replays
   entrances).
 - **Animates briefly:** pointer route changes (a 10px directional slide of
   the content area only; View Transitions API with a keyframe fallback),
@@ -237,6 +239,10 @@ other preferences, saved event views and palette recents; see "Console security 
 | `.th-sort` (`__mark`) | Sortable column header | A button inside `th[aria-sort]`; only on tables whose rows are all loaded (`lib/tablesort.js`): sources, rules, investigations, fleet nodes, a campaign's sessions. Numbers and times start descending, words ascending; missing values sort last; a polite status announces the order |
 | `.tabs`, `.tab` | Tabs | |
 | `.banner--{info,warn,danger,proposal}` | Callout | `--proposal` has a dashed edge: "not executed", like unloaded time and techniques not observed |
+| `.caveat` (`__summary`, `__head`, `__line`, `__more`, `__body`) | Folding caveat | `caveat({ id, title, summary }, …body)`: a banner in a native `<details>`. Title plus one sentence that carries the claim always visible; "Details" opens the full text. Folded under 720px, open above; the choice per caveat is remembered (`aegismesh.caveats`). Never animates; prints whole. Techniques, Rules, Fleet |
+| `.pager__cap` | End of a long list | `pager` stops offering pages at `LIST_CAP` (2,000) rows drawn and says how to reach the rest (filters, a shorter window, export). `growingTable` appends each page without redrawing the rows above |
+| `.chip-row` from `chipList` | Id chips that stay one line | The first `max` chips, then "+N" whose title and visually hidden text name the rest (two in table rows, twelve on detail pages) |
+| `.print-head` (`__org`, `__product`, `__when`) | Print header | Hidden on screen; every printed page opens with the organisation name, the product (and tenant), and when and by whom it was printed |
 | `.state`, `--error`, `.state__actions`, `.spinner`, `.skeleton` | Empty, loading, error | Every view has all three. A screen that fails keeps its page head; `screenFailure` picks the words and next step (older server, missing object with a link to its list, retryable outage) |
 | `.dialog`, `.drawer` | Native `<dialog>` | Focus trap, Esc and inert background come from the platform |
 | `.toast` | Transient confirmation | Never the only place an error is reported |
@@ -292,7 +298,8 @@ other preferences, saved event views and palette recents; see "Console security 
 | `.profile` | Actor profile panel | Reading, the server's hedged sentence in the display serif, the tally, then the two checklist groups |
 | `.mix` (`__bar`, `__seg--*`, `__list`, `--compact`) | Automation mix of a campaign | Textured segments plus counts in words |
 | `.miniscore` | Campaign card art | Identical stops on every lane; decorative, the card prints the numbers |
-| `.score` (`__step`, `__lane`, `__who`, `__cell--performed/absent/unknown`, `.is-shared`), `.score-legend` | Campaign score | A real table: rows are sessions, columns shared steps; lane line through every cell; times from the session's first event; sticky lane labels and a scroll shadow |
+| `.score` (`__step`, `__lane`, `__who`, `__cell--performed/absent/unknown`, `.is-shared`), `.score-legend`, `.score-more` | Campaign score | A real table: rows are sessions, columns shared steps; lane line through every cell; times from the session's first event; sticky lane labels and a scroll shadow. Beyond 14 lanes or steps it folds to the first 12 with "Showing 12 of 33 sessions and 12 of 24 steps." and one "Show all" per axis (focus moves to the first lane that was hidden) |
+| `.rec__count`, `.rec__more` | Grouped recommendation | Identical proposals (same sensor, wording, rules; different evidence) are one card, "Proposed N times", five evidence links and the rest folded |
 | `.pstatus` (`--attention`, `--info`, `--ok`), `.pcheck`, `.parea`, `.psummary` | Posture review | "!" square, italic "i" ring, check, each with its words; attention items carry a warn edge |
 | `.quiet-line` | One quiet line on the Overview | Posture attention count as a link, never a banner or alarm |
 | `.camp-strip` | Session's campaign | On the session story, links to the campaign with its label and basis |
@@ -330,7 +337,9 @@ The console server sends
   panel and that function's closure, and is emptied when the panel is
   dismissed or the page is left. Besides the
   preferences (`aegismesh.theme`, `aegismesh.density`, `aegismesh.prefs`:
-  closed values, parsed on read) it holds, per tenant (`aegismesh.views.<tenant>`,
+  closed values, parsed on read) and which caveats the operator folded or
+  opened (`aegismesh.caveats`: closed ids to "open"/"closed", validated on
+  read) it holds, per tenant (`aegismesh.views.<tenant>`,
   `aegismesh.recent.<tenant>`): saved event views, with only non-evidence
   filters (node, class, sensor, kind, rule, severity, since, until; source
   keys and search text are attacker-influenced and never written), and up to
@@ -1239,7 +1248,8 @@ the sign-in card and once per console session after sign-in as a
 dismissible notice above the screen (remembered in this tab under the
 session's expiry, which a tenant switch keeps). Both are Text nodes; the
 banner keeps line breaks and nothing else is interpreted. Reports and
-print headers do not carry the name yet.
+print headers carry the name since round 7; server-generated reports do
+not yet.
 
 **Posture, accepted risk.** Attention items offer "Accept risk…" to
 `settings.manage` (the reason why not to everyone else): a reason and an
@@ -1275,6 +1285,95 @@ brief and its counts), scrolling the page up when that makes room below.
 | Tour at 1440 and 375: popover overlaps neither the brief nor the counts on steps 1 and 2 | PASS (scripted) |
 | Scripted at 375px on 22 routes (the 15 reviewed screens and the new ones): one h1, no horizontal page scroll, no text under 11px | PASS after fixes |
 | Firefox, Safari, screen readers, the real Go server with the r6 backend, a real phone | NOT RUN: only Chromium and the mock |
+
+### Round 7: scale, folding caveats and the dark review (2026-11-26)
+
+**Closed from round 6.** Techniques, Rules and Fleet open with a folding
+caveat (`.caveat`): the title and one sentence that carries the claim stay
+visible, the full text is one tap away; folded under 720px, open above,
+the operator's choice remembered per caveat. Fleet's subtitle is one line
+and its limits moved into the caveat. One relative-time style everywhere
+(`formatRelative`): "just now", "45 s ago", "10 min ago", "2 h ago" (the
+same calendar day, or under 12 hours), "yesterday 14:03", "3 days ago",
+then the date ("Nov 7 09:05", the year only when it differs); calendar
+words follow the chosen zone and the absolute time stays on hover, in the
+peek and for assistive tech. Fleet token expiry uses the same units.
+Page-head actions that navigate are outlined buttons with an icon
+(`actionLink`); Source and Session no longer mix a pill with a text link.
+Every printed page opens with `.print-head`: organisation, product and
+tenant, when and by whom it was printed; the Digest kicker and its
+Markdown name the organisation too (the digest's `organization_name`, else
+`/meta`). Posture follows the server's per-check `acceptable` and
+`acceptable_reason` (`permission_denied`, `editing_disabled`,
+`overlay_unavailable`, `already_accepted`, `not_attention`): the button
+only where the server says yes, the reason said once when every check
+shares it, revoking only where the server allows; without the fields, the
+permission decides as before.
+
+**Real scale** (mock `--scale large`, comparable to the backend's
+`aegismesh demo --console --seed large`). Paged lists append a page
+without redrawing the rows above (`growingTable`) and stop offering pages
+at 2,000 rows with a sentence on how to reach the rest (`LIST_CAP`). A
+campaign score beyond 14 lanes or steps folds to the first 12 with the
+counts in words and one "Show all" per axis. Overview's "Events by sensor"
+shows the eight busiest and sums the rest into one row on the same scale
+(`topWithRest`). Id chips in a row fold to "+N" (`chipList`). A change of
+ten times or more reads as a multiple ("2,052×"), not "+205,159%"
+(`formatChangeRatio`). Identical recommendations are one card, "Proposed
+N times", with all of their evidence (five shown, the rest folded).
+Seeded events carry a dashed "Synthetic" chip (`synthetic: true`). The
+existing defences were checked, not rebuilt: live events are batched per
+frame and capped at 300 rows, palette event search is debounced and
+aborted, filters apply on submit, screens abort their requests on
+navigation, and the read cache serves back/forward.
+
+**Dark, 1440 review.** Sources, Source, Techniques, Investigations, an
+investigation, Recommendations, Sensors, Rules, Node, Fleet, Audit, Guide,
+Decoys, Honeytokens, Settings (Profile, Console) and a campaign were
+read in dark at 1440. Fixed by root cause: sensor chips wrapping rows to
+two lines (`chipList`); a column of red Detach buttons on an
+investigation (neutral now: detaching is undone by attaching again) and
+its report three panels down (a "Report and exports" head action moves
+focus there); repeated identical recommendations; a 2,195 px sensor list
+beside a 228 px mesh at 48 sensors; the phone search button drawn as an
+oval at the 44 px touch height (a ghost circle now). Not changed: Source's
+Activity and Cadence panels end at different heights.
+
+**Performance.** Each screen render is a User Timing measure
+(`screen:<route>`) for the browser's tools. `index.html` preloads exactly
+the static module graph of `main.js` and the Overview
+(`webtest/preload.test.mjs` keeps it so): before, 11 of 29 modules were
+found one round trip late; the digest vocabulary moved to `route.js`, so
+`lib/catalogs.js` (21 KB) left the first screen.
+
+| Measure (in-app Chromium, 1440, mock `--scale large`) | Before | After |
+|---|---|---|
+| Audit "Load more" at 4,100-4,400 rows (live screen) | 1.6-2.5 s per page | one page appended |
+| Script and forced layout for one more 100-row page (audit columns): to 500 / 1,000 / 2,000 / 4,000 rows | 142 / 198 / 513 / 908 ms (full rebuild) | 29 / 100 / 73 / 103 ms (append) |
+| Nodes in `main` after paging the audit trail | 101,501 at 3,600 rows | capped at 2,000 rows |
+| Overview page height, 48 sensors | 4,826 px | 3,110 px |
+| Campaign with 33 lanes, 24 steps | 33 × 24 cells | 12 × 12, "Show all" per axis |
+| First-screen modules / not preloaded / JS bytes (gzip) | 29 / 11 / 125,376 | 28 / 0 / 121,954 |
+| `/me` and `/meta` requests across 11 route switches | 0 | 0 |
+
+The pane was hidden while measuring, so paint timings (FCP, LCP) were not
+trustworthy and are not reported; the before/after figures are script and
+forced-layout time, request counts and graph sizes. Route switches on the
+normal mock, warm: 33-97 ms to a swapped-in view (`screen:*`, data
+included).
+
+### Verification: round 7 (2026-11-26, Node 25, Go toolchain, Chromium in the Claude browser pane, mocks on ports 9201 normal, 9202 `--scale large`, 9203 master for "before", 9204 `--settings-editing off`, 9205 `--posture-acceptable off`)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (362 tests: adds `polish.test.mjs` for caveats, action links, posture acceptability and the mock's codes, grouped recommendations, synthetic marks, the digest organisation; `scale.test.mjs` for growing tables, the list cap, chip folding, the folded score, `topWithRest` and the large mock; `preload.test.mjs`; humanised times and multiples in `format.test.mjs`) | PASS |
+| `go build ./...`, `go test ./internal/consoleui/...` | PASS |
+| Seen dark 1440: the secondary screens above, Overview and Events large, a 33-lane campaign | PASS after fixes |
+| Seen light 1440: sign-in, Events large (Synthetic chips); light 375: Techniques (caveat folded) | PASS |
+| Seen dark 375: Rules (caveat folded, round search button) | PASS |
+| Scripted dark 375 on 15 routes (Overview, Techniques, Rules, Fleet, Sources, a source, Sessions, a session, a campaign, an investigation, Recommendations, Posture, Digest, Events, Audit as analyst: "not permitted"): one h1, no horizontal page scroll, no text under 11px | PASS |
+| Posture as analyst (reason once, no button), admin with editing off (editing reason once, no Accept or Revoke), admin on an older server (Accept and Revoke as before) | PASS (scripted DOM checks) |
+| Firefox, Safari, screen readers, the real Go server with the r7 backend, a real phone, print preview | NOT RUN: only Chromium and the mock; print rules checked in CSS only |
 
 ## Brand
 
@@ -1407,6 +1506,11 @@ paint. The burst figure comes from `GET /__mock/burst?n=200` on the mock.
 # add --round6 off to answer like a round-5 server (no permissions, roles,
 # editable settings, history or accepted risk); --settings-editing off for a
 # round-6 server with console editing off (default on in the mock)
+# add --scale large for real volume (~50k events over 7 days, 640 sources,
+# 47 sensors, 36 playbooks from 2 to ~70 sources, 6,000 audit records);
+# the default, normal, keeps the small data set unchanged
+# add --posture-acceptable off for a round-6 server without the per-check
+# `acceptable` / `acceptable_reason` fields
 # add --round5 off to answer like a server without accounts and settings
 # (404 on /me, /admin/*, /system), --fail-prefs to refuse preference saves
 make ui-dev
