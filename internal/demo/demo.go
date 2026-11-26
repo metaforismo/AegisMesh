@@ -103,9 +103,6 @@ func run(parent context.Context, profile string, ready func(ConsoleInfo) error) 
 	if err := parent.Err(); err != nil {
 		return Summary{}, err
 	}
-	ctx, cancel := context.WithTimeout(parent, scenarioTimeout)
-	defer cancel()
-
 	workDir, err := os.MkdirTemp("", "aegismesh-demo-")
 	if err != nil {
 		return Summary{}, fmt.Errorf("demo: create private workspace: %w", err)
@@ -141,7 +138,7 @@ func run(parent context.Context, profile string, ready func(ConsoleInfo) error) 
 		// correlation on, as the AI decoy configuration ships it.
 		enabled := true
 		cfg.Correlation.Enabled = &enabled
-		if seeded, err = seed(cfg, profile, time.Now()); err != nil {
+		if seeded, err = seed(parent, cfg, profile, time.Now()); err != nil {
 			return Summary{}, err
 		}
 	}
@@ -157,6 +154,10 @@ func run(parent context.Context, profile string, ready func(ConsoleInfo) error) 
 		}
 	}()
 
+	// The live scenario's bound starts after any seeding and backfill, which
+	// scale with the profile rather than with the loopback interactions.
+	ctx, cancel := context.WithTimeout(parent, scenarioTimeout)
+	defer cancel()
 	if err := sys.Start(ctx); err != nil {
 		return Summary{}, fmt.Errorf("demo: start runtime: %w", err)
 	}

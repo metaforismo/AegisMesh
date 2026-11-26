@@ -306,3 +306,15 @@ func TestRunConsoleSeededRejectsUnknownProfile(t *testing.T) {
 		t.Fatal("expected an unknown profile error")
 	}
 }
+
+func TestSeedStopsOnCancellation(t *testing.T) {
+	cfg, err := loadConfig(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := seed(ctx, cfg, "large", time.Now()); err == nil || !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("seed ignored cancellation: %v", err)
+	}
+}

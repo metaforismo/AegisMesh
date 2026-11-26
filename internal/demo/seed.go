@@ -14,7 +14,8 @@ import (
 // seed appends a generated synthetic history to the demo's private evidence
 // store with the runtime's own storage options. The store is closed before the
 // runtime is built, so the console reads it back through its normal backfill.
-func seed(cfg *config.Config, profile string, now time.Time) (demoseed.Result, error) {
+// Ctrl-C (ctx cancellation) stops generation between envelopes.
+func seed(ctx context.Context, cfg *config.Config, profile string, now time.Time) (demoseed.Result, error) {
 	selected, err := demoseed.Lookup(profile)
 	if err != nil {
 		return demoseed.Result{}, fmt.Errorf("demo: %w", err)
@@ -30,7 +31,10 @@ func seed(cfg *config.Config, profile string, now time.Time) (demoseed.Result, e
 		return demoseed.Result{}, fmt.Errorf("demo: open seed store: %w", err)
 	}
 	result, err := demoseed.Generate(selected, cfg, now, func(envelope event.Envelope) error {
-		return store.Append(context.Background(), envelope)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return store.Append(ctx, envelope)
 	})
 	if closeErr := store.Close(); err == nil && closeErr != nil {
 		err = closeErr
