@@ -3,6 +3,8 @@ package demo
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -232,5 +234,75 @@ func expectedSummary() Summary {
 		SignalNotIncident: true,
 		ListenersReleased: true,
 		CleanupComplete:   true,
+	}
+}
+
+func TestRunConsoleSeededServesMarkedHistory(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var info ConsoleInfo
+	var page struct {
+		Events []struct {
+			Source    string `json:"source"`
+			Synthetic bool   `json:"synthetic"`
+		} `json:"events"`
+		TotalMatched int `json:"total_matched"`
+	}
+	var campaigns struct {
+		TotalCampaigns int `json:"total_campaigns"`
+	}
+	summary, err := RunConsoleSeeded(ctx, "small", func(ready ConsoleInfo) error {
+		defer cancel()
+		info = ready
+		for path, target := range map[string]any{"/api/v1/events?limit=200": &page, "/api/v1/campaigns": &campaigns} {
+			req, err := http.NewRequest(http.MethodGet, "http://"+ready.Addr+path, nil)
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Authorization", "Bearer "+ready.Token)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+			resp.Body.Close()
+			if err != nil || resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("%s: status %d: %v", path, resp.StatusCode, err)
+			}
+			if err := json.Unmarshal(body, target); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Seeded.Profile != "small" || info.Seeded.Events != 2000 || info.Seeded.Signals == 0 || info.Seeded.Sources < 50 {
+		t.Fatalf("seed result %+v", info.Seeded)
+	}
+	if summary.Events != 11 || !summary.CleanupComplete || !summary.ListenersReleased {
+		t.Fatalf("live summary %+v", summary)
+	}
+	if page.TotalMatched < info.Seeded.Events+info.Seeded.Signals+11 || campaigns.TotalCampaigns == 0 {
+		t.Fatalf("console total %d campaigns %d", page.TotalMatched, campaigns.TotalCampaigns)
+	}
+	live, synthetic := 0, 0
+	for _, e := range page.Events {
+		if e.Synthetic {
+			synthetic++
+		} else if e.Source == "127.0.0.1" {
+			live++
+		}
+	}
+	// The live loopback scenario is newer than all seeded history.
+	if live < 11 || synthetic == 0 || page.Events[0].Synthetic {
+		t.Fatalf("live=%d synthetic=%d first=%+v", live, synthetic, page.Events[0])
+	}
+}
+
+func TestRunConsoleSeededRejectsUnknownProfile(t *testing.T) {
+	if _, err := RunConsoleSeeded(context.Background(), "medium", func(ConsoleInfo) error { return nil }); err == nil {
+		t.Fatal("expected an unknown profile error")
 	}
 }

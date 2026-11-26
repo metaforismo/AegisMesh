@@ -53,6 +53,9 @@ make build
 
 # the same scenario behind the operator console on an OS-assigned loopback port (Ctrl-C to stop)
 ./bin/aegismesh demo --console
+
+# the same, preceded by ~2,000 (small) or 50,000 (large) seeded synthetic observations over 7 days
+./bin/aegismesh demo --console --seed small
 ```
 
 `demo` accepts no config, path, port, credential, API key or destination.
@@ -61,7 +64,9 @@ observation hash, produces eight dry-run recommendations, then stops and removes
 its private temporary workspace. It requires no cloud service, `curl`, `nc`,
 privileged port or external network access. `make demo` invokes the same path.
 `demo --console` keeps the scenario available until Ctrl-C and prints the console
-URL and a fresh token once.
+URL and a fresh token once. `--seed small|large` adds clearly marked (`"synthetic": true`),
+deterministic generated history from documentation-range addresses so the
+console shows scale; see [docs/cli.md](docs/cli.md#demo---console---seed-smalllarge).
 
 For a persistent workspace and manual protocol exploration:
 

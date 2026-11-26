@@ -60,6 +60,12 @@ func TestDemoStrictArgumentMatrix(t *testing.T) {
 		{name: "unknown", args: []string{"--unknown"}},
 		{name: "positional", args: []string{"unexpected"}},
 		{name: "separator positional", args: []string{"--", "unexpected"}},
+		{name: "seed without console", args: []string{"--seed", "small"}},
+		{name: "seed unknown profile", args: []string{"--console", "--seed", "medium"}},
+		{name: "seed empty", args: []string{"--console", "--seed="}},
+		{name: "seed repeated", args: []string{"--console", "--seed", "small", "--seed", "large"}},
+		{name: "seed with json", args: []string{"--console", "--json", "--seed", "small"}},
+		{name: "seed missing value", args: []string{"--console", "--seed"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false

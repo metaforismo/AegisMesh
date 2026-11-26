@@ -86,7 +86,7 @@ answers. Use it before any production-ish deployment.
 
 ## aegismesh demo
 
-    demo [--json]
+    demo [--json] [--console [--seed small|large]]
 
 Run one self-contained synthetic scenario through real HTTP, TCP, MCP and
 authentication-only SSH listeners. Every listener is bound to `127.0.0.1` on an
@@ -392,6 +392,51 @@ closes listeners and removes its private temporary directory. It cannot be
 combined with `--json`. The default `demo` output and teardown are unchanged.
 The operator UI is embedded in the binary and served at that URL; the API
 also works without a browser.
+
+### `demo --console --seed small|large`
+
+`--seed` (only with `--console`) first writes seeded synthetic history into the
+same private temporary evidence store, closes it, and then builds the runtime,
+so the console reads that history back through its normal storage backfill and
+index path before the live loopback scenario runs. It exists to make the console
+show realistic scale; the data is generated, not observed.
+
+| Profile | Sensor observations | Correlation signals | Sources | Span |
+| --- | ---: | ---: | ---: | --- |
+| `small` | exactly 2,000 | 305 | 117 | previous 7 days |
+| `large` | exactly 50,000 | 7,464 | 1,075 | previous 7 days |
+
+Counts are fixed per profile: gaps and offsets are whole milliseconds relative
+to the start time, so the same events and signals result whatever the start
+time (tested for `small`, checked for `large`). The command prints a `Seeded:` line with these counts before the
+console URL. Actor shapes, drawn from a fixed seeded random stream:
+sub-second HTTP/TCP/SSH scanners with scanner User-Agents; SSH and HTTP
+credential stuffing with many distinct synthetic passwords; AI-agent-like
+clients that enumerate the AI decoys, follow the MCP canary
+(`canary_demo`, `list_files`, `read_file .env`, `get_env API_KEY`) and replay
+the planted key; groups of sources following the same step sequences (so
+campaigns appear); human-paced browser sessions; and honeytoken replays across
+sensors. Peers are drawn only from documentation ranges `192.0.2.0/24`,
+`198.51.100.0/24`, `203.0.113.0/24` and `2001:db8::/32`; collisions model
+returning sources. All four demo sensors (http, tcp, mcp, ssh) are used.
+
+Every seeded observation carries a top-level `"synthetic": true` in its stored
+observation (covered by the payload hash), and the console's event summaries
+expose it as `"synthetic": true` (the field is omitted for observed evidence).
+Generated input passes through the live policy gates, detection engine,
+honeytoken scrubbing and `redact` helpers before serialization; synthetic
+passwords and the planted token values never reach evidence (tested).
+Correlation is enabled for a seeded run, and its signals come from the real
+correlation engine fed with the generated sequence in time order. Output is
+byte-identical for the same profile, start time and demo configuration. The
+history ends at least two minutes before start, so live demo traffic is newest.
+Nothing is written outside the demo's temporary directory, which is removed
+on exit together with the seeded history.
+
+The index keeps its unchanged 64 MiB accounting bound, so with `large` it
+retains the newest ~13,400 of the 57,464 stored envelopes (about the last two
+days); older seeded history stays only in the temporary store. The `large` profile takes a few seconds to
+generate and backfill (see `docs/performance/2026-11-26`).
 
 For scripts, send `Authorization: Bearer <token>` to `/api/v1/*`. Browsers exchange
 `{"token":"…"}` at `POST /api/v1/session`; retain the HttpOnly SameSite=Strict

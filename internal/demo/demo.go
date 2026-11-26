@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/config"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/demoseed"
 	"github.com/metaforismo/aegismesh/internal/detect"
 	"github.com/metaforismo/aegismesh/internal/event"
 	"github.com/metaforismo/aegismesh/internal/honeytoken"
@@ -65,14 +65,41 @@ type Summary struct {
 // Run owns every listener, client, file and cleanup path used by the demo.
 // It accepts no external destination or config, and all network traffic is
 // validated as loopback before a client connects.
-func Run(parent context.Context) (Summary, error) { return run(parent, nil) }
+func Run(parent context.Context) (Summary, error) { return run(parent, "", nil) }
 
 // RunConsole holds the same synthetic scenario until cancellation. The callback
 // receives the one-time secret directly; it is never logged or persisted.
 func RunConsole(parent context.Context, ready func(string, string) error) (Summary, error) {
-	return run(parent, ready)
+	return RunConsoleSeeded(parent, "", func(info ConsoleInfo) error { return ready(info.Addr, info.Token) })
 }
-func run(parent context.Context, ready func(string, string) error) (summary Summary, err error) {
+
+// ConsoleInfo is handed to the console callback once the demo is ready.
+type ConsoleInfo struct {
+	// Addr is the bound loopback console authority.
+	Addr string
+	// Token is the one-time operator secret; never log or persist it.
+	Token string
+	// Seeded counts generated synthetic history; zero without a seed profile.
+	Seeded demoseed.Result
+}
+
+// RunConsoleSeeded is RunConsole with optional seeded synthetic history. A
+// non-empty profile writes that demoseed profile into the private evidence
+// store before the runtime starts, so the console backfills it through the
+// normal storage and index path, ahead of the live loopback scenario.
+func RunConsoleSeeded(parent context.Context, profile string, ready func(ConsoleInfo) error) (Summary, error) {
+	if ready == nil {
+		return Summary{}, errors.New("demo: console callback is required")
+	}
+	if profile != "" {
+		if _, err := demoseed.Lookup(profile); err != nil {
+			return Summary{}, fmt.Errorf("demo: %w", err)
+		}
+	}
+	return run(parent, profile, ready)
+}
+
+func run(parent context.Context, profile string, ready func(ConsoleInfo) error) (summary Summary, err error) {
 	if err := parent.Err(); err != nil {
 		return Summary{}, err
 	}
@@ -105,6 +132,16 @@ func run(parent context.Context, ready func(string, string) error) (summary Summ
 		}
 		cfg.Console = config.Console{Enabled: true, Listen: "127.0.0.1:0", SessionTTLSeconds: 3600, IndexMaxEvents: 50000, SettingsEditing: config.SettingsEditingConsole, Operators: []config.Operator{{Name: "demo-admin", Role: "admin", TokenSHA256: auth.Digest(token)}}}
 		if err = cfg.Validate(); err != nil {
+			return Summary{}, err
+		}
+	}
+	var seeded demoseed.Result
+	if profile != "" {
+		// Seeded history is generated, and live traffic observed, with
+		// correlation on, as the AI decoy configuration ships it.
+		enabled := true
+		cfg.Correlation.Enabled = &enabled
+		if seeded, err = seed(cfg, profile, time.Now()); err != nil {
 			return Summary{}, err
 		}
 	}
@@ -163,7 +200,7 @@ func run(parent context.Context, ready func(string, string) error) (summary Summ
 		if e != nil {
 			return Summary{}, e
 		}
-		if e = ready(addr, token); e != nil {
+		if e = ready(ConsoleInfo{Addr: addr, Token: token, Seeded: seeded}); e != nil {
 			return Summary{}, e
 		}
 		token = ""
@@ -174,7 +211,7 @@ func run(parent context.Context, ready func(string, string) error) (summary Summ
 	if err := verifyListenersReleased(addresses, adminAddr); err != nil {
 		return Summary{}, err
 	}
-	summary, err = verifyEvidence(cfg.Runtime.DataDir, cfg.Honeytokens)
+	summary, err = verifyEvidence(cfg.Runtime.DataDir, cfg.Honeytokens, seeded.Events+seeded.Signals)
 	if err != nil {
 		return Summary{}, err
 	}
@@ -182,56 +219,7 @@ func run(parent context.Context, ready func(string, string) error) (summary Summ
 	return summary, nil
 }
 
-func loadConfig(workDir string) (*config.Config, error) {
-	cfg := config.Config{
-		APIVersion: config.APIVersionV1Alpha1,
-		Runtime: config.Runtime{
-			InstanceName: "synthetic-demo",
-			DataDir:      filepath.Join(workDir, "data"),
-		},
-		Admin:   config.Admin{Listen: "127.0.0.1:0"},
-		Logging: config.Logging{Level: "error", Format: "json"},
-		LLM:     config.LLM{Provider: "local"},
-		Sensors: []config.Sensor{
-			{
-				ID: "demo-http", Kind: config.SensorKindHTTP, Listen: "127.0.0.1:0",
-				Persona: &config.HTTPPersona{ServerHeader: "AegisMesh-Demo"},
-				Rules:   []config.HTTPRule{{Name: "root", PathRegex: "^/$", Methods: []string{"GET"}, Status: http.StatusOK, Body: "synthetic demo\n"}},
-			},
-			{
-				ID: "demo-tcp", Kind: config.SensorKindTCP, Listen: "127.0.0.1:0", Banner: "AEGISMESH DEMO\n",
-				Session:         &config.TCPSession{MaxLineBytes: 128, IdleTimeoutSeconds: 3, MaxSessionSeconds: 5},
-				TCPResponseRule: []config.TCPRule{{Name: "ping", LineRegex: "^PING$", Response: "+OK PONG\n"}},
-			},
-			{
-				ID: "demo-mcp", Kind: config.SensorKindMCP, Listen: "127.0.0.1:0", MCPPath: "/mcp",
-				ServerName: "aegismesh-demo", ServerVer: "1.0.0",
-				Tools: []config.MCPTool{{Name: "canary_demo", Description: "Synthetic canary for the local demo", ResultJSON: `{"ok":true}`}},
-			},
-			{ID: "demo-ssh", Kind: config.SensorKindSSH, Listen: "127.0.0.1:0"},
-		},
-	}
-	ai, err := config.AIDecoyConfig()
-	if err != nil {
-		return nil, err
-	}
-	cfg.Honeytokens = ai.Honeytokens
-	cfg.Sensors[2].Environment = ai.Sensors[2].Environment
-	cfg.Sensors[0].Rules = append(cfg.Sensors[0].Rules, ai.Sensors[0].Rules[1:]...)
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("demo: encode internal config: %w", err)
-	}
-	path := filepath.Join(workDir, "mesh.json")
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
-		return nil, fmt.Errorf("demo: write internal config: %w", err)
-	}
-	loaded, err := config.Load(path)
-	if err != nil {
-		return nil, fmt.Errorf("demo: validate internal config: %w", err)
-	}
-	return loaded, nil
-}
+func loadConfig(workDir string) (*config.Config, error) { return demoseed.Config(workDir) }
 
 func validatedAddresses(endpoints []runtime.Endpoint) (map[string]string, error) {
 	if len(endpoints) != len(sensorOrder) {
@@ -456,15 +444,16 @@ func connectionDeadline(ctx context.Context) time.Time {
 	return deadline
 }
 
-func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) {
+func verifyEvidence(dataDir string, tokens []honeytoken.Token, seeded int) (Summary, error) {
 	reader, err := storage.NewReader(dataDir)
 	if err != nil {
 		return Summary{}, fmt.Errorf("demo: open evidence: %w", err)
 	}
 	var envelopes []event.Envelope
 	var corruptErr error
+	synthetic, liveSignals := 0, 0
 	err = reader.ForEach(func(envelope event.Envelope) error {
-		if len(envelopes) == maxEvents {
+		if len(envelopes) == maxEvents || synthetic > seeded {
 			return errors.New("demo: evidence exceeded the event limit")
 		}
 		if err := envelope.Validate(); err != nil {
@@ -486,6 +475,17 @@ func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) 
 				return errors.New("demo: SSH synthetic credential content reached evidence")
 			}
 		}
+		if demoseed.Marked(envelope) {
+			synthetic++
+			return nil
+		}
+		if seeded > 0 && envelope.Classification == event.ClassificationCorrelationSignal {
+			liveSignals++
+			if liveSignals > maxEvents {
+				return errors.New("demo: live correlation signals exceeded the event limit")
+			}
+			return nil // seeded mode enables correlation for the live scenario too
+		}
 		envelopes = append(envelopes, envelope)
 		return nil
 	}, func(_ string, readErr error) {
@@ -498,6 +498,9 @@ func verifyEvidence(dataDir string, tokens []honeytoken.Token) (Summary, error) 
 	}
 	if corruptErr != nil {
 		return Summary{}, fmt.Errorf("demo: corrupt evidence: %w", corruptErr)
+	}
+	if synthetic != seeded {
+		return Summary{}, fmt.Errorf("demo: found %d seeded observations, want %d", synthetic, seeded)
 	}
 	if len(envelopes) != 11 {
 		return Summary{}, fmt.Errorf("demo: recorded %d observations, want 11", len(envelopes))
