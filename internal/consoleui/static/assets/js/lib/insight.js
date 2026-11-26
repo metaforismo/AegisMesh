@@ -192,7 +192,9 @@ export function normalizeCampaign(c) {
 // column says "n of N".
 export function campaignScore(c) {
   const steps = c.steps;
-  const total = c.sessions.length || c.sessionCount || 0;
+  // The server caps the listed sessions (50) but counts steps over every member,
+  // so the denominator is the campaign's session count, not the listed lanes.
+  const total = c.sessionCount || c.sessions.length || 0;
   const lanes = c.sessions.map((s) => {
     const marks = Array.isArray(s.step_marks) ? s.step_marks : null;
     const byIndex = new Map();
