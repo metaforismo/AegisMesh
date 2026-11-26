@@ -339,10 +339,12 @@ export function mdFence(value) {
   return `${fence}${pad}${clean || ' '}${pad}${fence}`;
 }
 
-export function digestMarkdown(d, { asOfText = '' } = {}) {
+export function digestMarkdown(d, { asOfText = '', organization = '' } = {}) {
   const w = normalizeDigestWindow(d?.window);
   const lines = [];
   lines.push(`# AegisMesh digest: ${WINDOW_TEXT[w]}`, '');
+  // Configured by an administrator, fenced like every other server string.
+  if (str(organization)) lines.push(`Organization: ${mdFence(organization)}`, '');
   if (asOfText) lines.push(`As of ${asOfText}. Observations, not incidents.`, '');
   lines.push(digestLead(d).map((s) => s.map((x) => (x.t === 'code' || x.t === 'title' ? mdFence(x.v) : x.v)).join('')).join(' ') || 'No figures were reported.', '');
   lines.push('## Volume', '', `| Measure | ${w === '7d' ? 'Last 7 days' : 'Last 24 hours'} | Window before | Change |`, '| --- | ---: | ---: | ---: |');

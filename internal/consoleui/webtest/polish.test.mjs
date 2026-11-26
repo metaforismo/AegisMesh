@@ -146,3 +146,19 @@ test('identical recommendations read as one card with a count and all evidence',
   assert.equal(g[1].count, 1);
   assert.deepEqual(groupRecommendations(undefined), []);
 });
+
+test('seeded events say they are synthetic; observed ones do not', async () => {
+  const { eventTable } = await import('../static/assets/js/screens/shared.js');
+  const ev = (o) => ({ id: 'a'.repeat(32), time: '2026-11-26T10:00:00Z', sensor: { id: 'web', kind: 'http' }, classification: 'interaction', source: '192.0.2.1', summary: 'GET /', severity: '', rule_ids: [], ...o });
+  const el = eventTable([ev({ synthetic: true }), ev({ id: 'b'.repeat(32) }), ev({ id: 'c'.repeat(32), synthetic: 'yes' })], { caption: 'x' });
+  const chips = el.querySelectorAll((n) => /chip--synthetic/.test(n.getAttribute?.('class') || ''));
+  assert.equal(chips.length, 1, 'only a literal true marks a row');
+  assert.equal(chips[0].textContent, 'Synthetic');
+});
+
+test('the digest Markdown names the organisation, fenced', async () => {
+  const { digestMarkdown } = await import('../static/assets/js/lib/catalogs.js');
+  const md = digestMarkdown({ window: '24h', totals: {} }, { organization: 'Example `SOC`' });
+  assert.match(md, /^# AegisMesh digest: the last 24 hours\n\nOrganization: `` Example `SOC` ``\n/);
+  assert.doesNotMatch(digestMarkdown({ window: '24h' }), /Organization:/);
+});

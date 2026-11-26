@@ -338,6 +338,8 @@ function makeEvent(t, overrides = {}) {
     action: rules.length ? 'observe' : '',
     _integrity: rand() < 0.01 ? false : true,
   };
+  // Like the backend's seeded demo: large-scale events say they are synthetic.
+  if (LARGE_POOL) ev.synthetic = true;
   return ev;
 }
 

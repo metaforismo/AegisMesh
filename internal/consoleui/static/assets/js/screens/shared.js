@@ -111,13 +111,22 @@ function eventColumns({ extra = [], rowHref, origin = false, filterHref }) {
     },
     {
       label: 'Summary', className: 'col-summary',
-      cell: (ev) => (isEventId(ev.id)
-        ? h('a', { href: rowHref ? rowHref(ev) : eventHref(ev), class: 'row-open', 'data-row-link': '' }, evidence(ev.summary, { max: 160 }))
-        : evidence(ev.summary, { max: 160 })),
+      cell: (ev) => {
+        const text = isEventId(ev.id)
+          ? h('a', { href: rowHref ? rowHref(ev) : eventHref(ev), class: 'row-open', 'data-row-link': '' }, evidence(ev.summary, { max: 160 }))
+          : evidence(ev.summary, { max: 160 });
+        return ev.synthetic === true ? h('span', { class: 'summary-line' }, syntheticChip(), text) : text;
+      },
     },
     { label: 'Rules', cell: (ev) => ruleChips(ev.rule_ids, filterHref) },
     ...extra,
   ];
+}
+
+// Seeded demo data says so wherever an event is shown (`synthetic: true`
+// on the summary; observed events omit the field). Interface text.
+export function syntheticChip() {
+  return h('span', { class: ['chip', 'chip--synthetic'], title: 'Seeded by aegismesh demo, not observed by a sensor' }, 'Synthetic');
 }
 
 // Bring a row into view vertically only. (scrollIntoView would also scroll

@@ -6,7 +6,7 @@ import { addFilterHref } from '../lib/filters.js';
 import { pageHead, panel, kv, sevChip, clsChip, evidence, seal, table, empty, link, chip, toast, labelFor, banner, copyable } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { describeOrigin, normalizeNodeFilter, LOCAL } from '../lib/origin.js';
-import { eventTable, ruleChips, statusBadge, attachDialog, originLabel, originContext } from './shared.js';
+import { eventTable, ruleChips, statusBadge, attachDialog, originLabel, originContext, syntheticChip } from './shared.js';
 
 // The integrity scope the hub reports for forwarded evidence. The UI words
 // it itself and never shows a server-supplied description as interface text.
@@ -95,7 +95,7 @@ export async function renderEventDetail(root, ctx, id, { node = '', inDrawer = f
         crumbs: inDrawer ? null : [['Events', '#/events'], s.source ? [evidence(s.source, { max: 28 }), href('sources', s.source)] : null, ['Event', null]],
         title: h('span', { class: 'event-title' }, evidence(s.summary || '(no summary)')),
         subtitle: h('span', { class: 'btn-row' }, clsChip(s.classification), sevChip(s.severity), iv.seal,
-          forwarded ? h('span', { class: 'chip' }, 'Forwarded') : null),
+          forwarded ? h('span', { class: 'chip' }, 'Forwarded') : null, s.synthetic === true ? syntheticChip() : null),
         actions: [sessionId && !inDrawer ? h('a', { class: 'btn', href: href('sessions', sessionId) }, icon('story', { size: 'sm' }), 'Session story') : null, attach],
       }),
       integrity.verified ? null : banner('danger', 'Payload hash does not match', h('p', null, forwarded ? 'The forwarded payload does not match its recorded hash. Treat this copy as untrustworthy and compare it with the node’s own store. ' : 'The stored payload does not match its recorded hash. Treat this envelope as untrustworthy. ', integrity.error ? evidence(integrity.error) : null)),
