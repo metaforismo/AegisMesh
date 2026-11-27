@@ -8,6 +8,17 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console, round 8: a notification bell (unread count, day-grouped panel,
+  mark read, live from `/notifications/stream`, one optional notice for
+  critical items) and an Inbox (`#/inbox`, `g y`) with kind, severity and
+  unread filters; notification settings per kind. The investigation is a
+  workspace: status flow, priority, assignee, origin, a summary strip,
+  evidence grouped by source, activity merged with notes, a plain-text
+  note preview; the list filters by status and assignee ("Assigned to me"
+  default). "Open an investigation" from a campaign or a session. Source's
+  Activity and Cadence end level.
+- Dev mock: contract r8 (`mock-notify.mjs`, `mock-workspace.mjs`),
+  `--round8 off`, `/__mock/notify`.
 - Console in-app notifications (ADR-0027): a per-tenant inbox derived from
   indexed evidence and console state, with no egress —
   `critical_observation`, `honeytoken_replay`, `agent_canary`,

@@ -42,6 +42,8 @@ function ctx(hash, { me, api = {}, role } = {}) {
       roles: wrap('roles', api.roles ?? missing()),
       permissions: wrap('permissions', api.permissions ?? missing()),
       settingsHistory: wrap('settingsHistory', api.settingsHistory ?? missing()),
+      notificationPrefs: wrap('notificationPrefs', api.notificationPrefs ?? missing()),
+      putNotificationPrefs: (body) => { calls.push(['putNotificationPrefs', body]); return reply(typeof api.putNotificationPrefs === 'function' ? api.putNotificationPrefs(body) : api.putNotificationPrefs ?? missing()); },
     },
   };
 }
@@ -56,7 +58,7 @@ const navNames = (root) => root.querySelectorAll((el) => (el.getAttribute('class
 test('viewer: account sections only; an admin section answers "not permitted" without asking the server', async () => {
   const c = ctx('#/settings', { me: ME.viewer });
   const root = await render(c);
-  assert.deepEqual(navNames(root), ['Profile', 'Preferences', 'Sessions', 'API keys']);
+  assert.deepEqual(navNames(root), ['Profile', 'Preferences', 'Sessions', 'API keys', 'Notifications']);
   assert.match(root.textContent, /What the viewer role can do/);
   const c2 = ctx('#/settings/accounts', { me: ME.viewer });
   const r2 = await render(c2);
@@ -66,7 +68,7 @@ test('viewer: account sections only; an admin section answers "not permitted" wi
 
 test('admin: administration listed; every admin page renders from the stubbed API', async () => {
   const root = await render(ctx('#/settings', { me: ME.admin }));
-  assert.deepEqual(navNames(root).slice(4), ADMIN_SECTIONS.map((s) => s.label));
+  assert.deepEqual(navNames(root).slice(5), ADMIN_SECTIONS.map((s) => s.label));
   for (const s of ADMIN_SECTIONS) {
     const r = await render(ctx(`#/settings/${s.id}`, { me: ME.admin }));
     assert.ok(r.textContent.length > 0, s.id);
@@ -84,7 +86,7 @@ test('older server: profile falls back to the session; sessions and keys say the
   const root = await render(c);
   assert.match(root.textContent, /This server does not provide account management yet/);
   assert.match(root.textContent, /vera/);
-  assert.deepEqual(navNames(root), ['Profile', 'Preferences', 'Sessions', 'API keys'], 'administration is not offered');
+  assert.deepEqual(navNames(root), ['Profile', 'Preferences', 'Sessions', 'API keys', 'Notifications'], 'administration is not offered');
   for (const id of ['sessions', 'keys', 'accounts', 'system']) {
     const r = await render(ctx(`#/settings/${id}`, { me: undefined, role: 'admin' }));
     assert.match(r.textContent, /does not provide account management yet/, id);
@@ -142,4 +144,29 @@ test('account detail: a configured account is read-only with the reason; not fou
   assert.equal(r.querySelectorAll((el) => el.tagName === 'select').length, 0, 'no role control');
   const gone = await render(ctx('#/settings/accounts/acc_000000000000', { me: ME.admin, api: { account: new ApiError(404, 'not_found', 'account not found') } }));
   assert.match(gone.textContent, /Account not found/);
+});
+
+test('notifications: a toggle per kind with what it means, account security always on, severity choices; changes save the difference', async () => {
+  const prefs = { kinds: { critical_observation: true, honeytoken_replay: true, agent_canary: true, new_campaign: false, posture_attention: true, account_security: true, assignment: true }, min_severity: 'info' };
+  const c = ctx('#/settings/notifications', { me: ME.viewer, api: { notificationPrefs: prefs, putNotificationPrefs: (b) => ({ ...prefs, ...b, kinds: { ...prefs.kinds, ...(b.kinds || {}) } }) } });
+  const root = await render(c);
+  const boxes = root.querySelectorAll((el) => el.tagName === 'input' && el.getAttribute('type') === 'checkbox' && (el.getAttribute('id') || '').startsWith('ntf-kind-'));
+  assert.equal(boxes.length, 6, 'six toggles; account security is said, not a box');
+  assert.match(root.textContent, /Always on/);
+  assert.match(root.textContent, /Only someone who read a decoy can hold it/);
+  const campaign = boxes.find((b) => b.getAttribute('id') === 'ntf-kind-new_campaign');
+  assert.equal(campaign.checked, false);
+  campaign.checked = true;
+  campaign.dispatch('change');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(c.calls.find((x) => x[0] === 'putNotificationPrefs'), ['putNotificationPrefs', { kinds: { new_campaign: true } }]);
+  const radios = root.querySelectorAll((el) => el.getAttribute('type') === 'radio' && el.getAttribute('name') === 'ntf-min-severity');
+  assert.deepEqual(radios.map((r) => r.getAttribute('value')), ['info', 'medium', 'high', 'critical']);
+  assert.match(root.textContent, /Stored in this browser only/);
+});
+
+test('notifications on an older server: said once, no controls', async () => {
+  const root = await render(ctx('#/settings/notifications', { me: ME.viewer }));
+  assert.match(root.textContent, /This server does not keep notifications yet/);
+  assert.equal(root.querySelectorAll((el) => el.tagName === 'input').length, 0);
 });

@@ -137,7 +137,11 @@ admin tokens (`aegismesh console token` generates one). It shows a bounded in-me
 views: attacker sessions with an actor profile (signals checked, present or not), campaigns (several
 sources that followed the same steps; similar behaviour, not attribution) and a posture review of the
 running configuration (not a security guarantee), where a known risk can be accepted for a while
-with a reason (it stays listed, never "fixed"). What each operator sees and can do follows their role's
+with a reason (it stays listed, never "fixed"). An inbox behind a bell in the top bar notes
+high-severity findings, planted credentials coming back, agent canaries, new campaigns, posture changes,
+your account and assignments (inside the console only: nothing is sent anywhere). An investigation is
+a workspace with a status, priority, assignee, activity and notes, and can be opened from a campaign or a
+session with its events attached. What each operator sees and can do follows their role's
 permissions. Settings shows your profile and permissions, preferences (UTC or local time, default
 window, theme), your sessions and API keys; administrators manage console-managed accounts, built-in
 and custom roles (a permission matrix with a diff before saving), sessions and keys, and read the

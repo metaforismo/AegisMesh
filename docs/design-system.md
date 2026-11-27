@@ -173,7 +173,8 @@ Rules:
   chips and saved views, help tips, the situation brief and the chart
   readout, paging, "Show all" on a folded campaign score, folding caveats,
   numbers changing, an in-place refresh (it never replays
-  entrances).
+  entrances), the notification bell's count and its panel, the status
+  flow.
 - **Animates briefly:** pointer route changes (a 10px directional slide of
   the content area only; View Transitions API with a keyframe fallback),
   dialogs and the side panel (interruptible transitions on `[open]` with
@@ -316,6 +317,19 @@ other preferences, saved event views and palette recents; see "Console security 
 | `.top-org`, `.nav-org`, `.login__org`, `.login__banner` | Organisation name and banner | Plain text from `/meta`; name in the top bar from 720px, in the phone drawer below; banner on the sign-in card with line breaks kept |
 | `.cell-lead` (column option `lead`) | Phone card head | Below 720px the row's identity (a source, a title, a name) heads its stacked card, unlabelled and a step larger |
 | `.top-tenant`, `--static` | Active tenant in the top bar | A button that opens the tenant menu with several tenants; a static label with one tenant not named `default`; absent otherwise |
+| `.bell`, `.bell__badge` | Notification bell (round 8) | Ghost icon button in the top bar; the unread count is a small tabular figure in ink (never a red dot), "99+" beyond 99, and the accessible name says the count ("Notifications, 12 unread"). Changes number in place: no pulse, bounce or flash. Absent on a server without `/notifications` |
+| `.notify` (`__head`, `__count`, `__bar`, `__body`, `__foot`, `__settings`, `__close`) | The bell's panel | A native popover under the bell (computed placement), full screen below 720px. All or Unread, Mark all as read, Open the inbox, Notification settings. Arrow keys move between rows. Never animates; refreshed on every open |
+| `.notify-day`, `.notify-item` (`__dot`, `__meta`, `__title`, `__summary`, `__count`, `__read`, `.is-unread`) | A notification | Kind glyph and word, severity meter and word, relative time, "3 times" for a grouped repeat, the title as the link, the server's summary as text (two lines, four in the Inbox). Unread is a filled square plus a semibold title plus visually hidden "Unread:", never colour alone. Grouped under day headings in the chosen zone ("Today", "Yesterday", "Nov 24") |
+| `.nkind` (`--<kind>`) | Notification kind | Icon beside the word: warn "Finding", key "Planted credential", flag "Agent canary", campaign "Campaign", posture "Posture", lock "Your account", user "Assigned to you" |
+| `.ntoggle` (`__label`, `__name`, `__why`, `__always`, `--fixed`), `.ntoggles` | Notification settings | One native check box per kind with what it means under it; "Your account's security" is always on and says so in words (no disabled box) |
+| `.toast--note` | The one critical notice | The bell icon, ink, a 2px ink edge; "Critical: <title>" with "Open the inbox". At most one a minute, only while the tab is visible, only when not turned off |
+| `.flow` (`__item`, `__step`, `__num`, `__label`, `__arrow`, `.is-current`, `.is-done`) | Status flow | The statuses the API supports in order (Open → Monitoring → Closed); the current step is ink with a filled number and the 1px accent line under its word; passed steps ink-2; buttons with `aria-pressed` and `aria-current="step"` for writers, plain text otherwise |
+| `.ws-head`, `.ws-field`, `.ws-sum` (`__grid`, `__cell`, `__basis`), `.ws-layout`, `.ws-main`, `.ws-side` | Investigation workspace | Case state in one flat strip (status, priority, assignee); a six-cell summary strip of the attached evidence that says whether the server or the browser computed it; two columns from 1200px |
+| `.ev-group` (`__head`, `__source`, `__meta`), `.ev-row` (`__when`, `__cls`, `__what`, `__meta`, `__sensor`, `__detach`) | Evidence by source | A compact timeline per source (the group with the latest event first, newest first inside); summary as evidence, one line on desktop, wrapped on phones; Detach is a neutral ghost button |
+| `.feed` (`__item`, `--note`, `--activity`, `__mark`, `__who`, `__detail`, `__when`, `__truncated`) | Activity with notes | Oldest first; a change is one quiet line ("ada changed the status: open → monitoring"), a note is shown in full as plain text; a note appears once |
+| `.composer` (`__head`, `__foot`), `.note-preview` | Note composer | Write or Preview (segmented); the preview is the plain text as everyone will read it, on a dashed edge (not saved yet); count and "nothing is formatted" |
+| `.grid--level` | Paired panels that end level | Both panels stretch to the taller; the shorter one's body takes the room (Source: Activity beside Cadence) |
+| `.strip-facts` | The activity strip in words | Busiest slice, quiet slices, slice length |
 
 ## Console security rules
 
@@ -385,7 +399,8 @@ it is an audited action.
 
 Sign-in, Overview, Events (with live mode), Event detail, Sources, Source
 detail, Sessions, Session detail, Campaigns, Campaign detail, Digest,
-Investigations, Investigation detail, Techniques, Recommendations, Decoys,
+Investigations, Investigation detail, Inbox (round 8; the bell's screen,
+in the palette and `g y`, not in the sidebar), Techniques, Recommendations, Decoys,
 Honeytokens, Sensors, Rules, Posture, Node, Fleet and Fleet node
 (experimental), Audit trail (`audit.read`), and the Guide. The sidebar groups
 them as Observe (Overview, Digest, Events, Sources), Understand (Sessions,
@@ -1375,6 +1390,99 @@ included).
 | Posture as analyst (reason once, no button), admin with editing off (editing reason once, no Accept or Revoke), admin on an older server (Accept and Revoke as before) | PASS (scripted DOM checks) |
 | Firefox, Safari, screen readers, the real Go server with the r7 backend, a real phone, print preview | NOT RUN: only Chromium and the mock; print rules checked in CSS only |
 
+### Round 8: notifications, the investigation workspace, cases from campaigns (2026-11-27)
+
+Built against contract r8 while the backend landed in parallel; the
+mock follows the backend's reply (severity per kind, account security
+always on, at most 200 ids per read, kind and severity filters, the
+summary's indexed and missing counts). Every part has an older-server
+state (`--round8 off`).
+
+**Notification centre.** A bell in the top bar (`ui/bell.js`, on the
+first screen; the panel loads on first open). The server derives the
+notices (findings of high or critical severity, planted credentials
+coming back, agent canaries, new campaigns, posture, your account,
+assignments); nothing is sent anywhere. The count is the server's: the
+first page at sign-in, then the sibling stream
+`/api/v1/notifications/stream` (`notification` and `unread` events; a
+stream that never opens gives way to a poll a minute). Quiet by design:
+the badge changes number in place; arrivals are announced to assistive
+tech once per quiet spell, never per item ("3 new notifications. 15
+unread."); the only toast is one subtle notice for a critical item while
+the tab is visible, at most once a minute, which the operator can turn
+off (Settings, Notifications; kept in this browser). The panel groups by
+day (in the chosen zone), says kind, severity, relative time and how many
+repeats were grouped, links to the target (only routes the console
+knows; a forwarded event keeps its origin), marks one or all as read
+(optimistic, put back on refusal; "all" stops at the newest item seen so
+an arrival during the request stays unread). An older server: no bell,
+no Inbox in the palette, no errors.
+
+**Inbox** (`#/inbox`, palette, `g y`). Kind and unread are asked of the
+server; the minimum severity applies to what is loaded and the page says
+so. j/k move between rows, Enter opens, x marks read. The unfiltered view
+shares the bell's store, so marking here updates the badge.
+
+**Notification settings** (Settings, Your account, Notifications). A
+check box per kind with what it means, the minimum severity (info,
+medium, high, critical; there is no "low" kind), and the critical notice.
+Each change saves at once, one after another; a refusal puts the
+previous choice back. "Your account's security" is always on and says
+so in words.
+
+**Investigation workspace.** The header carries the title, where the
+case came from (a campaign or a session, linked), the status flow (Open →
+Monitoring → Closed: what the API supports; Monitoring is the
+in-progress step), priority and the assignee picker. The picker lists
+you first, then everyone the server says may be assigned
+(`/investigations/assignees`); on a server without the list, accounts
+whose role reads investigations (for someone who may read accounts);
+the current assignee stays listed with "(no longer eligible)" rather
+than silently changing. Under the header, a summary strip (sources,
+sensors, first and last seen, max severity, rules) that says whether the
+server or the browser computed it. Evidence is a compact timeline grouped
+by source with Detach in place; beside it the activity merged with the
+notes, oldest first, with the composer and its plain-text preview;
+"Report and exports" in one place. Edits are optimistic and the server's
+answer (the whole case) redraws the feed and the summary. An older server
+gets the same page without assignee or activity, and a computed summary.
+
+**Investigations list.** Status and assignee (Anyone, Assigned to me,
+Unassigned) filters, assignee, events and max severity columns, and
+"Open with Assigned to me" (kept in this browser; a link that names an
+assignee wins). The list is unpaged, so the filters apply in the
+browser.
+
+**Campaign or session → investigation.** "Open an investigation" on a
+campaign (only when the server sends its member event sample) and on a
+session story: the title prefilled from the campaign's label or the
+session's source, a priority (high when the evidence reached high), how
+many events will be attached (at most 200, newest per session first) and
+that a first note records the basis and the caveat. One submission at a
+time (`createSubmitGuard`: a double click or Enter twice shares the
+first request); it lands on the new case. On an older server a session
+falls back to the plain create with the story's event ids.
+
+**Polish.** Source: Activity and Cadence end level (`.grid--level`), and
+the strip says its busiest slice, quiet slices and slice length in words.
+
+Motion: nothing new animates. Contrast: no token changed; the badge is
+`--color-canvas` on `--color-ink` (the ink pair already measured).
+
+### Verification: round 8 (2026-11-27, Node 25, Go toolchain, Chromium in the Claude browser pane, mocks on ports 9211 normal, 9212 `--scale large`, 9213 `--round8 off`)
+
+| Check | Result |
+|---|---|
+| `make ui-test` (adds `notify.test.mjs`: validation, links, day grouping, read state and rollback, batches of 200, mark all, live arrivals, badge and name, announcement batching, the toast rule, preferences merge, inbox filters; `bell.test.mjs`: older server, live badge and one announcement per burst, polling fallback; `workspace.test.mjs`: summary, grouping, activity and notes order, assignee options and fallback eligibility by permission, list filters and default, the draft, the submit guard, campaign and session flows with double submit and the older-server fallback; `mocknotify.test.mjs`; notification settings in `settingsscreen.test.mjs`) | PASS |
+| `go build ./...`, `go test ./internal/consoleui/...` | PASS |
+| Driven in the browser as analyst (normal): bell panel, mark read (badge 27 → 26), Inbox j/k/x, status and assignee changes and a note (feed order, toasts), campaign → investigation with three submits (one request, lands on the case), Source panels level (both 653-1029 px) | PASS |
+| Seen with the pane visible: bell panel dark 1440 and light 375 (full screen); Inbox dark 1440; Investigations dark 1440 and large at pane width; workspace dark 1440 (analyst, viewer), light 1440, light 375; notification settings light 375; Source dark 1440; workspace on `--round8 off` dark 1440 | PASS after fixes (panel head alignment, a stray rule above the single toggle, taller summary chips) |
+| Scripted at 375 light: Inbox, Investigations, an investigation, notification settings: one h1, no horizontal scroll, no text under 11px | PASS |
+| Critical notice: two critical arrivals via `/__mock/notify` while the tab was visible gave one notice, the badge 26 → 28 and one announcement ("2 new notifications. 28 unread.") | PASS |
+| `--round8 off`: no bell, Inbox and settings say the server is older, no assignee parts, no campaign action, session falls back to the plain create | PASS (the only console errors are the expected 404 network lines) |
+| `--scale large`: 672 unread ("99+"), Inbox pages of 100 to 400 rows, kind filter from the server, 83 investigations | PASS |
+| Firefox, Safari, screen readers, the real Go server with the r8 backend, a real phone | NOT RUN: only Chromium and the mock |
+
 ## Brand
 
 The name stays **AegisMesh** (module path, binary, Helm chart and docs depend
@@ -1511,6 +1619,9 @@ paint. The burst figure comes from `GET /__mock/burst?n=200` on the mock.
 # the default, normal, keeps the small data set unchanged
 # add --posture-acceptable off for a round-6 server without the per-check
 # `acceptable` / `acceptable_reason` fields
+# add --round8 off to answer like a round-7 server (no notifications,
+# assignees or cases from campaigns and sessions); GET /__mock/notify?kind=…&severity=…
+# raises one notification in every tenant (to see the bell and the critical notice)
 # add --round5 off to answer like a server without accounts and settings
 # (404 on /me, /admin/*, /system), --fail-prefs to refuse preference saves
 make ui-dev

@@ -63,6 +63,9 @@ export function createLiveStream({
   EventSourceImpl = globalThis.EventSource,
   checkSession,
   onEvent = () => {},
+  // Other named SSE events → handler(raw data string). The notification
+  // stream uses this for `notification` and `unread`.
+  events = {},
   onState = () => {},
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (id) => clearTimeout(id),
@@ -94,6 +97,12 @@ export function createLiveStream({
       const ev = parseObservation(msg.data);
       if (ev) onEvent(ev);
     });
+    for (const [name, fn] of Object.entries(events)) {
+      es.addEventListener(name, (msg) => {
+        if (gen !== generation) return;
+        fn(msg.data);
+      });
+    }
     es.addEventListener('heartbeat', (msg) => {
       if (gen !== generation) return;
       lastHeartbeat = safeTime(msg.data) || null;

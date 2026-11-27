@@ -550,7 +550,10 @@ function leave(el) {
   setTimeout(() => el.remove(), LEAVE_MS);
 }
 
-export function toast(kind, message, { timeout } = {}) {
+// kind: 'ok', 'error', or 'note' (a notice from the inbox: the bell, no
+// colour). `action` ({ label, href }) adds one link, for a notice that
+// points somewhere.
+export function toast(kind, message, { timeout, action } = {}) {
   if (!toastRegion) {
     toastRegion = h('div', { class: 'toast-region', role: 'status', 'aria-live': 'polite' });
     document.body.appendChild(toastRegion);
@@ -558,11 +561,14 @@ export function toast(kind, message, { timeout } = {}) {
     toastRegion.addEventListener('pointerleave', () => { delete toastRegion.dataset.hold; });
   }
   const isError = kind === 'error';
-  const ms = timeout ?? (isError ? 9000 : 4500);
+  const ms = timeout ?? (isError ? 9000 : kind === 'note' ? 8000 : 4500);
   const close = h('button', { class: ['btn', 'btn--ghost', 'btn--sm', 'btn--icon'], type: 'button', 'aria-label': 'Dismiss' }, icon('close', { size: 'sm' }));
-  const el = h('div', { class: ['toast', isError ? 'toast--error' : 'toast--ok'] },
-    icon(isError ? 'warn' : 'check'),
-    h('p', { class: 'toast__text' }, message), close);
+  const note = kind === 'note';
+  const go = action?.href ? h('a', { class: ['btn', 'btn--sm'], href: action.href }, action.label || 'Open') : null;
+  const el = h('div', { class: ['toast', isError ? 'toast--error' : note ? 'toast--note' : 'toast--ok'] },
+    icon(isError ? 'warn' : note ? 'bell' : 'check'),
+    h('p', { class: 'toast__text' }, message), go, close);
+  go?.addEventListener('click', () => leave(el));
   close.addEventListener('click', () => leave(el));
   toastRegion.appendChild(el);
   const live = [...toastRegion.children].filter((t) => !t.dataset.leaving);

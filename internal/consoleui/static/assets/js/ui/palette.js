@@ -13,7 +13,7 @@ import { capitalize } from '../lib/taxonomy.js';
 import { toCan, ROUTE_PERMS } from '../lib/perms.js';
 import { icon } from './icons.js';
 import { nodeFilterTargets } from '../lib/origin.js';
-import { NAV, isApple } from './shell.js';
+import { NAV, isApple, hasFeature } from './shell.js';
 import { GLOSSARY } from '../lib/glossary.js';
 import { loadRecents, storeRecents, pushRecent } from '../lib/views.js';
 import { formatRelative } from '../lib/format.js';
@@ -37,7 +37,7 @@ function screenItems(can) {
   const out = [];
   for (const g of NAV) {
     for (const i of g.items) {
-      if (!can(ROUTE_PERMS[i.route])) continue;
+      if (!can(ROUTE_PERMS[i.route]) || !hasFeature(i.feature)) continue;
       out.push({ group: 'Go to', label: i.label, icon: i.icon, hint: i.keys || g.group, weight: 60, run: (p) => p.navigate(i.href), keywords: [g.group], recent: { kind: 'screen', id: i.route } });
     }
   }
@@ -324,7 +324,7 @@ export function togglePalette(p) {
 export function shortcutGroups(who) {
   const can = toCan(who);
   const go = NAV.flatMap((g) => g.items)
-    .filter((i) => i.keys && can(ROUTE_PERMS[i.route]))
+    .filter((i) => i.keys && can(ROUTE_PERMS[i.route]) && hasFeature(i.feature))
     .map((i) => [i.keys.split(' '), `Go to ${i.label}`]);
   return [
     { title: 'Anywhere', keys: [

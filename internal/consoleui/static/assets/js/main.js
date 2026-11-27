@@ -18,7 +18,8 @@ import { permissionsOf, toCan, ROUTE_PERMS, BUILTIN_PERMS, principalRoleName } f
 import { h, clear } from './lib/dom.js';
 import { createSwr, abortable } from './lib/swr.js';
 import { chordOf, createSequences, isTypingTarget } from './lib/keys.js';
-import { createShell, applyRail, applyPreferences, setPrefsSink, prefersReducedMotion, cycleTheme, isApple, NAV } from './ui/shell.js';
+import { createShell, applyRail, applyPreferences, setPrefsSink, prefersReducedMotion, cycleTheme, isApple, NAV, setFeature, hasFeature } from './ui/shell.js';
+import { createBell } from './ui/bell.js';
 import { createPrefsStore } from './lib/prefs.js';
 import { isMissingEndpoint } from './lib/insight.js';
 import { sentence } from './lib/settings.js';
@@ -50,6 +51,8 @@ const state = {
   me: null,
   can: () => false,
   shell: null,
+  // The notification bell of the current shell (round 8), or null.
+  bell: null,
   controller: null,
   cleanup: null,
   current: null, // { screen, key, update, hash }
@@ -167,7 +170,11 @@ const CURSOR_ARG = { events: 1, source: 1, sessions: 2 }; // later pages are nev
 const PASS = new Set(['request', 'hasCsrf', 'forgetSession', 'meta', 'session', 'switchTenant', 'audit', 'verifyAudit', 'enrollmentTokens',
   'exportIndicators', 'sessionReport', 'investigationReport', 'exportEvents',
   'me', 'preferences', 'mySessions', 'myKeys', 'accounts', 'account', 'allSessions', 'adminSettings', 'system', 'exportAudit',
-  'permissions', 'roles', 'role', 'settingsHistory']);
+  'permissions', 'roles', 'role', 'settingsHistory',
+  // Round 8: the inbox and its read state are per principal and change
+  // with every arrival, so they are never cached; marking read or saving
+  // notification preferences changes nothing another screen has cached.
+  'notifications', 'markNotificationsRead', 'notificationPrefs', 'putNotificationPrefs', 'assignees']);
 
 const nav = { back: false, used: new Set() };
 const swr = createSwr({
@@ -324,8 +331,15 @@ function teardownScreen() {
   state.current = null;
 }
 
+function stopBell() {
+  state.bell?.stop();
+  state.bell = null;
+  setFeature('notifications', false);
+}
+
 function endSession(notice) {
   teardownScreen();
+  stopBell();
   swr.invalidate();
   state.session = null;
   state.shell = null;
@@ -398,6 +412,7 @@ async function switchTenant(target) {
   swr.invalidate();
   state.session = session;
   state.shell = null;
+  stopBell();
   try {
     await loadAccess();
   } catch {
@@ -489,7 +504,16 @@ async function render({ soft = false } = {}) {
 
   if (!state.shell) {
     teardownScreen();
-    state.shell = createShell({ session: state.session, meta: state.meta, me: state.me, can: state.can, onLogout: logout, onSearch: openPalette, onSwitchTenant: switchTenant });
+    stopBell();
+    // The bell stays hidden until the server answers /notifications; an
+    // older server never shows it and the Inbox leaves the palette.
+    const bell = createBell({ api: rawApi, checkSession: () => rawApi.session().then(() => true), storage: browserStorage });
+    state.bell = bell;
+    bell.start().then((on) => {
+      if (state.bell !== bell) return;
+      setFeature('notifications', on);
+    });
+    state.shell = createShell({ session: state.session, meta: state.meta, me: state.me, can: state.can, onLogout: logout, onSearch: openPalette, onSwitchTenant: switchTenant, bell });
     clear(appRoot);
     appRoot.appendChild(state.shell.root);
     const prefetchFrom = (e) => {
@@ -553,6 +577,10 @@ async function render({ soft = false } = {}) {
     navigate: (target) => { location.hash = target; },
     rerender: () => render({ soft: true }),
     prefs,
+    // The shared notification store (the bell's), or null on a server
+    // without the inbox.
+    inbox: state.bell?.inbox || null,
+    notificationsReady: () => state.bell?.available === true,
     // The operator revoked this browser's own session: it is already gone
     // on the server, so only the local state is cleared.
     signedOut: () => {
@@ -654,6 +682,7 @@ function onKeydown(e) {
     return;
   }
   const target = sequences.feed(chord);
+  if (target === '#/inbox' && !hasFeature('notifications')) return;
   if (target) {
     e.preventDefault();
     location.hash = target;

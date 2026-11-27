@@ -8,7 +8,7 @@
 //   node internal/consoleui/devserver/mock-server.mjs [--port 9121] [--fleet hub|agent|both|none]
 //     [--accept-evidence on|off] [--burst N] [--auth token|oidc|both] [--tenants a,b]
 //     [--round4 on|off] [--round5 on|off] [--fail-prefs] [--round6 on|off] [--settings-editing on|off]
-//     [--posture-acceptable on|off] [--scale normal|large]
+//     [--posture-acceptable on|off] [--scale normal|large] [--round8 on|off]
 //
 // Loopback only. Synthetic data only: addresses come from the RFC 5737 /
 // RFC 3849 documentation ranges. Dev tokens (never valid anywhere else):
@@ -32,6 +32,8 @@ import { campaignsOf, campaignDetail, publicCampaign, actorOf, postureOf } from 
 import { createAccounts, clientFamily } from './mock-accounts.mjs';
 import { BUILTIN, createAcceptance } from './mock-roles.mjs';
 import { SCALES, LARGE, sourcePool, extraSensors, pickSource, campaignRuns, auditBackfill } from './mock-scale.mjs';
+import { createNotifications, seedNotifications, observationNotice, NOTIFY_KINDS, NOTIFY_SEVERITIES, LINK_ROUTES } from './mock-notify.mjs';
+import { pushActivity, summaryOf as invSummaryOf, memberEvents, originNote, MAX_EVIDENCE } from './mock-workspace.mjs';
 import { matchesEventFilters, normalizeEventFilters, EVENT_FILTER_KEYS } from '../static/assets/js/lib/route.js';
 import { normalizeNodeFilter, originOf, LOCAL } from '../static/assets/js/lib/origin.js';
 
@@ -90,6 +92,13 @@ const argEditing = process.argv.indexOf('--settings-editing');
 const EDIT_ARG = argEditing > 0 ? process.argv[argEditing + 1] : (process.env.AEGISMESH_MOCK_SETTINGS_EDITING || 'on');
 if (!['on', 'off'].includes(EDIT_ARG)) throw new Error('--settings-editing must be on or off');
 const SETTINGS_EDITING = EDIT_ARG === 'on';
+
+// Round-8 endpoints (in-console notifications, campaign or session to
+// investigation, the investigation workspace fields; contract r8). `off`
+// (implied by --round5 off) answers like a round-7 server: 404 on the new
+// routes and none of the new investigation or campaign fields.
+const argRound8 = process.argv.indexOf('--round8');
+const ROUND8 = ROUND5 && (argRound8 > 0 ? process.argv[argRound8 + 1] : (process.env.AEGISMESH_MOCK_ROUND8 || 'on')) !== 'off';
 
 const argTenants = process.argv.indexOf('--tenants');
 const TENANTS = (argTenants > 0 ? process.argv[argTenants + 1] : (process.env.AEGISMESH_MOCK_TENANTS || 'default')).split(',').map((t) => t.trim()).filter(Boolean);
@@ -433,11 +442,33 @@ function buildTenant(name, local) {
   t.localById = (id) => t.byKey.get(keyOf(id, LOCAL));
   t.localEvents = () => events.filter((e) => !e.node);
   if (local) {
-    const a = newInv(t, 'MCP tool abuse from 203.0.113.7', 'high', t.localEvents().filter((e) => e.source === '203.0.113.7').slice(0, 6).map((e) => e.id), 'ana');
+    const ago = (ms) => new Date(now - ms).toISOString().replace(/\.\d+Z$/, 'Z');
+    const a = newInv(t, 'MCP tool abuse from 203.0.113.7', 'high', t.localEvents().filter((e) => e.source === '203.0.113.7').slice(0, 6).map((e) => e.id), 'ana', 'open', { at: ago(5 * 3600e3) });
     a.event_ids.push('f'.repeat(32)); // aged out of the index on purpose
-    a.notes.push({ id: hex(8), time: a.created_at, author: 'ana', text: 'Read_file attempts against ../../etc/passwd, then a canary hit.\nNo outbound activity observed.' });
-    newInv(t, 'Scanner noise baseline', 'low', t.localEvents().slice(100, 103).map((e) => e.id), 'ada', 'monitoring');
-    newInv(t, 'Closed: SSH credential spray', 'medium', [], 'ana', 'closed');
+    pushActivity(a, { at: ago(5 * 3600e3 - 60e3), actorId: 'cfg:ana', actorName: 'ana', kind: 'attach', detail: '7 events' });
+    a.notes.push({ id: hex(8), time: ago(4 * 3600e3), author: 'ana', text: 'Read_file attempts against ../../etc/passwd, then a canary hit.\nNo outbound activity observed.' });
+    pushActivity(a, { at: ago(4 * 3600e3), actorId: 'cfg:ana', actorName: 'ana', kind: 'note', detail: '' });
+    pushActivity(a, { at: ago(3 * 3600e3), actorId: 'cfg:ada', actorName: 'ada', kind: 'priority', detail: 'medium → high' });
+    a.assignee = 'cfg:ana';
+    pushActivity(a, { at: ago(50 * 60e3), actorId: 'cfg:ada', actorName: 'ada', kind: 'assignee', detail: 'unassigned → ana' });
+    a.updated_at = ago(50 * 60e3);
+    const b = newInv(t, 'Scanner noise baseline', 'low', t.localEvents().slice(100, 103).map((e) => e.id), 'ada', 'monitoring', { at: ago(30 * 3600e3) });
+    b.assignee = 'cfg:ada';
+    pushActivity(b, { at: ago(29 * 3600e3), actorId: 'cfg:ada', actorName: 'ada', kind: 'status', detail: 'open → monitoring' });
+    newInv(t, 'Closed: SSH credential spray', 'medium', [], 'ana', 'closed', { at: ago(3 * 86400e3) });
+    // Large scale: a team's worth of cases, some assigned, some not.
+    if (LARGE_SCALE) {
+      const people = [null, 'cfg:ana', 'cfg:ada', 'acc_7k2m9q4wz1', null];
+      const statuses = ['open', 'open', 'monitoring', 'closed'];
+      const local = t.localEvents();
+      for (let i = 0; i < 80; i++) {
+        const src = local[(i * 613) % local.length].source;
+        const ids = local.filter((e) => e.source === src).slice(0, 1 + (i % 40)).map((e) => e.id);
+        const inv = newInv(t, `${pick(['Replay of planted key', 'Tool abuse', 'Credential spray', 'Scanner sweep', 'Agent canary'])} from ${src}`, pick(['low', 'medium', 'high']), ids, pick(['ana', 'ada']), statuses[i % 4], { at: ago((i + 1) * 5.5 * 3600e3) });
+        inv.assignee = people[i % people.length];
+        if (inv.assignee) pushActivity(inv, { at: ago((i + 1) * 5.5 * 3600e3 - 600e3), actorId: 'cfg:ada', actorName: 'ada', kind: 'assignee', detail: 'unassigned → assigned' });
+      }
+    }
     // Large scale: a month of audit history before anyone signs in.
     if (LARGE_SCALE) for (const r of auditBackfill({ now, rand })) record(t, r.actor, r.role, r.action, r.target, r.outcome, r.remote, r.detail, {}, r.time);
   } else {
@@ -449,10 +480,13 @@ function buildTenant(name, local) {
   return t;
 }
 
-function newInv(t, title, priority, eventIds, by, status = 'open') {
+// `by` is the creator's name; `byId` its principal id (configured
+// operators are cfg:<name>). Round 8 fields are kept on every record and
+// stripped from responses when --round8 off.
+function newInv(t, title, priority, eventIds, by, status = 'open', { byId = `cfg:${by}`, origin = null, assignee = null, at = stamp() } = {}) {
   const id = `inv_${hex(12)}`;
-  const ts = stamp();
-  const inv = { id, title, status, priority, created_at: ts, updated_at: ts, created_by: by, event_ids: [...eventIds], notes: [] };
+  const inv = { id, title, status, priority, created_at: at, updated_at: at, created_by: by, event_ids: [...eventIds], notes: [], origin, assignee, activity: [] };
+  pushActivity(inv, { at, actorId: byId, actorName: by, kind: 'created', detail: origin ? `from ${origin.kind} ${origin.id}` : '' });
   t.investigations.set(id, inv);
   return inv;
 }
@@ -527,6 +561,23 @@ function postureBody(T, events, { raw = false, caller } = {}) {
   return raw ? body : acceptance.decorate(body, caller);
 }
 
+// Round 8: each tenant's notification inbox, seeded from what its index
+// and console state already hold.
+for (const T of tenants.values()) {
+  T.notify = createNotifications({ rand });
+  if (!ROUND8) continue;
+  const sn = snapshot(T.events, T.local ? 'complete' : 'unavailable');
+  seedNotifications(T.notify, {
+    events: [...T.events].reverse(),
+    campaigns: ROUND4 ? campaignsOf(sessionsOf(T.name, sn.events)).map(publicCampaign) : [],
+    posture: T.local ? postureBody(T, T.events, { raw: true }) : null,
+    investigations: [...T.investigations.values()],
+    ruleTitle: (id) => RULE_BY_ID.get(id)?.title || '',
+    now,
+    principals: T.local ? { admin: 'cfg:ada', analyst: 'cfg:ana', viewer: 'cfg:vera' } : { analyst: 'cfg:ana' },
+  });
+}
+
 const sessionView = (s) => ({
   principal: { name: s.name, role: s.role, auth_method: s.auth_method, tenant: s.tenant, tenants: s.tenants },
   tenant: s.tenant, tenants: s.tenants, csrf_token: s.csrf_token, expires_at: s.expires_at,
@@ -541,12 +592,20 @@ function newSession(fields) {
 
 const sessionCookie = (sid) => `aegismesh_session=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL}`;
 
+// Display name of a principal id (configured, managed or single sign-on).
+const principalName = (id) => (id ? accounts.accounts.get(id)?.name || (id.startsWith('cfg:') ? id.slice(4) : id) : null);
+
 const invView = (t, inv, detail) => {
-  const out = { ...inv };
+  const { activity, origin, assignee, ...out } = inv;
+  const indexed = inv.event_ids.map(t.localById).filter(Boolean);
   if (detail) {
-    out.events = inv.event_ids.map(t.localById).filter(Boolean).map(summaryOf).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    out.events = indexed.map(summaryOf).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
   } else {
     delete out.notes;
+  }
+  if (ROUND8) {
+    Object.assign(out, { origin: origin || null, assignee: assignee || null, assignee_name: principalName(assignee), event_count: inv.event_ids.length, max_severity: invSummaryOf(indexed).max_severity });
+    if (detail) Object.assign(out, { activity: activity.map((a) => ({ ...a })), summary: invSummaryOf(indexed, inv.event_ids) });
   }
   return out;
 };
@@ -755,15 +814,52 @@ function emitLive(t) {
     if (st.node && originOf(e) !== st.node) continue;
     res.write(`event: observation\ndata: ${JSON.stringify(summaryOf(e))}\n\n`);
   }
+  // A live finding of severity high or critical becomes a notification
+  // (grouped by rule and source within 10 minutes).
+  if (!e.node) {
+    const n = observationNotice(e, RULE_BY_ID.get(e.rule_ids[0])?.title || '');
+    if (n) notify(t, { ...n, link: { route: 'event', id: e.id } });
+  }
 }
 setInterval(() => { for (const t of tenants.values()) emitLive(t); }, 4000).unref();
 
 function endStreams(sid) {
-  for (const [res, st] of streams) {
-    if (st.sid !== sid) continue;
-    streams.delete(res);
-    res.end();
+  for (const map of [streams, notifyStreams]) {
+    for (const [res, st] of map) {
+      if (st.sid !== sid) continue;
+      map.delete(res);
+      res.end();
+    }
   }
+}
+
+// ---- Round 8: notifications ------------------------------------------------------
+
+// Principals an investigation can be assigned to: enabled, a member of the
+// tenant, with a role that includes investigations.read.
+function assignees(T) {
+  return [...accounts.accounts.values()]
+    .filter((a) => a.status !== 'disabled' && a.tenants.includes(T.name) && accounts.permissionsOf({ account_id: a.id, role: a.role }).includes('investigations.read'))
+    .map((a) => ({ id: a.id, name: a.name, kind: a.kind }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// notifyStreams: response → { tenant, sid, who, perms }.
+const notifyStreams = new Map();
+const sse = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+function notify(T, n) {
+  if (!ROUND8) return null;
+  const { item, grouped } = T.notify.add(n);
+  for (const [res, st] of notifyStreams) {
+    if (st.tenant !== T.name || !T.notify.visible(item, st.who, st.perms) || !T.notify.wanted(item, st.who)) continue;
+    const v = T.notify.view(item, st.who);
+    sse(res, 'notification', { id: v.id, kind: v.kind, severity: v.severity, title: v.title, summary: v.summary, link: v.link, created_at: v.created_at, updated_at: v.updated_at, group_count: v.group_count });
+    sse(res, 'unread', { unread: T.notify.unreadCount(st.who, st.perms) });
+  }
+  return item;
+}
+function pushUnread(T, sid, who, perms) {
+  for (const [res, st] of notifyStreams) if (st.tenant === T.name && st.who === who) sse(res, 'unread', { unread: T.notify.unreadCount(who, perms) });
 }
 
 // Burst: GET /__mock/burst?n=200 pushes n observations to every open stream
@@ -778,7 +874,7 @@ function burst(n) {
   return count;
 }
 setInterval(() => {
-  for (const res of streams.keys()) res.write(`event: heartbeat\ndata: {"time":"${new Date().toISOString()}"}\n\n`);
+  for (const res of [...streams.keys(), ...notifyStreams.keys()]) res.write(`event: heartbeat\ndata: {"time":"${new Date().toISOString()}"}\n\n`);
 }, 15000).unref();
 
 // ---- Router ----------------------------------------------------------------
@@ -843,6 +939,61 @@ async function api(req, res, url) {
     fail(res, 'forbidden', `requires ${perm}`);
     return false;
   };
+
+  // ---- Round 8: in-console notifications (mock-notify.mjs) -----------------
+  // Authentication is enough: items addressed to the principal need nothing
+  // more; everything else is filtered by evidence.read in the store.
+  if (ROUND8 && (p === '/notifications' || p.startsWith('/notifications/') || p === '/me/notification-preferences')) {
+    const me = s.account_id;
+    const N = T.notify;
+    if (p === '/notifications' && m === 'GET') {
+      for (const k of url.searchParams.keys()) if (!['unread', 'cursor', 'limit', 'kind', 'severity'].includes(k)) return fail(res, 'invalid_argument', `unknown parameter "${k}"`);
+      const kind = url.searchParams.get('kind') || '';
+      const severity = url.searchParams.get('severity') || '';
+      if (kind && !NOTIFY_KINDS.includes(kind)) return fail(res, 'invalid_argument', 'unknown kind');
+      if (severity && !NOTIFY_SEVERITIES.includes(severity)) return fail(res, 'invalid_argument', 'unknown severity');
+      const unread = url.searchParams.get('unread');
+      if (unread !== null && unread !== '1' && unread !== '0') return fail(res, 'invalid_argument', 'unread must be 1 or 0');
+      const limit = Number(url.searchParams.get('limit') || 50);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) return fail(res, 'invalid_argument', 'limit must be 1..200');
+      const cursor = Number(url.searchParams.get('cursor') || 0);
+      if (!Number.isInteger(cursor) || cursor < 0) return fail(res, 'invalid_argument', 'invalid cursor');
+      return send(res, 200, N.list(me, perms, { unread: unread === '1', cursor, limit, kind, severity }));
+    }
+    if (p === '/notifications/read' && m === 'POST') {
+      let b;
+      try { b = await readBody(req, ['ids', 'all', 'before']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
+      const byIds = Array.isArray(b.ids);
+      if (byIds === (b.all === true)) return fail(res, 'invalid_argument', 'send either ids or all:true');
+      if (byIds && (b.ids.length > 200 || b.ids.some((x) => typeof x !== 'string' || !/^ntf_[0-9a-f]{16}$/.test(x)))) return fail(res, 'invalid_argument', 'ids must be notification ids (at most 200)');
+      if (b.before !== undefined && (typeof b.before !== 'string' || Number.isNaN(Date.parse(b.before)))) return fail(res, 'invalid_argument', 'before must be RFC 3339');
+      const unread = N.markRead(me, perms, b);
+      pushUnread(T, s.id, me, perms);
+      return send(res, 200, { unread });
+    }
+    if (p === '/notifications/stream' && m === 'GET') {
+      if (notifyStreams.size >= 32) return fail(res, 'unavailable', 'too many streams');
+      res.writeHead(200, securityHeaders({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' }));
+      res.write(': connected\n\n');
+      notifyStreams.set(res, { tenant: T.name, sid: s.id, who: me, perms });
+      sse(res, 'unread', { unread: N.unreadCount(me, perms) });
+      req.on('close', () => notifyStreams.delete(res));
+      return;
+    }
+    if (p === '/me/notification-preferences') {
+      if (m === 'GET') return send(res, 200, N.prefs(me));
+      if (m === 'PUT') {
+        let b;
+        try { b = await readBody(req, ['kinds', 'min_severity']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
+        const out = N.putPrefs(me, b);
+        if (out.error) return fail(res, 'invalid_argument', out.error);
+        audit(who.name, who.role, 'preferences.update', 'notifications', 'ok', remote);
+        pushUnread(T, s.id, me, perms);
+        return send(res, 200, N.prefs(me));
+      }
+    }
+    return fail(res, 'not_found', 'no such endpoint');
+  }
 
   // ---- Round 5: accounts, access and settings (mock-accounts.mjs) ----------
   if (ROUND5 && await accounts.handle({
@@ -1112,7 +1263,48 @@ async function api(req, res, url) {
     const sn = snap();
     const hit = campaignsOf(sessionsOf(T.name, sn.events)).find((c) => c.id === id);
     if (!hit) return fail(res, 'not_found', 'campaign is no longer derivable from the index');
-    return send(res, 200, campaignDetail(hit, (x) => withInsight(x, sn)));
+    const detail = campaignDetail(hit, (x) => withInsight(x, sn));
+    if (ROUND8) detail.event_ids_sample = memberEvents(hit._members.map((mem) => mem.session._events), 50).map((e) => e.id);
+    return send(res, 200, detail);
+  }
+  // Round 8: open an investigation from a campaign or a session, with its
+  // member events attached (bounded; newest per session first) and a first
+  // note stating the basis and the caveat.
+  const fromMatch = p.match(/^\/(campaigns|sessions)\/([^/]+)\/investigation$/);
+  if (ROUND8 && m === 'POST' && fromMatch) {
+    if (!need('investigations.write', 'investigation.create')) return;
+    let b;
+    try { b = await readBody(req, ['title', 'priority', 'max_events']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
+    if (b.title !== undefined && (typeof b.title !== 'string' || !b.title.trim() || b.title.length > 200)) return fail(res, 'invalid_argument', 'title must be 1..200 characters');
+    if (b.priority !== undefined && !['low', 'medium', 'high'].includes(b.priority)) return fail(res, 'invalid_argument', 'bad priority');
+    if (b.max_events !== undefined && (!Number.isInteger(b.max_events) || b.max_events < 1 || b.max_events > MAX_EVIDENCE)) return fail(res, 'invalid_argument', `max_events must be 1..${MAX_EVIDENCE}`);
+    const id = decodeURIComponent(fromMatch[2]);
+    const sn = snap();
+    let lists;
+    let d;
+    let kind;
+    if (fromMatch[1] === 'campaigns') {
+      if (!/^cmp_[0-9a-f]{12}$/.test(id)) return fail(res, 'invalid_argument', 'malformed campaign id');
+      const hit = campaignsOf(sessionsOf(T.name, sn.events)).find((c) => c.id === id);
+      if (!hit) return fail(res, 'not_found', 'campaign is no longer derivable from the index');
+      lists = hit._members.map((mem) => mem.session._events);
+      d = publicCampaign(hit);
+      kind = 'campaign';
+    } else {
+      const found = findSession(id);
+      if (!found) return;
+      lists = [found.session._events];
+      d = publicSession(found.session);
+      kind = 'session';
+    }
+    const attach = memberEvents(lists, b.max_events || MAX_EVIDENCE);
+    const title = b.title?.trim() || (kind === 'campaign' ? `Campaign: ${d.label || d.id}` : `Session from ${d.source}`);
+    const inv = newInv(T, title, b.priority || 'medium', attach.map((e) => e.id), who.name, 'open', { byId: s.account_id, origin: { kind, id: d.id } });
+    pushActivity(inv, { at: inv.created_at, actorId: s.account_id, actorName: who.name, kind: 'attach', detail: `${attach.length} events from the ${kind}` });
+    inv.notes.push({ id: hex(8), time: inv.created_at, author: who.name, text: originNote(kind, d, attach.length) });
+    pushActivity(inv, { at: inv.created_at, actorId: s.account_id, actorName: who.name, kind: 'note', detail: '' });
+    audit(who.name, who.role, 'investigation.create', inv.id, 'ok', remote, `from ${kind} ${d.id}`);
+    return send(res, 201, invView(T, inv, true));
   }
   if (ROUND4 && m === 'GET' && p === '/posture') {
     if (!strictQuery([])) return;
@@ -1304,10 +1496,19 @@ async function api(req, res, url) {
     });
   }
 
+  // Round 8: who an investigation can be assigned to (principals whose
+  // role includes investigations.read, enabled, in this tenant).
+  if (ROUND8 && p === '/investigations/assignees' && m === 'GET') {
+    if (!strictQuery([])) return;
+    if (!need('investigations.write', 'investigation.assignees')) return;
+    return send(res, 200, { assignees: assignees(T) });
+  }
   if (p === '/investigations' && m === 'GET') {
     const status = url.searchParams.get('status') || '';
     if (status && !['open', 'monitoring', 'closed'].includes(status)) return fail(res, 'invalid_argument', 'bad status');
-    const list = [...T.investigations.values()].filter((i) => !status || i.status === status).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    const assignee = ROUND8 ? url.searchParams.get('assignee') || '' : '';
+    const target = assignee === 'me' ? s.account_id : assignee === 'none' ? null : assignee;
+    const list = [...T.investigations.values()].filter((i) => (!status || i.status === status) && (!assignee || (i.assignee || null) === target)).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     return send(res, 200, { investigations: list.map((i) => invView(T, i, false)) });
   }
   if (p === '/investigations' && m === 'POST') {
@@ -1318,7 +1519,8 @@ async function api(req, res, url) {
     const ids = Array.isArray(b.event_ids) ? b.event_ids : [];
     if (ids.length > 200 || ids.some((x) => !/^[0-9a-f]{32}$/.test(x))) return fail(res, 'invalid_argument', 'bad event_ids');
     if (ids.some((x) => !T.localById(x))) return fail(res, 'not_found', 'event not in index');
-    const inv = newInv(T, b.title.trim(), b.priority || 'medium', ids, who.name);
+    const inv = newInv(T, b.title.trim(), b.priority || 'medium', ids, who.name, 'open', { byId: s.account_id });
+    if (ids.length) pushActivity(inv, { at: inv.created_at, actorId: s.account_id, actorName: who.name, kind: 'attach', detail: `${ids.length} event${ids.length === 1 ? '' : 's'}` });
     audit(who.name, who.role, 'investigation.create', inv.id, 'ok', remote);
     return send(res, 201, invView(T, inv, true));
   }
@@ -1326,16 +1528,25 @@ async function api(req, res, url) {
     const inv = T.investigations.get(mm[1]);
     if (!inv) return fail(res, 'not_found', 'no such investigation');
     const touch = () => { inv.updated_at = new Date().toISOString().replace(/\.\d+Z$/, 'Z'); };
+    const act = (kind, detail = '') => pushActivity(inv, { at: stamp(), actorId: s.account_id, actorName: who.name, kind, detail });
     if (!mm[2] && m === 'GET') return send(res, 200, invView(T, inv, true));
     if (!mm[2] && m === 'PATCH') {
       if (!need('investigations.write', 'investigation.update', inv.id)) return;
       let b;
-      try { b = await readBody(req, ['title', 'status', 'priority']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
+      try { b = await readBody(req, ROUND8 ? ['title', 'status', 'priority', 'assignee'] : ['title', 'status', 'priority']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
       if (b.status && !['open', 'monitoring', 'closed'].includes(b.status)) return fail(res, 'invalid_argument', 'bad status');
       if (b.priority && !['low', 'medium', 'high'].includes(b.priority)) return fail(res, 'invalid_argument', 'bad priority');
+      if (b.title !== undefined && (typeof b.title !== 'string' || !b.title.trim() || b.title.length > 200)) return fail(res, 'invalid_argument', 'title is required (≤200 chars)');
+      if ('assignee' in b && b.assignee !== null && !assignees(T).some((x) => x.id === b.assignee)) return fail(res, 'invalid_argument', 'assignee must be an existing principal with investigations.read');
+      for (const k of ['status', 'priority', 'title']) if (b[k] !== undefined && b[k] !== inv[k]) act(k, `${inv[k]} → ${b[k]}`);
+      const assigned = 'assignee' in b && b.assignee !== inv.assignee;
+      if (assigned) act('assignee', `${principalName(inv.assignee) || 'unassigned'} → ${principalName(b.assignee) || 'unassigned'}`);
       Object.assign(inv, b);
       touch();
       audit(who.name, who.role, 'investigation.update', inv.id, 'ok', remote, Object.keys(b).join(','));
+      if (assigned && b.assignee && b.assignee !== s.account_id) {
+        notify(T, { kind: 'assignment', severity: 'medium', for: b.assignee, title: 'You were assigned an investigation', summary: `${who.name} assigned you "${inv.title}".`, link: { route: 'investigation', id: inv.id } });
+      }
       return send(res, 200, invView(T, inv, true));
     }
     if (mm[2] === '/notes' && m === 'POST') {
@@ -1344,6 +1555,7 @@ async function api(req, res, url) {
       try { b = await readBody(req, ['text']); } catch (err) { return fail(res, 'invalid_argument', err.message); }
       if (typeof b.text !== 'string' || !b.text.trim() || [...b.text].length > 4000) return fail(res, 'invalid_argument', 'text is required (≤4000 chars)');
       inv.notes.push({ id: hex(8), time: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), author: who.name, text: b.text });
+      act('note');
       touch();
       audit(who.name, who.role, 'investigation.note', inv.id, 'ok', remote);
       return send(res, 201, invView(T, inv, true));
@@ -1356,9 +1568,11 @@ async function api(req, res, url) {
         if (!inv.event_ids.includes(mm[3])) {
           if (inv.event_ids.length >= 200) return fail(res, 'conflict', 'investigation already holds 200 events');
           inv.event_ids.push(mm[3]);
+          act('attach', mm[3]);
         }
-      } else {
+      } else if (inv.event_ids.includes(mm[3])) {
         inv.event_ids = inv.event_ids.filter((x) => x !== mm[3]);
+        act('detach', mm[3]);
       }
       touch();
       audit(who.name, who.role, action, inv.id, 'ok', remote, mm[3]);
@@ -1601,6 +1815,20 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/v1/')) return await api(req, res, url);
     if (url.pathname.startsWith('/__site/') && req.method === 'GET') return await serveSite(res, url);
     if (url.pathname === '/__mock/burst' && req.method === 'GET') return send(res, 200, { sent: burst(url.searchParams.get('n') || 200), streams: streams.size });
+    // Mock only: raise one notification in every tenant (kind and severity
+    // from closed lists), to see the bell, the panel and the critical toast.
+    if (url.pathname === '/__mock/notify' && req.method === 'GET' && ROUND8) {
+      const kind = NOTIFY_KINDS.includes(url.searchParams.get('kind')) ? url.searchParams.get('kind') : 'critical_observation';
+      const severity = NOTIFY_SEVERITIES.includes(url.searchParams.get('severity')) ? url.searchParams.get('severity') : 'critical';
+      let sent = 0;
+      for (const t of tenants.values()) {
+        const e = t.events.find((x) => !x.node);
+        if (!e) continue;
+        notify(t, { kind, severity, title: severity === 'critical' ? 'Critical finding on a decoy (mock trigger)' : 'Finding on a decoy (mock trigger)', summary: `Raised by /__mock/notify for source ${e.source}.`, link: { route: 'event', id: e.id } });
+        sent++;
+      }
+      return send(res, 200, { sent, streams: notifyStreams.size });
+    }
     if (url.pathname === '/__mock/idp/authorize' && req.method === 'GET' && OIDC_AUTH) return idpPage(res, url);
     if (req.method !== 'GET') return fail(res, 'not_found', 'not found');
     return await serveStatic(req, res, url);
@@ -1610,5 +1838,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${localTenant.fleet.accepting ? 'on' : 'off'}; auth: ${AUTH_MODE}; tenants: ${TENANTS.join(',')}; round4: ${ROUND4 ? 'on' : 'off'}; round5: ${ROUND5 ? 'on' : 'off'}; round6: ${ROUND6 ? 'on' : 'off'}; settings editing: ${ROUND6 && SETTINGS_EDITING ? 'on' : 'off'})`);
+  console.log(`AegisMesh console mock on http://${HOST}:${PORT}/  (tokens: dev-viewer, dev-analyst, dev-admin; fleet: ${FLEET_MODE}; accept evidence: ${localTenant.fleet.accepting ? 'on' : 'off'}; auth: ${AUTH_MODE}; tenants: ${TENANTS.join(',')}; round4: ${ROUND4 ? 'on' : 'off'}; round5: ${ROUND5 ? 'on' : 'off'}; round6: ${ROUND6 ? 'on' : 'off'}; round8: ${ROUND8 ? 'on' : 'off'}; scale: ${SCALE}; settings editing: ${ROUND6 && SETTINGS_EDITING ? 'on' : 'off'})`);
 });

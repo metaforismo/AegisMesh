@@ -100,6 +100,8 @@ export const SCREENS = Object.freeze({
   settings: lazy('Settings', () => import('./settings.js'), { skeleton: 'settings' }),
   settings_account: lazy('Account', () => import('./settings.js'), { skeleton: 'settings' }),
   settings_role: lazy('Role', () => import('./settings.js'), { skeleton: 'settings' }),
+  // The inbox: per principal and never cached, so nothing is prefetched.
+  inbox: lazy('Inbox', () => import('./inbox.js'), { skeleton: 'table' }),
   posture: lazy('Posture', () => import('./posture.js'), {
     skeleton: 'posture',
     prefetch: (api) => { api.posture(); },

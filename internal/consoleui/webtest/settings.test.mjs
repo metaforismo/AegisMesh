@@ -164,7 +164,7 @@ test('settings gating: administration only with capabilities.administer (a conve
   assert.equal(S.visibleSections({ role: 'admin', capabilities: { administer: false } }).admin.length, 0, 'admin role outside the local tenant');
   assert.equal(S.visibleSections({ capabilities: { administer: true } }).admin.length, S.ADMIN_SECTIONS.length);
   assert.ok(S.isAdminSection('accounts') && !S.isAdminSection('keys'));
-  assert.equal(S.ACCOUNT_SECTIONS.length, 4);
+  assert.equal(S.ACCOUNT_SECTIONS.length, 5, 'profile, preferences, sessions, keys, notifications');
 });
 
 test('settings validation: labels, names, tenants, typed confirmation', () => {

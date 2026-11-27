@@ -76,7 +76,7 @@ test('kv renders an em dash for empty values and skips undefined', () => {
 });
 
 test('every routable screen except login has a registered module', () => {
-  const names = ['overview', 'events', 'event', 'sources', 'source', 'sensors', 'rules', 'recommendations', 'node', 'investigations', 'investigation', 'audit', 'fleet', 'fleet_node', 'guide', 'sessions', 'attack_session', 'techniques', 'decoys', 'honeytokens', 'digest', 'campaigns', 'campaign', 'posture', 'settings', 'settings_account', 'settings_role'];
+  const names = ['overview', 'events', 'event', 'sources', 'source', 'sensors', 'rules', 'recommendations', 'node', 'investigations', 'investigation', 'audit', 'fleet', 'fleet_node', 'guide', 'sessions', 'attack_session', 'techniques', 'decoys', 'honeytokens', 'digest', 'campaigns', 'campaign', 'posture', 'settings', 'settings_account', 'settings_role', 'inbox'];
   assert.deepEqual(Object.keys(SCREENS).sort(), [...names].sort());
   for (const n of names) assert.equal(typeof SCREENS[n].render, 'function', n);
   assert.equal(ROUTE_PERMS.audit, 'audit.read', 'the audit trail needs audit.read');
