@@ -249,7 +249,8 @@ and shared across its node-filter classes; heartbeat frames remain per stream.
 `investigation.attach`, `investigation.detach`, `audit.read`, `audit.verify`,
 `authz.denied`, `event.read`, `export.events`, `account.create`, `account.update`, `key.create`,
 `key.revoke`, `session.revoke`, `preferences.update`, `audit.export`, `role.create`, `role.update`,
-`role.delete`, `settings.update`, `settings.revert`, `posture.accept`, `posture.unaccept`. Records may carry `actor_id`
+`role.delete`, `settings.update`, `settings.revert`, `posture.accept`, `posture.unaccept`,
+`notification.read`, `notification.preferences`, `investigation.assign`. Records may carry `actor_id`
 (stable principal id). Token values, key digests, session identifiers and note bodies are never
 written to the audit trail.
 
@@ -1246,3 +1247,142 @@ pruned on the next write. Audit: `posture.accept` (detail `until=… reason="…
 and `posture.unaccept`, target = check id. New checks POS-020..022 are listed in
 `docs/ai-threat-detection.md`. `/api/v1/system` gains component `settings`
 (`off|ok|degraded`).
+
+## Notifications and investigation workspace (ADR-0027)
+
+Implements the round-8 contract. Same conventions: strict 64 KiB bodies,
+cookie CSRF and Origin on mutations, arrays never null, RFC 3339 UTC,
+tenant-scoped. The inbox is derived inside the console; nothing is sent
+anywhere.
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/api/v1/notifications` | authenticated | `?unread=1`, `?kind=<kind>`, `?severity=<exact>`, `?limit=1..200` (50), `?cursor=` → page |
+| POST | `/api/v1/notifications/read` | authenticated | `{"ids":[≤200 ntf ids]}` **or** `{"all":true,"before"?:RFC3339}` (default now) → `{"unread":N}` |
+| GET | `/api/v1/notifications/stream` | authenticated | SSE: `unread` first, then `notification`, `unread`, `heartbeat` |
+| GET / PUT | `/api/v1/me/notification-preferences` | authenticated | `{"kinds":{…7 kinds…},"min_severity":"info|medium|high|critical"}`; PUT merges |
+| POST | `/api/v1/campaigns/{id}/investigation` | investigations.write | `{"title"?,"priority"?,"max_events"?:1..200}` → 201 investigation detail |
+| POST | `/api/v1/sessions/{id}/investigation` | investigations.write | same body → 201 investigation detail |
+| GET | `/api/v1/investigations/assignees` | investigations.write | `{"assignees":[{"id","name","kind"}]}` |
+
+**Kinds and severities.** `critical_observation` (catalog rule of severity
+high/critical; severity = the rule's), `honeytoken_replay` (HT-001, COR-008;
+critical), `agent_canary` (AGT-001; high), `new_campaign` (first sight of a
+campaign id; medium), `posture_attention` (a check newly in attention, or an
+acceptance expiring within 7 days; medium), `account_security` (a key created
+or revoked for your account, your role or tenants changed, one of your
+sessions ended by someone else; high; recipient only), `assignment` (an
+investigation assigned to you by someone else; medium; recipient only).
+
+**Visibility.** Evidence kinds need `evidence.read`, posture needs
+`analysis.read`; `account_security` and `assignment` are shown only to the
+affected principal. Evaluated per request and per streamed item against the
+current role. Preferences and read state are per principal per tenant.
+`account_security` cannot be disabled (`false` → 400) and ignores
+`min_severity`; unknown kinds, severities or fields → 400. Defaults: every
+kind on, `min_severity` `info`.
+
+**Bounds.** Grouping: repeats of kind + rule + source within 10 minutes of
+the item's first observation increase `group_count` and `updated_at`; they
+do not mark a read item unread. Rate limit per tenant: 20 new
+evidence-derived items per observation minute and 60 per wall minute;
+excess candidates fold into one item per kind per 10 wall minutes titled
+"More notifications than the inbox limit", whose `group_count` counts what
+was folded. Ring of 2,000 items per tenant, read state for 256 principals,
+16 notification streams (separate from the event streams' 16; streams do not
+take request slots). Live items are sent once when created; grouping
+increments are visible on the next list.
+
+**Text.** Titles and summaries are rendered from fixed templates at read
+time. Only catalog rule ids, counts, ids, source keys matching
+`^[0-9A-Za-z.:\[\]%_-]{1,64}$` and sensor ids matching
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` are interpolated; anything else renders
+as "an unrecognised source" / "an unnamed sensor". Paths, tool names, user
+agents and campaign labels are never used.
+
+```jsonc
+// GET /api/v1/notifications?limit=3 (from a test run)
+{"items":[
+  {"id":"ntf_e00b043b3c179bb5","kind":"new_campaign","severity":"medium","title":"New campaign observed",
+   "summary":"Campaign cmp_ea5e7da9f36e groups 2 sessions from 2 sources that share a step sequence. Shared behaviour does not prove a shared operator.",
+   "created_at":"2026-11-27T05:03:13.8Z","updated_at":"2026-11-27T05:03:13.8Z","read":false,
+   "link":{"route":"campaign","id":"cmp_ea5e7da9f36e"},"group_count":1},
+  {"id":"ntf_b65064fa7487567f","kind":"honeytoken_replay","severity":"critical","title":"Planted decoy credential seen inbound",
+   "summary":"HT-001 matched 3 observations from source 203.0.113.7 on sensor web. The marker is operator-owned; its use is an observation, not proof of who used it.",
+   "created_at":"2026-11-27T05:01:13Z","updated_at":"2026-11-27T05:03:13Z","read":false,
+   "link":{"route":"event","id":"64ac336dab4fd87a501e0e4e149dc0de"},"group_count":3,
+   "rule_id":"HT-001","source":"203.0.113.7","sensor":"web"}],
+ "unread":2,"next_cursor":null,
+ "limits":{"group_window_seconds":600,"max_items":2000,"per_minute":20,"per_wall_minute":60}}
+// link: route ∈ session|campaign|event|posture|settings|investigation; "node" (32 hex) qualifies a
+// forwarded event; settings ids are keys|sessions|profile; posture ids are check ids.
+// created_at is the observation time for evidence kinds (clamped to now), the action time otherwise.
+
+// SSE frames
+event: unread
+data: {"unread":2}
+event: notification
+data: {"id":"ntf_…","kind":"honeytoken_replay","severity":"critical","title":"…","summary":"…","created_at":"…","link":{…},"group_count":1}
+
+// PUT /api/v1/me/notification-preferences {"kinds":{"agent_canary":false},"min_severity":"medium"}
+{"kinds":{"account_security":true,"agent_canary":false,"assignment":true,"critical_observation":true,
+ "honeytoken_replay":true,"new_campaign":true,"posture_attention":true},"min_severity":"medium"}
+```
+
+**Investigation additions.** `origin` (null | `{"kind":"campaign|session","id"}`),
+`assignee` (principal id | null), `assignee_name` (null | name at assignment),
+`activity` (detail only; ≤200 entries, newest last, `activity_truncated` when
+older ones were dropped; kinds `created|status|priority|title|assignee|note|attach|detach`;
+details are fixed words, ids and counts, never note or title text) and
+`summary` (detail only, computed from attached events still retained:
+`sources`, `sensors`, `first_seen`, `last_seen` (null when none),
+`max_severity` ("" when none), `rule_ids`, `indexed_events`, `missing_events`).
+List items gain `assignee`, `assignee_name`, `origin`, `event_count`,
+`max_severity`; filters `?status=` and `?assignee=me|none|<principal id>`.
+`PATCH` accepts `"assignee":"<id>"|null`; the id must name an active principal
+of the tenant whose role grants `investigations.read` (else 400, audited
+`investigation.assign` denied). An assignment by someone else notifies the
+assignee (`assignment`). Audit: `investigation.update` for title, status and
+priority, `investigation.assign` (detail `assignee=<id>|none`), both when a
+patch changes both.
+
+**From a campaign or session.** The campaign (or session) must be in the
+retained analysis sample (404 otherwise). At most `max_events` (default and
+maximum 200) local events are attached, round-robin newest per session first,
+so every member session is represented before any contributes a second;
+forwarded events are left out and counted in the note. The default title is
+`Campaign <id>: N sources, M sessions` / `Session from <source>: N events`.
+The first note is composed from templates (basis, counts, validated sources,
+rule ids, highest severity, the fixed campaign caveats or the session caveat).
+Audited as `investigation.create` with detail `origin=campaign:<id> events=N`.
+There is no idempotency key: a repeated request creates a second
+investigation (the console disables the button while one is in flight).
+`GET /api/v1/campaigns/{id}` gains `event_ids_sample` (≤50, same order).
+
+```jsonc
+// POST /api/v1/campaigns/cmp_ea5e7da9f36e/investigation {"max_events":4}, then
+// PATCH {"assignee":"cfg:viewer","status":"monitoring"} (from a test run; events abridged)
+{"id":"inv_h0TtJzVkH1UzUHNNxZcLummW22L9DSLixTQUi9MvJy0","title":"Campaign cmp_ea5e7da9f36e: 2 sources, 2 sessions",
+ "status":"monitoring","priority":"medium","created_at":"2026-11-27T05:21:13.786954Z","updated_at":"2026-11-27T05:21:13.79786Z",
+ "created_by":"analyst","event_ids":["76eca4dd…","b5e60392…","57578eef…","27987774…"],
+ "origin":{"kind":"campaign","id":"cmp_ea5e7da9f36e"},"assignee":"cfg:viewer","assignee_name":"viewer",
+ "notes":[{"id":"note_…","author":"analyst","time":"…","text":"Opened from campaign cmp_ea5e7da9f36e. Basis: same_step_sequence, same_client_family. 2 sessions from 2 sources (192.0.2.10, 198.51.100.20), 8 events in the retained sample; 4 attached, newest per session first, limit 4. Rules: LLM-001, LLM-002. Highest severity: medium.\n\nCaveats:\n- Shared behaviour does not prove a shared operator; …"}],
+ "events":[{"id":"76eca4dd…","source":"198.51.100.20","summary":"POST /v1/chat/completions → 200","severity":"medium","rule_ids":["LLM-002"],"…":"…"}],
+ "activity":[
+  {"at":"2026-11-27T05:21:13.78696Z","actor_id":"cfg:analyst","actor_name":"analyst","kind":"created","detail":"created from campaign cmp_ea5e7da9f36e"},
+  {"at":"…","actor_id":"cfg:analyst","actor_name":"analyst","kind":"attach","detail":"attached 4 events from campaign cmp_ea5e7da9f36e"},
+  {"at":"…","actor_id":"cfg:analyst","actor_name":"analyst","kind":"note","detail":"note added"},
+  {"at":"…","actor_id":"cfg:analyst","actor_name":"analyst","kind":"status","detail":"open → monitoring"},
+  {"at":"…","actor_id":"cfg:analyst","actor_name":"analyst","kind":"assignee","detail":"assigned to viewer (cfg:viewer)"}],
+ "summary":{"sources":2,"sensors":["ai-http"],"first_seen":"2026-11-27T05:01:14.200000000Z","last_seen":"2026-11-27T05:03:13.800000000Z",
+  "max_severity":"medium","rule_ids":["LLM-001","LLM-002"],"indexed_events":4,"missing_events":0}}
+// GET /api/v1/investigations?assignee=me (as cfg:viewer)
+{"investigations":[{"id":"inv_h0Tt…","title":"Campaign cmp_ea5e7da9f36e: 2 sources, 2 sessions","status":"monitoring",
+ "priority":"medium","…":"…","origin":{"kind":"campaign","id":"cmp_ea5e7da9f36e"},"assignee":"cfg:viewer",
+ "assignee_name":"viewer","event_count":4,"max_severity":"medium"}]}
+```
+
+**Storage.** `<tenant state>/notifications.json` (`aegismesh.notifications/v1`)
+and `investigations.json` (`aegismesh.investigations/v2`; the legacy bare map
+is read and migrated in memory, rewritten on the next change). Both are
+strict-decoded and fail start-up when corrupt.

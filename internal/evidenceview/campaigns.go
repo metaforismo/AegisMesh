@@ -322,3 +322,40 @@ func assignCampaigns(tenant string, sessions []Session) {
 		}
 	}
 }
+
+// EventSample returns at most max member events, newest per session first:
+// round r takes the r-th newest event of every member session in member
+// order (newest session first), so every session is represented before any
+// session contributes a second event. keep (nil keeps all) filters events.
+func (c Campaign) EventSample(max int, keep func(evidenceindex.Summary) bool) []evidenceindex.Summary {
+	return sampleSessions(c.members, max, keep)
+}
+
+// EventSample returns at most max of the session's events, newest first.
+func (s Session) EventSample(max int, keep func(evidenceindex.Summary) bool) []evidenceindex.Summary {
+	return sampleSessions([]Session{s}, max, keep)
+}
+
+func sampleSessions(sessions []Session, max int, keep func(evidenceindex.Summary) bool) []evidenceindex.Summary {
+	out := []evidenceindex.Summary{}
+	for round := 0; len(out) < max; round++ {
+		progressed := false
+		for _, session := range sessions {
+			index := len(session.Events) - 1 - round
+			if index < 0 {
+				continue
+			}
+			progressed = true
+			if e := session.Events[index]; keep == nil || keep(e) {
+				out = append(out, e)
+				if len(out) == max {
+					return out
+				}
+			}
+		}
+		if !progressed {
+			break
+		}
+	}
+	return out
+}

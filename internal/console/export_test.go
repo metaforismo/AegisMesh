@@ -50,3 +50,11 @@ func (s *Server) CloseAuditForTest() {
 		_ = view.audit.Close()
 	}
 }
+
+// DeriveNotificationsForTest runs one forced derivation pass (appends,
+// campaigns, posture, flush) in every tenant view, synchronously.
+func (s *Server) DeriveNotificationsForTest() {
+	for _, view := range s.views {
+		view.derivePass(true)
+	}
+}

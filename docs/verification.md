@@ -16,6 +16,43 @@ moment and are not rewritten; headings carry "(merged as #NN)" where a PR has
 since merged. Historical merge status is in the 2026-11-16 audit entry; the
 new local uncommitted slice is recorded first.
 
+## 2026-11-27 — round 8 backend: notifications, workspace, incremental sessions (local branch `feat/notifications-workspace`)
+
+ADR-0027. Run locally on macOS (Apple M3, Go 1.27.4) in the backend
+worktree, sequentially, on a host shared with other agents (1-minute load
+7.8–12.5).
+
+| Check | Result |
+|---|---|
+| `"$(go env GOROOT)/bin/gofmt" -l .` | PASS (empty) |
+| `make lint` (gofmt + `go vet ./...`) | PASS; golangci-lint not installed: BLOCKED, vet+fmt fallback ran |
+| `go vet -tags perf ./internal/console/ ./internal/evidenceview/` | PASS |
+| `make test` (`go test -race ./...`, 56 packages) | PASS |
+| `make secrets-scan` | PASS |
+| `go test -fuzz FuzzDecode -fuzztime 15s ./internal/console/notifications/` | PASS (~1.07 M execs) |
+| `go test -fuzz FuzzDecodeSnapshot -fuzztime 15s ./internal/console/investigations/` | PASS (~2.17 M execs) |
+| `make perf PERF_PROFILE=large` ×3 and `go test -tags perf -run TestPerfIncrementalSessions ./internal/evidenceview` | PASS (correctness only); numbers in `docs/performance/2026-11-27/` |
+| `make sbom` | NOT RUN (fails in worktrees, known) |
+| UI / browser checks | NOT RUN (backend-only round; the console is built by a separate agent) |
+
+New tests: notification store units (grouping window, observation- and
+wall-clock budgets with overflow, ring cap and cursor paging, permission and
+recipient filtering, preferences, read state across reopen, fail-closed
+decoding, slow-subscriber closure, template injection with HTML, control,
+bidi and instruction text); loopback integration tests for derivation from
+appended observations, rate limiting, permission filtering and
+account_security delivery (key create/revoke, role change, session revoked by
+an administrator), preferences, read state and high-water mark across a
+restart, tenant isolation, SSE delivery, filtering after permission loss and
+closure on key revocation, campaign/session → investigation bounds, note
+templates and audit, assignee validation, activity log and list filters, and
+posture notifications. Also an investigations schema v2 migration test with
+strict-decoding tables, the seeded-demo inbox (64 items: 29
+honeytoken_replay, 27 critical_observation, 7 agent_canary, 1 new_campaign;
+55 candidates folded into 4 overflow items), and randomized incremental-session
+equivalence against full recompute (`evidenceview` and through the real
+index and memo).
+
 ## 2026-11-23 — landing page redesign (local branch `feat/landing-taste`)
 
 `site/index.html` rebuilt with the tasteskill design method (v2.5.1) and its

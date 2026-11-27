@@ -11,6 +11,9 @@ import (
 
 var campaignIDPattern = regexp.MustCompile(`^cmp_[0-9a-f]{12}$`)
 
+// campaignSampleLimit caps event_ids_sample in campaign detail (newest per session first).
+const campaignSampleLimit = 50
+
 // CampaignList is the GET /api/v1/campaigns response.
 type CampaignList struct {
 	Items           []evidenceview.Campaign `json:"items"`
@@ -63,11 +66,16 @@ func (s *Server) campaign(w http.ResponseWriter, r *http.Request, _ caller) {
 	set, snapshot := s.campaignSet()
 	for _, campaign := range set.Campaigns {
 		if campaign.ID == id {
+			sample := []string{}
+			for _, e := range campaign.EventSample(campaignSampleLimit, nil) {
+				sample = append(sample, e.ID)
+			}
 			boundedJSON(w, struct {
 				evidenceview.CampaignDetail
-				GeneratedAt string                 `json:"generated_at"`
-				Bounds      evidenceindex.Snapshot `json:"bounds"`
-			}{campaign.Detail(), time.Now().UTC().Format(time.RFC3339Nano), snapshot})
+				EventIDsSample []string               `json:"event_ids_sample"`
+				GeneratedAt    string                 `json:"generated_at"`
+				Bounds         evidenceindex.Snapshot `json:"bounds"`
+			}{campaign.Detail(), sample, time.Now().UTC().Format(time.RFC3339Nano), snapshot})
 			return
 		}
 	}

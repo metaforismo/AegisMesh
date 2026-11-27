@@ -50,6 +50,9 @@ type Index struct {
 	// one generation. Both are guarded by mu.
 	generation uint64
 	analysis   *Snapshot
+	// appended is a one-slot, single-consumer wake-up for the notification
+	// deriver; a send never blocks an append.
+	appended chan struct{}
 }
 
 // Stats reports current index capacity, occupancy, and historical coverage.
@@ -76,6 +79,7 @@ func New(capacity int, meter observe.Meter) (*Index, error) {
 		ids:         map[string]*list.Element{},
 		history:     "complete",
 		subscribers: map[chan Summary]struct{}{},
+		appended:    make(chan struct{}, 1),
 		size:        meter.Gauge("aegismesh_console_index_events", "Indexed console envelopes"),
 	}
 
@@ -226,6 +230,10 @@ func (index *Index) add(envelope event.Envelope, node string) {
 	}
 
 	index.size.Set(float64(index.items.Len()))
+	select {
+	case index.appended <- struct{}{}:
+	default:
+	}
 	for subscriber := range index.subscribers {
 		select {
 		case subscriber <- index.resolved(summary):
@@ -475,4 +483,61 @@ func (index *Index) Subscribe() (<-chan Summary, func(), bool) {
 			close(subscriber)
 		}
 	}, true
+}
+
+// Appends returns a one-slot channel signalled after appends. It has a single
+// consumer (the console notification deriver); coalesced signals are expected.
+func (index *Index) Appends() <-chan struct{} { return index.appended }
+
+// Appended returns the retained summaries appended after ordinal `after`, in
+// append order and at most the newest max of them, plus the newest ordinal.
+// Evicted ordinals are skipped; nothing is copied besides the summaries.
+func (index *Index) Appended(after uint64, max int) ([]Summary, uint64) {
+	index.mu.RLock()
+	defer index.mu.RUnlock()
+	from := after + 1
+	if max > 0 && index.next >= uint64(max) && from < index.next-uint64(max)+1 {
+		from = index.next - uint64(max) + 1
+	}
+	out := []Summary{}
+	for ordinal := from; ordinal <= index.next; ordinal++ {
+		if element := index.ordinals[ordinal]; element != nil {
+			out = append(out, index.resolved(element.Value.(*entry).summary))
+		}
+	}
+	return out, index.next
+}
+
+// LocalSummaries returns the retained local summaries among ids, newest first
+// in index order, and how many ids are no longer retained. It copies no envelope.
+func (index *Index) LocalSummaries(ids []string) ([]Summary, int) {
+	index.mu.RLock()
+	defer index.mu.RUnlock()
+	found := make([]*entry, 0, len(ids))
+	missing := 0
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		element := index.ids[id]
+		if element == nil {
+			missing++
+			continue
+		}
+		found = append(found, element.Value.(*entry))
+	}
+	sort.Slice(found, func(i, j int) bool {
+		a, b := found[i], found[j]
+		if !a.envelope.Time.Equal(b.envelope.Time) {
+			return a.envelope.Time.After(b.envelope.Time)
+		}
+		return a.ordinal > b.ordinal
+	})
+	out := make([]Summary, 0, len(found))
+	for _, item := range found {
+		out = append(out, index.resolved(item.summary))
+	}
+	return out, missing
 }

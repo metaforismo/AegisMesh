@@ -483,6 +483,18 @@ attention; a corrupt, interrupted or newer overlay is neither applied nor
 written, and the console still starts with file values. `aegismesh demo`
 enables `settings_editing: console`.
 
+Each tenant's state directory (`<state_dir>/tenants/<tenant>/`) also holds
+`investigations.json` (schema `aegismesh.investigations/v2`; a legacy file is
+read and rewritten on the next change) and `notifications.json` (schema
+`aegismesh.notifications/v1`: the derived in-console inbox, read state and
+preferences; ADR-0027). The inbox has no configuration fields: its bounds
+(2,000 items per tenant, 10-minute grouping, 20 new items per observation
+minute and 60 per wall minute, 256 principals with read state) are fixed. A
+corrupt `notifications.json` or a stale `notifications.json.tmp` aborts
+startup; the file holds only derived items and read state, so after
+inspection it can be moved aside (the inbox is re-derived from the retained
+index and every item becomes unread).
+
 `AEGISMESH_CONSOLE_ENABLED` and `AEGISMESH_CONSOLE_LISTEN` override the matching
 fields. Credentials, TLS and limits stay in the file. Relative `state_dir` and
 TLS file paths resolve against the config directory. Empty `state_dir` follows

@@ -163,3 +163,16 @@ they did before. The memo removes repeated work between appends; it does not
 make the derivation itself cheap. Overview, events and SSE were unchanged. Backfill of 57,464
 envelopes took ~0.7 s; the 64 MiB bound retains 13,362 of them (26.6 MiB live
 heap). These are local synthetic measurements, not capacity.
+
+## Incremental sessions after appends — 2026-11-27
+
+After an append, sessions are regrouped only for the source keys whose events
+changed (`evidenceview.UpdateSessions`). The result is byte-identical to a full
+recompute, checked after every random batch by an equivalence test. On the same
+profile, sessions plus campaigns derivation after one append fell from
+14.7 ms / 21.0 MB to 1.9 ms / 2.2 MB. The "append before each" endpoints, on a
+busier host than the baseline, fell from 21.3 ms / 39.2 MB to 11.7 ms / 20.6 MB
+(sessions list) and from 15.9 ms / 23.3 MB to 4.6 ms / 5.5 MB (campaigns). The
+remaining sessions-list cost is the per-generation sample copy and the cursor
+digest, which were not changed. Details are in
+[performance/2026-11-27](../performance/2026-11-27/README.md).

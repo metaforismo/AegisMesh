@@ -193,6 +193,21 @@ external body-file planting inference, hard tenancy, cross-node correlation,
 public saturation/p99 measurements and external IdP validation. No automatic
 export/delivery or new runtime network destination exists.
 
+## Round 8 backend — notifications, investigation workspace, incremental sessions (ADR-0027)
+
+- [x] Per-tenant in-console inbox derived from indexed evidence and console
+  state (seven kinds, template-rendered text, grouping, per-minute rate limits
+  with overflow items, high-water mark across restarts, per-principal read
+  state and preferences, sibling SSE stream); campaign/session →
+  investigation; assignee, origin, activity log and computed summary;
+  incremental session regrouping after appends.
+- Not done: any delivery outside the console (mail, webhook, chat, push —
+  deliberately not built), digest/quiet-hours scheduling, per-rule
+  subscriptions, notification for grouping increments on the live stream,
+  idempotency keys for campaign → investigation, preferences shared across
+  tenants, incremental cursor digest and snapshot copy (the remaining cost of
+  the sessions list after an append), configurable inbox bounds.
+
 ## Round 6 backend — permissions, custom roles, editable settings (ADR-0026)
 
 - [x] Permission catalogue with every route pinned per built-in role, custom
