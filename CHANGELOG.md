@@ -19,6 +19,26 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
   Activity and Cadence end level.
 - Dev mock: contract r8 (`mock-notify.mjs`, `mock-workspace.mjs`),
   `--round8 off`, `/__mock/notify`.
+- Console in-app notifications (ADR-0027): a per-tenant inbox derived from
+  indexed evidence and console state, with no egress —
+  `critical_observation`, `honeytoken_replay`, `agent_canary`,
+  `new_campaign`, `posture_attention`, `account_security` (affected principal
+  only) and `assignment`. Text comes from fixed templates (rule ids, counts,
+  validated source keys and sensor ids only). 10-minute grouping, 20 new
+  items per observation minute and 60 per wall minute with an overflow item,
+  2,000-item ring, a persisted high-water mark so restarts neither duplicate
+  nor resurrect items, per-principal read state and preferences, and
+  `GET /api/v1/notifications/stream`. Audit actions `notification.read`,
+  `notification.preferences`.
+- Investigation workspace: `origin`, `assignee` (validated against tenant
+  principals holding `investigations.read`; `investigation.assign` audit),
+  a bounded activity log, a computed `summary`, list filters `status` and
+  `assignee`, per-item `event_count` and `max_severity`;
+  `POST /api/v1/campaigns/{id}/investigation` and
+  `POST /api/v1/sessions/{id}/investigation` with bounded round-robin
+  evidence and a templated first note; `GET /api/v1/investigations/assignees`;
+  campaign detail `event_ids_sample`. Investigation snapshot schema v2 (legacy
+  files migrate in memory and are rewritten on the next change).
 
 - Console, round 7: folding caveats (Techniques, Rules, Fleet), one
   humanised relative time ("10 min ago", "yesterday 14:03", then the date),
@@ -123,6 +143,9 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Changed
 
+- After an append, sessions are regrouped only for the source keys whose
+  events changed (byte-identical to a full recompute, proven by a randomized
+  equivalence test); see docs/performance/2026-11-27.
 - Brand: the shield mark is replaced by a net closed around a lure, with a
   serif wordmark, a scheme-aware favicon and files in `site/assets/brand/`.
 - Landing: console pictures and the share image retaken from the redesigned

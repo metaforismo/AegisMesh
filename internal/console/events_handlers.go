@@ -115,16 +115,25 @@ var streamHeartbeat = 15 * time.Second
 // principal's role must still grant evidence.read, so removing that
 // permission from a custom role ends its open streams.
 func (s *Server) streamAuthorized(credentials caller) bool {
+	principal, ok := s.streamPrincipal(credentials)
+	return ok && s.grants(principal).has(permission.EvidenceRead)
+}
+
+// streamPrincipal re-resolves a long-lived stream's principal: the cookie
+// session must still exist, and a managed bearer key must still be usable
+// and still belong to this tenant. Config-file tokens cannot change while the
+// process runs. Callers check permissions on the returned principal.
+func (s *Server) streamPrincipal(credentials caller) (auth.Principal, bool) {
 	principal := credentials.session.Principal
 	if credentials.cookie {
 		session, ok := s.auth.Peek(credentials.id)
-		return ok && s.grants(session.Principal).has(permission.EvidenceRead)
+		return session.Principal, ok
 	}
 	if principal.Source != auth.SourceManaged {
-		return s.grants(principal).has(permission.EvidenceRead)
+		return principal, true
 	}
 	current, _, ok := s.accounts.Verify(principal.ID, principal.KeyID)
-	return ok && s.grants(current).has(permission.EvidenceRead) && slices.Contains(current.Tenants, s.tenantID)
+	return current, ok && slices.Contains(current.Tenants, s.tenantID)
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, credentials caller) {

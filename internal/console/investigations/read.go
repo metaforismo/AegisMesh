@@ -1,7 +1,6 @@
 package investigations
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 
@@ -37,14 +36,11 @@ func ReadOpenCount(dir string) (*int, error) {
 	if err != nil {
 		return nil, err
 	}
-	var items map[string]Investigation
-	if json.Unmarshal(body, &items) != nil || items == nil || len(items) > MaxInvestigations {
+	items, err := decode(body)
+	if err != nil {
 		return nil, ErrInvalid
 	}
-	for id, item := range items {
-		if id != item.ID || validate(item) != nil {
-			return nil, ErrInvalid
-		}
+	for _, item := range items {
 		if item.Status != "closed" {
 			count++
 		}

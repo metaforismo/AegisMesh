@@ -8,6 +8,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/console/accounts"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/console/notifications"
 	"github.com/metaforismo/aegismesh/internal/console/permission"
 )
 
@@ -200,6 +201,9 @@ func (s *Server) patchAccount(w http.ResponseWriter, r *http.Request, credential
 	if !s.audited(w, r, principal, "account.update", id, err, "fields="+strings.Join(change.Fields, ","), true) {
 		return
 	}
+	if slices.Contains(change.Fields, "role") || slices.Contains(change.Fields, "tenants") {
+		s.notify(account.Tenants, notifications.Account(id, notifications.ReasonRoleChanged, id != principal.ID, s.now()))
+	}
 	send(w, 200, s.managedView(account, s.now()))
 }
 
@@ -264,6 +268,7 @@ func (s *Server) revokeAdminSession(w http.ResponseWriter, r *http.Request, cred
 		s.denyEscalation(w, r, credentials.session.Principal, "session.revoke", handle)
 		return
 	}
+	target, _ := s.auth.SessionPrincipal(handle)
 	info, ok := s.auth.Revoke(handle, "")
 	var err error
 	if !ok {
@@ -272,6 +277,10 @@ func (s *Server) revokeAdminSession(w http.ResponseWriter, r *http.Request, cred
 	if !s.audited(w, r, credentials.session.Principal, "session.revoke", handle, err,
 		"account="+info.AccountID, true) {
 		return
+	}
+	// Only a session ended by someone else notifies its principal.
+	if target.ID != "" && target.ID != credentials.session.Principal.ID {
+		s.notify(target.Tenants, notifications.Account(target.ID, notifications.ReasonSessionRevoked, true, s.now()))
 	}
 	if credentials.cookie && handle == s.auth.Handle(credentials.id) {
 		s.clearCookie(w)

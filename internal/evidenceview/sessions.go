@@ -193,13 +193,7 @@ func Sessions(tenant string, events []evidenceindex.Summary) []Session {
 	for _, group := range groups {
 		out = append(out, summarize(tenant, group))
 	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := Time(out[i].Events[len(out[i].Events)-1]), Time(out[j].Events[len(out[j].Events)-1])
-		if !a.Equal(b) {
-			return a.After(b)
-		}
-		return out[i].ID < out[j].ID
-	})
+	sortSessions(out)
 	assignCampaigns(tenant, out)
 	return out
 }

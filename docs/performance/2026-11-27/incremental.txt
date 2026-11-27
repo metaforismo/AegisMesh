@@ -1,0 +1,5 @@
+retained 13362, sample 8192, sessions 456, campaigns 28
+full Sessions+Campaigns after append       p50   14.744 ms  p95   16.161 ms    20966080 B/op    69045 allocs/op
+UpdateSessions+Campaigns after append      p50    1.919 ms  p95    2.599 ms     2179908 B/op     7112 allocs/op
+UpdateSessions only                        p50    1.315 ms  p95    1.556 ms     1309702 B/op     3937 allocs/op
+Campaigns only (over updated sessions)     p50    0.712 ms  p95    0.829 ms      872462 B/op     3183 allocs/op

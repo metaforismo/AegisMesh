@@ -162,3 +162,34 @@ func TestCampaignCaps(t *testing.T) {
 		t.Fatal("session scan cap")
 	}
 }
+
+func TestEventSampleRoundRobinNewestFirst(t *testing.T) {
+	mk := func(source string, n int) Session {
+		s := Session{ID: source}
+		for i := range n {
+			s.Events = append(s.Events, evidenceindex.Summary{ID: fmt.Sprintf("%s-%d", source, i)})
+		}
+		return s
+	}
+	ids := func(events []evidenceindex.Summary) string {
+		out := []string{}
+		for _, e := range events {
+			out = append(out, e.ID)
+		}
+		return strings.Join(out, ",")
+	}
+	sessions := []Session{mk("a", 3), mk("b", 1), mk("c", 2)}
+	if got := ids(sampleSessions(sessions, 10, nil)); got != "a-2,b-0,c-1,a-1,c-0,a-0" {
+		t.Fatalf("sample = %s", got)
+	}
+	if got := ids(sampleSessions(sessions, 4, nil)); got != "a-2,b-0,c-1,a-1" {
+		t.Fatalf("bounded = %s", got)
+	}
+	skipB := func(e evidenceindex.Summary) bool { return !strings.HasPrefix(e.ID, "b") }
+	if got := ids(sampleSessions(sessions, 10, skipB)); got != "a-2,c-1,a-1,c-0,a-0" {
+		t.Fatalf("filtered = %s", got)
+	}
+	if got := sampleSessions(nil, 5, nil); len(got) != 0 {
+		t.Fatal("empty")
+	}
+}
