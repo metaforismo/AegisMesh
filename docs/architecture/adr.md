@@ -1311,3 +1311,118 @@ catalogue.
 Audit records' role field allows 24 bytes for custom role ids. Overlay save
 and audit append remain separate transactions (503 says which failed). A
 same-UID local writer can still edit the overlay or accounts file, as before.
+
+## ADR-0027 — in-console notifications, investigation workspace and incremental sessions
+
+**Status:** implemented on branch `feat/notifications-workspace`; not merged or released.
+
+**Context.** Operators asked to be told when something worth a look happens
+(a planted credential replayed, an agent canary, a new campaign, posture
+drift, a change to their own access) without watching the event stream, and
+to turn a campaign or session into an investigation with one action.
+AGENTS.md forbids new egress and forbids untrusted data becoming behaviour;
+the inbox must therefore be a read model inside the console, derived only
+from evidence already indexed and from console state.
+
+**Alternatives.** (A) Push alerts out (mail, webhook, chat). Rejected: new
+egress, credentials to store, and attacker-triggered outbound traffic.
+(B) Persist rendered titles and summaries. Rejected: any template mistake
+would be stored forever and observation text could reach the inbox. (C)
+Persist structured facts only and render from fixed templates at read time,
+derive inside the console process, bound every dimension. **Chosen: C.**
+
+**Decision — derivation.** One deriver per tenant view walks index append
+ordinals (`Index.Appended`, newest 8,192 per pass, woken by a one-slot
+non-blocking signal; it holds no stream slot) and maps each new summary to at
+most three candidates: `honeytoken_replay` for HT-001/COR-008 (critical),
+`agent_canary` for AGT-001 (high), `critical_observation` for any other
+catalog rule of severity high or critical. Every 15 s while the index
+changes it compares campaign ids with the remembered set (1,024) and adds
+`new_campaign` (medium) once per id; every 60 s it evaluates posture and adds
+`posture_attention` (medium) for checks newly in attention and for
+acceptances expiring within 7 days (once per check and expiry). Console
+actions add `account_security` (high: a key created or revoked for your
+account, your role or tenants changed, one of your sessions ended by someone
+else) and `assignment` (medium: an investigation assigned to you by someone
+else). Derived state is persisted at most once a second.
+
+**Decision — no text from attackers.** Items store kind, severity, times,
+a group count, a link (closed route set, ids checked against their
+grammars) and facts: catalog rule id, source key and sensor id only when they
+match strict grammars (`^[0-9A-Za-z.:\[\]%_-]{1,64}$`, `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`),
+campaign/check/investigation ids, counts and closed-vocabulary reasons.
+Titles and summaries are composed from fixed templates when listed or
+streamed; a fact failing its grammar renders as "an unrecognised source" or
+"an unnamed sensor". Paths, tool names, user agents, campaign labels, note
+and title text never reach an item. The same rule applies to the first note
+of an investigation opened from a campaign or session (basis codes, counts,
+rule ids, validated source keys and sensor ids, the fixed campaign caveats).
+
+**Decision — flood bounds.** Repeats of one kind + rule + source within 10
+minutes of an item's first observation increase `group_count` (saturating at
+10⁶) instead of creating items. New evidence-derived items (the three
+observation kinds and `new_campaign`) are limited per tenant to 20 per
+observation-time minute and 60 per wall-clock minute; beyond that, candidates
+fold into one overflow item per kind per 10 wall-clock minutes ("More
+notifications than the inbox limit", count = folded candidates). Nothing is
+dropped silently: every folded candidate is counted and its observation stays
+in the event list. Per-tenant ring of 2,000 items (oldest dropped), at most 256
+principals with read state or preferences (least recently active dropped),
+16 live subscribers per tenant, 16 notification streams overall (separate
+from the 16 event streams and from the 8 request slots).
+
+**Decision — persistence and restarts.** `<tenant state dir>/notifications.json`
+(`aegismesh.notifications/v1`) holds items, per-principal read state (a
+watermark plus individual ids still in the ring), preferences and the
+deriver memory: a high-water mark (time, event key) of derived observations,
+seen campaign ids, the last attention set and notified expiries. It is
+strict-decoded, capped by the 32 MiB state limit, atomically replaced, and a
+corrupt file or a stale `.tmp` fails start-up with an actionable message (the
+file holds only derived items and read state). On start-up the deriver
+re-reads the retained index but skips observations at or before the
+persisted high-water mark, so a restart neither duplicates items nor makes
+old ones unread; observations evicted before start-up are never derived.
+Out-of-order observations older than the start-up mark (late forwarded
+evidence) are not derived after a restart.
+
+**Decision — visibility.** `GET /api/v1/notifications` needs only
+authentication; each item is filtered on every request by the caller's
+current permissions: evidence kinds need `evidence.read`, posture needs
+`analysis.read`, `account_security` and `assignment` are recipient-only.
+Preferences (kinds, minimum severity) and read state are per principal per
+tenant; `account_security` cannot be disabled or filtered by severity. A
+sibling SSE stream (`/api/v1/notifications/stream`) re-verifies the
+credential on every frame like the event stream (cookie session alive,
+managed key usable and in the tenant) and re-resolves the role per item, so a
+removed permission stops delivery of the items it gated at once and a
+revoked credential ends the stream. Items never cross tenants; account items
+are written into each tenant the affected principal belongs to.
+
+**Decision — workspace.** Investigations (snapshot schema
+`aegismesh.investigations/v2`; the legacy map is read and migrated in memory
+with an empty log and rewritten on the next change) gain `origin`,
+`assignee` (an active principal of the tenant whose role grants
+`investigations.read`, validated at assignment), a bounded activity log
+(200 entries, oldest dropped) whose details come from fixed words, ids and
+counts, and a computed summary. `POST /campaigns|sessions/{id}/investigation`
+attach at most 200 local events (round-robin, newest per session first) and
+are audited as `investigation.create` with the origin. No new permission was
+needed; the assignee list uses `investigations.write`.
+
+**Decision — incremental sessions.** Sessions of a source depend only on
+that source's events. After an append or eviction the memo aligns the new
+sample with the previous generation (insertions anywhere, drops at the
+oldest end, at most 1,024 changes) and regroups only the affected sources;
+anything else falls back to a full recompute. An equivalence test compares
+the result with a full recompute after every random batch (out-of-order
+times, idle gaps, eviction, sample truncation, forwarded collisions).
+
+**Consequences.** One fixed-name file per tenant; no dependency, no egress,
+no new permission. Read-state changes and preference changes are audited
+(`notification.read`, `notification.preferences`), assignments as
+`investigation.assign`. The inbox is an observation feed, not incident
+management: a notification asserts that an observation matched a rule, not
+that an attack happened. Opening an investigation from a campaign twice
+creates two investigations (the console disables the button while a request
+is in flight). The memo can now hold one previous generation's sample and
+sessions until the next generation's sessions are computed.

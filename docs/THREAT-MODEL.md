@@ -19,6 +19,8 @@ Version: v0.2 development baseline. Method: STRIDE-per-trust-boundary plus agent
 - A13 Managed API keys (`amk_` bearer tokens held by people and integrations)
 - A14 Custom role definitions (permission sets stored with the accounts) and the console settings
   overlay (allowlisted overrides, accepted posture risks, change history)
+- A15 Per-tenant notification inbox (derived items, per-principal read state and preferences,
+  deriver high-water mark) and the investigation workspace (assignee, activity log, origin)
 
 ## Trust boundaries
 
@@ -570,3 +572,60 @@ settings. Mitigations by threat:
   trusted for their own permissions; the controls above stop partial
   administrators from widening their own reach, not a full administrator
   acting maliciously.
+
+## In-console notifications and investigation workspace (ADR-0027)
+
+Asset A15. The inbox is derived inside the console from indexed summaries and
+console state; it has no outbound path (no mail, webhook, chat or push), so it
+adds no egress and no outbound credential. Mitigations by threat:
+
+- **Inbox flooding by a scanner.** An attacker controls how many observations
+  match rules, from how many source addresses, and (through a fleet node) the
+  claimed observation times. Repeats of one kind + rule + source within 10
+  minutes fold into one item. New evidence-derived items are limited per
+  tenant to 20 per observation minute and 60 per wall-clock minute; the excess
+  folds into one overflow item per kind per 10 wall minutes whose count states
+  how many were folded, so a flood is visible but bounded, and observations
+  stay in the event list. Each pass derives at most the newest 8,192 appends;
+  the ring keeps 2,000 items, so a sustained flood ages older items out of the
+  inbox (not out of evidence). Account and assignment items are not rate
+  limited: they come from authenticated, audited console actions. Residual: a
+  long flood can push older genuine items out of the ring; the evidence and
+  rule views remain authoritative.
+- **Template injection.** Paths, tool names, user agents, MCP arguments and
+  campaign labels never reach an item: only catalog rule ids, counts, ids and
+  source keys / sensor ids that match strict grammars are stored, and titles
+  and summaries are rendered from fixed templates on read. A value failing its
+  grammar renders as "an unrecognised source" or "an unnamed sensor". The
+  first note of an investigation opened from a campaign or session follows the
+  same rule. Tests feed HTML, control characters, bidi overrides and
+  instruction text through source and sensor fields; a fuzz target covers the
+  persisted decoder. Residual: a source key that is a valid address shape is
+  shown verbatim (it is an observed peer address, not a verdict).
+- **Information leakage across permissions.** Items are filtered on every
+  list, count and streamed frame against the caller's current role: evidence
+  kinds need `evidence.read`, posture needs `analysis.read`. `account_security`
+  and `assignment` carry a recipient and are shown only to that principal,
+  never to administrators. Read state and preferences are per principal.
+  Unread counts are computed over the visible set only, so a count never
+  reveals hidden items.
+- **Leakage across tenants.** Each tenant view has its own store file, deriver
+  and index; a stream subscribes only to its tenant's store; account items
+  for a multi-tenant principal are written into each of its tenants
+  separately. A test derives from two tenant indexes and checks each
+  principal sees only its own tenant.
+- **Stale access on long-lived streams.** The notification stream re-verifies
+  the credential on every frame and heartbeat like the event stream (revoked
+  or expired session, revoked key, removed tenant membership end it) and
+  re-resolves the role per item; tests remove `evidence.read` mid-stream and
+  revoke the key.
+- **Tampered or corrupt state.** `notifications.json` and the investigations
+  snapshot are strict-decoded with closed vocabularies and grammars, capped,
+  atomically replaced, and fail start-up when corrupt; nothing in them selects
+  a path, a command or an action. Residual: a same-UID local writer can edit
+  them like any console state (for example mark items read).
+- **Assignment abuse.** Assignment needs `investigations.write`; the assignee
+  must be an active principal of the tenant whose role grants
+  `investigations.read`; refusals are audited. The notification names only the
+  investigation id. Residual: the assignee list discloses principal names of
+  the tenant to holders of `investigations.write`.
