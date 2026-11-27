@@ -144,6 +144,7 @@ test('assignees and PATCH assignee: only principals that read investigations; th
   assert.equal(res.json.activity.at(-1).kind, 'assignee');
   const told = (await call(on.base, vera, 'GET', '/notifications?kind=assignment')).json.items;
   assert.ok(told.some((x) => x.link.id === target.id && !x.read), 'the assignee has an unread assignment');
+  assert.ok(told.every((x) => x.severity === 'medium'), 'assignments are medium, so a medium minimum keeps them');
   const mine = (await call(on.base, vera, 'GET', '/investigations?assignee=me')).json.investigations;
   assert.deepEqual(mine.map((i) => i.id), [target.id]);
   const none = (await call(on.base, vera, 'GET', '/investigations?assignee=none')).json.investigations;

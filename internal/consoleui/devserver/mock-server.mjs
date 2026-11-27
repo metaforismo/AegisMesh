@@ -1545,7 +1545,7 @@ async function api(req, res, url) {
       touch();
       audit(who.name, who.role, 'investigation.update', inv.id, 'ok', remote, Object.keys(b).join(','));
       if (assigned && b.assignee && b.assignee !== s.account_id) {
-        notify(T, { kind: 'assignment', severity: 'info', for: b.assignee, title: 'You were assigned an investigation', summary: `${who.name} assigned you "${inv.title}".`, link: { route: 'investigation', id: inv.id } });
+        notify(T, { kind: 'assignment', severity: 'medium', for: b.assignee, title: 'You were assigned an investigation', summary: `${who.name} assigned you "${inv.title}".`, link: { route: 'investigation', id: inv.id } });
       }
       return send(res, 200, invView(T, inv, true));
     }

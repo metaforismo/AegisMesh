@@ -222,7 +222,7 @@ export function seedNotifications(store, { events = [], campaigns = [], posture 
   if (principals.analyst) {
     seeds.push({ kind: 'account_security', severity: 'high', at: now - 26 * 3600e3, for: principals.analyst, title: 'A session of yours was revoked by someone else', summary: 'ada revoked your session from Firefox on Linux. Your other sessions were not affected.', link: { route: 'settings', id: 'sessions' } });
     const inv = investigations[0];
-    if (inv) seeds.push({ kind: 'assignment', severity: 'info', at: now - 50 * 60e3, for: principals.analyst, title: 'You were assigned an investigation', summary: `ada assigned you "${inv.title}".`, link: { route: 'investigation', id: inv.id } });
+    if (inv) seeds.push({ kind: 'assignment', severity: 'medium', at: now - 50 * 60e3, for: principals.analyst, title: 'You were assigned an investigation', summary: `ada assigned you "${inv.title}".`, link: { route: 'investigation', id: inv.id } });
   }
   if (principals.viewer) {
     seeds.push({ kind: 'account_security', severity: 'medium', at: now - 5 * 86400e3, for: principals.viewer, title: 'Your role changed', summary: 'Your role is now viewer. It can read evidence and investigations; it cannot change them.', link: { route: 'settings', id: 'profile' } });

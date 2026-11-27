@@ -434,7 +434,7 @@ async function notifications(v) {
   const sev = choices({
     legend: 'Minimum severity', name: 'ntf-min-severity', value: current.min_severity, compact: true,
     options: PREF_SEVERITIES.map((x) => [x, x[0].toUpperCase() + x.slice(1)]),
-    hint: 'Notices below this severity are neither listed nor counted. Assignments are info, campaigns and posture medium, findings high or critical. Your account’s notices ignore it.',
+    hint: 'Notices below this severity are neither listed nor counted. Assignments, campaigns and posture are medium, findings high or critical. Your account’s notices ignore it.',
     onChange: (x) => {
       const prev = current.min_severity;
       save({ min_severity: x }, () => sev.set(prev), `Minimum severity: ${x}.`);
