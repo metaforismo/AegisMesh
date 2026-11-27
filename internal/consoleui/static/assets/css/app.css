@@ -1219,3 +1219,11 @@ button.top-user { min-height: 2rem; padding: 0 var(--space-2); }
 
 /* Tabs wrap on phones instead of hiding the last ones off the edge. */
 @media (max-width: 45rem) { .tabs { flex-wrap: wrap; overflow-x: visible; } }
+
+/* ---- Inbox (round 8) -------------------------------------------------------- */
+.inbox-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.inbox-filters .field { min-width: min(100%, 14rem); }
+.inbox-list .notify-day__label { position: static; padding-top: var(--space-4); background: none; }
+.inbox-list .notify-item { padding-block: var(--space-3); }
+.inbox-list .notify-item__summary { -webkit-line-clamp: 4; }
+@media (max-width: 44.99rem) { .inbox-filters > * { flex: 1 1 100%; } }

@@ -162,6 +162,13 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     recommendations: (limit, opts) => get('/recommendations', { limit }, opts),
     node: (opts) => get('/node', undefined, opts),
     investigations: (status, opts) => get('/investigations', { status }, opts),
+    // Round 8: who a case can be assigned to (principals with
+    // investigations.read); older servers answer 404.
+    assignees: (opts) => get('/investigations/assignees', undefined, opts),
+    // Round 8: open a case from a campaign or a session; the server attaches
+    // the member events (bounded) and writes the first note.
+    openCampaignInvestigation: (id, body) => request('POST', `/campaigns/${seg(id)}/investigation`, { body }),
+    openSessionInvestigation: (id, body) => request('POST', `/sessions/${seg(id)}/investigation`, { body }),
     investigation: (id, opts) => get(`/investigations/${seg(id)}`, undefined, opts),
     createInvestigation: (body) => request('POST', '/investigations', { body }),
     updateInvestigation: (id, body) => request('PATCH', `/investigations/${seg(id)}`, { body }),
@@ -235,6 +242,12 @@ export function createApi({ fetchImpl = globalThis.fetch?.bind(globalThis), base
     acceptPosture: (id, body) => request('POST', `/posture/${seg(id)}/accept`, { body }),
     unacceptPosture: (id) => request('DELETE', `/posture/${seg(id)}/accept`),
     system: (opts) => get('/system', undefined, opts),
+    // Round 8: the in-console inbox. Nothing is sent anywhere; reading
+    // and marking happen on the console server only.
+    notifications: (query, opts) => get('/notifications', query, opts),
+    markNotificationsRead: (body) => request('POST', '/notifications/read', { body }),
+    notificationPrefs: (opts) => get('/me/notification-preferences', undefined, opts),
+    putNotificationPrefs: (body) => request('PUT', '/me/notification-preferences', { body }),
     // Audited download of the whole audit chain (or since a time).
     exportAudit: (format, since, opts) => get('/admin/audit/export', { format, since }, { ...opts, raw: true }),
 

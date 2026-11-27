@@ -15,6 +15,7 @@ import { confirmAction, keyReveal, formField, choices, errorSummary, wireForm, o
 import { icon } from '../ui/icons.js';
 import { CATALOGUE, groupCatalogue, roleSummary, principalRoleName, isRoleId } from '../lib/perms.js';
 import { href } from '../lib/route.js';
+import { NOTIFICATION_KINDS, KIND_META, PREF_SEVERITIES, ALWAYS_ON, parseNotifyPrefs, mergeNotifyPrefs, readToastPref, writeToastPref } from '../lib/notify.js';
 
 // "in 3 h" / "expired" for times ahead (sessions, keys).
 export function formatUntil(value, now = Date.now()) {
@@ -364,7 +365,110 @@ async function keys(v) {
     listSlot);
 }
 
-const SECTIONS = { profile, preferences, sessions, keys };
+// ---- Notifications (round 8) ----------------------------------------------------
+
+const browserStore = () => {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+};
+
+// Per-kind toggles with what each one means, the minimum severity, and the
+// one on-screen notice for critical items (kept in this browser). Each
+// change saves at once; saves run one after another, so an early answer
+// never overwrites a later choice, and a refusal puts the previous value
+// back on screen.
+async function notifications(v) {
+  const { ctx } = v;
+  v.hint = 'Changes apply at once. Notices stay in this console; nothing is sent anywhere.';
+  let current;
+  try {
+    current = parseNotifyPrefs(await ctx.api.notificationPrefs({ signal: ctx.signal }));
+  } catch (err) {
+    if (err?.name === 'AbortError' || (err instanceof ApiError && err.status === 401)) throw err;
+    if (isMissingEndpoint(err)) {
+      return olderServerState({ title: 'This server does not keep notifications yet', detail: 'The console is newer than the AegisMesh server answering it. Once the server provides the inbox, the bell appears in the top bar and its settings appear here.' });
+    }
+    return sectionError(err, () => ctx.rerender());
+  }
+  const status = h('p', { class: 'pref-status', role: 'status', 'aria-live': 'polite' });
+  let chain = Promise.resolve();
+  const save = (patch, undo, what) => {
+    const merged = mergeNotifyPrefs(current, patch);
+    if (!merged.patch) return;
+    const before = current;
+    current = merged.prefs;
+    status.textContent = 'Saving…';
+    chain = chain.then(() => ctx.api.putNotificationPrefs(merged.patch)).then((res) => {
+      current = parseNotifyPrefs(res || current);
+      status.textContent = `${what} Saved to your account.`;
+    }, (err) => {
+      current = before;
+      undo();
+      status.textContent = `Not saved, so the previous choice is back. ${sentence(describeError(err).detail)}`;
+      toast('error', `Could not save the notification setting: ${sentence(describeError(err).detail)} The previous choice is back.`);
+    });
+  };
+
+  const rows = NOTIFICATION_KINDS.map((k) => {
+    const meta = KIND_META[k];
+    const id = `ntf-kind-${k}`;
+    // Always on: said in words, never a disabled box.
+    if (k === ALWAYS_ON) {
+      return h('li', { class: ['ntoggle', 'ntoggle--fixed'] },
+        h('p', { class: 'ntoggle__label' }, h('span', { class: 'ntoggle__always' }, 'Always on'), icon(meta.icon, { size: 'sm' }), h('span', { class: 'ntoggle__name' }, meta.name)),
+        h('p', { class: 'ntoggle__why' }, meta.describe));
+    }
+    const input = h('input', { type: 'checkbox', id, name: id, 'aria-describedby': `${id}-why`, prop: { checked: current.kinds[k] } });
+    input.addEventListener('change', () => {
+      const on = input.checked;
+      save({ kinds: { [k]: on } }, () => { input.checked = !on; }, `${meta.name}: ${on ? 'on' : 'off'}.`);
+    });
+    return h('li', { class: 'ntoggle' },
+      h('label', { class: 'ntoggle__label', for: id }, input, icon(meta.icon, { size: 'sm' }), h('span', { class: 'ntoggle__name' }, meta.name)),
+      h('p', { class: 'ntoggle__why', id: `${id}-why` }, meta.describe));
+  });
+
+  const sev = choices({
+    legend: 'Minimum severity', name: 'ntf-min-severity', value: current.min_severity, compact: true,
+    options: PREF_SEVERITIES.map((x) => [x, x[0].toUpperCase() + x.slice(1)]),
+    hint: 'Notices below this severity are neither listed nor counted. Assignments are info, campaigns and posture medium, findings high or critical. Your account’s notices ignore it.',
+    onChange: (x) => {
+      const prev = current.min_severity;
+      save({ min_severity: x }, () => sev.set(prev), `Minimum severity: ${x}.`);
+    },
+  });
+
+  const store = browserStore();
+  const toastId = 'ntf-toast';
+  const toastBox = h('input', { type: 'checkbox', id: toastId, 'aria-describedby': `${toastId}-why`, prop: { checked: readToastPref(store) } });
+  const toastStatus = h('p', { class: 'pref-status', role: 'status', 'aria-live': 'polite' });
+  toastBox.addEventListener('change', () => {
+    const ok = writeToastPref(store, toastBox.checked);
+    toastStatus.textContent = ok ? `Critical notice: ${toastBox.checked ? 'on' : 'off'}. Saved in this browser.` : 'This browser does not keep the choice; it applies until the page is closed.';
+  });
+
+  return h('div', { class: 'stack-lg' },
+    panel({
+      title: 'What reaches your inbox', primary: true,
+      meta: 'Saved to your account',
+      body: [h('ul', { class: 'ntoggles' }, rows), h('div', { class: 'ntoggles__sev' }, sev.el), status],
+    }),
+    panel({
+      title: 'On screen',
+      meta: 'Stored in this browser only',
+      body: [
+        h('div', { class: 'ntoggle' },
+          h('label', { class: 'ntoggle__label', for: toastId }, toastBox, icon('bell', { size: 'sm' }), h('span', { class: 'ntoggle__name' }, 'One notice for critical items')),
+          h('p', { class: 'ntoggle__why', id: `${toastId}-why` }, 'While this tab is visible, a critical notification may show one quiet notice, at most once a minute. Everything else only changes the count on the bell.')),
+        toastStatus,
+      ],
+    }));
+}
+
+const SECTIONS = { profile, preferences, sessions, keys, notifications };
 
 export default {
   async render(id, v) {

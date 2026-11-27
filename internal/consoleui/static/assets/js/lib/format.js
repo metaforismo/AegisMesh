@@ -103,6 +103,26 @@ export function formatRelative(value, now = Date.now()) {
   return `${sameYear ? `${MONTHS[f.mo]} ${f.da}` : `${f.y}-${pad(f.mo + 1)}-${pad(f.da)}`} ${pad(f.h)}:${pad(f.mi)}`;
 }
 
+// Calendar day of an instant in the chosen zone ("2026-11-27"), and the
+// heading a day-grouped list uses for it: "Today", "Yesterday", then the
+// date ("Nov 24", with the year when it is not this year's).
+export function dayKey(value) {
+  const d = parseTime(value);
+  if (!d) return '';
+  const f = fields(d);
+  return `${f.y}-${pad(f.mo + 1)}-${pad(f.da)}`;
+}
+
+export function dayLabel(value, now = Date.now()) {
+  const d = parseTime(value);
+  if (!d) return 'Unknown day';
+  const days = calendarDays(d, now);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  const f = fields(d);
+  return fields(new Date(now)).y === f.y ? `${MONTHS[f.mo]} ${f.da}` : `${MONTHS[f.mo]} ${f.da}, ${f.y}`;
+}
+
 // One duration style everywhere (session spans, gaps, uptime, lifetimes):
 // "850 ms", "4.2 s", "45 s", "3 min", "1.5 h", "2.3 d". Unknown or negative
 // is "—"; zero is "0 s".

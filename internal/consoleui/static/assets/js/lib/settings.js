@@ -14,6 +14,7 @@ export const ACCOUNT_SECTIONS = Object.freeze([
   { id: 'preferences', label: 'Preferences', icon: 'settings', hint: 'Time zone, default window, density, theme, motion' },
   { id: 'sessions', label: 'Sessions', icon: 'devices', hint: 'Where your account is signed in' },
   { id: 'keys', label: 'API keys', icon: 'key', hint: 'Tokens for scripts and integrations' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', hint: 'What reaches your inbox, and the one notice for critical items' },
 ]);
 
 // Administration pages. `settings` names the /admin/settings sections a

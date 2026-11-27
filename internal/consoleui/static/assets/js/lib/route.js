@@ -98,6 +98,8 @@ const ROUTES = [
   { name: 'campaigns', pattern: ['campaigns'] },
   { name: 'campaign', pattern: ['campaigns', ':id'], valid: (p) => /^cmp_[0-9a-z]{4,64}$/.test(p.id) },
   { name: 'posture', pattern: ['posture'] },
+  // Round 8: the in-console notification inbox.
+  { name: 'inbox', pattern: ['inbox'] },
   // Settings: your account and, for admins, administration. A section id
   // comes from a closed list; an account id from its three closed shapes.
   { name: 'settings', pattern: ['settings'] },

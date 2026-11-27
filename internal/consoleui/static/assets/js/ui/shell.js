@@ -21,6 +21,9 @@ export { brandMark };
 export const NAV = [
   { group: 'Observe', items: [
     { route: 'overview', label: 'Overview', href: '#/overview', icon: 'overview', keys: 'g o' },
+    // The bell is the inbox's home; the screen is in the palette and the
+    // shortcut sheet, not the sidebar, and only when the server has it.
+    { route: 'inbox', label: 'Inbox', href: '#/inbox', icon: 'bell', keys: 'g y', sidebar: false, feature: 'notifications' },
     { route: 'digest', label: 'Digest', href: '#/digest', icon: 'digest', keys: 'g b' },
     { route: 'events', label: 'Events', href: '#/events', also: ['event'], icon: 'events', keys: 'g e' },
     { route: 'sources', label: 'Sources', href: '#/sources', also: ['source'], icon: 'sources', keys: 'g s' },
@@ -49,6 +52,15 @@ export const NAV = [
     { route: 'guide', label: 'Guide', href: '#/guide', icon: 'guide', keys: 'g h' },
   ] },
 ];
+
+// Server features the interface found at sign-in (round 8: the inbox).
+// A NAV item with `feature` is listed only while the feature is on.
+const features = new Set();
+export function setFeature(name, on) {
+  if (on) features.add(name);
+  else features.delete(name);
+}
+export const hasFeature = (name) => !name || features.has(name);
 
 export const isApple = () => /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
 
@@ -362,7 +374,7 @@ export function organizationText(v) {
   return Array.from(s).slice(0, 80).join('');
 }
 
-export function createShell({ session, meta, me = null, can = null, onLogout, onSearch, onSwitchTenant }) {
+export function createShell({ session, meta, me = null, can = null, onLogout, onSearch, onSwitchTenant, bell = null }) {
   // A rebuilt shell (sign-in, tenant switch) replaces the old controls.
   themeListeners.clear();
   densityListeners.clear();
@@ -372,7 +384,7 @@ export function createShell({ session, meta, me = null, can = null, onLogout, on
   const indicators = [];
 
   const groups = NAV.map((g) => {
-    const items = g.items.filter((i) => allowed(ROUTE_PERMS[i.route]));
+    const items = g.items.filter((i) => i.sidebar !== false && allowed(ROUTE_PERMS[i.route]));
     if (!items.length) return null;
     const indicator = h('span', { class: 'nav-indicator', 'aria-hidden': 'true' });
     const list = h('ul', { class: 'nav-list' }, indicator, items.map((i) => {
@@ -458,6 +470,7 @@ export function createShell({ session, meta, me = null, can = null, onLogout, on
     search,
     h('div', { class: 'top-spacer' }),
     liveSlot,
+    bell ? [bell.button, bell.panel, bell.live] : null,
     densityControl(),
     themeControl(),
     tenantControl(session, onSwitchTenant),
