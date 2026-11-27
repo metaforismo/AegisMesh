@@ -8,6 +8,18 @@ changes bump MINOR). Numbers in parentheses are merged pull requests.
 
 ### Added
 
+- Console, round 8: a notification bell (unread count, day-grouped panel,
+  mark read, live from `/notifications/stream`, one optional notice for
+  critical items) and an Inbox (`#/inbox`, `g y`) with kind, severity and
+  unread filters; notification settings per kind. The investigation is a
+  workspace: status flow, priority, assignee, origin, a summary strip,
+  evidence grouped by source, activity merged with notes, a plain-text
+  note preview; the list filters by status and assignee ("Assigned to me"
+  default). "Open an investigation" from a campaign or a session. Source's
+  Activity and Cadence end level.
+- Dev mock: contract r8 (`mock-notify.mjs`, `mock-workspace.mjs`),
+  `--round8 off`, `/__mock/notify`.
+
 - Console, round 7: folding caveats (Techniques, Rules, Fleet), one
   humanised relative time ("10 min ago", "yesterday 14:03", then the date),
   organisation on every print and on the digest, posture acceptance
