@@ -114,7 +114,7 @@ func Account(recipient, reason string, byOther bool, at time.Time) Candidate {
 // Assignment derives an item for the principal an investigation was assigned to.
 func Assignment(recipient, investigation string, at time.Time) Candidate {
 	return Candidate{
-		Kind: KindAssignment, Severity: SeverityInfo, At: at, Recipient: recipient,
+		Kind: KindAssignment, Severity: SeverityMedium, At: at, Recipient: recipient,
 		GroupKey: KindAssignment + "|" + recipient + "|" + investigation,
 		Link:     Link{Route: RouteInvestigation, ID: investigation},
 		Facts:    Facts{Investigation: investigation, Reason: ReasonAssigned},
