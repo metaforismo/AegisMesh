@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/metaforismo/aegismesh/internal/evidenceindex"
 	"github.com/metaforismo/aegismesh/internal/evidenceview"
@@ -23,6 +24,11 @@ import (
 // index generation and the next request replaces the entry; nothing is merged
 // across generations or tenants. Snapshots taken while a live node-name
 // resolver is installed have generation zero and are never memoised.
+//
+// Sessions of a new generation are derived incrementally from the newest
+// earlier generation whose sessions were computed (evidenceview.UpdateSessions,
+// byte-identical to a full recompute), so at most one older sample and its
+// sessions stay referenced until the new generation's sessions exist.
 type analysisMemo struct {
 	mu              sync.Mutex
 	current         *analysisResult
@@ -43,6 +49,10 @@ type digestMemo struct {
 	missing    int
 }
 
+// incrementalSessions counts generations whose sessions were derived from a
+// base generation (tests assert the incremental path is exercised).
+var incrementalSessions atomic.Int64
+
 // analysisResult is immutable once each lazily derived value is computed.
 // Callers must treat every returned slice, map and pointer as read-only.
 type analysisResult struct {
@@ -51,6 +61,10 @@ type analysisResult struct {
 
 	sessionsOnce sync.Once
 	sessions     []evidenceview.Session
+	// base is an earlier generation whose sessions are computed, or nil; it
+	// is released once this generation's sessions exist.
+	base          atomic.Pointer[analysisResult]
+	sessionsReady atomic.Bool
 
 	campaignsOnce sync.Once
 	campaigns     evidenceview.CampaignSet
@@ -78,14 +92,32 @@ func (s *Server) analysis() *analysisResult {
 	}
 	// A request holding an older snapshot never replaces a newer entry.
 	if current == nil || generation > current.snapshot.Generation() {
+		if current != nil {
+			// Keep the chain at depth one: the base always has its sessions.
+			if current.sessionsReady.Load() {
+				fresh.base.Store(current)
+			} else {
+				fresh.base.Store(current.base.Load())
+			}
+		}
 		s.memo.current = fresh
 	}
 	return fresh
 }
 
-// Sessions is evidenceview.Sessions over the snapshot, computed once.
+// Sessions is evidenceview.Sessions over the snapshot, computed once, and
+// incrementally from the base generation when there is one.
 func (a *analysisResult) Sessions() []evidenceview.Session {
-	a.sessionsOnce.Do(func() { a.sessions = evidenceview.Sessions(a.tenant, a.snapshot.Events) })
+	a.sessionsOnce.Do(func() {
+		if base := a.base.Load(); base != nil && base.sessionsReady.Load() {
+			incrementalSessions.Add(1)
+			a.sessions = evidenceview.UpdateSessions(a.tenant, base.snapshot.Events, base.sessions, a.snapshot.Events)
+		} else {
+			a.sessions = evidenceview.Sessions(a.tenant, a.snapshot.Events)
+		}
+		a.base.Store(nil)
+		a.sessionsReady.Store(true)
+	})
 	return a.sessions
 }
 

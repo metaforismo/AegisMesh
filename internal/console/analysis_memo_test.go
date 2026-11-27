@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -263,5 +265,47 @@ func TestCatalogWindowMatchesReference(t *testing.T) {
 		if e.ID == future.ID {
 			t.Fatal("future event inside the window")
 		}
+	}
+}
+
+// TestIncrementalSessionsAfterAppendsMatchFullRecompute replays seeded
+// envelopes as new observations in random batches (some with earlier native
+// times) and compares the memo's incremental sessions, campaigns and every
+// campaign detail with a full recompute after every batch.
+func TestIncrementalSessionsAfterAppendsMatchFullRecompute(t *testing.T) {
+	s, local, _ := seededMemoServer(t)
+	view := s.views["local"]
+	view.analysis().Sessions() // the base generation
+	replay := local.EnvelopesAt
+	envelopes, _ := replay(400)
+	r := rand.New(rand.NewPCG(7, 7))
+	before := incrementalSessions.Load()
+	next := 0
+	for step := range 40 {
+		for range 1 + r.IntN(15) {
+			e := envelopes[next%len(envelopes)]
+			next++
+			e.ID = fmt.Sprintf("%032x", 0xfeed0000+next)
+			e.Time = time.Now().UTC().Add(-time.Duration(r.IntN(3600)) * time.Second)
+			local.Add(e)
+		}
+		analysis := view.analysis()
+		got := analysis.Sessions()
+		want := evidenceview.Sessions("local", analysis.snapshot.Events)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("step %d: sessions differ from full recompute", step)
+		}
+		gotCampaigns, wantCampaigns := analysis.Campaigns(), evidenceview.Campaigns("local", want)
+		if !bytes.Equal(mustJSON(t, gotCampaigns.Campaigns), mustJSON(t, wantCampaigns.Campaigns)) {
+			t.Fatalf("step %d: campaigns differ", step)
+		}
+		for i := range gotCampaigns.Campaigns {
+			if !bytes.Equal(mustJSON(t, gotCampaigns.Campaigns[i].Detail()), mustJSON(t, wantCampaigns.Campaigns[i].Detail())) {
+				t.Fatalf("step %d: campaign detail differs", step)
+			}
+		}
+	}
+	if taken := incrementalSessions.Load() - before; taken < 40 {
+		t.Fatalf("incremental path taken %d of 40 generations", taken)
 	}
 }
