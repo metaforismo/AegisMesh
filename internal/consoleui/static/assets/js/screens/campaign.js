@@ -15,6 +15,7 @@ import { pageHead, panel, kv, sevChip, evidence, timeEl, empty, helpTip, table, 
 import { stageTag, kindChips } from '../ui/story.js';
 import { mixView, campaignScoreView, actorChip, sourceChips } from '../ui/insight.js';
 import { icon } from '../ui/icons.js';
+import { openInvestigationFrom } from '../ui/open-investigation.js';
 
 const tip = (id) => helpTip(glossaryEntry(id));
 const titled = (text, id) => h('span', { class: 'title-help' }, text, tip(id));
@@ -75,6 +76,13 @@ export default {
     const exact = c.sessions.some((s) => Array.isArray(s.step_marks));
     const print = h('button', { class: 'btn', type: 'button' }, icon('print', { size: 'sm' }), 'Print');
     print.addEventListener('click', () => globalThis.print?.());
+    // Round 8: open a case with the member events attached. Only a server
+    // that sends the member event sample has the route.
+    let investigate = null;
+    if (ctx.can('investigations.write') && Array.isArray(raw?.event_ids_sample)) {
+      investigate = h('button', { class: ['btn', 'btn--primary'], type: 'button' }, icon('investigations', { size: 'sm' }), 'Open an investigation');
+      investigate.addEventListener('click', () => openInvestigationFrom(ctx, { kind: 'campaign', id: c.id, label: c.label, eventCount: c.eventCount, maxSeverity: c.maxSeverity }));
+    }
 
     mount(root,
       pageHead({
@@ -82,7 +90,7 @@ export default {
         title: h('span', { class: 'campaign-title' }, title),
         subtitle: [basisSentence(raw), span ? ` Seen ${span}, from ${formatDateTime(c.firstSeen)} to ${formatDateTime(c.lastSeen)}.` : ''],
         hint: 'Read the lanes across: each row is one source’s session, each column a step they share. Open a source to read its full story.',
-        actions: [print],
+        actions: [investigate, print],
       }),
       h('section', { class: 'camp-hero', 'aria-label': 'Campaign at a glance' },
         h('dl', { class: 'camp-hero__figures' },

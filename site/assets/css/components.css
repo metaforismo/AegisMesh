@@ -2971,7 +2971,7 @@ label.perm__row { cursor: pointer; }
    it never animates. Full screen on phones. */
 .notify { width: min(26rem, calc(100vw - 1rem)); max-height: min(36rem, calc(100vh - var(--topbar-h, 3.5rem) - 1rem)); padding: 0; display: none; flex-direction: column; overflow: hidden; }
 .notify:popover-open { display: flex; }
-.notify__head { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-1) var(--space-4); }
+.notify__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-1) var(--space-4); }
 .notify__title { font-size: var(--text-md); font-weight: var(--weight-semibold); }
 .notify__count { flex: 1; color: var(--color-ink-3); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .notify__close { align-self: center; }
@@ -3022,15 +3022,12 @@ a.notify-item__title:hover { text-decoration: underline; text-underline-offset: 
 /* Notification settings: one toggle per kind, each with what it means. */
 .ntoggles { list-style: none; display: flex; flex-direction: column; }
 .ntoggle { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) 0; border-top: var(--border-width) solid var(--color-border); }
-.ntoggles .ntoggle:first-child { border-top: 0; padding-top: 0; }
+.ntoggles .ntoggle:first-child, .panel__body > .ntoggle:first-child { border-top: 0; padding-top: 0; }
 .ntoggle__label { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 2rem; font-weight: var(--weight-medium); cursor: pointer; }
 .ntoggle__label input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--color-accent); }
 .ntoggle__label .icon { color: var(--color-ink-3); }
 .ntoggle__why { max-width: 70ch; padding-left: calc(1rem + var(--space-2)); color: var(--color-ink-2); font-size: var(--text-xs); line-height: var(--leading-snug); }
 .ntoggles__sev { margin-top: var(--space-3); padding-top: var(--space-4); border-top: var(--border-width) solid var(--color-border); }
-.ntoggle__always { order: 3; margin-left: var(--space-2); padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-xs); color: var(--color-ink-3); font-size: var(--text-2xs); font-weight: var(--weight-medium); }
-.ntoggle--fixed .ntoggle__label { cursor: default; padding-left: calc(1rem + var(--space-2)); }
-
 .ntoggle__always { order: 3; margin-left: var(--space-2); padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-xs); color: var(--color-ink-3); font-size: var(--text-2xs); font-weight: var(--weight-medium); }
 .ntoggle--fixed .ntoggle__label { cursor: default; padding-left: calc(1rem + var(--space-2)); }
 

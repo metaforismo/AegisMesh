@@ -19,11 +19,12 @@ import {
   assessmentOf, evidenceMeta, storyItems, stageSummary, formatDurationMs, regularityText, boundsNote, unfoldSentence, stageMeta,
 } from '../lib/story.js';
 import { glossaryEntry } from '../lib/glossary.js';
-import { pageHead, panel, kv, sevChip, evidence, chip, chipList, empty, banner, helpTip, toast, errorState, actionLink, glyph, copyable } from '../ui/components.js';
+import { pageHead, panel, kv, sevChip, evidence, chip, chipList, empty, banner, helpTip, errorState, actionLink, glyph, copyable } from '../ui/components.js';
 import { assessmentChip, frameworkChips, stageTag, kindChips } from '../ui/story.js';
 import { downloadActions } from '../ui/downloads.js';
 import { icon } from '../ui/icons.js';
-import { ruleChips, newInvestigationDialog, notFoundInTenant } from './shared.js';
+import { openInvestigationFrom } from '../ui/open-investigation.js';
+import { ruleChips, notFoundInTenant } from './shared.js';
 import { createDrawer } from './events.js';
 import { renderEventDetail } from './event.js';
 import { tenantInfo } from '../lib/tenant.js';
@@ -338,14 +339,12 @@ export default {
     const localIds = [...new Set(timeline.filter((e) => e.node_id === 'local' && isEventId(e.event_id)).map((e) => e.event_id))].slice(0, 200);
     let investigate = null;
     if (ctx.can('investigations.write') && localIds.length) {
-      investigate = h('button', { class: ['btn', 'btn--primary'], type: 'button' }, icon('investigations', { size: 'sm' }), 'New investigation with these events');
-      investigate.addEventListener('click', async () => {
-        const inv = await newInvestigationDialog(ctx, { eventIds: localIds });
-        if (inv?.id) {
-          toast('ok', `Investigation created with ${localIds.length} event${localIds.length === 1 ? '' : 's'}.`);
-          ctx.navigate(href('investigations', inv.id));
-        }
-      });
+      investigate = h('button', { class: ['btn', 'btn--primary'], type: 'button' }, icon('investigations', { size: 'sm' }), 'Open an investigation');
+      // Round 8 attaches the session's events on the server (newest first,
+      // at most 200); an older server gets the story's local ids.
+      investigate.addEventListener('click', () => openInvestigationFrom(ctx, {
+        kind: 'session', id: d.id, source: String(d.source ?? ''), eventCount: Number(d.event_count) || localIds.length, maxSeverity: d.max_severity, fallbackIds: localIds,
+      }));
     }
 
     const a = assessmentOf(d.automation);
