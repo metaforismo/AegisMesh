@@ -10,6 +10,7 @@ import (
 
 	"github.com/metaforismo/aegismesh/internal/console/accounts"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
+	"github.com/metaforismo/aegismesh/internal/console/notifications"
 	"github.com/metaforismo/aegismesh/internal/console/permission"
 )
 
@@ -302,6 +303,7 @@ func (s *Server) mintKey(w http.ResponseWriter, r *http.Request, principal auth.
 		"account="+accountID+" days="+strconv.Itoa(days), local) {
 		return
 	}
+	s.notify(s.accountTenants(accountID), notifications.Account(accountID, notifications.ReasonKeyCreated, accountID != principal.ID, s.now()))
 	send(w, 201, keyCreated{Key: view, Token: token})
 }
 
@@ -329,6 +331,9 @@ func (s *Server) revokeKey(w http.ResponseWriter, r *http.Request, principal aut
 	}
 	if !s.audited(w, r, principal, "key.revoke", keyID, err, detail, local) {
 		return
+	}
+	if changed {
+		s.notify(s.accountTenants(accountID), notifications.Account(accountID, notifications.ReasonKeyRevoked, accountID != principal.ID, s.now()))
 	}
 	w.WriteHeader(204)
 }

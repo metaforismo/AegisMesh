@@ -90,6 +90,15 @@ var builtinRouteAccess = map[string]string{
 	"DELETE /api/v1/admin/roles/{id}":          "admin",
 	"POST /api/v1/posture/{check_id}/accept":   "admin",
 	"DELETE /api/v1/posture/{check_id}/accept": "admin",
+	// Round 8 routes (notifications, workspace).
+	"GET /api/v1/notifications":                 "viewer",
+	"POST /api/v1/notifications/read":           "viewer",
+	"GET /api/v1/notifications/stream":          "viewer",
+	"GET /api/v1/me/notification-preferences":   "viewer",
+	"PUT /api/v1/me/notification-preferences":   "viewer",
+	"GET /api/v1/investigations/assignees":      "analyst",
+	"POST /api/v1/campaigns/{id}/investigation": "analyst",
+	"POST /api/v1/sessions/{id}/investigation":  "analyst",
 }
 
 var roleRank = map[string]int{"none": 0, "viewer": 1, "analyst": 2, "admin": 3}

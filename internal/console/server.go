@@ -21,6 +21,7 @@ import (
 	"github.com/metaforismo/aegismesh/internal/console/audit"
 	"github.com/metaforismo/aegismesh/internal/console/auth"
 	"github.com/metaforismo/aegismesh/internal/console/investigations"
+	"github.com/metaforismo/aegismesh/internal/console/notifications"
 	"github.com/metaforismo/aegismesh/internal/console/oidc"
 	"github.com/metaforismo/aegismesh/internal/console/settings"
 	"github.com/metaforismo/aegismesh/internal/console/tenant"
@@ -112,6 +113,9 @@ type Server struct {
 	auth            *auth.Manager
 	audit           *audit.Log
 	cases           *investigations.Store
+	inbox           *notifications.Store
+	derive          *deriver
+	inboxStreams    chan struct{}
 	accounts        *accounts.Store
 	overlay         *settings.Store
 	live            *liveSettings
@@ -188,6 +192,7 @@ func New(opts Options) (_ *Server, err error) {
 		mux:            http.NewServeMux(),
 		slots:          make(chan struct{}, 8),
 		streams:        make(chan struct{}, 16),
+		inboxStreams:   make(chan struct{}, 16),
 		requests: opts.Meter.CounterVec(
 			"aegismesh_console_requests_total", "Console requests by fixed endpoint group", 40,
 		),
@@ -315,6 +320,12 @@ func (s *Server) openState(dir string) error {
 	}
 
 	s.cases = cases
+	inbox, err := notifications.Open(dir)
+	if err != nil {
+		return fmt.Errorf("console notifications: %w", err)
+	}
+	s.inbox = inbox
+	s.newDeriver()
 	return nil
 }
 
@@ -390,6 +401,14 @@ func (s *Server) Start() {
 			defer s.wg.Done()
 			_ = s.httpServer.Serve(s.listener)
 		}()
+		// One notification deriver per tenant view, stopped by Close.
+		for _, view := range s.views {
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				view.runDeriver()
+			}()
+		}
 		// last_used_at updates are kept in memory and persisted at most once a minute.
 		s.wg.Add(1)
 		go func() {

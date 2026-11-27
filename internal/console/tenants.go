@@ -32,7 +32,7 @@ func (s *Server) scopedServer(name string, opts Options, dir string) (*Server, e
 		unassignedAudit: s.unassignedAudit, cfg: s.cfg, tenantID: name, instanceID: s.instanceID, views: s.views, auth: s.auth, oidc: s.oidc,
 		index: index, runtime: s.runtime, rules: s.rules, fleetStatus: s.fleetStatus,
 		fleetHub: s.fleetHub.ForTenant(name), listener: s.listener,
-		done: s.done, slots: s.slots, streams: s.streams, clients: s.clients,
+		done: s.done, slots: s.slots, streams: s.streams, inboxStreams: s.inboxStreams, clients: s.clients,
 		requests: s.requests, failures: s.failures, key: s.key,
 		accounts: s.accounts, overlay: s.overlay, live: s.live, log: s.log, security: s.security, settingSources: s.settingSources, startedAt: s.startedAt,
 		certExpiry: s.certExpiry, now: s.now, assets: s.assets,
@@ -104,6 +104,9 @@ func (s *Server) switchTenant(w http.ResponseWriter, r *http.Request, credential
 func (s *Server) closeState() {
 	if s.cases != nil {
 		_ = s.cases.Close()
+	}
+	if s.inbox != nil {
+		_ = s.inbox.Close()
 	}
 	if s.audit != nil {
 		_ = s.audit.Close()

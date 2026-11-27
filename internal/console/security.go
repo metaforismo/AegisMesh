@@ -279,7 +279,8 @@ func (s *Server) route(spec routeSpec) {
 		}
 		acceptsBody := r.Method == "POST" &&
 			(group == "session" ||
-				group == "investigations" || group == "fleet-tokens" || group == "me" || group == "admin") ||
+				group == "investigations" || group == "fleet-tokens" || group == "me" || group == "admin" ||
+				group == "notifications") ||
 			r.Method == "PATCH" &&
 				(group == "investigations" || group == "admin") ||
 			r.Method == "PUT" && (group == "me" || group == "admin")
@@ -287,7 +288,8 @@ func (s *Server) route(spec routeSpec) {
 			fail(w, 400, "invalid_argument", "this endpoint does not accept a request body")
 			return
 		}
-		if group != "stream" {
+		// Long-lived streams have their own 16-slot caps instead of request slots.
+		if group != "stream" && group != "notification-stream" {
 			select {
 			case s.slots <- struct{}{}:
 				defer func() {
@@ -301,7 +303,7 @@ func (s *Server) route(spec routeSpec) {
 		// Routes beyond what a built-in viewer holds write audit records, so
 		// they need a ready audit trail before running.
 		audited := perm != permPublic && perm != permAuthenticated && !viewerHolds(perm)
-		if (audited || group == "me" && r.Method != "GET") && !view.audit.Ready() ||
+		if (audited || (group == "me" || group == "notifications") && r.Method != "GET") && !view.audit.Ready() ||
 			group == "admin" && !s.views[s.cfg.LocalTenant].audit.Ready() {
 			fail(w, 503, "unavailable", "audit trail requires inspection and restart")
 			return
