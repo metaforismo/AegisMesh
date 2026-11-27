@@ -30,7 +30,20 @@ function activityStrip(s, rows) {
     h('p', { class: 'strip-head' },
       h('span', null, `${STRIP_BINS} equal slices from first to last sighting`),
       h('span', { class: 'muted' }, partial ? `${formatCount(rows.length)} of ${formatCount(total)} events loaded; dashed slices not loaded` : `${formatCount(total)} events`)),
-    activityTrace(bins, { start: first, end, knownFrom: partial && Number.isFinite(oldest) ? oldest : -Infinity, height: 40, startLabel: formatDateTime(s.first_seen), endLabel: formatDateTime(s.last_seen) }));
+    activityTrace(bins, { start: first, end, knownFrom: partial && Number.isFinite(oldest) ? oldest : -Infinity, height: 40, startLabel: formatDateTime(s.first_seen), endLabel: formatDateTime(s.last_seen) }),
+    stripFacts(bins, first, end, partial));
+}
+
+// Two facts the strip shows, in words, so the panel says what it draws:
+// the busiest slice and how many slices were quiet (among loaded events).
+function stripFacts(bins, first, end, partial) {
+  const peak = bins.reduce((best, n, i) => (n > bins[best] ? i : best), 0);
+  const size = (end - first) / bins.length;
+  const quiet = bins.filter((n) => n === 0).length;
+  return h('dl', { class: 'strip-facts' },
+    h('div', null, h('dt', null, 'Busiest slice'), h('dd', null, `${formatCount(bins[peak])} event${bins[peak] === 1 ? '' : 's'}, from ${formatDateTime(new Date(first + peak * size).toISOString())}`)),
+    h('div', null, h('dt', null, partial ? 'Quiet slices, among loaded events' : 'Quiet slices'), h('dd', null, `${formatCount(quiet)} of ${formatCount(bins.length)}`)),
+    h('div', null, h('dt', null, 'Slice length'), h('dd', null, formatGap(size))));
 }
 
 // Gaps between consecutive loaded events, binned. Printed counts carry the
@@ -146,7 +159,7 @@ export default {
           ['Sensor kinds', h('span', { class: 'chip-row' }, (s.kinds || []).map((x) => chip(x)))],
         ]),
       }),
-      h('div', { class: 'grid grid--2' },
+      h('div', { class: ['grid', 'grid--2', 'grid--level'] },
         panel({ title: 'Activity', meta: 'When this source was seen, between its first and last sighting', body: stripSlot }),
         panel({ title: h('span', { class: 'title-help' }, 'Cadence', helpTip(glossaryEntry('cadence'))), meta: srvGaps ? 'How regularly its events arrive. Histogram from the server, over all retained events.' : 'How regularly its events arrive. Computed in your browser from the loaded events.', body: cadenceSlot })),
       panel({ title: 'Events', meta: 'Newest first', flush: true, body: tableSlot, foot: pagerSlot }));
